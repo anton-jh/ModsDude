@@ -24,13 +24,6 @@ public interface IShellNavigationService
     Task<bool> GoToSavegamesAsync(Guid repoId, Guid savegameId);
 
     /// <summary>
-    /// Into a repo's saves list with the past savegames showing. Reached from a profile's count of them,
-    /// whose only useful destination is a list that does not filter them out again.
-    /// </summary>
-    /// <returns>False where the shell is not up yet, the repo has no savegames, or navigation was refused.</returns>
-    Task<bool> GoToPastSavegamesAsync(Guid repoId);
-
-    /// <summary>
     /// Into a profile's own history, where any two revisions can be compared. Reached from a savegame,
     /// whose snapshots each name the revision they were played on - so "what changed under this save"
     /// is a question this already answers, and a cut-down comparison beside the savegame list would be

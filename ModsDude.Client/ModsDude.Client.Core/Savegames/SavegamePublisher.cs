@@ -89,7 +89,7 @@ public sealed class SavegamePublisher(
         {
             ProfileId = target?.ProfileId,
             ProfileRevision = target?.Revision,
-            // A newly published savegame is its profile's current one, which follows head.
+            // A newly published savegame follows head.
             TargetRevision = null,
             LastObservedHash = packed.ContentHash,
             LastPlayedRevision = null

@@ -31,7 +31,7 @@ public sealed class SavegameCheckOut(
     /// claim you already hold is not a conflict.
     /// </para>
     /// </remarks>
-    public async Task<SavegameCheckOutResult> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
+    public async Task<SavegameCheckOutResult> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, SavegameRevisionMode revisionMode, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
     {
         runningGuard.EnsureNotRunning(game.Identity, game.Name);
 
@@ -63,7 +63,7 @@ public sealed class SavegameCheckOut(
         {
             ProfileId = head.ProfileId,
             ProfileRevision = head.ProfileRevision,
-            TargetRevision = SavegameRevisionRules.TargetRevisionOf(savegame),
+            TargetRevision = SavegameRevisionRules.PinnedRevision(revisionMode, head.ProfileRevision),
             // The bytes just written are the first observation, and nothing has been played on them.
             LastObservedHash = head.ContentHash,
             LastPlayedRevision = null

@@ -41,9 +41,9 @@ public static class ProfileActivation
         => current == target && pinnedRevision is null ? ProfileActivationKind.Apply : ProfileActivationKind.Activate;
 
     /// <param name="pinnedRevision">
-    /// The revision a past savegame checked out here holds the mod folder to, from
+    /// The revision a savegame checked out here in compatibility mode holds the mod folder to, from
     /// <see cref="Savegames.SavegameHoldRules.RequiredRevision"/>. Naming it is the whole change: the
-    /// button normally applies the profile's latest, the apply table refuses that while a past savegame is
+    /// button normally applies the profile's latest, the apply table refuses that while such a savegame is
     /// held, and its only remaining job is repairing folder drift back to the revision that savegame runs
     /// on. Null - which is nearly always - leaves the label as it was.
     /// </param>

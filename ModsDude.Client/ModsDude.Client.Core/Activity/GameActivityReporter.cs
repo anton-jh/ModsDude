@@ -17,7 +17,7 @@ namespace ModsDude.Client.Core.Activity;
 /// </para>
 /// <para>
 /// <b>What the game is on, not what the gesture was.</b> The revision reported is the one the game
-/// is held to - a past savegame, or a friend being followed onto one - and null where it follows head,
+/// is held to - a savegame in compatibility mode, or a friend being followed onto one - and null where it follows head,
 /// which is what lets a friend follow the profile without pinning themselves to whatever number head
 /// happened to be.
 /// </para>

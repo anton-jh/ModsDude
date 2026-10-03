@@ -6,6 +6,7 @@
       xmlns:account="clr-namespace:ModsDude.Client.Wpf.Account"
       xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
       xmlns:savegames="clr-namespace:ModsDude.Client.Wpf.Savegames"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=savegames:RepoSavegamesPageViewModel, IsDesignTimeCreatable=False}"
@@ -214,29 +215,9 @@
                         BorderThickness="1"
                         BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                         Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
-                    <Grid RowDefinitions="auto * auto auto">
+                    <Grid RowDefinitions="* auto auto">
 
-                        <!-- Past savegames are hidden by default: they stay findable without filling a
-                             list somebody opened to find the one they are playing tonight. The count
-                             is said out loud, because a filter nobody can see is a list that is
-                             quietly wrong. -->
-                        <Grid Grid.Row="0" Margin="12 10 12 4" ColumnDefinitions="auto *">
-                            <CheckBox Grid.Column="0"
-                                      Content="Show past savegames"
-                                      ToolTip="Savegames their profile has moved on from. They are still playable, and their mod list does not move."
-                                      IsChecked="{Binding ShowPastSavegames, Mode=TwoWay}" />
-
-                            <TextBlock Grid.Column="1"
-                                       Margin="8 0 0 0"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"
-                                       Style="{DynamicResource CaptionTextBlockStyle}"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                       Text="{Binding HiddenPastText}"
-                                       Visibility="{Binding HasHiddenPast, Converter={StaticResource BoolToVisibilityConverter}}" />
-                        </Grid>
-
-                        <ListBox Grid.Row="1"
+                        <ListBox Grid.Row="0"
                                  ItemsSource="{Binding Savegames}"
                                  SelectedItem="{Binding Selected, Mode=TwoWay}"
                                  BorderThickness="0"
@@ -250,31 +231,7 @@
 
                                     <!-- The inset the container no longer provides, and it clears the
                                          selection bar rather than sitting under it. -->
-                                    <Grid ColumnDefinitions="auto * auto">
-                                        <Grid.Style>
-                                            <Style TargetType="Grid">
-                                                <Setter Property="Margin" Value="12 10" />
-                                                <Style.Triggers>
-                                                    <!-- A past savegame hangs under its profile's current one. -->
-                                                    <DataTrigger Binding="{Binding IsPast}" Value="True">
-                                                        <Setter Property="Margin" Value="36 10 12 10" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Grid.Style>
-
-                                        <!-- The elbow that says "under the row above": a line down from the
-                                             row's top edge to the title, then across. Drawn into the row's
-                                             own margin, so the past row's content is what moves right and the
-                                             connector needs no column of its own. -->
-                                        <Border Grid.ColumnSpan="3"
-                                                Width="14" Height="24"
-                                                Margin="-22 -10 0 0"
-                                                HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                CornerRadius="0 0 0 5"
-                                                BorderThickness="1.5 0 0 1.5"
-                                                BorderBrush="{DynamicResource TextFillColorTertiaryBrush}"
-                                                Visibility="{Binding IsPast, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <Grid Margin="12 10" ColumnDefinitions="auto * auto">
 
                                         <StackPanel Grid.Column="0"
                                                     Orientation="Horizontal"
@@ -298,20 +255,7 @@
                                             </Grid>
                                         </StackPanel>
 
-                                        <!-- Past rows are dimmed as well as indented: the profile has moved on
-                                             from them, so they should recede behind the one it is following.
-                                             Only this column - the buttons stay at full strength, because a
-                                             past savegame is still playable. -->
                                         <StackPanel Grid.Column="1">
-                                            <StackPanel.Style>
-                                                <Style TargetType="StackPanel">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsPast}" Value="True">
-                                                            <Setter Property="Opacity" Value="0.7" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </StackPanel.Style>
 
                                             <TextBlock Text="{Binding Name}"
                                                        TextTrimming="CharacterEllipsis"
@@ -410,12 +354,24 @@
                                                     Command="{Binding CheckInCommand}"
                                                     Visibility="{Binding CanCheckIn, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                                            <Button Content="{Binding CheckOutLabel}"
-                                                    HorizontalAlignment="Stretch"
-                                                    Style="{DynamicResource AccentButtonStyle}"
-                                                    ToolTip="{Binding CheckOutToolTip}"
-                                                    Command="{Binding CheckOutCommand}"
-                                                    Visibility="{Binding ChecksOutAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                            <shared:SplitButton IsAccent="True"
+                                                                Header="{Binding CheckOutLabel}"
+                                                                ToolTip="{Binding CheckOutToolTip}"
+                                                                Command="{Binding CheckOutCommand}"
+                                                                CaretToolTip="Other ways to check out"
+                                                                Visibility="{Binding ChecksOutAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <Button Width="300"
+                                                        Style="{DynamicResource SubtleMenuButton}"
+                                                        Command="{Binding CheckOutInCompatibilityModeCommand}">
+                                                    <StackPanel Orientation="Vertical">
+                                                        <TextBlock Text="Compatibility mode" FontWeight="SemiBold" />
+                                                        <TextBlock Text="Stays on the revision it was last played on while checked out."
+                                                                   Margin="0 2 0 0"
+                                                                   TextWrapping="Wrap"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </shared:SplitButton>
 
                                             <!-- The other way out of a hold, immediately below the
                                                  first: Check in mints a snapshot, Discard mints
@@ -452,28 +408,30 @@
                                                     Command="{Binding CheckOutCommand}"
                                                     Visibility="{Binding ChecksOutAsSecondary, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                                            <Button Margin="0 4 0 0"
-                                                    Content="Take a copy"
-                                                    HorizontalAlignment="Stretch"
-                                                    ToolTip="{Binding TakeCopyToolTip}"
-                                                    Command="{Binding TakeCopyCommand}" />
-
-                                            <!-- Only on a past savegame, and the other end of the swap a
-                                                 publish performs. It displaces somebody's current
-                                                 savegame, so it asks first. -->
-                                            <Button Margin="0 4 0 0"
-                                                    Content="Make current"
-                                                    HorizontalAlignment="Stretch"
-                                                    ToolTip="Puts this savegame back in its profile's current slot, so it follows the mod list again. Whichever savegame is there becomes past."
-                                                    Command="{Binding MakeCurrentCommand}"
-                                                    Visibility="{Binding CanMakeCurrent, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                            <shared:SplitButton Margin="0 4 0 0"
+                                                                Header="Take a copy"
+                                                                ToolTip="{Binding TakeCopyToolTip}"
+                                                                Command="{Binding TakeCopyCommand}"
+                                                                CaretToolTip="Other ways to take a copy">
+                                                <Button Width="300"
+                                                        Style="{DynamicResource SubtleMenuButton}"
+                                                        Command="{Binding TakeCopyInCompatibilityModeCommand}">
+                                                    <StackPanel Orientation="Vertical">
+                                                        <TextBlock Text="Compatibility mode" FontWeight="SemiBold" />
+                                                        <TextBlock Text="Activates the revision it was last played on before writing the copy."
+                                                                   Margin="0 2 0 0"
+                                                                   TextWrapping="Wrap"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </shared:SplitButton>
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
 
-                        <TextBlock Grid.Row="1"
+                        <TextBlock Grid.Row="0"
                                    Margin="16"
                                    TextWrapping="Wrap"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -481,14 +439,14 @@
                                    Text="{Binding EmptyText}"
                                    Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                        <TextBlock Grid.Row="2"
+                        <TextBlock Grid.Row="1"
                                    Margin="12 4"
                                    HorizontalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Text="Reading the repo's saves…"
                                    Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                        <Border Grid.Row="3"
+                        <Border Grid.Row="2"
                                 BorderThickness="0 1 0 0"
                                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
                             <StackPanel Orientation="Horizontal" Margin="12">

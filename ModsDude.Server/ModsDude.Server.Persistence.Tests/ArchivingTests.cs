@@ -165,14 +165,6 @@ public class ArchivingTests(DatabaseFixture fixture)
         {
             Assert.False(await dbContext.Savegames.CheckNameIsTaken(repoId, new SavegameName("The main save"), CancellationToken.None));
 
-            // The archived one still holds the profile's current slot - archiving frees a name and
-            // nothing else - so the successor supersedes it, exactly as a publish would. That the
-            // slot survives archiving is SavegameCurrentQueryTests' subject, not this one's.
-            var archived = (await dbContext.Savegames.GetCurrentAsync(repoId, profileId, CancellationToken.None))!;
-
-            archived.Supersede(DateTime.UtcNow);
-            await dbContext.SaveChangesAsync(CancellationToken.None);
-
             dbContext.Savegames.Add(new Savegame(repoId, new SavegameName("The main save"), profileId, DateTime.UtcNow));
 
             await dbContext.SaveChangesAsync(CancellationToken.None);
@@ -313,19 +305,9 @@ public class ArchivingTests(DatabaseFixture fixture)
         return profile.Id;
     }
 
-    /// <summary>
-    /// The same write a publish makes. A profile has one current savegame, so a second savegame on one
-    /// profile supersedes the first rather than sitting beside it - and the two writes are ordered,
-    /// because the index refuses the instant where both are current.
-    /// </summary>
     private async Task<SavegameId> GivenASavegame(RepoId repoId, ProfileId profileId, string name)
     {
         using var dbContext = fixture.CreateDbContext();
-
-        var superseded = await dbContext.Savegames.GetCurrentAsync(repoId, profileId, CancellationToken.None);
-
-        superseded?.Supersede(DateTime.UtcNow);
-        await dbContext.SaveChangesAsync(CancellationToken.None);
 
         var savegame = new Savegame(repoId, new SavegameName(name), profileId, DateTime.UtcNow);
 

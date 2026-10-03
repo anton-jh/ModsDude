@@ -646,23 +646,6 @@
         },
         "type": "object"
       },
-      "MakeSavegameCurrentResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "savegame": {
-            "$ref": "#/components/schemas/SavegameDto"
-          },
-          "superseded": {
-            "nullable": true,
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SavegameDto"
-              }
-            ]
-          }
-        },
-        "type": "object"
-      },
       "ModAttributeDto": {
         "additionalProperties": false,
         "properties": {
@@ -986,9 +969,7 @@
           "https://server.modsdude.com/api/problems/savegame-claim-held-by-other",
           "https://server.modsdude.com/api/problems/profile-in-use-by-savegame",
           "https://server.modsdude.com/api/problems/invalid-mod-file-name",
-          "https://server.modsdude.com/api/problems/savegame-current-conflict",
           "https://server.modsdude.com/api/problems/savegame-profile-not-paired",
-          "https://server.modsdude.com/api/problems/savegame-has-no-profile",
           "https://server.modsdude.com/api/problems/unknown-modhub-game",
           "https://server.modsdude.com/api/problems/trust-code-not-found",
           "https://server.modsdude.com/api/problems/trust-code-not-usable",
@@ -1034,9 +1015,7 @@
           "SavegameClaimHeldByOther",
           "ProfileInUseBySavegame",
           "InvalidModFileName",
-          "SavegameCurrentConflict",
           "SavegameProfileNotPaired",
-          "SavegameHasNoProfile",
           "UnknownModHubGame",
           "TrustCodeNotFound",
           "TrustCodeNotUsable",
@@ -1681,11 +1660,6 @@
           "snapshotCount": {
             "format": "int32",
             "type": "integer"
-          },
-          "supersededAt": {
-            "format": "date-time",
-            "nullable": true,
-            "type": "string"
           },
           "totalSizeBytes": {
             "format": "int64",
@@ -6719,93 +6693,6 @@
         ],
         "responses": {
           "200": {
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          },
-          "412": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
-                }
-              }
-            },
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "EntraExternalId": []
-          }
-        ],
-        "tags": [
-          "Savegames"
-        ]
-      }
-    },
-    "/api/v1/repos/{repoId}/savegames/{savegameId}/makeCurrent": {
-      "post": {
-        "operationId": "MakeSavegameCurrentV1",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "repoId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 1
-          },
-          {
-            "in": "path",
-            "name": "savegameId",
-            "required": true,
-            "schema": {
-              "format": "guid",
-              "type": "string"
-            },
-            "x-position": 2
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MakeSavegameCurrentResponse"
-                }
-              }
-            },
             "description": ""
           },
           "400": {

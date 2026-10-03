@@ -213,6 +213,8 @@ internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardli
 
     public bool SupportsHardlinks { get; } = supportsHardlinks;
 
+    public SavegameCompatibilityPolicy SavegameCompatibility { get; } = new(1, 1, 5, 50);
+
 
     /// <summary>Every file the adapter has opened, by name - which is what a scan costs.</summary>
     public ConcurrentBag<string> Opened { get; } = [];

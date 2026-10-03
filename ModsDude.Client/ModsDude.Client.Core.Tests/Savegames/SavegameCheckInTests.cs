@@ -22,7 +22,7 @@ public class SavegameCheckInTests
     {
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.Uploader.DuringUpload = () => harness.WriteSlotFile(_slot1, "a savegame, played once and saved again");
@@ -45,7 +45,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         var snapshotsBefore = harness.Server.Snapshots.Count;
 
@@ -64,7 +64,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         var head = await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
@@ -83,6 +83,26 @@ public class SavegameCheckInTests
     }
 
     /// <summary>
+    /// Play in compatibility mode happened on the old revision, so that is what the snapshot records -
+    /// which keeps the save old, and the next check-out asks again. Keeping it checked out keeps the pin.
+    /// </summary>
+    [Fact]
+    public async Task Checking_in_from_compatibility_mode_records_the_pinned_revision_and_keeps_the_pin()
+    {
+        using var harness = new SavegameHarness(appliedRevision: 4);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 4);
+
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Compatibility, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
+
+        await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, takeOver: false, CancellationToken.None);
+
+        Assert.Equal(4, Assert.Single(harness.Server.CheckIns).ProfileRevision);
+        Assert.Equal(4, harness.Binding(harness.Server.SavegameId).TargetRevision);
+    }
+
+    /// <summary>
     /// The three slow things a check-in does, in the order it does them, each with the bytes it is
     /// moving - which is what the strip's bar is drawn from. Without them the whole operation is one
     /// indeterminate bar for as long as a 400 MB save takes to pack and send.
@@ -93,7 +113,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
@@ -123,7 +143,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
@@ -147,7 +167,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
@@ -172,7 +192,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         var head = await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("somebody else's evening"));
@@ -194,7 +214,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
@@ -240,7 +260,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         var snapshotsBefore = harness.Server.Snapshots.Count;
 
@@ -263,7 +283,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.RecycleBin.Refuses = true;
@@ -281,7 +301,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.RecycleBin.Refuses = true;
 
@@ -311,7 +331,7 @@ public class SavegameCheckInTests
         // asserting that the client folder's manifest was the one read, rather than the server
         // folder's 1004 or nothing at all.
         await harness.SeedHeadAsync("a savegame", profileRevision: 2);
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, SavegameRevisionMode.Latest, CancellationToken.None);
 
         await harness.CheckIn.CheckInAsync(
             harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
@@ -325,7 +345,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         var head = await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         var (snapshot, _, _, _) = await harness.CheckIn.CheckInAsync(
             harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None,
@@ -347,7 +367,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
 
@@ -365,7 +385,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.Adapter.ThrowOnRename = true;
 
@@ -390,7 +410,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness(appliedRevision: 4);
         await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         Assert.Null(harness.Binding(harness.Server.SavegameId).LastPlayedRevision);
 
@@ -417,7 +437,7 @@ public class SavegameCheckInTests
         using var harness = new SavegameHarness(appliedRevision: 4);
         await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         await harness.ApplyAsync(1004);
@@ -443,7 +463,7 @@ public class SavegameCheckInTests
         harness.Server.FollowNoProfile();
         await harness.SeedHeadAsync("a savegame", profileRevision: null);
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         await harness.CheckIn.CheckInAsync(
             harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None,
@@ -457,7 +477,7 @@ public class SavegameCheckInTests
     {
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
         harness.WriteSlotFile(_slot1, "played");
         harness.Guard.Running = true;
 
@@ -472,7 +492,7 @@ public class SavegameCheckInTests
     {
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
         harness.Guard.Running = true;
 
         await Assert.ThrowsAsync<GameRunningException>(

@@ -407,11 +407,11 @@ public sealed class DriftMonitor : IDriftMonitor
                 target.Target,
                 active,
                 target.ModFolder,
-                // A past savegame held here pins the folder to its own revision, and that is what
+                // A savegame held here in compatibility mode pins the folder to its revision, and that is what
                 // "up to date" means for this game until it is checked in. Nothing is suppressed
                 // to achieve it: the comparison is against the number the game is supposed to be
-                // on, and it comes out equal on its own. Against head instead, a game holding a
-                // past savegame would report drift permanently and offer a re-apply to head that the
+                // on, and it comes out equal on its own. Against head instead, a game holding such a
+                // savegame would report drift permanently and offer a re-apply to head that the
                 // apply table refuses.
                 currentRevision: _heldSavegames.GetRequiredRevision(candidate.Identity, active.ProfileId)
                     ?? _profileRevisions.GetHeadRevision(active),

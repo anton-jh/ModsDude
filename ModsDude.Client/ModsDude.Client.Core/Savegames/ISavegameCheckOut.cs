@@ -12,7 +12,7 @@ public interface ISavegameCheckOut
     /// The game is running, the slot holds play nobody has checked in, or the game already holds a
     /// savegame that claims its mod folder.
     /// </exception>
-    Task<SavegameCheckOutResult> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
+    Task<SavegameCheckOutResult> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, SavegameRevisionMode revisionMode, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
     /// <summary>
     /// Writes a named snapshot into a slot without claiming or binding anything. The slot reads as

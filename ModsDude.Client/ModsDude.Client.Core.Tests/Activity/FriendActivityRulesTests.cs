@@ -37,7 +37,7 @@ public class FriendActivityRulesTests
     }
 
     /// <summary>
-    /// Same profile, different mod list: a friend on a past savegame's revision is somewhere this game
+    /// Same profile, different mod list: a friend on an older revision is somewhere this game
     /// is not, and that is exactly when following them is worth a button.
     /// </summary>
     [Fact]

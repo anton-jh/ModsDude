@@ -67,21 +67,6 @@ public sealed class ShellNavigationService : IShellNavigationService
         return await repoPage.TrySelectSavegameAsync(savegameId);
     }
 
-    public async Task<bool> GoToPastSavegamesAsync(Guid repoId)
-    {
-        if (_shell is not MainPageViewModel shell)
-        {
-            return false;
-        }
-
-        if (await shell.TrySelectRepoAsync(repoId) is not RepoPageViewModel repoPage)
-        {
-            return false;
-        }
-
-        return repoPage.TrySelectSavegames(showPastSavegames: true);
-    }
-
     public async Task<bool> GoToProfileHistoryAsync(Guid repoId, Guid profileId, int? selectRevision = null)
     {
         if (_shell is not MainPageViewModel shell)

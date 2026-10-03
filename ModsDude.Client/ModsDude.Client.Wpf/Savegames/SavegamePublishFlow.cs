@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
@@ -20,14 +19,12 @@ namespace ModsDude.Client.Wpf.Savegames;
 public sealed class SavegamePublishFlow(
     ISavegameSlots savegameSlots,
     ISavegamePublisher savegamePublisher,
-    ISavegamesClient savegamesClient,
     IProfileService profileService,
     ISyncManifestStore manifestStore,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
     IBackgroundTaskReporter backgroundTasks,
-    IToastService toasts,
-    ILogger<SavegamePublishFlow> logger) : ISavegamePublishFlow
+    IToastService toasts) : ISavegamePublishFlow
 {
     public async Task PublishAsync(
         Repo repo,
@@ -194,57 +191,20 @@ public sealed class SavegamePublishFlow(
             await profileService.RefreshProfiles(repo.Id, cancellationToken);
         }
 
-        var current = await ReadCurrentSavegamesAsync(repo.Id, cancellationToken);
         var options = new List<SavegamePublishOption>();
 
         foreach (var profile in profileService.Profiles.Where(x => x.RepoId == repo.Id).OrderBy(x => x.Name, NaturalOrder.Comparer))
         {
-            var incumbent = current.GetValueOrDefault(profile.Id);
-
             options.Add(new SavegamePublishOption(
                 profile.Id,
                 profile.Name,
                 SavegameRevisionRules.DeclaredRevisionFor(profile.Id, profile.HeadRevision, appliedProfileId, appliedRevision),
-                incumbent?.Name,
-                incumbent?.Head?.ProfileRevision,
                 profile.Id == appliedProfileId));
         }
 
         options.Add(SavegamePublishOption.NoModList);
 
         return options;
-    }
-
-    /// <summary>
-    /// Which savegame each profile is following right now, keyed by profile. Archived savegames count:
-    /// archiving does not release a profile's slot, so a publish still supersedes them.
-    /// </summary>
-    /// <remarks>
-    /// A failed read costs only the supersede notice; the publish is still correct.
-    /// </remarks>
-    private async Task<IReadOnlyDictionary<Guid, SavegameDto>> ReadCurrentSavegamesAsync(Guid repoId, CancellationToken cancellationToken)
-    {
-        var current = new Dictionary<Guid, SavegameDto>();
-
-        try
-        {
-            var savegames = await savegamesClient.GetSavegamesV1Async(repoId, cancellationToken);
-            var archived = await savegamesClient.GetArchivedSavegamesV1Async(repoId, cancellationToken);
-
-            foreach (var savegame in savegames.Concat(archived))
-            {
-                if (savegame.ProfileId is Guid profileId && savegame.SupersededAt is null)
-                {
-                    current[profileId] = savegame;
-                }
-            }
-        }
-        catch (ApiException exception)
-        {
-            logger.LogWarning(exception, "Could not read the current savegames of repo {RepoId}; publishing without the supersede notice.", repoId);
-        }
-
-        return current;
     }
 }
 

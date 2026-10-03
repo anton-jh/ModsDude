@@ -60,7 +60,7 @@ public class ProfileRevisionComparisonTests
         Assert.Equal(ProfileModChangeKind.Changed, change.Kind);
         Assert.False(change.VersionMoved);
         Assert.True(change.LockChanged);
-        Assert.True(change.ToLocked);
+        Assert.True(change.ToLock.ByProfile);
     }
 
     /// <summary>
@@ -124,6 +124,21 @@ public class ProfileRevisionComparisonTests
         var comparison = Compare([Pin("A", "1.0.0")], []);
 
         Assert.Equal("1.0.0", Assert.Single(comparison.Changes).Version.VersionId.Value);
+    }
+
+    /// <summary>
+    /// Each side keeps its own lock, adapter half included, so whether a mod was locked on the older
+    /// revision is answerable even after the newer one dropped the lock.
+    /// </summary>
+    [Fact]
+    public void A_change_carries_each_sides_full_lock()
+    {
+        var comparison = Compare([Pin("A", "1.0.0", lockedByAdapter: true)], [Pin("A", "2.0.0")]);
+
+        var change = Assert.Single(comparison.Changes);
+
+        Assert.Equal(new ProfileModLock(ByAdapter: true, ByProfile: false), change.FromLock);
+        Assert.Equal(default, change.ToLock);
     }
 
 

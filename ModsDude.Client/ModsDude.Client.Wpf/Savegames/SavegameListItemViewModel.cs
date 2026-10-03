@@ -32,18 +32,28 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// badge, as prominently as anything on it: where a game has twenty slots, "slot 4" is often how the
 /// player picks this save out of the list. Null for a game whose slots are not numbered.
 /// </param>
-public sealed record SavegameHoldHere(Game Game, SavegameSlotRef Slot, string? FolderName, bool IsUnreachable, int? SlotNumber = null);
+/// <param name="PinnedRevision">The revision it is held on in compatibility mode, or null on latest.</param>
+public sealed record SavegameHoldHere(
+    Game Game,
+    SavegameSlotRef Slot,
+    string? FolderName,
+    bool IsUnreachable,
+    int? SlotNumber = null,
+    int? PinnedRevision = null);
 
 
 /// <summary>What a savegame row's buttons do. The page owns every flow; the row only says which one.</summary>
+/// <remarks>
+/// A null revision mode on a check-out or a copy is the ordinary button: it asks where the mod list
+/// has moved far enough from the save, and goes to latest otherwise.
+/// </remarks>
 public interface ISavegameRowActions
 {
-    Task CheckOutAsync(SavegameListItemViewModel row);
+    Task CheckOutAsync(SavegameListItemViewModel row, SavegameRevisionMode? revisionMode);
     Task CheckInAsync(SavegameListItemViewModel row);
     Task DiscardAsync(SavegameListItemViewModel row);
     Task DisconnectAsync(SavegameListItemViewModel row);
-    Task TakeCopyAsync(SavegameListItemViewModel row);
-    Task MakeCurrentAsync(SavegameListItemViewModel row);
+    Task TakeCopyAsync(SavegameListItemViewModel row, SavegameRevisionMode? revisionMode);
 }
 
 
@@ -71,7 +81,7 @@ public partial class SavegameListItemViewModel : ObservableObject
 
     private bool _hasUnpublishedPlay;
     private int _revisionsBehind;
-    private bool _lockedPinMoved;
+    private bool _promptsForCompatibility;
 
     /// <summary>
     /// What this machine can do with this savegame, or null where there is no installation of the
@@ -113,11 +123,6 @@ public partial class SavegameListItemViewModel : ObservableObject
         ShowHolderTag = isAmbiguous;
         HolderAvatar = holderAvatar;
 
-        // Recorded here because the row's actions need it and because it is what the binding will
-        // carry a moment later - two answers to "which list does this savegame run on" is how a row comes
-        // to describe a different apply from the one that runs.
-        PinnedRevision = SavegameRevisionRules.TargetRevisionOf(savegame);
-
         Chips = [];
 
         RefreshChips();
@@ -139,29 +144,8 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// <summary>Refused for a Guest, and therefore never offered - a picker leading to a refusal is worse than one never offered.</summary>
     public bool IsMember { get; }
 
-    /// <summary>
-    /// The revision this savegame runs on where it pins one, from
-    /// <see cref="SavegameRevisionRules.TargetRevisionOf"/>. Null for a current savegame, which follows its
-    /// profile, and for one that follows no mod list.
-    /// </summary>
-    public int? PinnedRevision { get; }
-
-    /// <summary>Whether this is a <em>past</em> savegame - one its profile has moved on from.</summary>
-    /// <remarks>
-    /// A fact about which savegame a profile is following, not a problem with either, which is why the
-    /// chip saying it is <see cref="SavegameChipTone.Neutral"/> and why the list hides these rows by
-    /// default rather than colouring them.
-    /// </remarks>
-    public bool IsPast => Savegame.SupersededAt is not null;
-
     /// <summary>Whether this savegame follows a mod list at all.</summary>
     public bool HasProfile => Savegame.ProfileId is not null;
-
-    /// <summary>
-    /// Whether this is the savegame its profile is following right now: the opposite of
-    /// <see cref="IsPast"/>, for a savegame that has a profile to be current in.
-    /// </summary>
-    public bool IsCurrent => HasProfile && IsPast is false;
 
     /// <summary>
     /// Whether taking the claim is on offer here and now: Member, and nothing about this machine in
@@ -169,16 +153,15 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     public bool CanCheckOut => IsMember && _offer?.CanCheckOut is true;
 
-
     /// <summary>
-    /// Whether this savegame can be put back in its profile's current slot.
+    /// Whether staying on the revision the save was last played on is a choice to offer: only where the
+    /// profile has moved on since, and not for a save held here, which keeps the mode it is held in.
     /// </summary>
-    /// <remarks>
-    /// Only a past one has anywhere to go: a current savegame is already there, and one following no mod
-    /// list is in no succession. Nothing about this machine gates it - which savegame a profile follows is
-    /// a decision about the repo, like publishing, and is gated the same way.
-    /// </remarks>
-    public bool CanMakeCurrent => IsMember && IsPast;
+    public bool HasCompatibilityMode => _revisionsBehind > 0 && IsHeldHere is false;
+
+    public bool CanCheckOutInCompatibilityMode => CanCheckOut && HasCompatibilityMode;
+
+    public bool CanTakeCopyInCompatibilityMode => HasCompatibilityMode;
 
     /// <summary>
     /// The installation on this machine whose slot actually holds this savegame, or null where none
@@ -383,7 +366,8 @@ public partial class SavegameListItemViewModel : ObservableObject
         : "No snapshots yet";
 
     /// <summary>
-    /// What the rest of the history adds up to, said only where there is more than the head:     /// size is already on the line, and repeating it as a total would be the same number twice.
+    /// What the rest of the history adds up to, said only where there is more than the head: size is
+    /// already on the line, and repeating it as a total would be the same number twice.
     /// </summary>
     private string History => Savegame.SnapshotCount > 1
         ? $" · {Savegame.SnapshotCount} snapshots, {SavegameWording.Size(Savegame.TotalSizeBytes)} stored"
@@ -418,7 +402,11 @@ public partial class SavegameListItemViewModel : ObservableObject
 
 
     [RelayCommand(CanExecute = nameof(CanCheckOut))]
-    private Task CheckOut() => _actions?.CheckOutAsync(this) ?? Task.CompletedTask;
+    private Task CheckOut() => _actions?.CheckOutAsync(this, null) ?? Task.CompletedTask;
+
+    [RelayCommand(CanExecute = nameof(CanCheckOutInCompatibilityMode))]
+    private Task CheckOutInCompatibilityMode()
+        => _actions?.CheckOutAsync(this, SavegameRevisionMode.Compatibility) ?? Task.CompletedTask;
 
     /// <summary>
     /// Hands the save back from the slot holding it, as a new snapshot.
@@ -453,23 +441,15 @@ public partial class SavegameListItemViewModel : ObservableObject
 
 
     /// <summary>
-    /// Puts this savegame back in its profile's current slot, displacing whichever one is there.
-    /// </summary>
-    /// <remarks>
-    /// One of the two things that change which savegame a profile is following, and the other way
-    /// round from publishing - same swap, seen from the other end. Both are stated before they run,
-    /// which is why this opens a confirmation naming what it displaces rather than acting on the
-    /// click. See docs/10-savegame-profile-binding.md#current-and-past-savegames.
-    /// </remarks>
-    [RelayCommand(CanExecute = nameof(CanMakeCurrent))]
-    private Task MakeCurrent() => _actions?.MakeCurrentAsync(this) ?? Task.CompletedTask;
-
-    /// <summary>
     /// Open to everybody, Guest included. It is what makes the list worth showing to somebody who
     /// cannot take the claim: they can still read the history and play a copy.
     /// </summary>
     [RelayCommand]
-    private Task TakeCopy() => _actions?.TakeCopyAsync(this) ?? Task.CompletedTask;
+    private Task TakeCopy() => _actions?.TakeCopyAsync(this, null) ?? Task.CompletedTask;
+
+    [RelayCommand(CanExecute = nameof(CanTakeCopyInCompatibilityMode))]
+    private Task TakeCopyInCompatibilityMode()
+        => _actions?.TakeCopyAsync(this, SavegameRevisionMode.Compatibility) ?? Task.CompletedTask;
 
 
     /// <summary>
@@ -488,19 +468,6 @@ public partial class SavegameListItemViewModel : ObservableObject
         RefreshChips();
     }
 
-    /// <summary>
-    /// Records what this machine can do with this savegame right now, from
-    /// <see cref="SavegameRowRules.Describe"/>.
-    /// </summary>
-    /// <remarks>
-    /// Arrives from outside for the same reason the drift chips do: none of it is a fact about the
-    /// savegame. It needs the games this repo offers, what each one is holding and what its mod
-    /// folder was last synced to - none of which a row has or should have.
-    /// </remarks>
-    /// <param name="blockingSavegameName">
-    /// What the savegame already claiming the mod folder is called, where the page could find it in
-    /// its own list.
-    /// </param>
     /// <summary>
     /// Records where on this machine the local copy is sitting - the fact that decides whether this
     /// row's primary action is Check in or Check out, and which of the three ways out of a hold it
@@ -534,15 +501,35 @@ public partial class SavegameListItemViewModel : ObservableObject
         OnPropertyChanged(nameof(HasUnreachableHoldNote));
         OnPropertyChanged(nameof(ChecksOutAsPrimary));
         OnPropertyChanged(nameof(ChecksOutAsSecondary));
+        OnPropertyChanged(nameof(HasCompatibilityMode));
+        OnPropertyChanged(nameof(CanCheckOutInCompatibilityMode));
+        OnPropertyChanged(nameof(CanTakeCopyInCompatibilityMode));
 
         CheckInCommand.NotifyCanExecuteChanged();
         DiscardCommand.NotifyCanExecuteChanged();
         DisconnectCommand.NotifyCanExecuteChanged();
+        CheckOutInCompatibilityModeCommand.NotifyCanExecuteChanged();
+        TakeCopyInCompatibilityModeCommand.NotifyCanExecuteChanged();
+
+        RefreshChips();
     }
 
+    /// <summary>
+    /// Records what this machine can do with this savegame right now, from
+    /// <see cref="SavegameRowRules.Describe"/>.
+    /// </summary>
+    /// <remarks>
+    /// Arrives from outside for the same reason the drift chips do: none of it is a fact about the
+    /// savegame. It needs the games this repo offers, what each one is holding and what its mod
+    /// folder was last synced to - none of which a row has or should have.
+    /// </remarks>
     /// <param name="offer">
     /// What the game this repo offers can do with this savegame, or null where none is connected on
     /// this machine.
+    /// </param>
+    /// <param name="blockingSavegameName">
+    /// What the savegame already claiming the mod folder is called, where the page could find it in
+    /// its own list.
     /// </param>
     public void SetOffer(SavegameRowOffer? offer, string? blockingSavegameName)
     {
@@ -555,24 +542,45 @@ public partial class SavegameListItemViewModel : ObservableObject
         OnPropertyChanged(nameof(IsBlocked));
         OnPropertyChanged(nameof(CheckOutToolTip));
         OnPropertyChanged(nameof(TakeCopyToolTip));
+        OnPropertyChanged(nameof(CanCheckOutInCompatibilityMode));
 
         CheckOutCommand.NotifyCanExecuteChanged();
+        CheckOutInCompatibilityModeCommand.NotifyCanExecuteChanged();
     }
 
-    /// <param name="lockedPinMoved">
-    /// Whether a <em>locked</em> pin moved between the two revisions. Only that turns the chip
-    /// caution-coloured: an unlocked mod at a different version is untidy, a locked map at a different
-    /// snapshot is a damaged save waiting to happen.
-    /// </param>
-    public void SetRevisionDrift(int revisionsBehind, bool lockedPinMoved)
+    /// <summary>How many revisions the profile has moved on since the save was last played.</summary>
+    public void SetRevisionsBehind(int revisionsBehind)
     {
-        if (_revisionsBehind == revisionsBehind && _lockedPinMoved == lockedPinMoved)
+        if (_revisionsBehind == revisionsBehind)
         {
             return;
         }
 
         _revisionsBehind = revisionsBehind;
-        _lockedPinMoved = lockedPinMoved;
+
+        OnPropertyChanged(nameof(HasCompatibilityMode));
+        OnPropertyChanged(nameof(CanCheckOutInCompatibilityMode));
+        OnPropertyChanged(nameof(CanTakeCopyInCompatibilityMode));
+
+        CheckOutInCompatibilityModeCommand.NotifyCanExecuteChanged();
+        TakeCopyInCompatibilityModeCommand.NotifyCanExecuteChanged();
+
+        RefreshChips();
+    }
+
+    /// <param name="promptsForCompatibility">
+    /// Whether checking out on latest would ask about compatibility mode first. Only that turns the
+    /// revisions-behind chip caution-coloured: a list that moved a little is ordinary, one that moved
+    /// enough to ask about is a damaged save waiting to happen.
+    /// </param>
+    public void SetCompatibility(bool promptsForCompatibility)
+    {
+        if (_promptsForCompatibility == promptsForCompatibility)
+        {
+            return;
+        }
+
+        _promptsForCompatibility = promptsForCompatibility;
 
         RefreshChips();
     }
@@ -583,24 +591,16 @@ public partial class SavegameListItemViewModel : ObservableObject
         Chips.Clear();
         Chips.Add(BuildStateChip());
 
-        // Current and past are both said, because the list groups a profile's savegames together and
-        // which one is which has to read at a glance. All three are Neutral and none is ever Caution:
-        // which savegame a profile is following, and whether a savegame follows one at all, are facts
-        // rather than problems - and spending the loud tone on them is what teaches people to ignore it
-        // where it does mean a damaged save.
-        if (IsPast)
-        {
-            Chips.Add(new SavegameChip(
-                PinnedRevision is int revision ? $"Past · {ProfileName} rev {revision}" : $"Past · {ProfileName}",
-                SavegameChipTone.Neutral));
-        }
-        else if (HasProfile)
-        {
-            Chips.Add(new SavegameChip("Current", SavegameChipTone.Neutral));
-        }
-        else
+        // Facts rather than problems, so Neutral: spending the loud tone on them is what teaches
+        // people to ignore it where it does mean a damaged save.
+        if (HasProfile is false)
         {
             Chips.Add(new SavegameChip(SavegameWording.NoModList, SavegameChipTone.Neutral));
+        }
+
+        if (Hold?.PinnedRevision is int pinned)
+        {
+            Chips.Add(new SavegameChip($"Compatibility · rev {pinned}", SavegameChipTone.Neutral));
         }
 
         if (_hasUnpublishedPlay)
@@ -612,7 +612,7 @@ public partial class SavegameListItemViewModel : ObservableObject
         {
             Chips.Add(new SavegameChip(
                 SavegameWording.RevisionsBehind(_revisionsBehind),
-                _lockedPinMoved ? SavegameChipTone.Caution : SavegameChipTone.Neutral));
+                _promptsForCompatibility ? SavegameChipTone.Caution : SavegameChipTone.Neutral));
         }
 
         OnPropertyChanged(nameof(HasHolder));

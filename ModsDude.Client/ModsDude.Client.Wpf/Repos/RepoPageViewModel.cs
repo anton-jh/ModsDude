@@ -53,13 +53,6 @@ public partial class RepoPageViewModel
     /// <summary>Which row the Archive should pick out on arrival. One-shot, like the others.</summary>
     private Guid? _highlightInArchiveOnce;
 
-    /// <summary>
-    /// Whether the Saves list should arrive with past savegames showing. One-shot, like the others: it
-    /// describes an arrival rather than a standing preference, so opening Saves from the sidebar
-    /// afterwards gets the default back.
-    /// </summary>
-    private bool _showPastSavegamesOnce;
-
     /// <summary>Which savegame the Saves list should arrive with selected. One-shot, like the others.</summary>
     private Guid? _selectSavegameOnce;
 
@@ -157,12 +150,10 @@ public partial class RepoPageViewModel
         {
             _savesMenuItem = new MenuItemViewModel("Saves", () =>
             {
-                var showPastSavegames = _showPastSavegamesOnce;
                 var select = _selectSavegameOnce;
-                _showPastSavegamesOnce = false;
                 _selectSavegameOnce = null;
 
-                return repoSavegamesPageViewModelFactory.Create(repo, showPastSavegames, select);
+                return repoSavegamesPageViewModelFactory.Create(repo, select);
             }).WithIcon(MenuIcons.Saves);
 
             MenuItems.Add(_savesMenuItem);
@@ -335,25 +326,20 @@ public partial class RepoPageViewModel
     /// <summary>
     /// Selects the repo's Saves list.
     /// </summary>
-    /// <param name="showPastSavegames">
-    /// Whether to arrive with the past-savegames toggle on. Set by a link from a profile's count of them,
-    /// which would otherwise land on a list filtering out the very rows it counted.
-    /// </param>
     /// <param name="select">
     /// The savegame to arrive with selected. Set by a link about one savegame - a notice, a toast, a
     /// profile's history - which would otherwise land on whichever row happens to be first.
     /// </param>
     /// <returns>False where this repo has no savegames, or navigation was refused.</returns>
-    public bool TrySelectSavegames(bool showPastSavegames = false, Guid? select = null)
+    public bool TrySelectSavegames(Guid? select = null)
     {
         if (_savesMenuItem is null)
         {
             return false;
         }
 
-        // Read and cleared by the menu item's factory, so they apply to the page this call opens and
+        // Read and cleared by the menu item's factory, so it applies to the page this call opens and
         // not to the next one somebody reaches through the sidebar.
-        _showPastSavegamesOnce = showPastSavegames;
         _selectSavegameOnce = select;
 
         if (ReferenceEquals(NavManager.Selected, _savesMenuItem) is false)
@@ -364,20 +350,11 @@ public partial class RepoPageViewModel
         {
             // Already open, so selecting it again constructs nothing and the factory never runs. Tell
             // the page the user is looking at instead.
-            _showPastSavegamesOnce = false;
             _selectSavegameOnce = null;
 
-            if (NavManager.CurrentPage is RepoSavegamesPageViewModel page)
+            if (NavManager.CurrentPage is RepoSavegamesPageViewModel page && select is Guid savegameId)
             {
-                if (showPastSavegames)
-                {
-                    page.ShowPastSavegames = true;
-                }
-
-                if (select is Guid savegameId)
-                {
-                    page.Select(savegameId);
-                }
+                page.Select(savegameId);
             }
         }
 
@@ -385,9 +362,8 @@ public partial class RepoPageViewModel
 
         if (selected is false)
         {
-            // Refused, so nothing read the values and they must not be waiting for whoever opens
-            // Saves next.
-            _showPastSavegamesOnce = false;
+            // Refused, so nothing read the value and it must not be waiting for whoever opens Saves
+            // next.
             _selectSavegameOnce = null;
         }
 

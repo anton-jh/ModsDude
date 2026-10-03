@@ -45,9 +45,9 @@ public enum SavegameRowBlock
 /// the block is <see cref="SavegameRowBlock.AnotherSavegameIsHeld"/>.
 /// </param>
 /// <param name="PinnedRevision">
-/// The revision a past savegame runs on, carried through so the activation can name it. Null for a
-/// current savegame, whose activation names the profile alone - it follows whatever the profile says
-/// now, and a number there would be one the user has no reason to have heard of.
+/// The revision a savegame in compatibility mode runs on, carried through so the activation can name
+/// it. Null on latest, where the activation names the profile alone - it follows whatever the
+/// profile says now, and a number there would be one the user has no reason to have heard of.
 /// </param>
 public sealed record SavegameRowOffer(
     SavegameRowBlock CheckOut,
@@ -86,13 +86,13 @@ public static class SavegameRowRules
 {
     /// <param name="profileId">The savegame's profile, or null where it follows no mod list.</param>
     /// <param name="headRevision">
-    /// The profile's head, which is what a <em>current</em> savegame runs on. Null where this member
+    /// The profile's head, which is what a savegame on latest runs on. Null where this member
     /// cannot see the profile at all, which is the same answer as following no mod list: nothing here
     /// can say what the folder ought to be on, so nothing is claimed about it.
     /// </param>
     /// <param name="pinnedRevision">
-    /// What a <em>past</em> savegame runs on, from <see cref="SavegameRevisionRules.TargetRevisionOf"/>. Null
-    /// for a current one.
+    /// What a savegame in compatibility mode runs on, from <see cref="SavegameRevisionRules.PinnedRevision"/>.
+    /// Null on latest.
     /// </param>
     /// <param name="held">What the game is already holding.</param>
     /// <param name="appliedProfileId">
@@ -130,8 +130,7 @@ public static class SavegameRowRules
             return new SavegameRowOffer(SavegameRowBlock.None, Guid.Empty, null);
         }
 
-        // Head for a current savegame, its own revision for a past one - the check-out table in
-        // docs/10-savegame-profile-binding.md#which-revision-a-savegame-runs-on, read from the row.
+        // Head on latest, the pinned revision in compatibility mode.
         var required = pinnedRevision ?? head;
 
         return appliedProfileId == profile && appliedRevision == required
@@ -168,7 +167,7 @@ public static class SavegameRowRules
     /// Which list would be activated first, where <see cref="SavegameRowOffer.ActivatesFirst"/>.
     /// </summary>
     /// <remarks>
-    /// The number only where the savegame pins one. A current savegame follows its profile, so naming a
+    /// The number only where the savegame pins one. On latest a savegame follows its profile, so naming a
     /// revision it happens to be at right now would be a number to memorise rather than a thing to know.
     /// </remarks>
     public static string DescribeActivation(string profileName, int? pinnedRevision)

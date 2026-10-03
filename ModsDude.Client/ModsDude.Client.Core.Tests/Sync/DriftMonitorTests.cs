@@ -67,14 +67,14 @@ public class DriftMonitorTests
     }
 
     /// <summary>
-    /// A game holding a past savegame is behind head <em>by construction</em> - that savegame's
+    /// A game holding a savegame in compatibility mode is behind head <em>by construction</em> - that savegame's
     /// revision does not move - so comparing it against head would report drift permanently, and offer
     /// a re-apply to head that the apply table refuses. The comparison is against the revision the
     /// savegame targets instead, and nothing is suppressed to achieve it: it comes out equal on its
     /// own.
     /// </summary>
     [Fact]
-    public void A_game_holding_a_past_savegame_is_not_reported_as_behind_the_profile()
+    public void A_game_holding_a_pinned_savegame_is_not_reported_as_behind_the_profile()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(4, ("fs25_a.zip", "one"));
@@ -87,11 +87,11 @@ public class DriftMonitorTests
     }
 
     /// <summary>
-    /// Folder drift under a past savegame still reports, and against that savegame's revision - the
+    /// Folder drift under a savegame in compatibility mode still reports, and against that savegame's revision - the
     /// re-apply it offers has to target the list the savegame needs rather than head.
     /// </summary>
     [Fact]
-    public void Folder_drift_under_a_past_savegame_still_reports_against_its_revision()
+    public void Folder_drift_under_a_pinned_savegame_still_reports_against_its_revision()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(4, ("fs25_a.zip", "one"));

@@ -347,7 +347,7 @@ public static class NoticeBuilder
             new(NoticeActionKind.OpenSavegame, "Open the save") { IsPrimary = true }
         };
 
-        // A past savegame pinned to a revision its folder has moved off is the one savegame problem a
+        // A savegame in compatibility mode whose folder has moved off its revision is the one savegame problem a
         // re-apply actually fixes, and the button names the number it is going to install rather than
         // offering a latest the apply table refuses.
         if (kinds.Any(x => x.Kind is SavegameDriftKind.PlayedOnAnotherModList && x.RunsOnAnotherProfile is false)

@@ -83,13 +83,6 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     /// </summary>
     public void FollowNoProfile() => _savegame = _savegame with { ProfileId = null };
 
-    /// <summary>
-    /// Makes this savegame a past one: somebody published a new savegame to its profile, and that one is
-    /// current now. Nothing about this savegame's own history changes - a past savegame is not
-    /// read-only, and the single restriction is that its profile revision does not move.
-    /// </summary>
-    public void Supersede() => _savegame = _savegame with { SupersededAt = DateTime.UtcNow };
-
     /// <summary>Puts a snapshot and its bytes on the server - a publish that happened before the test.</summary>
     public SavegameSnapshotDto Seed(byte[] content, int? profileRevision = 1)
     {
@@ -315,21 +308,6 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
         => throw new NotSupportedException();
     public Task<SavegameDto> UpdateSavegameV1Async(Guid repoId, Guid savegameId, UpdateSavegameRequest request, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
-    /// <summary>
-    /// The swap, as the real endpoint performs it: this savegame takes the slot and whatever held it
-    /// leaves. Only the seeded savegame exists here, so nothing is displaced and the answer says so.
-    /// </summary>
-    public Task<MakeSavegameCurrentResponse> MakeSavegameCurrentV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default)
-    {
-        MadeCurrent++;
-
-        _savegame = _savegame with { SupersededAt = null };
-
-        return Task.FromResult(new MakeSavegameCurrentResponse { Savegame = _savegame, Superseded = null });
-    }
-
-    /// <summary>How many times a savegame was put back in its profile's slot.</summary>
-    public int MadeCurrent { get; private set; }
     public Task<ICollection<SavegameDto>> GetSavegamesV1Async(Guid repoId, CancellationToken cancellationToken = default)
     {
         ListReads++;

@@ -56,8 +56,8 @@ public class PersistedGame
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Part of the intent, and written with it.</b> Set only by following a friend who is on a past
-    /// savegame: joining them means being on the revision their save runs on, and nothing held here
+    /// <b>Part of the intent, and written with it.</b> Set only by following a friend who has a savegame
+    /// in compatibility mode: joining them means being on the revision their save runs on, and nothing held here
     /// says so - the savegame is on their machine. Every other activation clears it, so the ordinary
     /// way back to head is activating the profile again.
     /// </para>

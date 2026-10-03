@@ -72,8 +72,8 @@ public class SavegameCheckout
     /// <para>
     /// <b>A floor, not one revision</b>, because the server never learns which revision the folder is
     /// on until the check-in says so. What it does know is where play can start: the revision of the
-    /// snapshot that was taken, which a past save is applied to exactly and a current one is at or
-    /// below - a current save follows its profile's head, and a head only moves forward. Every
+    /// snapshot that was taken, which a save in compatibility mode is applied to exactly and any other
+    /// is at or below - it goes onto its profile's head, and a head only moves forward. Every
     /// revision played until the check-in is at or above it.
     /// </para>
     /// <para>

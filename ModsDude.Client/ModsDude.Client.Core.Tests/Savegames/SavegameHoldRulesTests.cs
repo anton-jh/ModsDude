@@ -22,11 +22,11 @@ public class SavegameHoldRulesTests
     }
 
     /// <summary>
-    /// A current savegame follows its profile - that is what current means - so preparing the mod list
+    /// A savegame on latest follows its profile, so preparing the mod list
     /// before a session and then checking the savegame out has to leave the new list in place.
     /// </summary>
     [Fact]
-    public void A_current_savegame_pins_nothing_and_refuses_nothing()
+    public void A_savegame_on_latest_pins_nothing_and_refuses_nothing()
     {
         var held = new[] { Hold() };
 
@@ -35,22 +35,22 @@ public class SavegameHoldRulesTests
     }
 
     [Fact]
-    public void A_past_savegame_pins_the_folder_to_its_own_revision()
+    public void A_savegame_in_compatibility_mode_pins_the_folder_to_its_revision()
     {
         var held = new[] { Hold(target: 4) };
 
         Assert.Equal(4, SavegameHoldRules.RequiredRevision(held, _profileId));
 
-        // Re-applying it is the whole point: that is how folder drift under a past savegame gets repaired.
+        // Re-applying it is the whole point: that is how folder drift under a pinned savegame gets repaired.
         Assert.True(SavegameHoldRules.DecideApply(held, _profileId, 4).IsAllowed);
     }
 
     [Fact]
-    public void A_past_savegame_refuses_every_other_revision_including_head()
+    public void A_savegame_in_compatibility_mode_refuses_every_other_revision_including_head()
     {
         var decision = SavegameHoldRules.DecideApply([Hold(target: 4)], _profileId, 1004);
 
-        Assert.Equal(SavegameApplyRefusal.PastSavegameIsHeld, decision.Refusal);
+        Assert.Equal(SavegameApplyRefusal.CompatibilityModeIsHeld, decision.Refusal);
         Assert.Equal(_savegameId, decision.SavegameId);
         Assert.Equal(4, decision.Revision);
     }
@@ -113,7 +113,7 @@ public class SavegameHoldRulesTests
     }
 
     /// <summary>
-    /// Whichever profile it follows, and whether it is current or past: deactivating takes the game off
+    /// Whichever profile it follows, and whether it is in compatibility mode or not: deactivating takes the game off
     /// its mod list altogether, so every savegame that claims one is in the way.
     /// </summary>
     [Fact]
@@ -141,7 +141,7 @@ public class SavegameHoldRulesTests
     }
 
 
-    /// <param name="target">A number makes it past, pinned to that revision; null makes it current.</param>
+    /// <param name="target">A number puts it in compatibility mode, pinned to that revision; null follows head.</param>
     private static SavegameCheckoutBinding Hold(int? target = null, bool noProfile = false)
         => new(Guid.NewGuid(), _savegameId, Keys.Slot("savegame1"), 1, "aaaa", DateTime.UtcNow)
         {

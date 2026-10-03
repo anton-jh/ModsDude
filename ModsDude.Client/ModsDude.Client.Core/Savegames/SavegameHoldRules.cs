@@ -24,11 +24,11 @@ public enum SavegameApplyRefusal
     AnotherProfileIsHeld,
 
     /// <summary>
-    /// A past savegame is checked out here, and it runs on one revision only. Re-applying that
+    /// A savegame is checked out here in compatibility mode, so it runs on one revision only. Re-applying that
     /// revision is allowed - repairing folder drift is exactly what it is for - and anything else,
     /// head included, would move a savegame whose revision does not move.
     /// </summary>
-    PastSavegameIsHeld
+    CompatibilityModeIsHeld
 }
 
 
@@ -76,8 +76,8 @@ public static class SavegameHoldRules
     /// </summary>
     /// <remarks>
     /// Read by the apply, which installs it in place of head, and by the drift check, which compares
-    /// against it in place of head. Nothing is suppressed by the second: a game holding a past
-    /// savegame is behind head by construction, and comparing it against head instead would report
+    /// against it in place of head. Nothing is suppressed by the second: a game holding a savegame
+    /// in compatibility mode is behind head by construction, and comparing it against head instead would report
     /// drift permanently while offering a re-apply the apply table refuses.
     /// </remarks>
     public static int? RequiredRevision(IReadOnlyList<SavegameCheckoutBinding> held, Guid profileId)
@@ -99,7 +99,7 @@ public static class SavegameHoldRules
     /// </summary>
     /// <param name="revision">
     /// The revision about to be installed, or null where the caller has not chosen one and will take
-    /// whatever <see cref="RequiredRevision"/> says. Null therefore never trips the past-savegame
+    /// whatever <see cref="RequiredRevision"/> says. Null therefore never trips the compatibility-mode
     /// refusal - it cannot be the wrong revision when it is not a revision.
     /// </param>
     public static SavegameApplyDecision DecideApply(
@@ -126,7 +126,7 @@ public static class SavegameHoldRules
             if (binding.TargetRevision is int pinned && revision is int asked && asked != pinned)
             {
                 return new SavegameApplyDecision(
-                    SavegameApplyRefusal.PastSavegameIsHeld, binding.SavegameId, heldProfile, pinned);
+                    SavegameApplyRefusal.CompatibilityModeIsHeld, binding.SavegameId, heldProfile, pinned);
             }
         }
 

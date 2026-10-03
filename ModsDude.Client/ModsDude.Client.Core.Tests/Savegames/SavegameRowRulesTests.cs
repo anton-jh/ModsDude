@@ -21,11 +21,11 @@ public class SavegameRowRulesTests
 
 
     /// <summary>
-    /// The ordinary evening: a current savegame, on a game following its profile, whose folder is on
+    /// The ordinary evening: a savegame checked out on latest, on a game following its profile, whose folder is on
     /// head. One click, and nothing to read.
     /// </summary>
     [Fact]
-    public void A_current_savegame_on_a_folder_already_at_head_is_one_click()
+    public void On_latest_a_folder_already_at_head_is_one_click()
     {
         var offer = Describe(head: 1004, appliedRevision: 1004);
 
@@ -35,12 +35,12 @@ public class SavegameRowRulesTests
     }
 
     /// <summary>
-    /// The game is on this profile but behind its head, which is what a current savegame runs on. The
-    /// revision is deliberately not named: a current savegame follows whatever its profile says now, so a
+    /// The game is on this profile but behind its head, which is what a savegame on latest runs on. The
+    /// revision is deliberately not named: a savegame on latest follows whatever its profile says now, so a
     /// number there would be one to memorise rather than a thing to do.
     /// </summary>
     [Fact]
-    public void A_current_savegame_on_a_stale_folder_activates_the_profile_by_name_first()
+    public void On_latest_a_stale_folder_activates_the_profile_by_name_first()
     {
         var offer = Describe(head: 1004, appliedRevision: 1000);
 
@@ -53,7 +53,7 @@ public class SavegameRowRulesTests
     }
 
     [Fact]
-    public void A_current_savegame_on_an_game_following_another_profile_activates_it_first()
+    public void On_latest_a_game_following_another_profile_activates_it_first()
     {
         var offer = Describe(1004, null, _otherProfileId, 1004);
 
@@ -62,12 +62,12 @@ public class SavegameRowRulesTests
     }
 
     /// <summary>
-    /// A past savegame runs on one revision only, so the activation names it: the profile's latest is
+    /// A savegame in compatibility mode runs on one revision only, so the activation names it: the profile's latest is
     /// what the apply table refuses, and a question naming only "Old-school" would describe an
     /// activation that does the wrong thing.
     /// </summary>
     [Fact]
-    public void A_past_savegame_names_the_revision_it_runs_on()
+    public void Compatibility_mode_names_the_revision_it_runs_on()
     {
         var offer = Describe(head: 1004, pinned: 4, appliedRevision: 1004);
 
@@ -77,7 +77,7 @@ public class SavegameRowRulesTests
     }
 
     [Fact]
-    public void A_past_savegame_on_a_folder_already_at_its_revision_is_one_click()
+    public void Compatibility_mode_on_a_folder_already_at_its_revision_is_one_click()
     {
         var offer = Describe(head: 1004, pinned: 4, appliedRevision: 4);
 

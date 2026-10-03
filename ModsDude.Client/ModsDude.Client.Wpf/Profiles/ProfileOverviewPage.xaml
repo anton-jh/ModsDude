@@ -71,9 +71,8 @@
                     </GroupBox>
                 </Border>
 
-                <!-- Which savegame this profile is following. The savegames themselves stay on the one
-                     repo-level list, so the past ones are a count and a link into that list rather
-                     than a second list of rows to keep true. -->
+                <!-- This profile's savegames, most recently played first. Each name leads to its row on
+                     the repo's Saves list, which is where a savegame is checked out and in. -->
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                         CornerRadius="4"
                         Padding="16"
@@ -84,83 +83,48 @@
 
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Text="{Binding CurrentSavegame}" />
+                                       Text="{Binding SavegamesNote}"
+                                       Visibility="{Binding HasSavegamesNote, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                            <!-- Archiving deliberately does not release a profile's slot, so this is a
-                                 state somebody can be stuck in. The three ways out are named. -->
-                            <TextBlock Margin="0 8 0 0"
-                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Text="{Binding ArchivedWarning}"
-                                       Visibility="{Binding HasArchivedWarning, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <ItemsControl ItemsSource="{Binding Savegames}" Grid.IsSharedSizeScope="True">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type profiles:ProfileSavegameRowViewModel}">
+                                        <Grid Margin="0 0 0 6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="auto" SharedSizeGroup="Name" />
+                                                <ColumnDefinition Width="auto" SharedSizeGroup="Played" />
+                                                <ColumnDefinition Width="auto" />
+                                            </Grid.ColumnDefinitions>
 
-                            <!-- The Saves list's own flows for this profile's savegame. Publish is always
-                                 here; Check in and Check out only where there is a current savegame, and
-                                 greyed with the reason in the tooltip where this machine cannot do them.
-                                 Whichever of the two the Saves row would lead with comes first and
-                                 accented, so each pair is drawn twice and one of them is shown. -->
-                            <StackPanel Orientation="Horizontal"
-                                        Margin="0 12 0 0"
-                                        Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <Button Content="Check in"
-                                        Style="{DynamicResource AccentButtonStyle}"
-                                        MinWidth="110"
-                                        ToolTip="{Binding CheckInToolTip}"
-                                        ToolTipService.ShowOnDisabled="True"
-                                        Command="{Binding CheckInCommand}"
-                                        Visibility="{Binding ChecksInAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                            <TextBlock Grid.Column="0" Margin="0 0 24 0">
+                                                <Hyperlink Style="{StaticResource TextLink}"
+                                                           ToolTip="Open it on the Saves list"
+                                                           Command="{Binding OpenCommand}">
+                                                    <Run Text="{Binding Name, Mode=OneWay}" />
+                                                </Hyperlink>
+                                            </TextBlock>
 
-                                <Button Content="{Binding CheckOutLabel}"
-                                        Style="{DynamicResource AccentButtonStyle}"
-                                        MinWidth="110"
-                                        ToolTip="{Binding CheckOutToolTip}"
-                                        ToolTipService.ShowOnDisabled="True"
-                                        Command="{Binding CheckOutCommand}"
-                                        Visibility="{Binding ChecksOutAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                            <TextBlock Grid.Column="1"
+                                                       Margin="0 0 24 0"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Text="{Binding LastPlayedText}" />
 
-                                <Button Content="{Binding CheckOutLabel}"
-                                        Margin="8 0 0 0"
-                                        MinWidth="110"
-                                        ToolTip="{Binding CheckOutToolTip}"
-                                        ToolTipService.ShowOnDisabled="True"
-                                        Command="{Binding CheckOutCommand}"
-                                        Visibility="{Binding ChecksInAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                            <TextBlock Grid.Column="2"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Text="{Binding HolderText}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
-                                <Button Content="Check in"
-                                        Margin="8 0 0 0"
-                                        MinWidth="110"
-                                        ToolTip="{Binding CheckInToolTip}"
-                                        ToolTipService.ShowOnDisabled="True"
-                                        Command="{Binding CheckInCommand}"
-                                        Visibility="{Binding ChecksOutAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                                <Button Content="Publish a save"
-                                        MinWidth="110"
-                                        ToolTip="{Binding PublishToolTip}"
-                                        ToolTipService.ShowOnDisabled="True"
-                                        Command="{Binding PublishCommand}">
-                                    <Button.Style>
-                                        <!-- Beside the other two where they are there, and first where
-                                             it is the only one. -->
-                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                            <Setter Property="Margin" Value="8 0 0 0" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasCurrent}" Value="False">
-                                                    <Setter Property="Margin" Value="0" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                            </StackPanel>
-
-                            <Button Margin="0 8 0 0"
+                            <Button Margin="0 12 0 0"
                                     HorizontalAlignment="Left"
-                                    Style="{DynamicResource SubtleMenuButton}"
-                                    Content="{Binding PastSavegamesText}"
-                                    ToolTip="Opens the repo's saves list with past savegames showing."
-                                    Command="{Binding ShowPastSavegamesCommand}"
-                                    Visibility="{Binding HasPastSavegames, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    MinWidth="110"
+                                    Content="Publish a save"
+                                    ToolTip="{Binding PublishToolTip}"
+                                    ToolTipService.ShowOnDisabled="True"
+                                    Command="{Binding PublishCommand}"
+                                    Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </StackPanel>
                     </GroupBox>
                 </Border>

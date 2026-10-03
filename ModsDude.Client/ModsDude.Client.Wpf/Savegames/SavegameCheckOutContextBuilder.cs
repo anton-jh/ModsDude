@@ -13,7 +13,6 @@ public sealed class SavegameCheckOutContextBuilder(
     ISavegameBindingStore bindingStore,
     IProfileService profileService,
     IProfileApplyService applyService,
-    ILockedPinDrift lockedPinDrift,
     IBackgroundTaskReporter backgroundTasks) : ISavegameCheckOutContextBuilder
 {
     public async Task<SavegameCheckOutContext> BuildAsync(
@@ -21,6 +20,8 @@ public sealed class SavegameCheckOutContextBuilder(
         SavegameDto savegame,
         Game game,
         SavegameCheckOutMode mode,
+        int? pinnedRevision,
+        SavegameCompatibilityVerdict? verdict,
         Func<Guid, string?> nameOf,
         CancellationToken cancellationToken)
     {
@@ -47,22 +48,22 @@ public sealed class SavegameCheckOutContextBuilder(
             suggested,
             DescribeSuggestion(options, suggested, hint),
             mode is SavegameCheckOutMode.CheckOut
-                ? await BuildModsSummaryAsync(repo, savegame, game, cancellationToken)
+                ? await BuildModsSummaryAsync(repo, savegame, game, pinnedRevision, cancellationToken)
                 : null,
-            await BuildRevisionNoteAsync(repo, savegame, cancellationToken),
+            DescribeRevision(savegame, pinnedRevision, verdict),
             // Absent for a copy, which applies nothing.
-            mode is SavegameCheckOutMode.CheckOut ? DescribeRunsOn(repo, savegame) : null);
+            mode is SavegameCheckOutMode.CheckOut ? DescribeRunsOn(repo, savegame, pinnedRevision) : null);
     }
 
     /// <summary>
-    /// Which revision the folder will be on afterwards. Shown for a current savegame too, whose head
-    /// can differ from the revision it was last played on.
+    /// Which revision the folder will be on afterwards. Shown on latest too, whose head can differ
+    /// from the revision the save was last played on.
     /// </summary>
-    private string? DescribeRunsOn(Repo repo, SavegameDto savegame)
+    private string? DescribeRunsOn(Repo repo, SavegameDto savegame, int? pinnedRevision)
     {
-        if (SavegameRevisionRules.TargetRevisionOf(savegame) is int pinned)
+        if (pinnedRevision is int pinned)
         {
-            return $"This savegame stays on rev {pinned}. Playing it does not move it forward.";
+            return $"Compatibility mode: stays on rev {pinned} while checked out.";
         }
 
         return profileService.FindLive(repo.Id, savegame.ProfileId) is ProfileDto profile
@@ -107,6 +108,7 @@ public sealed class SavegameCheckOutContextBuilder(
         Repo repo,
         SavegameDto savegame,
         Game game,
+        int? pinnedRevision,
         CancellationToken cancellationToken)
     {
         if (repo.Adapter.CanSupportMods is false || profileService.FindLive(repo.Id, savegame.ProfileId) is not ProfileDto profile)
@@ -124,7 +126,7 @@ public sealed class SavegameCheckOutContextBuilder(
             game,
             profile.Id,
             profile.Name,
-            SavegameRevisionRules.TargetRevisionOf(savegame),
+            pinnedRevision,
             cancellationToken,
             ProfileApplyService.Report(task, null))).Plans;
 
@@ -170,26 +172,20 @@ public sealed class SavegameCheckOutContextBuilder(
 
     /// <summary>
     /// Which revision the save was last played on against the one the profile is now at. Null where
-    /// they are the same.
+    /// they are the same, and in compatibility mode, where the folder stays on the played one.
     /// </summary>
-    private async Task<SavegameRevisionNote?> BuildRevisionNoteAsync(Repo repo, SavegameDto savegame, CancellationToken cancellationToken)
+    private static SavegameRevisionNote? DescribeRevision(
+        SavegameDto savegame,
+        int? pinnedRevision,
+        SavegameCompatibilityVerdict? verdict)
     {
-        if (savegame.Head is not SavegameSnapshotDto head ||
-            head.ProfileRevision is not int played ||
-            profileService.FindLive(repo.Id, savegame.ProfileId) is not ProfileDto profile ||
-            profile.HeadRevision <= played)
+        if (pinnedRevision is not null || verdict is null)
         {
             return null;
         }
 
-        var moved = await lockedPinDrift.HasMovedAsync(repo.Id, profile.Id, played, profile.HeadRevision, cancellationToken);
-
-        var text = $"Last played on revision {played}; {profile.Name} is now at {profile.HeadRevision}.";
-
         return new SavegameRevisionNote(
-            moved
-                ? text + " A locked mod moved between them, and hosting this save on it may damage it."
-                : text,
-            moved);
+            $"Last played on rev {verdict.Comparison.From}; {SavegameWording.ProfileOf(savegame)} is now at rev {verdict.Comparison.To}.",
+            verdict.ShouldPrompt);
     }
 }

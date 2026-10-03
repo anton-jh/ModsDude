@@ -17,8 +17,8 @@ public interface IProfileApplyService
     /// nothing to plan: no mod capability, no folder configured, or none of them reachable right now.
     /// </remarks>
     /// <param name="revision">
-    /// Which revision to plan against, or null to let the game decide - a past savegame held
-    /// there pins the folder to its own revision, and everything else follows head. Named only by the
+    /// Which revision to plan against, or null to let the game decide - a savegame held there
+    /// in compatibility mode pins the folder to its revision, and everything else follows head. Named only by the
     /// check-out modal, which is previewing the apply for a savegame nothing is holding yet.
     /// </param>
     /// <param name="progress">
@@ -54,8 +54,8 @@ public interface IProfileApplyService
     /// <inheritdoc cref="ApplyAsync" path="/param"/>
     /// <param name="pinRevision">
     /// Make <paramref name="revision"/> the game's standing intent rather than a one-off - see
-    /// <see cref="Core.Persistence.PersistedGame.PinnedRevision"/>. Only following a friend who is on a past savegame
-    /// does this; every other activation leaves the game on head, and clears a pin it had.
+    /// <see cref="Core.Persistence.PersistedGame.PinnedRevision"/>. Only following a friend who has a savegame in
+    /// compatibility mode does this; every other activation leaves the game on head, and clears a pin it had.
     /// </param>
     /// <param name="checkedOutSavegame">
     /// The savegame whose check-out this activation is part of, so friends hear about the check-out
@@ -87,7 +87,7 @@ public interface IProfileApplyService
     /// <param name="revision">
     /// Which revision to install, or null - nearly always - to let the game decide, per
     /// <see cref="TryPlanAsync"/>. Named by the activation a savegame check-out or copy runs first,
-    /// which is preparing the folder for a savegame nothing is holding yet: a past one runs on its own
+    /// which is preparing the folder for a savegame nothing is holding yet: in compatibility mode it runs on its own
     /// revision, and letting the game decide would install head and leave the check-out that follows
     /// immediately drifted.
     /// </param>

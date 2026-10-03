@@ -84,10 +84,10 @@ public static class ProfileModTouches
     /// <summary>The same words for a change a comparison has already found.</summary>
     public static string? Describe(ProfileModChange change) => Describe(
         change.FromVersionId is { } from
-            ? new ProfileModPin(change.ModId, from, new ProfileModLock(false, change.FromLocked))
+            ? new ProfileModPin(change.ModId, from, new ProfileModLock(false, change.FromLock.ByProfile))
             : null,
         change.ToVersionId is { } to
-            ? new ProfileModPin(change.ModId, to, new ProfileModLock(false, change.ToLocked))
+            ? new ProfileModPin(change.ModId, to, new ProfileModLock(false, change.ToLock.ByProfile))
             : null);
 
     /// <summary>The same answer for a change a comparison has already found.</summary>

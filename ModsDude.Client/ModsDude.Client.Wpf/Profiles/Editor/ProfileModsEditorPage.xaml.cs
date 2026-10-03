@@ -13,21 +13,6 @@ public partial class ProfileModsEditorPage : Page
 
 
     /// <summary>
-    /// The popup stays open through a click on its own content, so the item that runs the variant
-    /// has to put the caret back up itself.
-    /// </summary>
-    private void CloseSaveVariants(object sender, RoutedEventArgs e)
-    {
-        SaveVariantButton.IsChecked = false;
-    }
-
-    /// <inheritdoc cref="CloseSaveVariants"/>
-    private void CloseUpdateVariants(object sender, RoutedEventArgs e)
-    {
-        UpdateVariantButton.IsChecked = false;
-    }
-
-    /// <summary>
     /// Ctrl+F puts the caret in the search box. Ctrl+Z and Ctrl+Y undo and redo the draft - except in a
     /// text box, where they are the text's own.
     /// </summary>

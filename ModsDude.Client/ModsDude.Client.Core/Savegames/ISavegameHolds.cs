@@ -13,13 +13,6 @@ public interface ISavegameHolds
     Task ReleaseAsync(Game game, Guid repoId, Guid savegameId, CancellationToken ct);
 
     /// <summary>
-    /// Makes a past savegame current again, and lets go of the revision it pinned the mod folder to in
-    /// every given game holding it. The pins are cleared only after the server accepts the swap.
-    /// </summary>
-    /// <param name="games">Every installation that might be holding it. None is fine.</param>
-    Task<MakeSavegameCurrentResponse> MakeCurrentAsync(IReadOnlyList<Game> games, SavegameDto savegame, CancellationToken ct);
-
-    /// <summary>
     /// Cuts every local tie to a savegame. The slot's contents are not touched and the server is not
     /// told, so a claim that still exists stays standing.
     /// </summary>

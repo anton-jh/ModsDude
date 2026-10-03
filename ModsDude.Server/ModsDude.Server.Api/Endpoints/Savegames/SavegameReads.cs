@@ -89,7 +89,6 @@ internal static class SavegameReads
                 row.Created,
                 headsBySavegame.TryGetValue(row.Id, out var head) ? ToDto(repoId, head, names) : null,
                 checkoutsBySavegame.TryGetValue(row.Id, out var checkout) ? ToDto(checkout, names) : null,
-                row.SupersededAt,
                 row.ArchivedAt,
                 totals.GetValueOrDefault(row.Id).Count,
                 totals.GetValueOrDefault(row.Id).Bytes))
@@ -137,7 +136,6 @@ internal static class SavegameReads
             savegame.Created,
             head is null ? null : ToDto(savegame.RepoId, head, names),
             checkout is null ? null : ToDto(checkout, names),
-            savegame.SupersededAt,
             savegame.ArchivedAt,
             totals.Count,
             totals.Bytes);

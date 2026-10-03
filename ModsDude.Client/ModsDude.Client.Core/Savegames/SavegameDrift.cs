@@ -46,11 +46,11 @@ public enum SavegameDriftKind
 
     /// <summary>
     /// The folder is not on the mod list this save runs on - the game was applied to a different
-    /// profile entirely, or a past savegame's folder was moved off the revision it is pinned to. The
+    /// profile entirely, or the folder of a savegame in compatibility mode was moved off the revision it is pinned to. The
     /// case that corrupts saves, and the reason the locking exists at all.
     /// </summary>
     /// <remarks>
-    /// <b>Not "the profile moved".</b> A current savegame follows its profile, so head moving ahead of
+    /// <b>Not "the profile moved".</b> A savegame outside compatibility mode follows its profile, so head moving ahead of
     /// the folder is the game being behind - which <c>profileHasMoved</c> already reports, at the
     /// level it belongs to. Saying it here as well would fire this on the ordinary
     /// check-out-then-apply flow and spend the loudest warning in the app on the intended case.
@@ -89,8 +89,8 @@ public sealed record SavegameDrift(
     public int? AppliedRevision { get; init; }
 
     /// <summary>
-    /// The revision this save runs on, where it pins one - a past savegame's. Null for a current one,
-    /// which follows its profile and pins nothing.
+    /// The revision this save runs on, where it pins one - in compatibility mode. Null otherwise, where
+    /// it follows its profile and pins nothing.
     /// </summary>
     /// <remarks>
     /// <b>The number <see cref="SavegameDriftKind.PlayedOnAnotherModList"/> was decided by</b>, where
@@ -279,14 +279,14 @@ public static class SavegameDriftRules
             return true;
         }
 
-        // A current savegame pins nothing: it runs on whatever its profile says now, and the folder
+        // Outside compatibility mode a savegame pins nothing: it runs on whatever its profile says now, and the folder
         // being behind head is the game's business rather than this save's.
         if (binding.TargetRevision is not int pinned)
         {
             return false;
         }
 
-        // A past savegame's revision does not move, and the apply table forbids moving it - so a
+        // A pinned revision does not move, and the apply table forbids moving it - so a
         // mismatch here is an interrupted sync or discarded local state, not somebody's choice.
         return appliedRevision is int applied && applied != pinned;
     }

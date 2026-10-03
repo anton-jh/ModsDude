@@ -14,6 +14,9 @@ public interface ISavegameProfileActivation
     /// Where the mod folder is not on the revision this savegame runs on, asks to activate its profile
     /// and does. A copy may decline and go ahead; a check-out may not.
     /// </summary>
+    /// <param name="pinnedRevision">
+    /// The revision the folder has to be on: the played one in compatibility mode, null for latest.
+    /// </param>
     /// <param name="changed">Called after an activation, whether or not it succeeded.</param>
     /// <returns>
     /// Whether to carry on: nothing needed doing, the activation finished, or a copy was told to leave
@@ -24,6 +27,7 @@ public interface ISavegameProfileActivation
         Game game,
         SavegameDto savegame,
         SavegameCheckOutMode mode,
+        int? pinnedRevision,
         Func<Task> changed,
         CancellationToken cancellationToken);
 

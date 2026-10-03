@@ -19,8 +19,9 @@ public class HeldSavegamesTests
 
 
     /// <summary>
-    /// A game following a friend onto a past savegame is held on that revision by its own intent, with
-    /// no savegame of its own to say so - and the apply and the drift check have to read it all the same.
+    /// A game following a friend onto a savegame in compatibility mode is held on that revision by its
+    /// own intent, with no savegame of its own to say so - and the apply and the drift check have to
+    /// read it all the same.
     /// </summary>
     [Fact]
     public void A_game_pinned_by_its_own_intent_requires_that_revision()
@@ -34,19 +35,18 @@ public class HeldSavegamesTests
     }
 
     /// <summary>
-    /// A held past savegame outranks the game's own pin: the apply table refuses anything else while
-    /// it is out, so it is the revision the folder actually has to be on.
+    /// A savegame held in compatibility mode outranks the game's own pin: the apply table refuses
+    /// anything else while it is out, so it is the revision the folder actually has to be on.
     /// </summary>
     [Fact]
-    public async Task A_held_past_savegame_outranks_the_games_own_pin()
+    public async Task A_savegame_held_in_compatibility_mode_outranks_the_games_own_pin()
     {
         using var harness = new SavegameHarness(appliedRevision: 4);
         await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
-        harness.Server.Supersede();
         harness.Game.PersistedModel.PinnedRevision = 2;
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Compatibility, CancellationToken.None);
 
         Assert.Equal(4, harness.HeldSavegames.GetRequiredRevision(harness.Game.Identity, harness.ProfileId));
     }

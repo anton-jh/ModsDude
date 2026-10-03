@@ -31,6 +31,7 @@ public sealed class SavegameProfileActivation(
         Game game,
         SavegameDto savegame,
         SavegameCheckOutMode mode,
+        int? pinnedRevision,
         Func<Task> changed,
         CancellationToken cancellationToken)
     {
@@ -42,17 +43,15 @@ public sealed class SavegameProfileActivation(
             return true;
         }
 
-        var pinned = SavegameRevisionRules.TargetRevisionOf(savegame);
-
         var offer = SavegameRowRules.Describe(
-            savegame.Id, profile.Id, profile.HeadRevision, pinned, host.Held, host.AppliedProfileId, host.AppliedRevision);
+            savegame.Id, profile.Id, profile.HeadRevision, pinnedRevision, host.Held, host.AppliedProfileId, host.AppliedRevision);
 
         if (offer.ActivatesFirst is false)
         {
             return true;
         }
 
-        var list = SavegameRowRules.DescribeActivation(profile.Name, pinned);
+        var list = SavegameRowRules.DescribeActivation(profile.Name, pinnedRevision);
 
         // A check-out holds the save against this folder, so the folder has to be right. A copy claims
         // nothing, so writing it next to whatever the folder has now is the user's choice.
@@ -87,10 +86,10 @@ public sealed class SavegameProfileActivation(
         }
 
         // Named, not left to the game: nothing is holding this savegame yet, so the game would resolve
-        // head - wrong for a past savegame, whose check-out would then leave the folder drifted.
+        // head - wrong in compatibility mode, whose check-out would then leave the folder drifted.
         var outcome = await applyService.ActivateAsync(
             repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, cancellationToken,
-            revision: pinned ?? profile.HeadRevision);
+            revision: pinnedRevision ?? profile.HeadRevision);
 
         await driftMonitor.CheckAsync();
 

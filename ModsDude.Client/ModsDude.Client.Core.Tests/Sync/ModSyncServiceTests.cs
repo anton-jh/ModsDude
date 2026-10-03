@@ -886,8 +886,8 @@ public class ModSyncServiceTests
     }
 
     /// <summary>
-    /// The other half: a game that has to stay on an older list - one holding a past savegame,
-    /// whose revision does not move - gets that revision installed and recorded, rather than being
+    /// The other half: a game that has to stay on an older list - one holding a savegame in
+    /// compatibility mode, whose revision does not move - gets that revision installed and recorded, rather than being
     /// quietly taken to head by the only apply the client used to know how to do.
     /// </summary>
     [Fact]
@@ -977,13 +977,13 @@ public class ModSyncServiceTests
     }
 
     /// <summary>
-    /// <b>The apply that would take a savegame off its mod list, resolved rather than refused.</b> An
-    /// game holding a past savegame is pinned to that savegame's revision, and every caller asks for
+    /// <b>The apply that would take a savegame off its mod list, resolved rather than refused.</b> A
+    /// game holding a savegame in compatibility mode is pinned to that savegame's revision, and every caller asks for
     /// nothing in particular - so the one place all of them pass through is where head stops being the
     /// answer. Nobody had to know a savegame was involved.
     /// </summary>
     [Fact]
-    public async Task A_game_holding_a_past_savegame_gets_its_revision_rather_than_head()
+    public async Task A_game_holding_a_pinned_savegame_gets_its_revision_rather_than_head()
     {
         using var fixture = new SyncFixture();
         fixture.Server.HeadRevision = 1004;
@@ -1008,7 +1008,7 @@ public class ModSyncServiceTests
     /// then checked against what <em>is</em> held.
     /// </summary>
     [Fact]
-    public async Task A_named_revision_that_a_held_past_savegame_forbids_is_refused()
+    public async Task A_named_revision_that_a_held_pinned_savegame_forbids_is_refused()
     {
         using var fixture = new SyncFixture();
         fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));

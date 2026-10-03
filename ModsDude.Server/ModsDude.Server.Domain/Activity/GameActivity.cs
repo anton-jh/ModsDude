@@ -73,7 +73,7 @@ public class GameActivity
     /// The revision the game is held to, or null - nearly always - where it follows the profile's head.
     /// </summary>
     /// <remarks>
-    /// Only ever set where something chose a revision: a past savegame checked out, or somebody
+    /// Only ever set where something chose a revision: a savegame checked out in compatibility mode, or somebody
     /// following a friend who had one. An ordinary activation is on head by definition, and writing
     /// down the number head happened to be would make a follower pin themselves to it.
     /// </remarks>

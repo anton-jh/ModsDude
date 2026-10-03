@@ -30,7 +30,7 @@ public sealed record ModSyncRequest(
     /// </summary>
     /// <remarks>
     /// <b>Null is the ordinary answer and the one nearly every caller gives.</b> It resolves to the
-    /// revision a past savegame held here pins the folder to, and to the profile's head where nothing
+    /// revision a savegame held here in compatibility mode pins the folder to, and to the profile's head where nothing
     /// pins it - so a re-apply from the drift notice, from the mod list editor and from the game
     /// page all target the right list without any of them knowing what a savegame is. A number is for
     /// the one caller that knows better than the game does: the check-out dialog, previewing the

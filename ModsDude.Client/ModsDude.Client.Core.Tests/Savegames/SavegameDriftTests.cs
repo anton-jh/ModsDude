@@ -145,13 +145,13 @@ public class SavegameDriftTests
     }
 
     /// <summary>
-    /// A past savegame's revision does not move, and the apply table forbids moving it - so a folder
+    /// A pinned revision does not move, and the apply table forbids moving it - so a folder
     /// that is off it is an interrupted sync or discarded local state rather than anybody's choice.
     /// The case that corrupts saves, and it costs no I/O whatsoever: both numbers are already in local
     /// state.
     /// </summary>
     [Fact]
-    public void A_past_savegame_whose_folder_left_its_revision_is_drift()
+    public void A_pinned_savegame_whose_folder_left_its_revision_is_drift()
     {
         var kinds = SavegameDriftRules.Classify(Binding(target: 6), "aaaa", headSnapshot: 4, _profileId, appliedRevision: 8);
 
@@ -273,7 +273,7 @@ public class SavegameDriftTests
     /// local state. It is the reason this state is worth having at all.
     /// </summary>
     [Fact]
-    public async Task A_past_savegame_whose_folder_was_re_synced_off_its_revision_is_reported()
+    public async Task A_pinned_savegame_whose_folder_was_re_synced_off_its_revision_is_reported()
     {
         using var harness = new DriftHarness();
 
@@ -288,7 +288,7 @@ public class SavegameDriftTests
     }
 
     /// <summary>
-    /// The same two integers for a savegame that is its profile's current savegame say nothing at all: it
+    /// The same two integers for a savegame on latest say nothing at all: it
     /// follows the profile, so the folder moving to a newer revision of it is the intended flow.
     /// </summary>
     [Fact]
@@ -356,7 +356,7 @@ public class SavegameDriftTests
 
 
     /// <param name="target">
-    /// What the savegame runs on. A number is a past savegame, pinned; null is a current one, which
+    /// What the savegame runs on. A number is compatibility mode, pinned; null is latest, which
     /// follows its profile and pins nothing.
     /// </param>
     private static SavegameCheckoutBinding Binding(
@@ -439,7 +439,7 @@ public class SavegameDriftTests
         });
 
         /// <summary>Records that this machine holds the savegame in the slot, at a known hash.</summary>
-        /// <param name="target">A number makes it a past savegame, pinned to that revision.</param>
+        /// <param name="target">A number puts it in compatibility mode, pinned to that revision.</param>
         public void Hold(string contentHash, int snapshot = 1, int revision = 6, int? target = null)
             => _bindings.SetBinding(Game.Identity, new SavegameCheckoutBinding(
                 _repoId,

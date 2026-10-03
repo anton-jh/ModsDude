@@ -95,17 +95,16 @@ public readonly record struct SavegameCheckoutBinding(
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>A number here is the whole of "this game is holding a past savegame".</b> Stored rather
-    /// than inferred from revision numbers, because inferring it needs the server's answer to "is this
-    /// still its profile's current savegame?" and the two things that read it - the apply table and the
-    /// drift check - both have to work offline and cost a directory listing.
+    /// <b>A number here is the whole of "this savegame is checked out in compatibility mode".</b> It
+    /// is chosen at check-out, and the two things that read it - the apply table and the drift check -
+    /// both work offline from it.
     /// </para>
     /// <para>
-    /// <b>Not <see cref="ProfileRevision"/>, which it happens to equal at check-out.</b> That one is
-    /// what the held snapshot was <em>played</em> on and belongs to play attribution; this is what the
-    /// mod folder has to be on and belongs to the rules. A current savegame's are already different -
-    /// it was played on some older revision and runs on head - and nothing that decides drift reads
-    /// the other.
+    /// <b>Not <see cref="ProfileRevision"/>, which it equals at check-out in compatibility mode.</b>
+    /// That one is what the held snapshot was <em>played</em> on and belongs to play attribution; this
+    /// is what the mod folder has to be on and belongs to the rules. Outside compatibility mode they
+    /// differ - the save was played on some older revision and runs on head - and nothing that decides
+    /// drift reads the other.
     /// </para>
     /// </remarks>
     public int? TargetRevision { get; init; }

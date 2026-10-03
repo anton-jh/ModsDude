@@ -62,14 +62,6 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            Visibility="{Binding HasRevisionText, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                <!-- Superseding, inline rather than as a second modal: a confirmation that appears
-                     after the button is one that gets clicked through. -->
-                <TextBlock Text="{Binding SupersedeNotice}"
-                           Margin="0 8 0 0"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Visibility="{Binding HasSupersedeNotice, Converter={StaticResource BoolToVisibilityConverter}}" />
-
                 <TextBlock Text="{Binding MismatchNotice}"
                            Margin="0 8 0 0"
                            TextWrapping="Wrap"

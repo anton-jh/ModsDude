@@ -275,7 +275,7 @@ internal sealed class ModSyncPlanBuilder(
 
             _ => throw new UserFriendlyException(
                 "That savegame runs on one revision, and this is not it",
-                $"Game '{request.Game}' is holding savegame '{decision.SavegameId}', a past savegame pinned to revision {decision.Revision} of profile '{decision.ProfileId}'. Revision {revision} was asked for; only {decision.Revision} may be applied while it is held.")
+                $"Game '{request.Game}' is holding savegame '{decision.SavegameId}', checked out in compatibility mode on revision {decision.Revision} of profile '{decision.ProfileId}'. Revision {revision} was asked for; only {decision.Revision} may be applied while it is held.")
         };
     }
 

@@ -17,8 +17,8 @@ public class SavegamePublisherTests
 
 
     /// <summary>
-    /// Publishing to a profile makes the new savegame its current one - superseding whatever was - so it
-    /// follows the profile from then on rather than staying on the revision it was published at.
+    /// A newly published savegame is held on latest, so it follows the profile from then on rather
+    /// than staying on the revision it was published at.
     /// </summary>
     [Fact]
     public async Task Publishing_leaves_the_mod_folder_pinned_to_nothing()
@@ -45,7 +45,7 @@ public class SavegamePublisherTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot2, "a brand new savegame");
 
@@ -210,7 +210,7 @@ public class SavegamePublisherTests
 
         // Already holding one that claims the mod folder, which a publish *to a profile* is refused
         // for. This one claims nothing.
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot2, "an unmanaged savegame");
 

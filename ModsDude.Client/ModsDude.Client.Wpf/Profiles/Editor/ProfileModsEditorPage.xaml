@@ -4,6 +4,7 @@
       xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
       xmlns:editor="clr-namespace:ModsDude.Client.Wpf.Profiles.Editor"
       xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:ed="clr-namespace:ModsDude.Client.Core.Profiles.Editor;assembly=ModsDude.Client.Core"
@@ -238,102 +239,6 @@
             <Setter Property="TextAlignment" Value="Center" />
             <Setter Property="IsHitTestVisible" Value="False" />
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-        </Style>
-
-        <!-- The split save button: the accent chrome split down the seam, outer corners rounded. -->
-        <Style x:Key="SaveSplitPrimary" TargetType="Button">
-            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-            <Setter Property="Padding" Value="16 7" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Background"
-                                Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                CornerRadius="4 0 0 4"
-                                Padding="{TemplateBinding Padding}">
-                            <Grid>
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                <Border x:Name="FocusRing"
-                                        Margin="-14 -5"
-                                        CornerRadius="4 0 0 4"
-                                        BorderThickness="0"
-                                        BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
-                            </Grid>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="FocusRing" Property="BorderThickness" Value="2" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorDisabledBrush}" />
-                                <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorDisabledBrush}" />
-                            </Trigger>
-                            <DataTrigger Binding="{Binding Summary.WillApply}" Value="False">
-                                <Setter TargetName="Background" Property="CornerRadius" Value="4" />
-                                <Setter TargetName="FocusRing" Property="CornerRadius" Value="4" />
-                            </DataTrigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="SaveSplitCaret" TargetType="ToggleButton">
-            <Setter Property="Width" Value="34" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Background"
-                                Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                CornerRadius="0 4 4 0">
-                            <Grid>
-                                <Rectangle Width="1" Margin="0 7"
-                                           HorizontalAlignment="Left"
-                                           Fill="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                                           Opacity="0.3" />
-                                <Path x:Name="Chevron"
-                                      Data="M 0 0 L 4.5 4.5 L 9 0"
-                                      Stroke="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                                      StrokeThickness="1.4"
-                                      StrokeStartLineCap="Round"
-                                      StrokeEndLineCap="Round"
-                                      StrokeLineJoin="Round"
-                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                <Border x:Name="FocusRing"
-                                        CornerRadius="0 4 4 0"
-                                        BorderThickness="0"
-                                        BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
-                            </Grid>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="FocusRing" Property="BorderThickness" Value="2" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorDisabledBrush}" />
-                                <Setter TargetName="Chevron" Property="Stroke" Value="{DynamicResource TextOnAccentFillColorDisabledBrush}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
         </Style>
 
     </Page.Resources>
@@ -764,44 +669,23 @@
                                             Command="{Binding ShowUpdatesCommand}" />
                                 </StackPanel>
 
-                                <StackPanel x:Name="UpdateSplitButton" Grid.Column="2" Orientation="Horizontal">
-                                    <Button Content="{Binding Summary.ApplyUpdatesText}"
-                                            Command="{Binding ApplyAllUpdatesCommand}" />
-
-                                    <ToggleButton x:Name="UpdateVariantButton"
-                                                  Margin="2 0 0 0"
-                                                  Padding="8 0"
-                                                  ToolTip="Other ways to update"
-                                                  Content="&#xE70D;"
-                                                  FontFamily="{DynamicResource SymbolThemeFontFamily}"
-                                                  FontSize="10"
-                                                  Visibility="{Binding Summary.HasRepoOnlyUpdates, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                                    <Popup IsOpen="{Binding IsChecked, ElementName=UpdateVariantButton, Mode=TwoWay}"
-                                           PlacementTarget="{Binding ElementName=UpdateSplitButton}"
-                                           Placement="Bottom"
-                                           StaysOpen="False"
-                                           AllowsTransparency="True">
-                                        <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
-                                                Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
-                                                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                                                BorderThickness="1"
-                                                Padding="4">
-                                            <Button Width="300"
-                                                    Style="{DynamicResource SubtleMenuButton}"
-                                                    Command="{Binding ApplyRepoUpdatesCommand}"
-                                                    Click="CloseUpdateVariants">
-                                                <StackPanel Orientation="Vertical">
-                                                    <TextBlock Text="{Binding Summary.UpdateRepoOnlyText}" FontWeight="SemiBold" />
-                                                    <TextBlock Text="{Binding UpdateRepoOnlyDescription}"
-                                                               Margin="0 2 0 0"
-                                                               TextWrapping="Wrap"
-                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                </StackPanel>
-                                            </Button>
-                                        </Border>
-                                    </Popup>
-                                </StackPanel>
+                                <shared:SplitButton Grid.Column="2"
+                                                    Header="{Binding Summary.ApplyUpdatesText}"
+                                                    Command="{Binding ApplyAllUpdatesCommand}"
+                                                    IsMenuAvailable="{Binding Summary.HasRepoOnlyUpdates}"
+                                                    CaretToolTip="Other ways to update">
+                                    <Button Width="300"
+                                            Style="{DynamicResource SubtleMenuButton}"
+                                            Command="{Binding ApplyRepoUpdatesCommand}">
+                                        <StackPanel Orientation="Vertical">
+                                            <TextBlock Text="{Binding Summary.UpdateRepoOnlyText}" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding UpdateRepoOnlyDescription}"
+                                                       Margin="0 2 0 0"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                    </Button>
+                                </shared:SplitButton>
 
                                 <!-- Where the online updates come from, and how current they are. -->
                                 <ItemsControl Grid.Row="1" Grid.ColumnSpan="3"
@@ -1035,47 +919,27 @@
         <Grid Grid.Row="1" ColumnDefinitions="auto auto auto auto *">
 
             <!-- Split button: Save is one click, and saving without re-applying costs opening the menu. -->
-            <StackPanel x:Name="SaveSplitButton"
-                        Grid.Column="0" Orientation="Horizontal" Margin="32 24 4 24">
-
-                <Button x:Name="SaveButton"
-                        MinWidth="200"
-                        Style="{StaticResource SaveSplitPrimary}"
-                        Content="{Binding Summary.SaveActionText}"
-                        Command="{Binding SaveChangesCommand}" />
-
-                <ToggleButton x:Name="SaveVariantButton"
-                              Style="{StaticResource SaveSplitCaret}"
-                              ToolTip="Other ways to save"
-                              IsEnabled="{Binding IsEnabled, ElementName=SaveButton}"
-                              Visibility="{Binding Summary.WillApply, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                <Popup IsOpen="{Binding IsChecked, ElementName=SaveVariantButton, Mode=TwoWay}"
-                       PlacementTarget="{Binding ElementName=SaveSplitButton}"
-                       Placement="Top"
-                       VerticalOffset="-6"
-                       StaysOpen="False"
-                       AllowsTransparency="True">
-                    <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
-                            Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
-                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            Padding="4">
-                        <Button Width="320"
-                                Style="{DynamicResource SubtleMenuButton}"
-                                Command="{Binding SaveOnlyCommand}"
-                                Click="CloseSaveVariants">
-                            <StackPanel Orientation="Vertical">
-                                <TextBlock Text="Save only" FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding SaveOnlyDescription}"
-                                           Margin="0 2 0 0"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                            </StackPanel>
-                        </Button>
-                    </Border>
-                </Popup>
-            </StackPanel>
+            <shared:SplitButton Grid.Column="0" Margin="32 24 4 24"
+                                MinWidth="234"
+                                Padding="16 7"
+                                IsAccent="True"
+                                Header="{Binding Summary.SaveActionText}"
+                                Command="{Binding SaveChangesCommand}"
+                                IsMenuAvailable="{Binding Summary.WillApply}"
+                                MenuPlacement="Top"
+                                CaretToolTip="Other ways to save">
+                <Button Width="320"
+                        Style="{DynamicResource SubtleMenuButton}"
+                        Command="{Binding SaveOnlyCommand}">
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock Text="Save only" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding SaveOnlyDescription}"
+                                   Margin="0 2 0 0"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Button>
+            </shared:SplitButton>
 
             <Button Grid.Column="1" Margin="4 24 4 24"
                     Content="Discard changes"

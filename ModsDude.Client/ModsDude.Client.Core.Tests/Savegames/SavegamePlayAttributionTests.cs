@@ -31,7 +31,7 @@ public class SavegamePlayAttributionTests
         using var harness = new SavegameHarness(appliedRevision: 4);
         await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         // An evening on revision 4, while a thousand edits move the profile's head to 1004.
         harness.WriteSlotFile(_slot1, "a savegame, played once");
@@ -63,7 +63,7 @@ public class SavegamePlayAttributionTests
         using var harness = new SavegameHarness(appliedRevision: 4);
         await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
@@ -84,7 +84,7 @@ public class SavegamePlayAttributionTests
         using var harness = new SavegameHarness(appliedRevision: 4);
         await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
         await harness.ApplyAsync(1004);
 
         Assert.Null(harness.Binding(harness.Server.SavegameId).LastPlayedRevision);
@@ -113,7 +113,7 @@ public class SavegamePlayAttributionTests
         harness.WriteManifest(harness.ProfileId, 4, "client");
 
         await harness.SeedHeadAsync("a savegame", profileRevision: 4);
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, SavegameRevisionMode.Latest, CancellationToken.None);
 
         // An evening in the MP client's folder.
         harness.WriteSlotFile(_client, "a savegame, played once");
@@ -145,7 +145,7 @@ public class SavegamePlayAttributionTests
 
         await harness.SeedHeadAsync("a savegame", profileRevision: null);
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         var bound = harness.Binding(harness.Server.SavegameId);
 
@@ -177,7 +177,7 @@ public class SavegamePlayAttributionTests
         using var harness = new SavegameHarness(appliedRevision: 4);
         await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
         harness.PointTheFolderAtAnotherProfile(revision: 9);
@@ -204,7 +204,7 @@ public class SavegamePlayAttributionTests
         using var harness = new SavegameHarness(appliedRevision: 4);
         await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         var savesBefore = harness.State.Saves;
 
@@ -226,7 +226,7 @@ public class SavegamePlayAttributionTests
         using var harness = new SavegameHarness(appliedRevision: 4);
         await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
@@ -251,7 +251,7 @@ public class SavegamePlayAttributionTests
         using var harness = new SavegameHarness(appliedRevision: 4);
         await harness.SeedHeadAsync("a savegame", profileRevision: 4);
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 

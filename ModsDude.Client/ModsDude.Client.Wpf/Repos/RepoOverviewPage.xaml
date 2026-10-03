@@ -70,7 +70,7 @@
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Text="{Binding Game.ActiveProfileSummary}" />
 
-                                <!-- Neutral. Holding a past savegame is a state somebody chose and is
+                                <!-- Neutral. Holding a savegame in compatibility mode is a state somebody chose and is
                                      playing in, not a problem with the game. -->
                                 <TextBlock Margin="0 4 0 0"
                                            TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"

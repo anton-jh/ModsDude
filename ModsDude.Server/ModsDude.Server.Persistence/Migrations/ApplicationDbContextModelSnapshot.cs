@@ -485,24 +485,15 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<Guid?>("ProfileId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("SupersededAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.HasKey("RepoId", "Id");
 
                     b.HasIndex("RepoId", "Name")
                         .IsUnique()
                         .HasFilter("\"ArchivedAt\" IS NULL");
 
-                    b.HasIndex("RepoId", "ProfileId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Savegames_OneCurrentPerProfile")
-                        .HasFilter("\"SupersededAt\" IS NULL");
+                    b.HasIndex("RepoId", "ProfileId");
 
-                    b.ToTable("Savegames", t =>
-                        {
-                            t.HasCheckConstraint("CK_Savegames_SupersededOnlyWithAProfile", "\"SupersededAt\" IS NULL OR \"ProfileId\" IS NOT NULL");
-                        });
+                    b.ToTable("Savegames");
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Savegames.SavegameCheckInRequest", b =>

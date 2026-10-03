@@ -59,7 +59,7 @@ public class ProfileModChangeViewModel
         // A save whose whole point was holding a mod where it is has nothing else to show, so the
         // lock is said in words rather than left as a row that appears to report nothing.
         var locks = change.LockChanged
-            ? change.ToLocked ? "locked" : "unlocked"
+            ? change.ToLock.ByProfile ? "locked" : "unlocked"
             : "";
 
         return string.Join(" · ", new[] { version, locks }.Where(x => x.Length > 0));

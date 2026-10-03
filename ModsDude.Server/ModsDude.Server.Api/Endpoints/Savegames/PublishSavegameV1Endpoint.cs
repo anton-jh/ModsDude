@@ -48,16 +48,8 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// only difference is which end says it first.
 /// </para>
 /// <para>
-/// <b>Publishing to a profile supersedes whatever savegame it was following</b>, in the same transaction
-/// as everything else here. A profile has at most one current savegame, so the new one taking the
-/// slot and the old one leaving it are one event and not two - and a publish that committed the new
-/// row first would be refused by the one-current-savegame index rather than doing half the job. The
-/// old savegame is untouched otherwise: still playable, still holding its history, still on the
-/// revision it was last played on.
-/// </para>
-/// <para>
 /// <b>A profile is a choice, not a requirement.</b> Publishing without one produces a savegame that
-/// follows no mod list: nothing is superseded, no revision is recorded, and every rule about
+/// follows no mod list: no revision is recorded, and every rule about
 /// revisions leaves it alone. That is the only shape available to an adapter with savegame support
 /// and no mod support, and it is offered in a mod-capable repo too.
 /// </para>
@@ -130,12 +122,6 @@ public class PublishSavegameV1Endpoint : IEndpoint
 
         var now = timeService.Now();
 
-        // At most one - the index says so - and found whether or not it is archived, since archiving
-        // does not hand a profile's slot back.
-        var superseded = profileId is ProfileId target
-            ? await dbContext.Savegames.GetCurrentAsync(new RepoId(repoId), target, cancellationToken)
-            : null;
-
         var savegame = new Savegame(new RepoId(repoId), new SavegameName(request.Name), profileId, now)
         {
             Id = savegameId
@@ -158,18 +144,6 @@ public class PublishSavegameV1Endpoint : IEndpoint
         // than ending here - the play it will eventually record has not happened yet.
         var checkout = new SavegameCheckout(new RepoId(repoId), savegameId, userId, now, profileRevision);
 
-        // Two writes rather than one, and the order is the point: the outgoing savegame has to leave
-        // the profile's slot before the new one takes it, or the one-current-savegame index refuses
-        // the instant where both are current. A change tracker promises no order between an update
-        // and an insert, so this states it - the same shape MoveModVersionV1Endpoint uses to take an
-        // ordering through a unique index. The transaction is what makes the halfway state, where
-        // the profile has no current savegame at all, something no other request and no crash can
-        // observe.
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-        superseded?.Supersede(now);
-        await unitOfWork.CommitAsync(cancellationToken);
-
         dbContext.Savegames.Add(savegame);
         dbContext.SavegameSnapshots.Add(snapshot);
         dbContext.SavegameCheckouts.Add(checkout);
@@ -178,17 +152,8 @@ public class PublishSavegameV1Endpoint : IEndpoint
         {
             await unitOfWork.CommitAsync(cancellationToken);
         }
-        catch (DbUpdateException exception)
+        catch (DbUpdateException)
         {
-            // Somebody else published to this profile in the same instant, superseded the same
-            // incumbent, and got their row in first. The read above cannot see it - it committed
-            // after this request read - so the index is what decides, and the loser is told what has
-            // changed rather than being told about a name they did not clash with.
-            if (profileId is ProfileId contested && SavegameConflicts.IsCurrentSavegameConflict(exception))
-            {
-                return TypedResults.BadRequest(Problems.SavegameCurrentConflict(contested));
-            }
-
             // Two people published the same name in the same instant. The check above is what gives
             // the good error message; the unique index on (RepoId, Name) is what makes one of them
             // lose rather than both succeeding. A client re-sending a publish it already made lands
@@ -196,8 +161,6 @@ public class PublishSavegameV1Endpoint : IEndpoint
             // one, since the savegame it is asking for exists.
             return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
-
-        await transaction.CommitAsync(cancellationToken);
 
         await CheckInSavegameV1Endpoint.ReleaseAfterNewSnapshotAsync(retentionUpkeep, savegame, cancellationToken);
 
@@ -215,7 +178,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
     /// <para>
     /// <c>null</c> is <b>no mod list</b>, offered in the publish dialog as an explicit choice rather
     /// than being what an omitted field falls back to. The save is then unmanaged: nothing about
-    /// revisions, current or past applies to it.
+    /// revisions applies to it.
     /// </para>
     /// </param>
     /// <param name="ProfileRevision">

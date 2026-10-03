@@ -7904,10 +7904,6 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<MakeSavegameCurrentResponse> MakeSavegameCurrentV1Async(System.Guid repoId, System.Guid savegameId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
-
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <exception cref="ApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task RestoreSavegameV1Async(System.Guid repoId, System.Guid savegameId, RestoreRequest? request = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
@@ -8986,127 +8982,6 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
                         if (status_ == 200)
                         {
                             return;
-                        }
-                        else
-                        if (status_ == 400)
-                        {
-                            var objectResponse_ = await ReadObjectResponseAsync<CustomProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
-                            if (objectResponse_.Object == null)
-                            {
-                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
-                            }
-                            throw new ApiException<CustomProblemDetails>("A server side error occurred.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
-                        }
-                        else
-                        if (status_ == 401)
-                        {
-                            var objectResponse_ = await ReadObjectResponseAsync<CustomProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
-                            if (objectResponse_.Object == null)
-                            {
-                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
-                            }
-                            throw new ApiException<CustomProblemDetails>("A server side error occurred.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
-                        }
-                        else
-                        if (status_ == 403)
-                        {
-                            var objectResponse_ = await ReadObjectResponseAsync<CustomProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
-                            if (objectResponse_.Object == null)
-                            {
-                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
-                            }
-                            throw new ApiException<CustomProblemDetails>("A server side error occurred.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
-                        }
-                        else
-                        if (status_ == 412)
-                        {
-                            var objectResponse_ = await ReadObjectResponseAsync<CustomProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
-                            if (objectResponse_.Object == null)
-                            {
-                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
-                            }
-                            throw new ApiException<CustomProblemDetails>("A server side error occurred.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
-                        }
-                        else
-                        {
-                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
-                            throw new ApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
-                        }
-                    }
-                    finally
-                    {
-                        if (disposeResponse_)
-                            response_.Dispose();
-                    }
-                }
-            }
-            finally
-            {
-                if (disposeClient_)
-                    client_.Dispose();
-            }
-        }
-
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<MakeSavegameCurrentResponse> MakeSavegameCurrentV1Async(System.Guid repoId, System.Guid savegameId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
-        {
-            if (repoId == null)
-                throw new System.ArgumentNullException("repoId");
-
-            if (savegameId == null)
-                throw new System.ArgumentNullException("savegameId");
-
-            var client_ = _httpClient;
-            var disposeClient_ = false;
-            try
-            {
-                using (var request_ = await CreateHttpRequestMessageAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    request_.Content = new System.Net.Http.StringContent(string.Empty, System.Text.Encoding.UTF8, "application/json");
-                    request_.Method = new System.Net.Http.HttpMethod("POST");
-                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
-
-                    var urlBuilder_ = new System.Text.StringBuilder();
-                    if (!string.IsNullOrEmpty(_baseUrl)) urlBuilder_.Append(_baseUrl);
-                    // Operation Path: "api/v1/repos/{repoId}/savegames/{savegameId}/makeCurrent"
-                    urlBuilder_.Append("api/v1/repos/");
-                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(repoId, System.Globalization.CultureInfo.InvariantCulture)));
-                    urlBuilder_.Append("/savegames/");
-                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(savegameId, System.Globalization.CultureInfo.InvariantCulture)));
-                    urlBuilder_.Append("/makeCurrent");
-
-                    PrepareRequest(client_, request_, urlBuilder_);
-
-                    var url_ = urlBuilder_.ToString();
-                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
-
-                    PrepareRequest(client_, request_, url_);
-
-                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                    var disposeResponse_ = true;
-                    try
-                    {
-                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
-                        foreach (var item_ in response_.Headers)
-                            headers_[item_.Key] = item_.Value;
-                        if (response_.Content != null && response_.Content.Headers != null)
-                        {
-                            foreach (var item_ in response_.Content.Headers)
-                                headers_[item_.Key] = item_.Value;
-                        }
-
-                        ProcessResponse(client_, response_);
-
-                        var status_ = (int)response_.StatusCode;
-                        if (status_ == 200)
-                        {
-                            var objectResponse_ = await ReadObjectResponseAsync<MakeSavegameCurrentResponse>(response_, headers_, cancellationToken).ConfigureAwait(false);
-                            if (objectResponse_.Object == null)
-                            {
-                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
-                            }
-                            return objectResponse_.Object;
                         }
                         else
                         if (status_ == 400)
@@ -11445,18 +11320,6 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial record MakeSavegameCurrentResponse
-    {
-
-        [Newtonsoft.Json.JsonProperty("savegame", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public SavegameDto Savegame { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("superseded", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public SavegameDto? Superseded { get; set; } = default!;
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial record ModAttributeDto
     {
 
@@ -11823,32 +11686,26 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invalid-mod-file-name")]
         InvalidModFileName = 35,
 
-        [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/savegame-current-conflict")]
-        SavegameCurrentConflict = 36,
-
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/savegame-profile-not-paired")]
-        SavegameProfileNotPaired = 37,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/savegame-has-no-profile")]
-        SavegameHasNoProfile = 38,
+        SavegameProfileNotPaired = 36,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/unknown-modhub-game")]
-        UnknownModHubGame = 39,
+        UnknownModHubGame = 37,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/trust-code-not-found")]
-        TrustCodeNotFound = 40,
+        TrustCodeNotFound = 38,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/trust-code-not-usable")]
-        TrustCodeNotUsable = 41,
+        TrustCodeNotUsable = 39,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/trust-code-redemption-conflict")]
-        TrustCodeRedemptionConflict = 42,
+        TrustCodeRedemptionConflict = 40,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/invalid-display-name")]
-        InvalidDisplayName = 43,
+        InvalidDisplayName = 41,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/client-build-mismatch")]
-        ClientBuildMismatch = 44,
+        ClientBuildMismatch = 42,
 
     }
 
@@ -12380,9 +12237,6 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [Newtonsoft.Json.JsonProperty("snapshotCount", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public int SnapshotCount { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("supersededAt", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public System.DateTime? SupersededAt { get; set; } = default!;
 
         [Newtonsoft.Json.JsonProperty("totalSizeBytes", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public long TotalSizeBytes { get; set; } = default!;

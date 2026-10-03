@@ -46,7 +46,7 @@ public sealed class SavegameOffers(
             row.Id,
             row.Savegame.ProfileId,
             profileService.FindLive(repo.Id, row.Savegame.ProfileId)?.HeadRevision,
-            row.PinnedRevision,
+            row.Hold?.PinnedRevision,
             host.Held,
             host.AppliedProfileId,
             host.AppliedRevision);
@@ -72,7 +72,8 @@ public sealed class SavegameOffers(
                 binding.Slot,
                 savegameSlots.DescribeFolder(host.Game, binding.Slot.Target),
                 host.UnreachableHolds.Contains(savegameId),
-                savegameSlots.DescribeSlotNumber(host.Game, binding.Slot));
+                savegameSlots.DescribeSlotNumber(host.Game, binding.Slot),
+                binding.TargetRevision);
         }
 
         return null;

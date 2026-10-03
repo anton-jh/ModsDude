@@ -50,6 +50,17 @@ public class FarmingSimulatorBaseModAdapter(
     /// <inheritdoc/>
     public IReadOnlyList<ModAttributeDefinition> Attributes => FarmingSimulatorModAttributes.For(gameVersion);
 
+    /// <summary>
+    /// A removal weighs most: the game drops whatever the save held from that mod - vehicles,
+    /// placeables - the next time it saves. A mod list here easily runs to hundreds, so a few added or
+    /// updated is ordinary.
+    /// </summary>
+    public SavegameCompatibilityPolicy SavegameCompatibility { get; } = new(
+        AddedWeight: 1,
+        ChangedWeight: 1,
+        RemovedWeight: 5,
+        PromptThreshold: 50);
+
 
     /// <summary>
     /// What a Farming Simulator mod is packaged as. Anything else in the folder is not a mod that

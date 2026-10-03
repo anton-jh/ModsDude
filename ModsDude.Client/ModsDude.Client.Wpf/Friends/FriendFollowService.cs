@@ -22,8 +22,9 @@ namespace ModsDude.Client.Wpf.Friends;
 /// <para>
 /// <b>The revision only where the friend is held on one.</b> A friend who activated the profile is on
 /// head, whatever number head is, and following them follows head - so the game here keeps moving
-/// with the profile. A friend on a past savegame is on that savegame's revision, and joining them means
-/// being on it too; that one is pinned, and activating the profile again is the way back to head.
+/// with the profile. A friend with a savegame in compatibility mode is on that savegame's revision,
+/// and joining them means being on it too; that one is pinned, and activating the profile again is
+/// the way back to head.
 /// </para>
 /// </remarks>
 public sealed class FriendFollowService(

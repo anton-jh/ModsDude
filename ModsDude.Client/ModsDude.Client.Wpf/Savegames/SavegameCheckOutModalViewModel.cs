@@ -232,10 +232,10 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     /// Which revision the folder ends up on.
     /// </summary>
     /// <remarks>
-    /// <b>Shown even where nothing is wrong</b>, unlike <see cref="Revision"/> beneath it. A current
-    /// savegame's number can differ from the one it was last played on whenever anybody has edited the
+    /// <b>Shown even where nothing is wrong</b>, unlike <see cref="Revision"/> beneath it. On latest the
+    /// number can differ from the one it was last played on whenever anybody has edited the
     /// profile since, and that is exactly the case where somebody wants to have seen the number before
-    /// the evening rather than after it. For a past savegame it says the opposite thing: the number does
+    /// the evening rather than after it. In compatibility mode it says the opposite thing: the number does
     /// not move, and playing it will not move it.
     /// </remarks>
     [ObservableProperty]

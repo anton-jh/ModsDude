@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Savegames;
 
 namespace ModsDude.Client.Core.Tests.Savegames;
 
@@ -16,7 +17,7 @@ public class HeldSlotReaderTests
         await harness.SeedHeadAsync("a savegame");
         harness.Adapter.DisplayNames[_slot1.Slot.Value] = "My farm";
 
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
         var reading = Assert.Single(await harness.Reader.ReadAsync(harness.Game.Identity, CancellationToken.None));
@@ -31,7 +32,7 @@ public class HeldSlotReaderTests
     {
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.Adapter.ThrowOnGetSlots = true;
 
@@ -47,7 +48,7 @@ public class HeldSlotReaderTests
         using var harness = new SavegameHarness();
         harness.AddSecondTarget();
         await harness.SeedHeadAsync("a savegame");
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _client, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.RemoveSecondTarget();
 
@@ -59,7 +60,7 @@ public class HeldSlotReaderTests
     {
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         Assert.Empty(await harness.Reader.ReadAsync(harness.Game.Identity, [], CancellationToken.None));
     }
@@ -69,7 +70,7 @@ public class HeldSlotReaderTests
     {
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => harness.Reader.ReadAsync(harness.Game.Identity, new CancellationToken(canceled: true)));

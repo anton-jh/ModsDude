@@ -121,6 +121,8 @@ internal class FakeMultiTargetBaseModAdapter : IBaseModAdapter
 {
     public bool SupportsHardlinks => true;
 
+    public SavegameCompatibilityPolicy SavegameCompatibility { get; } = new(1, 1, 5, 50);
+
 
     /// <summary>
     /// Every zip in the folder is a mod, named after the file and versioned by whatever is written

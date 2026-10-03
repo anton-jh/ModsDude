@@ -130,6 +130,8 @@ public interface IBaseModAdapter
     /// </remarks>
     IReadOnlyList<ModAttributeDefinition> Attributes => [];
 
+    SavegameCompatibilityPolicy SavegameCompatibility { get; }
+
     Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken);
     ILocalModAdapter WithLocalSettings(string serializedLocalSettings);
     ILocalModAdapter WithLocalSettings(DynamicForm localSettings);

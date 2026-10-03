@@ -65,8 +65,8 @@ public sealed record ProfileRevisionComparison(
                     ProfileModChangeKind.Added,
                     null,
                     pin.VersionId,
-                    false,
-                    pin.Lock.ByProfile));
+                    default,
+                    pin.Lock));
 
                 continue;
             }
@@ -81,8 +81,8 @@ public sealed record ProfileRevisionComparison(
                 ProfileModChangeKind.Changed,
                 existing.VersionId,
                 pin.VersionId,
-                existing.Lock.ByProfile,
-                pin.Lock.ByProfile));
+                existing.Lock,
+                pin.Lock));
         }
 
         foreach (var pin in before)
@@ -94,8 +94,8 @@ public sealed record ProfileRevisionComparison(
                     ProfileModChangeKind.Removed,
                     pin.VersionId,
                     null,
-                    pin.Lock.ByProfile,
-                    false));
+                    pin.Lock,
+                    default));
             }
         }
 
@@ -112,13 +112,15 @@ public sealed record ProfileRevisionComparison(
 /// </param>
 /// <param name="FromVersionId">What the older revision pinned, or <c>null</c> where it pinned nothing.</param>
 /// <param name="ToVersionId">What the newer one pins, or <c>null</c> where it pins nothing.</param>
+/// <param name="FromLock">The older revision's lock on the mod. Unlocked where it pinned nothing.</param>
+/// <param name="ToLock">The newer revision's lock on the mod. Unlocked where it pins nothing.</param>
 public sealed record ProfileModChange(
     CatalogModVersion Version,
     ProfileModChangeKind Kind,
     ModVersionKey? FromVersionId,
     ModVersionKey? ToVersionId,
-    bool FromLocked,
-    bool ToLocked)
+    ProfileModLock FromLock,
+    ProfileModLock ToLock)
 {
     public ModKey ModId => Version.ModId;
     public string DisplayName => Version.Name;
@@ -130,7 +132,7 @@ public sealed record ProfileModChange(
     /// revision, so a mod re-registered as version-sensitive would otherwise read as a change
     /// somebody made to the profile.
     /// </summary>
-    public bool LockChanged => Kind is ProfileModChangeKind.Changed && FromLocked != ToLocked;
+    public bool LockChanged => Kind is ProfileModChangeKind.Changed && FromLock.ByProfile != ToLock.ByProfile;
 }
 
 /// <remarks>

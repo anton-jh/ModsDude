@@ -406,11 +406,12 @@ public sealed class ProfileApplyService(
         // can get past; this one is the sentence somebody can act on.
         if (heldSavegames.DecideApply(game.Identity, profileId, revision) is { IsAllowed: false } refusal)
         {
-            // Two refusals, two sentences. A past savegame held here is not following "another mod list" -
-            // it is following this very one and does not move off its revision - and telling somebody
-            // to check it in over a revision mismatch would be advice that fixes nothing.
-            var reason = refusal.Refusal is SavegameApplyRefusal.PastSavegameIsHeld
-                ? $"'{game.Name}' is holding a past savegame, which runs on revision {refusal.Revision} and does not move off it. It was left as it is."
+            // Two refusals, two sentences. A savegame held here in compatibility mode is not following
+            // "another mod list" - it is following this very one and does not move off its revision -
+            // and telling somebody to check it in over a revision mismatch would be advice that fixes
+            // nothing.
+            var reason = refusal.Refusal is SavegameApplyRefusal.CompatibilityModeIsHeld
+                ? $"'{game.Name}' is holding a savegame in compatibility mode on rev {refusal.Revision}. It was left as it is."
                 : $"'{game.Name}' is holding a savegame that follows another mod list, so it was left as it is. Check that savegame in first.";
 
             return new ProfileApplyOutcome(game, ProfileApplyStatus.Refused, reason)
@@ -564,7 +565,7 @@ public sealed class ProfileApplyService(
             : GameActivityKind.Reapplied;
 
         // What the game is held on now, never the revision the gesture happened to name: the savegame
-        // list names head's number to prepare for a current savegame, and reporting that would pin
+        // list names head's number to prepare for a savegame on latest, and reporting that would pin
         // anybody following to a revision nothing holds.
         activity.Report(
             game.Identity,

@@ -22,16 +22,6 @@ namespace ModsDude.Server.Api.Dtos;
 /// the repo's profile list holds live profiles only, and a savegame following an archived one still
 /// needs a name for its row.
 /// </param>
-/// <param name="SupersededAt">
-/// When the profile stopped following this savegame, or <c>null</c> while it still does. Null for a
-/// savegame with no profile too, which is neither current nor past - the client reads the pair, not
-/// this field alone.
-/// <para>
-/// A different fact from <paramref name="ArchivedAt"/>, and carried separately for that reason: a
-/// savegame can be current or past, archived or not, in any combination, and a profile whose current
-/// savegame is archived still has a current savegame.
-/// </para>
-/// </param>
 /// <param name="Checkout">
 /// The open claim, or <c>null</c> where nobody holds it. A claim is held from the moment it is taken until it ends, however long that
 /// is, so "Anton has had this since March" is a claim like any other and is the thing the next person
@@ -51,7 +41,6 @@ public record SavegameDto(
     DateTime Created,
     SavegameSnapshotDto? Head,
     SavegameCheckoutDto? Checkout,
-    DateTime? SupersededAt,
     DateTime? ArchivedAt,
     int SnapshotCount,
     long TotalSizeBytes);

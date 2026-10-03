@@ -45,7 +45,7 @@ public class SavegameCheckInClaimTests
     {
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         var result = await CheckInAsync(harness, keepPlaying: true);
 
@@ -197,7 +197,7 @@ public class SavegameCheckInClaimTests
         var harness = new SavegameHarness();
 
         await harness.SeedHeadAsync("a savegame");
-        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 

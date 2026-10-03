@@ -1,6 +1,8 @@
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -19,6 +21,9 @@ public sealed class SavegameCheckOutFlow(
     ISavegameCheckInFlow checkInFlow,
     ISavegameProfileActivation profileActivation,
     ISavegameCheckOutContextBuilder contextBuilder,
+    ISavegameBindingStore bindings,
+    ISavegameCompatibilityCheck compatibilityCheck,
+    IProfileService profileService,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
     IBackgroundTaskReporter backgroundTasks,
@@ -28,7 +33,9 @@ public sealed class SavegameCheckOutFlow(
         Repo repo,
         SavegameDto savegame,
         int snapshotNumber,
+        int? playedRevision,
         SavegameCheckOutMode mode,
+        SavegameRevisionMode? revisionMode,
         string? currentUserId,
         Func<Guid, string?> nameOf,
         Func<Task> changed,
@@ -37,7 +44,8 @@ public sealed class SavegameCheckOutFlow(
         try
         {
             await StartAsync(
-                repo, savegame, snapshotNumber, mode, currentUserId, nameOf, changed, agreedToTakeFrom: null, cancellationToken);
+                repo, savegame, snapshotNumber, playedRevision, mode, revisionMode,
+                currentUserId, nameOf, changed, agreedToTakeFrom: null, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -57,7 +65,9 @@ public sealed class SavegameCheckOutFlow(
         Repo repo,
         SavegameDto savegame,
         int snapshotNumber,
+        int? playedRevision,
         SavegameCheckOutMode mode,
+        SavegameRevisionMode? revisionMode,
         string? currentUserId,
         Func<Guid, string?> nameOf,
         Func<Task> changed,
@@ -101,13 +111,29 @@ public sealed class SavegameCheckOutFlow(
             }
         }
 
-        // Before the slot modal, so its mod summary describes the folder as it will be.
-        if (await profileActivation.ConfirmActivateFirstAsync(repo, game, savegame, mode, changed, cancellationToken) is false)
+        // Decided before the folder is touched, because it decides which revision the folder goes onto.
+        // A save already held here keeps the mode it is held in: its own pin refuses any other revision,
+        // so switching is checking it in and out again.
+        var verdict = await AssessAsync(repo, savegame, playedRevision, cancellationToken);
+
+        var chosenMode = HeldMode(game, savegame)
+            ?? revisionMode
+            ?? await ChooseRevisionModeAsync(savegame, playedRevision, verdict);
+
+        if (chosenMode is not SavegameRevisionMode chosen)
         {
             return;
         }
 
-        var context = await contextBuilder.BuildAsync(repo, savegame, game, mode, nameOf, cancellationToken);
+        var pinned = SavegameRevisionRules.PinnedRevision(chosen, playedRevision);
+
+        // Before the slot modal, so its mod summary describes the folder as it will be.
+        if (await profileActivation.ConfirmActivateFirstAsync(repo, game, savegame, mode, pinned, changed, cancellationToken) is false)
+        {
+            return;
+        }
+
+        var context = await contextBuilder.BuildAsync(repo, savegame, game, mode, pinned, verdict, nameOf, cancellationToken);
 
         var modal = new SavegameCheckOutModalViewModel(
             mode,
@@ -122,7 +148,8 @@ public sealed class SavegameCheckOutFlow(
         if (modal.CheckInFirstSavegameId is Guid blocking)
         {
             await CheckInBlockingAsync(
-                repo, game, blocking, savegame, snapshotNumber, mode, currentUserId, nameOf, changed, takingFrom?.User.Id, cancellationToken);
+                repo, game, blocking, savegame, snapshotNumber, playedRevision, mode, chosen, currentUserId, nameOf, changed,
+                takingFrom?.User.Id, cancellationToken);
 
             return;
         }
@@ -132,7 +159,7 @@ public sealed class SavegameCheckOutFlow(
             return;
         }
 
-        await ExecuteAsync(repo, savegame, snapshotNumber, mode, game, slot, changed, takingFrom?.User.Id, cancellationToken);
+        await ExecuteAsync(repo, savegame, snapshotNumber, mode, chosen, game, slot, changed, takingFrom?.User.Id, cancellationToken);
     }
 
     /// <summary>
@@ -154,6 +181,56 @@ public sealed class SavegameCheckOutFlow(
             "Leave it with them");
     }
 
+    private SavegameRevisionMode? HeldMode(Game game, SavegameDto savegame)
+        => bindings.GetBinding(game.Identity, savegame.Id) is SavegameCheckoutBinding binding
+            ? binding.TargetRevision is null ? SavegameRevisionMode.Latest : SavegameRevisionMode.Compatibility
+            : null;
+
+    /// <summary>
+    /// How far the latest mod list has moved from the one the snapshot was played on. Null where there
+    /// is nothing to compare: no mod list, a profile this member cannot see, or nothing has moved.
+    /// </summary>
+    private async Task<SavegameCompatibilityVerdict?> AssessAsync(
+        Repo repo,
+        SavegameDto savegame,
+        int? playedRevision,
+        CancellationToken cancellationToken)
+    {
+        if (playedRevision is not int played
+            || repo.Adapter.FindSavegameCompatibility() is not SavegameCompatibilityPolicy policy
+            || profileService.FindLive(repo.Id, savegame.ProfileId) is not ProfileDto profile)
+        {
+            return null;
+        }
+
+        return await compatibilityCheck.AssessAsync(repo.Id, profile.Id, played, profile.HeadRevision, policy, cancellationToken);
+    }
+
+    /// <summary>
+    /// Latest, unless the mod list has moved far enough to ask. Null where the user backed out.
+    /// </summary>
+    private async Task<SavegameRevisionMode?> ChooseRevisionModeAsync(
+        SavegameDto savegame,
+        int? playedRevision,
+        SavegameCompatibilityVerdict? verdict)
+    {
+        if (verdict is not { ShouldPrompt: true } || playedRevision is not int played)
+        {
+            return SavegameRevisionMode.Latest;
+        }
+
+        var modal = new SavegameCompatibilityModalViewModel(
+            savegame.Name,
+            SavegameWording.ProfileOf(savegame),
+            played,
+            verdict.Comparison.To,
+            verdict);
+
+        await modalService.Value.Show(modal);
+
+        return modal.Result;
+    }
+
     /// <summary>
     /// The way out of a refused slot: check the savegame occupying it in, then offer the modal again
     /// with the slot free.
@@ -164,7 +241,9 @@ public sealed class SavegameCheckOutFlow(
         Guid blockingSavegameId,
         SavegameDto savegame,
         int snapshotNumber,
+        int? playedRevision,
         SavegameCheckOutMode mode,
+        SavegameRevisionMode revisionMode,
         string? currentUserId,
         Func<Guid, string?> nameOf,
         Func<Task> changed,
@@ -210,7 +289,8 @@ public sealed class SavegameCheckOutFlow(
         if (refreshed is not null)
         {
             await StartAsync(
-                repo, refreshed, snapshotNumber, mode, currentUserId, nameOf, changed, agreedToTakeFrom, cancellationToken);
+                repo, refreshed, snapshotNumber, playedRevision, mode, revisionMode, currentUserId, nameOf, changed,
+                agreedToTakeFrom, cancellationToken);
         }
     }
 
@@ -219,6 +299,7 @@ public sealed class SavegameCheckOutFlow(
         SavegameDto savegame,
         int snapshotNumber,
         SavegameCheckOutMode mode,
+        SavegameRevisionMode revisionMode,
         Game game,
         SavegameSlotOptionViewModel slot,
         Func<Task> changed,
@@ -264,7 +345,7 @@ public sealed class SavegameCheckOutFlow(
 
         task.Report("Taking the claim");
 
-        var (takenFrom, displaced) = await savegameCheckOut.CheckOutAsync(game, savegame, slot.Ref, cancellationToken, new SavegameStripProgress(task));
+        var (takenFrom, displaced) = await savegameCheckOut.CheckOutAsync(game, savegame, slot.Ref, revisionMode, cancellationToken, new SavegameStripProgress(task));
 
         ReportDisplaced(displaced);
 

@@ -19,11 +19,6 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// The number this first snapshot records, from <see cref="SavegameRevisionRules.DeclaredRevisionFor"/>.
 /// Null only for <see cref="NoModList"/>, whose pair is null on both halves.
 /// </param>
-/// <param name="CurrentSavegameName">
-/// The savegame this profile is following right now, which publishing displaces. Null where the profile
-/// has none - the ordinary starting state, where there is nothing to supersede and nothing to say.
-/// </param>
-/// <param name="CurrentSavegameRevision">The revision that savegame stays on once it is past.</param>
 /// <param name="FolderIsOnIt">
 /// Whether the mod folder is actually on this profile. Where it is not, the revision below is a
 /// declaration about a list this folder has never run - which the modal says out loud.
@@ -32,11 +27,9 @@ public sealed record SavegamePublishOption(
     Guid? ProfileId,
     string Name,
     int? DeclaredRevision,
-    string? CurrentSavegameName,
-    int? CurrentSavegameRevision,
     bool FolderIsOnIt)
 {
-    public static SavegamePublishOption NoModList { get; } = new(null, "No mod list", null, null, null, false);
+    public static SavegamePublishOption NoModList { get; } = new(null, "No mod list", null, false);
 
 
     /// <summary>What the publish sends, with the pair kept together or absent together.</summary>
@@ -148,8 +141,6 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     [NotifyPropertyChangedFor(nameof(RevisionText))]
     [NotifyPropertyChangedFor(nameof(HasRevisionText))]
-    [NotifyPropertyChangedFor(nameof(SupersedeNotice))]
-    [NotifyPropertyChangedFor(nameof(HasSupersedeNotice))]
     [NotifyPropertyChangedFor(nameof(MismatchNotice))]
     [NotifyPropertyChangedFor(nameof(HasMismatchNotice))]
     [NotifyPropertyChangedFor(nameof(CanKeepPlaying))]
@@ -198,22 +189,6 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     };
 
     public bool HasRevisionText => RevisionText is not null;
-
-    /// <summary>
-    /// That this publish displaces the savegame the profile is following now.
-    /// </summary>
-    /// <remarks>
-    /// Inline rather than a second modal, and worded for what actually happens to the other savegame:
-    /// past is not archived and not read-only. It stays playable, it stays checkable-out, and the one
-    /// thing that changes is that its revision stops moving.
-    /// </remarks>
-    public string? SupersedeNotice => SelectedProfile is { CurrentSavegameName: { Length: > 0 } current } profile
-        ? profile.CurrentSavegameRevision is int revision
-            ? $"'{current}' is {profile.Name}'s current savegame. Publishing this makes it past - it stays playable and stays on rev {revision}."
-            : $"'{current}' is {profile.Name}'s current savegame. Publishing this makes it past - it stays playable, and its mod list stops moving."
-        : null;
-
-    public bool HasSupersedeNotice => SupersedeNotice is not null;
 
     /// <summary>The folder is on one list and this is being recorded against another.</summary>
     public string? MismatchNotice => SelectedProfile is { ProfileId: not null, FolderIsOnIt: false } profile
