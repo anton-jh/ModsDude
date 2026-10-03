@@ -1,5 +1,5 @@
 # The whole server: the API, its database and the reverse proxy in front of it. Lives in ~/modsdude on the
-# server next to .env (see .env.example) and is uploaded fresh by every deploy; see README.md.
+# server next to .env (see .env.example) and is uploaded fresh by every deploy; see the repository's README.md.
 #
 # Only Caddy publishes ports. Docker opens published ports past ufw, so anything else listed here with
 # ports would be on the internet whatever the firewall says.

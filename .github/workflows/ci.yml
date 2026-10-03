@@ -201,7 +201,7 @@ jobs:
           missing=0
           for name in DEPLOY_HOST DEPLOY_USER DEPLOY_KNOWN_HOSTS DEPLOY_SSH_KEY SITE_ADDRESS; do
             if [ -z "${!name}" ]; then
-              echo "::error::$name is not set. See deploy/README.md."
+              echo "::error::$name is not set. See README.md."
               missing=1
             fi
           done
@@ -221,7 +221,7 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           echo "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
-      # Into ~/modsdude, next to the .env with the server's secrets; see deploy/README.md.
+      # Into ~/modsdude, next to the .env with the server's secrets; see README.md.
       - name: Upload the build and the server's configuration
         run: >
           scp -i ~/.ssh/deploy_key -r -C
