@@ -854,7 +854,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private void ShowTimeline(GetSavegameSnapshotsResponse snapshots, GetSavegameCheckoutsResponse checkouts)
     {
         // Newest first, and the rank behind it carries weight rather than tidying: publishing,
-        // checking in and taking a save over each write two rows off one clock reading, so the
+        // checking in and taking a save over can each write two rows off one clock reading, so the
         // moment alone leaves the tie to whichever read was concatenated first - which is what put
         // a publish above the claim it opened and made the save look checked out before it existed.
         var now = _time.GetUtcNow();

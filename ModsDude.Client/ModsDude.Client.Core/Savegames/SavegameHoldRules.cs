@@ -32,6 +32,19 @@ public enum SavegameApplyRefusal
 }
 
 
+/// <summary>Why a savegame being published cannot stay checked out in this game.</summary>
+public enum SavegameKeepRefusal
+{
+    None,
+
+    /// <summary>The game's mod folder is not on the profile the savegame follows.</summary>
+    NotOnProfile,
+
+    /// <summary>Another savegame following a profile already claims the game's mod folder.</summary>
+    AnotherSavegameHeld
+}
+
+
 /// <summary>
 /// Whether an apply may go ahead, and which held savegame says otherwise.
 /// </summary>
@@ -58,7 +71,7 @@ public sealed record SavegameApplyDecision(
 /// <para>
 /// <b>Pure, for the same reason <see cref="SavegameSlotStates"/> is.</b> Reading the bindings out of
 /// local state, asking the server what is current and running the sync all happen around these,
-/// never inside them - so the rules that decide whether a savegame gets taken off its mod list are three
+/// never inside them - so the rules that decide whether a savegame gets taken off its mod list are
 /// short functions with one copy each.
 /// </para>
 /// <para>
@@ -131,6 +144,36 @@ public static class SavegameHoldRules
         }
 
         return SavegameApplyDecision.Allowed;
+    }
+
+    /// <summary>
+    /// Whether a savegame being published may stay checked out in this game.
+    /// </summary>
+    /// <remarks>
+    /// A savegame with no profile claims no mod folder, so it may always be kept. One with a profile
+    /// may be kept only where the folder is already on that profile and no other savegame claims it.
+    /// </remarks>
+    /// <param name="active">The profile this game follows, in any repo.</param>
+    /// <param name="profileId">The profile the new savegame follows, in <paramref name="repoId"/>.</param>
+    public static SavegameKeepRefusal DecideKeepPublished(
+        IReadOnlyList<SavegameCheckoutBinding> held,
+        ActiveProfile? active,
+        Guid repoId,
+        Guid? profileId)
+    {
+        if (profileId is not Guid chosen)
+        {
+            return SavegameKeepRefusal.None;
+        }
+
+        if (active != new ActiveProfile(repoId, chosen))
+        {
+            return SavegameKeepRefusal.NotOnProfile;
+        }
+
+        return FindProfileHold(held) is null
+            ? SavegameKeepRefusal.None
+            : SavegameKeepRefusal.AnotherSavegameHeld;
     }
 
     /// <summary>

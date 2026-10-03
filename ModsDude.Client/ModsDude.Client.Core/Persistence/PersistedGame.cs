@@ -85,6 +85,9 @@ public class PersistedGame
     /// the picker next time, and discarded silently whenever it turns out to be wrong.
     /// </summary>
     public List<SavegameSlotHint> SavegameSlotHints { get; init; } = [];
+
+    /// <summary>Publishes sent and not yet answered, at most one per slot.</summary>
+    public List<SavegamePendingPublish> SavegamePendingPublishes { get; init; } = [];
 }
 
 

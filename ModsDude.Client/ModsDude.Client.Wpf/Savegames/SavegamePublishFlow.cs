@@ -1,7 +1,6 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -19,6 +18,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 public sealed class SavegamePublishFlow(
     ISavegameSlots savegameSlots,
     ISavegamePublisher savegamePublisher,
+    IHeldSavegames heldSavegames,
     IProfileService profileService,
     ISyncManifestStore manifestStore,
     Lazy<IModalService> modalService,
@@ -79,11 +79,9 @@ public sealed class SavegamePublishFlow(
             }
             else
             {
-                toasts.Show(outcome.KeptPlaying
-                    ? $"'{outcome.Savegame.Name}' is in {repo.Name}, and checked out to you. " +
-                      "The save has not moved - check it in when you want somebody else to be able to take it."
-                    : $"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. The local copy went to the " +
-                      "Recycle Bin - check it out again once the game is on that mod list.");
+                toasts.Show(outcome.LocalCopy is SavegameLocalCopy.Kept
+                    ? $"'{outcome.Savegame.Name}' is in {repo.Name}, and checked out to you."
+                    : $"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. The local copy went to the Recycle Bin.");
             }
 
             await published(outcome.Savegame.Id);
@@ -120,8 +118,8 @@ public sealed class SavegamePublishFlow(
         return options;
     }
 
-    /// <returns>What was created and whether it is still held, or null where the modal was dismissed.</returns>
-    private async Task<SavegamePublishOutcome?> PublishSlotAsync(
+    /// <returns>What was created and where the local copy is, or null where the modal was dismissed.</returns>
+    private async Task<SavegamePublishResult?> PublishSlotAsync(
         Game game,
         Repo repo,
         SavegameSlotRef slot,
@@ -134,13 +132,8 @@ public sealed class SavegamePublishFlow(
         var manifest = manifestStore.TryRead(new ModTargetRef(game.Identity, slot.Target));
         var options = await BuildOptionsAsync(repo, manifest?.ProfileId, manifest?.ProfileRevision, cancellationToken);
 
-        // Which profile this game follows decides whether the save can be kept: a publish to any other
-        // one hands it straight back.
-        var activeProfileId = game.ActiveProfile is ActiveProfile profile && profile.RepoId == repo.Id
-            ? profile.ProfileId
-            : (Guid?)null;
-
-        var preselected = preselectProfileId ?? activeProfileId;
+        var preselected = preselectProfileId
+            ?? (game.ActiveProfile is ActiveProfile profile && profile.RepoId == repo.Id ? profile.ProfileId : null);
 
         var modal = new SavegamePublishModalViewModel(
             slotLabel,
@@ -148,7 +141,7 @@ public sealed class SavegamePublishFlow(
             slotLabel,
             options,
             options.FirstOrDefault(x => x.ProfileId == preselected && x.ProfileId is not null),
-            activeProfileId,
+            profileId => heldSavegames.DecideKeepPublished(game, repo.Id, profileId),
             options.FirstOrDefault(x => x.ProfileId is not null && x.ProfileId == manifest?.ProfileId)?.Name,
             savegameSlots.DescribeSlotNumber(game, slot));
 
@@ -169,11 +162,9 @@ public sealed class SavegamePublishFlow(
 
         task.DeclareTransfers(TransferDirection.Upload);
 
-        var result = await savegamePublisher.PublishAsync(
+        return await savegamePublisher.PublishAsync(
             game, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), keepPlaying, cancellationToken,
             new SavegameStripProgress(task));
-
-        return new SavegamePublishOutcome(result.Savegame, keepPlaying, result.LocalCopy);
     }
 
     /// <summary>
@@ -207,9 +198,3 @@ public sealed class SavegamePublishFlow(
         return options;
     }
 }
-
-
-/// <summary>
-/// What a publish ended up doing: the savegame it made, and whether this machine still holds it.
-/// </summary>
-public sealed record SavegamePublishOutcome(SavegameDto Savegame, bool KeptPlaying, SavegameLocalCopy LocalCopy);
