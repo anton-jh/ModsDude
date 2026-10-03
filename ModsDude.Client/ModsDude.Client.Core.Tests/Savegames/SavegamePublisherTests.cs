@@ -35,12 +35,39 @@ public class SavegamePublisherTests
     }
 
     /// <summary>
-    /// The same limit reached from the other side rather than a rule of its own: a publish opens a
-    /// claim in the same transaction as the savegame, so publishing to a profile would leave this
-    /// game holding two savegames that both want its mod folder.
+    /// Publishing always works. Where the mod folder is already spoken for, the new savegame is simply
+    /// not kept: no claim, no binding, and the slot goes to the Recycle Bin.
     /// </summary>
     [Fact]
-    public async Task Publishing_to_a_profile_while_a_savegame_is_held_is_refused()
+    public async Task Publishing_without_keeping_it_while_another_savegame_is_held_leaves_that_one_alone()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        var heldId = harness.Server.SavegameId;
+
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+        var held = harness.Binding(heldId);
+
+        harness.WriteSlotFile(_slot2, "a brand new savegame");
+
+        var (savegame, localCopy) = await harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot2, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
+
+        Assert.False(Assert.Single(harness.Server.Publishes).KeepPlaying);
+        Assert.Equal(SavegameLocalCopy.Recycled, localCopy);
+        Assert.Equal(harness.SlotPath(_slot2), Assert.Single(harness.RecycleBin.Recycled));
+
+        Assert.Null(harness.Bindings.GetBinding(harness.Game.Identity, savegame.Id));
+        Assert.Equal(held, harness.Binding(heldId));
+        Assert.Equal(0, harness.Server.CheckoutsDiscarded);
+    }
+
+    /// <summary>
+    /// A publish opens its claim in the same transaction as the savegame, so keeping this one would
+    /// leave the game holding two savegames that both want its mod folder.
+    /// </summary>
+    [Fact]
+    public async Task Keeping_a_published_savegame_while_another_is_held_is_refused_before_anything_is_uploaded()
     {
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
@@ -49,16 +76,108 @@ public class SavegamePublisherTests
 
         harness.WriteSlotFile(_slot2, "a brand new savegame");
 
-        var exception = await Assert.ThrowsAsync<UserFriendlyException>(
+        await Assert.ThrowsAsync<UserFriendlyException>(
             () => harness.Publisher.PublishAsync(
                 harness.Game, harness.Server.RepoId, _slot2, "Season 5", null, harness.Target(), keepPlaying: true, CancellationToken.None));
 
-        Assert.Contains("already holding a savegame", exception.UserMessage);
-
-        // Refused before the bytes were packed, so nothing was uploaded and no orphan blob was left
-        // for the reclamation sweep.
         Assert.Empty(harness.Server.Publishes);
         Assert.Equal(0, harness.Uploader.Uploads);
+        Assert.Empty(harness.Adapter.Renames);
+    }
+
+    /// <summary>
+    /// The save would follow one mod list while sitting in a folder on another, which is the state
+    /// that damages saves.
+    /// </summary>
+    [Fact]
+    public async Task Keeping_a_published_savegame_on_a_profile_the_game_is_not_on_is_refused()
+    {
+        using var harness = new SavegameHarness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+
+        await Assert.ThrowsAsync<UserFriendlyException>(
+            () => harness.Publisher.PublishAsync(
+                harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, new SavegamePublishTarget(Guid.NewGuid(), 1),
+                keepPlaying: true, CancellationToken.None));
+
+        Assert.Empty(harness.Server.Publishes);
+        Assert.Equal(0, harness.Uploader.Uploads);
+    }
+
+    /// <summary>
+    /// The answer was lost after the server created the savegame. Publishing the same slot under the
+    /// same name again is the same publish, and is answered as one rather than refused as a name taken.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_again_after_a_lost_answer_repeats_the_same_publish()
+    {
+        using var harness = new SavegameHarness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+        harness.Server.LoseNextPublishAnswer = true;
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None));
+
+        // Nothing was recycled while the outcome was unknown.
+        Assert.Equal("a brand new savegame", harness.ReadSlotFile(_slot1));
+
+        var (savegame, localCopy) = await harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
+
+        Assert.Equal(2, harness.Server.Publishes.Count);
+        Assert.Equal(harness.Server.Publishes[0].RequestId, harness.Server.Publishes[1].RequestId);
+        Assert.Equal(harness.Server.Publishes[0].SavegameId, harness.Server.Publishes[1].SavegameId);
+        Assert.Equal(harness.Server.Publishes[0].SavegameId, savegame.Id);
+        Assert.Equal(SavegameLocalCopy.Recycled, localCopy);
+
+        // Answered, so there is nothing left to repeat.
+        Assert.Empty(harness.State.Find(harness.Game.Identity)!.SavegamePendingPublishes);
+    }
+
+    [Fact]
+    public async Task Publishing_different_bytes_after_a_lost_answer_is_a_new_publish()
+    {
+        using var harness = new SavegameHarness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+        harness.Server.LoseNextPublishAnswer = true;
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None));
+
+        harness.WriteSlotFile(_slot1, "played some more");
+
+        await harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 6", null, harness.Target(), keepPlaying: false, CancellationToken.None);
+
+        Assert.Equal(2, harness.Server.Publishes.Count);
+        Assert.NotEqual(harness.Server.Publishes[0].RequestId, harness.Server.Publishes[1].RequestId);
+        Assert.NotEqual(harness.Server.Publishes[0].SavegameId, harness.Server.Publishes[1].SavegameId);
+    }
+
+    /// <summary>
+    /// The repeat asked not to keep the save, but the publish it repeats did keep it: the server holds
+    /// a claim, so this machine has to hold the binding that goes with it.
+    /// </summary>
+    [Fact]
+    public async Task A_repeated_publish_follows_the_server_answer_rather_than_its_own_request()
+    {
+        using var harness = new SavegameHarness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+        harness.Server.LoseNextPublishAnswer = true;
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: true, CancellationToken.None));
+
+        var (savegame, localCopy) = await harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
+
+        Assert.Equal(SavegameLocalCopy.Kept, localCopy);
+        Assert.Equal(_slot1, harness.Binding(savegame.Id).Slot);
+        Assert.Empty(harness.RecycleBin.Recycled);
     }
 
     [Fact]
@@ -80,6 +199,9 @@ public class SavegamePublisherTests
         // before the savegame exists.
         Assert.NotEqual(Guid.Empty, request.SavegameId);
         Assert.Equal(savegame.Id, request.SavegameId);
+        Assert.NotEqual(Guid.Empty, request.RequestId);
+        Assert.NotEqual(request.SavegameId, request.RequestId);
+        Assert.True(request.KeepPlaying);
 
         // The pair the dialog settled, sent as one: the profile chosen there, and the revision it
         // declared - which for a folder already on that profile is the revision the folder is on.
@@ -95,14 +217,11 @@ public class SavegamePublisherTests
     }
 
     /// <summary>
-    /// The other ending, which is what publishing to a mod list this game is not on always takes: the
-    /// snapshot is minted, the claim goes straight back, and the local copy goes to the Recycle Bin.
-    /// Without it, one publish leaves a savegame following one profile checked out into a folder on
-    /// another - drift no apply can clear, because the apply table refuses every profile the folder
-    /// could move to.
+    /// The other ending: the snapshot is minted, no claim is ever opened, and the local copy goes to the
+    /// Recycle Bin.
     /// </summary>
     [Fact]
-    public async Task Publishing_without_keeping_it_hands_the_savegame_straight_back()
+    public async Task Publishing_without_keeping_it_opens_no_claim_and_recycles_the_slot()
     {
         using var harness = new SavegameHarness();
 
@@ -113,10 +232,11 @@ public class SavegamePublisherTests
 
         // The savegame is real and the snapshot was minted: this is a publish, not a cancelled one.
         Assert.Equal(1, harness.Uploader.Uploads);
-        Assert.Single(harness.Server.Publishes);
+        Assert.False(Assert.Single(harness.Server.Publishes).KeepPlaying);
 
-        // And nothing on this machine claims it any more.
-        Assert.Equal(1, harness.Server.CheckoutsDiscarded);
+        // And nothing claims it, here or on the server.
+        Assert.Null(harness.Server.Claim);
+        Assert.Equal(0, harness.Server.CheckoutsDiscarded);
         Assert.Null(harness.Bindings.GetBinding(harness.Game.Identity, savegame.Id));
         Assert.Equal(harness.SlotPath(_slot1), Assert.Single(harness.RecycleBin.Recycled));
         Assert.Equal(SavegameLocalCopy.Recycled, localCopy);
@@ -127,9 +247,8 @@ public class SavegamePublisherTests
     }
 
     /// <summary>
-    /// The shell refuses by returning rather than throwing, so this used to pass in silence while the
-    /// caller told the user their copy was in the Recycle Bin. The hand-back itself still stands - the
-    /// bytes are on the server and the claim is released - but the answer says the folder stayed.
+    /// The shell refuses by returning rather than throwing. The publish itself still stands - the
+    /// bytes are on the server and nothing claims them - but the answer says the folder stayed.
     /// </summary>
     [Fact]
     public async Task Publishing_without_keeping_it_says_so_when_the_recycle_bin_refuses_the_local_copy()
@@ -145,7 +264,7 @@ public class SavegamePublisherTests
         Assert.Equal(SavegameLocalCopy.LeftBehind, localCopy);
         Assert.Equal(4, harness.RecycleBin.Attempts);
 
-        Assert.Equal(1, harness.Server.CheckoutsDiscarded);
+        Assert.Null(harness.Server.Claim);
         Assert.Null(harness.Bindings.GetBinding(harness.Game.Identity, savegame.Id));
 
         // Left exactly as it was, and read as a save nothing tracks - which needs a confirmation to
@@ -208,8 +327,8 @@ public class SavegamePublisherTests
         using var harness = new SavegameHarness();
         await harness.SeedHeadAsync("a savegame");
 
-        // Already holding one that claims the mod folder, which a publish *to a profile* is refused
-        // for. This one claims nothing.
+        // Already holding one that claims the mod folder, which keeping a publish *to a profile* is
+        // refused for. This one claims nothing.
         await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot2, "an unmanaged savegame");

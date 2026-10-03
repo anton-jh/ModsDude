@@ -28,9 +28,8 @@ namespace ModsDude.Server.Persistence.Retention;
 /// reported, and nothing is ever deleted because of it.
 /// </para>
 /// </remarks>
-public class RetentionUpkeep(ApplicationDbContext dbContext, ITimeService timeService, ILogger<RetentionUpkeep> logger)
+public class RetentionUpkeep(ApplicationDbContext dbContext, ITimeService timeService, ILogger<RetentionUpkeep> logger) : IRetentionUpkeep
 {
-    /// <summary>After a savegame gained or lost a snapshot.</summary>
     public Task ReleaseSavegameAsync(RepoId repoId, SavegameId savegameId, CancellationToken cancellationToken)
     {
         return GuardAsync("savegame", savegameId.Value.ToString(), async () =>
@@ -42,7 +41,6 @@ public class RetentionUpkeep(ApplicationDbContext dbContext, ITimeService timeSe
         });
     }
 
-    /// <summary>After a profile gained or lost a revision, or a snapshot was played on one of them.</summary>
     public Task ReleaseProfileAsync(RepoId repoId, ProfileId profileId, CancellationToken cancellationToken)
     {
         return GuardAsync("profile", profileId.Value.ToString(), async () =>
@@ -54,7 +52,6 @@ public class RetentionUpkeep(ApplicationDbContext dbContext, ITimeService timeSe
         });
     }
 
-    /// <summary>After mods gained, lost or reordered a version, or started being pinned.</summary>
     public Task ReleaseModsAsync(RepoId repoId, IReadOnlyCollection<ModId> modIds, CancellationToken cancellationToken)
     {
         return GuardAsync("mods", string.Join(", ", modIds.Select(x => x.Value)), async () =>
@@ -68,15 +65,12 @@ public class RetentionUpkeep(ApplicationDbContext dbContext, ITimeService timeSe
         });
     }
 
-    /// <summary>
-    /// After a revision was saved: the mods it pins that have a version scheduled. Asked of the
-    /// database first because a revision can pin thousands of mods and almost none of them will have
-    /// anything scheduled - so the question is which few to look at, not the whole list.
-    /// </summary>
     public Task ReleaseModsPinnedByAsync(RepoId repoId, ProfileId profileId, RevisionNumber revision, CancellationToken cancellationToken)
     {
         return GuardAsync("revision", $"{profileId.Value}/{revision.Value}", async () =>
         {
+            // Asked of the database first because a revision can pin thousands of mods and almost none
+            // of them will have anything scheduled - so the question is which few to look at.
             var pinned = dbContext.ProfileRevisions
                 .Where(x => x.RepoId == repoId && x.ProfileId == profileId && x.Number == revision)
                 .SelectMany(x => x.ModDependencies)

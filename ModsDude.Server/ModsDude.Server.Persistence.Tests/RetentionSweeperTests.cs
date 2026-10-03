@@ -519,8 +519,8 @@ public class RetentionSweeperTests(DatabaseFixture fixture)
         await CreateUpkeep(dbContext).ReleaseProfileAsync(repoId, profileId, CancellationToken.None);
     }
 
-    private static RetentionUpkeep CreateUpkeep(ApplicationDbContext dbContext)
-        => new(dbContext, new FixedTime(), NullLogger<RetentionUpkeep>.Instance);
+    private static IRetentionUpkeep CreateUpkeep(ApplicationDbContext dbContext)
+        => new RetentionUpkeep(dbContext, new FixedTime(), NullLogger<RetentionUpkeep>.Instance);
 
     private async Task<List<(int Number, DeletionSchedule? Schedule)>> SnapshotSchedulesAsync(RepoId repoId, SavegameId savegameId)
     {

@@ -8,6 +8,7 @@ namespace ModsDude.Client.Core.Tests.Savegames;
 /// </summary>
 public class SavegameHoldRulesTests
 {
+    private static readonly Guid _repoId = Guid.NewGuid();
     private static readonly Guid _profileId = Guid.NewGuid();
     private static readonly Guid _otherProfileId = Guid.NewGuid();
     private static readonly Guid _savegameId = Guid.NewGuid();
@@ -138,6 +139,37 @@ public class SavegameHoldRulesTests
     public void A_hold_on_one_profile_pins_no_revision_of_another()
     {
         Assert.Null(SavegameHoldRules.RequiredRevision([Hold(target: 4)], _otherProfileId));
+    }
+
+
+    [Fact]
+    public void A_published_savegame_on_the_profile_the_game_is_on_may_be_kept_beside_nothing()
+    {
+        Assert.Equal(SavegameKeepRefusal.None, SavegameHoldRules.DecideKeepPublished([], new(_repoId, _profileId), _repoId, _profileId));
+    }
+
+    [Fact]
+    public void A_published_savegame_with_no_profile_may_always_be_kept()
+    {
+        Assert.Equal(SavegameKeepRefusal.None, SavegameHoldRules.DecideKeepPublished([Hold()], null, _repoId, null));
+    }
+
+    [Fact]
+    public void A_published_savegame_on_a_profile_the_game_is_not_on_may_not_be_kept()
+    {
+        Assert.Equal(SavegameKeepRefusal.NotOnProfile, SavegameHoldRules.DecideKeepPublished([], new(_repoId, _otherProfileId), _repoId, _profileId));
+        Assert.Equal(SavegameKeepRefusal.NotOnProfile, SavegameHoldRules.DecideKeepPublished([], null, _repoId, _profileId));
+
+        // The same profile id in another repo's active profile is not this profile.
+        Assert.Equal(SavegameKeepRefusal.NotOnProfile, SavegameHoldRules.DecideKeepPublished([], new(Guid.NewGuid(), _profileId), _repoId, _profileId));
+    }
+
+    /// <summary>On the game's own profile too: one mod folder holds one savegame that follows a profile.</summary>
+    [Fact]
+    public void A_published_savegame_may_not_be_kept_beside_another_that_follows_a_profile()
+    {
+        Assert.Equal(SavegameKeepRefusal.AnotherSavegameHeld, SavegameHoldRules.DecideKeepPublished([Hold()], new(_repoId, _profileId), _repoId, _profileId));
+        Assert.Equal(SavegameKeepRefusal.None, SavegameHoldRules.DecideKeepPublished([Hold(noProfile: true)], new(_repoId, _profileId), _repoId, _profileId));
     }
 
 

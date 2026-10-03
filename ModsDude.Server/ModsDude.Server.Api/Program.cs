@@ -144,12 +144,10 @@ builder.Services.AddScoped<ClientBuildMiddleware>();
 
 builder.Services
     .Configure<BlobReclamationOptions>(builder.Configuration.GetSection(BlobReclamationOptions.SectionName));
-builder.Services.AddScoped<BlobReclamationJob>();
 
 builder.Services
     .Configure<StorageStatisticsOptions>(builder.Configuration.GetSection(StorageStatisticsOptions.SectionName));
 builder.Services.AddScoped<IStorageStatisticsRecorder, StorageStatisticsRecorder>();
-builder.Services.AddScoped<StorageStatisticsJob>();
 
 builder.Services
     .AddOptions<ClientDownloadOptions>()
@@ -158,13 +156,11 @@ builder.Services
     .ValidateOnStart();
 
 builder.Services.AddModHub(builder.Configuration);
-builder.Services.AddScoped<ModHubCrawlJob>();
 
 builder.Services
     .Configure<RetentionOptions>(builder.Configuration.GetSection(RetentionOptions.SectionName));
 builder.Services.AddScoped<IRetentionSweeper, RetentionSweeper>();
-builder.Services.AddScoped<RetentionUpkeep>();
-builder.Services.AddScoped<RetentionJobs>();
+builder.Services.AddScoped<IRetentionUpkeep, RetentionUpkeep>();
 
 // In the application's own database, under a schema of its own. Hangfire manages that schema itself,
 // outside the EF migrations, which is why the two never meet. The invisibility timeout slides because

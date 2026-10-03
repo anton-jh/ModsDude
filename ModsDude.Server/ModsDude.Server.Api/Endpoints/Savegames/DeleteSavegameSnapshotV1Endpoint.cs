@@ -51,7 +51,7 @@ public class DeleteSavegameSnapshotV1Endpoint : IEndpoint
         Guid repoId, Guid savegameId, int number,
         ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
-        RetentionUpkeep retentionUpkeep,
+        IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var savegame = await dbContext.Savegames.GetAsync(new RepoId(repoId), new SavegameId(savegameId), cancellationToken);

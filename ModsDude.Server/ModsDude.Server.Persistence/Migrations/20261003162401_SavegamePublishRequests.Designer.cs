@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ModsDude.Server.Persistence.DbContexts;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ModsDude.Server.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261003162401_SavegamePublishRequests")]
+    partial class SavegamePublishRequests
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -438,10 +441,6 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<DateTime>("Created")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("MembershipRevision")
-                        .IsConcurrencyToken()
-                        .HasColumnType("integer");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -664,85 +663,6 @@ namespace ModsDude.Server.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("ModsDude.Server.Domain.Statistics.FileTransfer", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("At")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Direction")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("File")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("RepoId")
-                        .HasColumnType("uuid");
-
-                    b.Property<long>("SizeBytes")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("At");
-
-                    b.HasIndex("RepoId", "At");
-
-                    b.HasIndex("UserId", "At");
-
-                    b.ToTable("FileTransfers", t =>
-                        {
-                            t.HasCheckConstraint("CK_FileTransfers_SizeNotNegative", "\"SizeBytes\" >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("ModsDude.Server.Domain.Statistics.StorageUsageSample", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("BlobCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Container")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateOnly>("Date")
-                        .HasColumnType("date");
-
-                    b.Property<long?>("RegisteredBytes")
-                        .HasColumnType("bigint");
-
-                    b.Property<Guid?>("RepoId")
-                        .HasColumnType("uuid");
-
-                    b.Property<long>("StoredBytes")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Date", "Container", "RepoId")
-                        .IsUnique();
-
-                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("Date", "Container", "RepoId"), false);
-
-                    b.ToTable("StorageUsageSamples", t =>
-                        {
-                            t.HasCheckConstraint("CK_StorageUsageSamples_RegisteredNotNegative", "\"RegisteredBytes\" IS NULL OR \"RegisteredBytes\" >= 0");
-
-                            t.HasCheckConstraint("CK_StorageUsageSamples_StoredNotNegative", "\"StoredBytes\" >= 0 AND \"BlobCount\" >= 0");
-                        });
-                });
-
             modelBuilder.Entity("ModsDude.Server.Domain.Users.User", b =>
                 {
                     b.Property<string>("Id")
@@ -751,9 +671,6 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<string>("AvatarHash")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
-
-                    b.Property<DateTime?>("BlockedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("Created")
                         .HasColumnType("timestamp with time zone");
@@ -1080,15 +997,6 @@ namespace ModsDude.Server.Persistence.Migrations
                         });
 
                     b.Navigation("Details");
-                });
-
-            modelBuilder.Entity("ModsDude.Server.Domain.Statistics.FileTransfer", b =>
-                {
-                    b.HasOne("ModsDude.Server.Domain.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Repos.Repo", b =>

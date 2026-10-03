@@ -17,9 +17,9 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// <para>
 /// One order covers all three, which is why this is a rank and not a special case per event.
 /// Earliest to latest inside an instant: a claim ends, a snapshot is minted, a claim is taken.
-/// Publishing mints the first snapshot and then hands the publisher the claim; a check-in closes the
-/// claim and then mints what it produced; a take-over closes the old claim and then opens the new
-/// one.
+/// Publishing mints the first snapshot and then, where it is kept, hands the publisher the claim; a
+/// check-in closes the claim and then mints what it produced; a take-over closes the old claim and
+/// then opens the new one.
 /// </para>
 /// </remarks>
 public enum SavegameTimelineRank

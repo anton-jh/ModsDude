@@ -38,8 +38,6 @@ namespace ModsDude.Server.Persistence.Retention;
 /// </remarks>
 public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionSweeper> logger) : IRetentionSweeper
 {
-    /// <param name="today">The date the schedules count from, in the zone the jobs run in.</param>
-    /// <param name="now">What a rescheduled mod version's <see cref="ModVersion.Updated"/> moves to.</param>
     public async Task ScheduleAsync(DateOnly today, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var totals = new SweepTotals();
@@ -61,8 +59,6 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
             totals.Scheduled, totals.Unscheduled);
     }
 
-    /// <param name="today">Anything scheduled for this date or earlier is due.</param>
-    /// <param name="now">What the versions left behind a deleted mod version are stamped with.</param>
     public async Task DeleteDueAsync(DateOnly today, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var totals = new SweepTotals();
@@ -84,13 +80,6 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
             totals.Snapshots, totals.Revisions, totals.ModVersions);
     }
 
-    /// <summary>
-    /// Deletes one kind of row in one repo that is outside its window and that nothing holds, without
-    /// waiting for a schedule. Rows only eligible as winding down are left to the jobs: that reason
-    /// means a history nobody has used for a while, which only the grace period can tell. So a rerun
-    /// finds nothing new to delete.
-    /// </summary>
-    /// <param name="now">What the versions left behind a deleted mod version are stamped with.</param>
     public async Task<PruneResult> PruneNowAsync(RepoId repoId, PrunableHistory history, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var totals = new SweepTotals();

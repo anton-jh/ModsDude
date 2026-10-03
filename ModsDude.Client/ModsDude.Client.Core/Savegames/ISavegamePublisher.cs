@@ -11,12 +11,13 @@ public interface ISavegamePublisher
     /// a savegame that follows none.
     /// </param>
     /// <param name="keepPlaying">
-    /// Whether to stay holding the save afterwards. False hands it straight back, which publishing to a
-    /// profile the game is not on has to do.
+    /// Whether to stay holding the save afterwards. False opens no claim and sends the slot to the
+    /// Recycle Bin, which is the only answer <see cref="SavegameHoldRules.DecideKeepPublished"/>
+    /// leaves where it refuses keeping.
     /// </param>
     /// <param name="progress">Which stage the bytes are in and how far through it they are.</param>
     /// <exception cref="Exceptions.UserFriendlyException">
-    /// The game is running, or already holds a savegame that claims its mod folder.
+    /// The game is running, or <paramref name="keepPlaying"/> was asked for where it is refused.
     /// </exception>
     Task<SavegamePublishResult> PublishAsync(
         Game game,

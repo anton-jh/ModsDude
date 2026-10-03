@@ -29,6 +29,7 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<SavegameSnapshot> SavegameSnapshots { get; init; }
     public required DbSet<SavegameCheckout> SavegameCheckouts { get; init; }
     public required DbSet<SavegameCheckInRequest> SavegameCheckInRequests { get; init; }
+    public required DbSet<SavegamePublishRequest> SavegamePublishRequests { get; init; }
     public required DbSet<ModHubMod> ModHubMods { get; init; }
     public required DbSet<ModHubCrawlState> ModHubCrawlStates { get; init; }
     public required DbSet<GameActivity> GameActivities { get; init; }

@@ -62,7 +62,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         ISavegameStorageService savegameStorageService,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
-        RetentionUpkeep retentionUpkeep,
+        IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
@@ -217,7 +217,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
     /// and the revision it was played on is now held, which can stop the whole profile winding down.
     /// </summary>
     internal static async Task ReleaseAfterNewSnapshotAsync(
-        RetentionUpkeep retentionUpkeep,
+        IRetentionUpkeep retentionUpkeep,
         Savegame savegame,
         CancellationToken cancellationToken)
     {

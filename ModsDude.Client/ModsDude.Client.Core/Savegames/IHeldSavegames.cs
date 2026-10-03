@@ -4,8 +4,8 @@ using ModsDude.Client.Core.Models;
 namespace ModsDude.Client.Core.Savegames;
 
 /// <summary>
-/// What the savegames a game holds mean for its mod folder: which revision it has to be on, and which
-/// applies they refuse.
+/// What the savegames a game holds mean for its mod folder: which revision it has to be on, which
+/// applies they refuse, and whether a newly published savegame may stay beside them.
 /// </summary>
 public interface IHeldSavegames
 {
@@ -20,4 +20,7 @@ public interface IHeldSavegames
 
     /// <inheritdoc cref="SavegameHoldRules.FindProfileHold"/>
     SavegameCheckoutBinding? FindProfileHold(GameIdentity game);
+
+    /// <inheritdoc cref="SavegameHoldRules.DecideKeepPublished"/>
+    SavegameKeepRefusal DecideKeepPublished(Game game, Guid repoId, Guid? profileId);
 }

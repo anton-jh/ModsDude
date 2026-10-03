@@ -63,27 +63,22 @@ public sealed record SavegamePublishOption(
 /// gets clicked through.
 /// </para>
 /// <para>
-/// <b>Whether you keep playing is the fourth, and it is not always a question.</b> Publishing to the
-/// mod list this game is already on leaves an ordinary held save, so the choice is offered and ticked.
-/// Publishing to any <em>other</em> profile cannot: the save would follow one mod list while sitting in
-/// a folder on another, which is the state that damages saves, and no apply clears it because the apply
-/// table refuses every profile the folder could move to. So that answer is taken away rather than
-/// warned about, and the notice says where the copy goes.
+/// <b>Whether you keep playing is the fourth, and it is not always a question.</b> Publishing always
+/// works, but keeping the save is offered only where <see cref="SavegameHoldRules.DecideKeepPublished"/>
+/// allows it. Elsewhere the answer is taken away rather than warned about, and the notice says why.
 /// </para>
 /// </remarks>
 public partial class SavegamePublishModalViewModel : ModalViewModel
 {
+    private readonly Func<Guid?, SavegameKeepRefusal> _decideKeep;
+
+
     /// <param name="preselected">
     /// The profile to arrive on, or null to arrive on nothing. Null where the game follows no
     /// profile in this repo: the two defaults available there - the first profile in the list, and no
     /// mod list - are both permanent decisions made on the user's behalf, so the modal asks instead.
     /// </param>
-    /// <param name="activeProfileId">
-    /// Which profile this game follows, or null where it follows none in this repo. Read only to decide
-    /// whether keeping the save is on offer - <b>separately from <paramref name="preselected"/></b>,
-    /// which is the same profile today and is a statement about where the modal opens rather than
-    /// about what the folder is on.
-    /// </param>
+    /// <param name="decideKeep">Whether a savegame following a given profile, or none, may stay checked out.</param>
     /// <param name="folderProfileName">
     /// Which mod list the folder is actually on, for the sentence that says so where the chosen
     /// profile is a different one. Null where it is on none.
@@ -94,14 +89,15 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
         string suggestedName,
         IReadOnlyList<SavegamePublishOption> profiles,
         SavegamePublishOption? preselected,
-        Guid? activeProfileId,
+        Func<Guid?, SavegameKeepRefusal> decideKeep,
         string? folderProfileName,
         int? slotNumber = null)
     {
+        _decideKeep = decideKeep;
+
         SlotLabel = slotLabel;
         SlotNumber = slotNumber;
         RepoName = repoName;
-        ActiveProfileId = activeProfileId;
         FolderProfileName = folderProfileName;
 
         _name = suggestedName;
@@ -115,10 +111,7 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     public int? SlotNumber { get; }
     public string RepoName { get; }
 
-    /// <inheritdoc cref="SavegamePublishModalViewModel(string, string, string, IReadOnlyList{SavegamePublishOption}, SavegamePublishOption?, Guid?, string?, int?)"/>
-    public Guid? ActiveProfileId { get; }
-
-    /// <inheritdoc cref="SavegamePublishModalViewModel(string, string, string, IReadOnlyList{SavegamePublishOption}, SavegamePublishOption?, Guid?, string?, int?)"/>
+    /// <inheritdoc cref="SavegamePublishModalViewModel(string, string, string, IReadOnlyList{SavegamePublishOption}, SavegamePublishOption?, Func{Guid?, SavegameKeepRefusal}, string?, int?)"/>
     public string? FolderProfileName { get; }
 
     /// <summary>Every profile in the repo, plus <see cref="SavegamePublishOption.NoModList"/> last.</summary>
@@ -143,6 +136,7 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     [NotifyPropertyChangedFor(nameof(HasRevisionText))]
     [NotifyPropertyChangedFor(nameof(MismatchNotice))]
     [NotifyPropertyChangedFor(nameof(HasMismatchNotice))]
+    [NotifyPropertyChangedFor(nameof(KeepRefusal))]
     [NotifyPropertyChangedFor(nameof(CanKeepPlaying))]
     [NotifyPropertyChangedFor(nameof(KeepPlaying))]
     [NotifyPropertyChangedFor(nameof(HandOverNotice))]
@@ -156,15 +150,13 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     /// </summary>
     /// <remarks>
     /// Kept separately from the answer so that picking another profile and picking this one back does
-    /// not silently drop a tick the user had put there. Ticked by default: publishing a save you are
-    /// in the middle of and being handed it back is the ordinary case, and it is what this modal
-    /// always did.
+    /// not silently drop a tick the user had put there. Unticked by default, as on check-in.
     /// </remarks>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(KeepPlaying))]
     [NotifyPropertyChangedFor(nameof(Consequence))]
     [NotifyPropertyChangedFor(nameof(ConfirmLabel))]
-    private bool _wantsToKeepPlaying = true;
+    private bool _wantsToKeepPlaying;
 
     /// <summary>The name to publish under, or null where the modal was dismissed.</summary>
     public string? Result { get; private set; }
@@ -199,16 +191,12 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
 
     public bool HasMismatchNotice => MismatchNotice is not null;
 
-    /// <summary>
-    /// Whether staying checked out is an answer this profile allows.
-    /// </summary>
-    /// <remarks>
-    /// <b>The mod folder, not the savegame.</b> A save following no mod list constrains no folder and
-    /// may always be kept; a save following the profile this game is already on sits in a folder that
-    /// is on its list, which is the ordinary held state. Every other profile is the refused one -
-    /// see the remarks on this class.
-    /// </remarks>
-    public bool CanKeepPlaying => SelectedProfile is not { ProfileId: Guid chosen } || chosen == ActiveProfileId;
+    /// <summary>Why staying checked out is not an answer the chosen profile allows. None until one is chosen.</summary>
+    public SavegameKeepRefusal KeepRefusal => SelectedProfile is null
+        ? SavegameKeepRefusal.None
+        : _decideKeep(SelectedProfile.ProfileId);
+
+    public bool CanKeepPlaying => KeepRefusal is SavegameKeepRefusal.None;
 
     /// <summary>
     /// What actually happens to the local copy: what was asked for, where the profile allows it.
@@ -225,20 +213,13 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
         set => WantsToKeepPlaying = value;
     }
 
-    /// <summary>
-    /// That this publish hands the save straight back, and why there is no choice about it.
-    /// </summary>
-    /// <remarks>
-    /// Named for the consequence rather than for the rule: "the apply table refuses every profile this
-    /// folder could move to" is true and is not what somebody about to lose a folder needs to read.
-    /// The Recycle Bin is said out loud because it is the whole of what makes this recoverable.
-    /// </remarks>
-    public string? HandOverNotice => CanKeepPlaying
-        ? null
-        : $"This game is not on {SelectedProfile?.Name}, so you cannot keep this save checked out: it would be " +
-          "sitting in a mod folder running a different list, which is what damages a save. Once the upload is " +
-          "verified the local copy goes to the Recycle Bin and the savegame is anybody's to take - check it out " +
-          $"again after applying {SelectedProfile?.Name} to carry on playing it.";
+    /// <summary>Why there is no choice about handing the save back.</summary>
+    public string? HandOverNotice => KeepRefusal switch
+    {
+        SavegameKeepRefusal.NotOnProfile => $"This game is not on {SelectedProfile?.Name}, so the save cannot stay checked out.",
+        SavegameKeepRefusal.AnotherSavegameHeld => "Another savegame is checked out in this game, so this one cannot stay checked out.",
+        _ => null
+    };
 
     public bool HasHandOverNotice => HandOverNotice is not null;
 
