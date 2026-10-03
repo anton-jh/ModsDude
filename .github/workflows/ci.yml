@@ -187,18 +187,25 @@ jobs:
 
     env:
       BUILD: ${{ needs.build-number.outputs.number }}
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       SITE_ADDRESS: ${{ vars.SITE_ADDRESS }}
 
     steps:
-      # Checked before anything reaches the server: without it there is no telling whether the deploy worked.
-      - name: Refuse to deploy without the site address
+      # Checked before anything reaches the server, so a missing one is named rather than surfacing as an
+      # ssh failure or an API that never answers.
+      - name: Refuse to deploy without the server's settings
         run: |
-          if [ -z "$SITE_ADDRESS" ]; then
-            echo "::error::The SITE_ADDRESS repository variable is not set."
-            exit 1
-          fi
+          missing=0
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_KNOWN_HOSTS DEPLOY_SSH_KEY SITE_ADDRESS; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is not set. See deploy/README.md."
+              missing=1
+            fi
+          done
+          exit $missing
 
       - uses: actions/checkout@v4
 
@@ -210,9 +217,9 @@ jobs:
       - name: Set up the deploy key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          echo "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
       # Into ~/modsdude, next to the .env with the server's secrets; see deploy/README.md.
       - name: Upload the build and the server's configuration

@@ -62,14 +62,18 @@ Then, outside the server:
 
 5. Point `SITE_ADDRESS` at the server in DNS, and open 22, 80 and 443 (TCP, and UDP for 443) in the
    hosting provider's firewall if it has one.
-6. Set the repository's Actions variable `SITE_ADDRESS`, the same domain as in `.env`, and its Actions
-   secrets:
+6. Set the repository's Actions variables:
+   - `SITE_ADDRESS`: the same domain as in `.env`.
    - `DEPLOY_HOST`: the server's address.
    - `DEPLOY_USER`: `modsdude`.
+   - `DEPLOY_KNOWN_HOSTS`: the server's host key as a `known_hosts` line, printed on the server itself so
+     there is no fingerprint to check. `<DEPLOY_HOST>` exactly as in that variable:
+     ```bash
+     awk -v host=<DEPLOY_HOST> '{print host, $1, $2}' /etc/ssh/ssh_host_ed25519_key.pub
+     ```
+
+   And its one Actions secret:
    - `DEPLOY_SSH_KEY`: the private half of the deploy key.
-   - `DEPLOY_KNOWN_HOSTS`: the output of `ssh-keyscan <DEPLOY_HOST>`, with the same form of the address as
-     `DEPLOY_HOST`. Check it is really the server: its `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`
-     must show the same fingerprint as `ssh-keygen -lf <(ssh-keyscan <DEPLOY_HOST>)` on your machine.
 7. Deploy: re-run the latest run of CI on main, or push to main. The first deploy creates the database and
    gets the certificate.
 
