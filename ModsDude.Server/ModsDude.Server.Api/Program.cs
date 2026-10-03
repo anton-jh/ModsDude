@@ -52,8 +52,12 @@ builder.Services
     .AddEndpointsApiExplorer()
     .AddOpenApiDocument(config =>
     {
-        var tokenEndpoint = builder.Configuration["EntraExternalId:TokenEndpoint"];
-        var authorizationEndpoint = builder.Configuration["EntraExternalId:AuthorizationEndpoint"];
+        var authority = builder.Configuration["EntraExternalId:Authority"]?.TrimEnd('/')
+            ?? throw new InvalidOperationException("'EntraExternalId:Authority' is missing from appsettings.json.");
+        var tokenEndpoint = $"{authority}/oauth2/v2.0/token";
+        var authorizationEndpoint = $"{authority}/oauth2/v2.0/authorize";
+        var scope = builder.Configuration["SwaggerAuthentication:Scope"]
+            ?? throw new InvalidOperationException("'SwaggerAuthentication:Scope' is missing from appsettings.json.");
 
         config.Title = "ModsDude Server";
         config.AddSecurity("EntraExternalId", new OpenApiSecurityScheme
@@ -70,7 +74,7 @@ builder.Services
                     {
                         { "offline_access", "Offline access" },
                         { "openid", "OpenID" },
-                        { "api://modsdude-server/act_as_user", "ModsDude Server default user scope" }
+                        { scope, "ModsDude Server default user scope" }
                     }
                 }
             }

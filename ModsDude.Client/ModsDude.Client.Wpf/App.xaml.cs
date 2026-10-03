@@ -126,7 +126,7 @@ public partial class App : Application
         }
 
         var builder = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
+            .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
             // Layered on top, and absent until somebody writes one: the deployed server's address
             // lives in appsettings.Production.json, the local one stays in the base file.
@@ -707,6 +707,10 @@ public partial class App : Application
 
         services.AddCore<IAuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
             ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));
+        var authentication = configuration.GetSection(AuthenticationOptions.SectionName).Get<AuthenticationOptions>();
+        services.AddSingleton(authentication is { IsComplete: true }
+            ? authentication
+            : throw new InvalidOperationException($"'{AuthenticationOptions.SectionName}' needs ClientId, Authority and Scope in appsettings.json."));
         services.AddSingleton<IAuthenticationService, AuthenticationService>();
         services.AddSingleton<ClientConfiguration>();
         services.AddSingleton<IStateStore, StateStore>();

@@ -18,20 +18,19 @@ namespace ModsDude.Client.Wpf.Account;
 /// </remarks>
 public class AuthenticationService : IAuthenticationService
 {
-    private const string _clientId = "17e5db7c-9023-40cd-9cd8-3c49b7f98927";
-    private static readonly string _authority = "https://modsdudeexternal.ciamlogin.com/cce54c8f-87a3-4c39-a558-9a15733d2cdf/susi_1/v2.0";
-    private static readonly string _redirectUri = "http://localhost";
-    private static readonly string[] _scopes = ["api://modsdude-server/act_as_user", "openid", "offline_access"];
+    private const string _redirectUri = "http://localhost";
+    private readonly string[] _scopes;
     private readonly IPublicClientApplication _client;
     private bool _tokenCacheConfigured = false;
     private CancellationTokenSource? _prompt;
 
 
-    public AuthenticationService()
+    public AuthenticationService(AuthenticationOptions options)
     {
+        _scopes = [options.Scope, "openid", "offline_access"];
         _client = PublicClientApplicationBuilder
-            .Create(_clientId)
-            .WithAuthority(_authority)
+            .Create(options.ClientId)
+            .WithAuthority(options.Authority)
             .WithRedirectUri(_redirectUri)
             .Build();
     }

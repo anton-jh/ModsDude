@@ -1,4 +1,4 @@
-modsdude.com {
+{$SITE_ADDRESS} {
 	handle / {
 		root * /etc/caddy/site
 		file_server

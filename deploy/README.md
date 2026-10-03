@@ -1,7 +1,7 @@
 # The server
 
 One Linux machine running three containers from `compose.yml`: the API, PostgreSQL and Caddy, which serves
-`modsdude.com` over HTTPS with a certificate it gets from Let's Encrypt by itself.
+`SITE_ADDRESS` over HTTPS with a certificate it gets from Let's Encrypt by itself.
 
 Everything lives in `~/modsdude` of the `modsdude` user:
 
@@ -60,9 +60,10 @@ Debian. As root:
 
 Then, outside the server:
 
-5. Point `modsdude.com` at the server in DNS, and open 22, 80 and 443 (TCP, and UDP for 443) in the
+5. Point `SITE_ADDRESS` at the server in DNS, and open 22, 80 and 443 (TCP, and UDP for 443) in the
    hosting provider's firewall if it has one.
-6. Set the repository's Actions secrets:
+6. Set the repository's Actions variable `SITE_ADDRESS`, the same domain as in `.env`, and its Actions
+   secrets:
    - `DEPLOY_HOST`: the server's address.
    - `DEPLOY_USER`: `modsdude`.
    - `DEPLOY_SSH_KEY`: the private half of the deploy key.
@@ -105,6 +106,33 @@ The blobs stay in Azure Storage whichever machine runs the server.
   API logs that it could not reach the containers when it starts. Make a new one under Certificates &
   secrets, put it in `.env`, then `docker compose up --detach api`.
 
+## Your own deployment
+
+Besides `.env` and the `SITE_ADDRESS` variable above, these committed settings name this deployment's
+Entra External ID tenant and GitHub repository. A fork changes them before its first push to main.
+
+Entra External ID needs three app registrations: the API, exposing one delegated scope; the client, a public
+client with the redirect URI `http://localhost`; and the Swagger UI, a single-page app with the redirect URI
+`https://localhost:7035/swagger/oauth2-redirect.html`. The client and the Swagger UI are granted the API's
+scope.
+
+| File | Setting | Value |
+| --- | --- | --- |
+| `ModsDude.Server.Api/appsettings.json` | `EntraExternalId:Domain` | `<tenant>.onmicrosoft.com` |
+| | `EntraExternalId:ClientId`, `Audience` | The API's application (client) ID |
+| | `EntraExternalId:Authority` | `https://<tenant>.ciamlogin.com/<tenant ID>` |
+| | `SwaggerAuthentication:ClientId` | The Swagger UI's application (client) ID |
+| | `SwaggerAuthentication:Scope` | The API's scope, `api://.../<scope name>` |
+| | `ClientDownload:GithubRepository` | `https://github.com/<owner>/<repo>` |
+| `ModsDude.Client.Wpf/appsettings.json` | `Authentication:ClientId` | The client's application (client) ID |
+| | `Authentication:Authority` | As `EntraExternalId:Authority` |
+| | `Authentication:Scope` | As `SwaggerAuthentication:Scope` |
+| | `Updates:GithubRepository` | As `ClientDownload:GithubRepository` |
+| `ModsDude.Client.Wpf/appsettings.Production.json` | `ModsDudeServer:BaseUrl` | `https://<SITE_ADDRESS>` |
+
+For development, `ModsDude.Server.Api/appsettings.Development.json` names the storage account
+(`Storage:StorageAccountName`) and the local database.
+
 ## Day to day
 
 As `modsdude`, in `~/modsdude`:
@@ -118,8 +146,8 @@ As `modsdude`, in `~/modsdude`:
 | Back up the database | `docker compose exec -T db pg_dump --username modsdude --format custom modsdude > ~/modsdude-$(date +%F).dump` |
 | Update PostgreSQL and Caddy within their versions | `docker compose pull db caddy && docker compose up --detach db caddy` |
 
-The admin page is at `https://modsdude.com/admin` and the Hangfire dashboard at
-`https://modsdude.com/admin/jobs`, both with username `admin` and password `ADMIN_PASSWORD`.
+The admin page is at `https://<SITE_ADDRESS>/admin` and the Hangfire dashboard at
+`https://<SITE_ADDRESS>/admin/jobs`, both with username `admin` and password `ADMIN_PASSWORD`.
 
 A new PostgreSQL major version (`postgres:17` to `18` in `compose.yml`) cannot read the old one's data: dump,
 change the version (and the volume's path in the container, if the image moved its data folder, as `postgres:18` did), remove the `modsdude_db` volume, deploy, then restore as when moving.
