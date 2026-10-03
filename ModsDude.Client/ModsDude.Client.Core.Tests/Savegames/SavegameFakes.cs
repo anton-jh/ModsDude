@@ -52,7 +52,7 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 
     public int CheckoutsTaken { get; private set; }
     public int CheckoutsDiscarded { get; private set; }
-    public int UploadLinksMinted { get; private set; }
+    public List<CreateSavegameUploadLinkRequest> UploadLinkRequests { get; } = [];
     public int DownloadLinksMinted { get; private set; }
 
     /// <summary>Every check-in the client sent, so a test can read what it based itself on.</summary>
@@ -279,7 +279,7 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 
     public Task<CreateSavegameUploadLinkResponse> CreateSavegameUploadLinkV1Async(CreateSavegameUploadLinkRequest request, CancellationToken cancellationToken = default)
     {
-        UploadLinksMinted++;
+        UploadLinkRequests.Add(request);
 
         var stored = _blobs.ContainsKey(request.ContentHash);
 

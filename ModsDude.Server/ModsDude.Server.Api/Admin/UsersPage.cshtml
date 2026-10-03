@@ -1,0 +1,82 @@
+@page "/admin/users"
+@model UsersPageModel
+@{
+    ViewData[AdminLayout.SectionKey] = AdminSection.Users;
+}
+
+<section>
+    <h2>Users</h2>
+    <div class="muted">Traffic covers the last @AdminWindows.TrafficDays days, counted when links are issued.</div>
+
+    @if (Model.Users.Count == 0)
+    {
+        <p class="muted">No users yet.</p>
+    }
+    else
+    {
+        <div class="rows" style="--columns: minmax(10rem, 2fr) 10rem 5rem 6.5rem 6.5rem">
+            <div class="rows-header">
+                <span>User</span>
+                <span>Last seen</span>
+                <span class="number">Repos</span>
+                <span class="number">Downloaded</span>
+                <span class="number">Uploaded</span>
+            </div>
+
+            @foreach (var user in Model.Users)
+            {
+                <details>
+                    <summary>
+                        <span>
+                            @user.Name
+                            @if (user.IsTrusted)
+                            {
+                                <span class="status Trusted">Trusted</span>
+                            }
+                        </span>
+                        <span>@AdminFormat.Time(user.LastSeen)</span>
+                        <span class="number">@AdminFormat.Count(user.Memberships.Count)</span>
+                        <span class="number">@AdminFormat.Bytes(user.DownloadedBytes)</span>
+                        <span class="number">@AdminFormat.Bytes(user.UploadedBytes)</span>
+                    </summary>
+
+                    <div class="row-details">
+                        <dl class="facts">
+                            <div><dt>Created</dt><dd>@AdminFormat.Time(user.Created)</dd></div>
+                        </dl>
+
+                        <h3>Memberships</h3>
+                        @if (user.Memberships.Count == 0)
+                        {
+                            <p class="muted">Not a member of any repo.</p>
+                        }
+                        else
+                        {
+                            <div class="scroll-list"><table>
+                                <thead>
+                                    <tr>
+                                        <th>Repo</th>
+                                        <th>Level</th>
+                                        <th class="number">Downloaded</th>
+                                        <th class="number">Uploaded</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var membership in user.Memberships)
+                                    {
+                                        <tr>
+                                            <td>@membership.Repo</td>
+                                            <td>@membership.Level</td>
+                                            <td class="number">@AdminFormat.Bytes(membership.DownloadedBytes)</td>
+                                            <td class="number">@AdminFormat.Bytes(membership.UploadedBytes)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table></div>
+                        }
+                    </div>
+                </details>
+            }
+        </div>
+    }
+</section>

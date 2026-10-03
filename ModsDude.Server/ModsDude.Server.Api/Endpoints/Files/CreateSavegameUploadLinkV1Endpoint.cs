@@ -3,10 +3,12 @@ using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
+using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Statistics;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
@@ -27,7 +29,7 @@ public class CreateSavegameUploadLinkV1Endpoint : IEndpoint
     /// have hashed the file before it asks for a link, and that is the point: naming the bytes up
     /// front is what lets the server check afterwards that what arrived is what was offered.
     /// </param>
-    public record CreateSavegameUploadLinkRequest(Guid RepoId, Guid SavegameId, string ContentHash);
+    public record CreateSavegameUploadLinkRequest(Guid RepoId, Guid SavegameId, string ContentHash, long SizeBytes);
 
     /// <param name="Link">
     /// Where to upload, or <c>null</c> when there is nothing to upload.
@@ -67,15 +69,24 @@ public class CreateSavegameUploadLinkV1Endpoint : IEndpoint
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         ISavegameStorageService savegameStorageService,
+        ITimeService timeService,
+        IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
+        var userId = claimsPrincipal.GetUserId();
+
+        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(request.RepoId), RepoMembershipLevel.Member))
             .MapToForbidden();
         if (authResult is not null)
         {
             return authResult;
+        }
+
+        if (request.SizeBytes < 0)
+        {
+            return TypedResults.BadRequest(Problems.InvalidFileSize(request.SizeBytes));
         }
 
         // Before storage sees it. The hash becomes a blob path segment, and the storage layer
@@ -92,6 +103,9 @@ public class CreateSavegameUploadLinkV1Endpoint : IEndpoint
         }
 
         var link = await savegameStorageService.GetUploadLink(new(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash, cancellationToken);
+
+        dbContext.FileTransfers.Add(new FileTransfer(new(request.RepoId), userId, TransferredFile.Savegame, TransferDirection.Upload, request.SizeBytes, timeService.Now()));
+        await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(new CreateSavegameUploadLinkResponse(link, false, savegameStorageService.ContentHashMetadataKey));
     }

@@ -88,4 +88,27 @@ public static class ModVersionExtensions
 
         return latest.ToDictionary(x => x.ModId);
     }
+
+    public static async Task<Dictionary<RepoId, long>> GetRegisteredBytesPerRepoAsync(this DbSet<ModVersion> dbSet, CancellationToken cancellationToken)
+    {
+        var rows = await dbSet
+            .AsNoTracking()
+            .GroupBy(x => x.RepoId)
+            .Select(x => new { RepoId = x.Key, Bytes = x.Sum(y => y.SizeBytes) })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(x => x.RepoId, x => x.Bytes);
+    }
+
+    public static async Task<Dictionary<RepoId, long>> GetScheduledForDeletionBytesPerRepoAsync(this DbSet<ModVersion> dbSet, CancellationToken cancellationToken)
+    {
+        var rows = await dbSet
+            .AsNoTracking()
+            .Where(x => x.DeletionScheduledFor != null)
+            .GroupBy(x => x.RepoId)
+            .Select(x => new { RepoId = x.Key, Bytes = x.Sum(y => y.SizeBytes) })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(x => x.RepoId, x => x.Bytes);
+    }
 }

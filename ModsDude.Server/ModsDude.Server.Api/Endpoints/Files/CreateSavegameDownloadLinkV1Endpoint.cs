@@ -3,10 +3,12 @@ using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
+using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Statistics;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
@@ -37,12 +39,16 @@ public class CreateSavegameDownloadLinkV1Endpoint : IEndpoint
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         ISavegameStorageService savegameStorageService,
+        ITimeService timeService,
+        IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
+        var userId = claimsPrincipal.GetUserId();
+
         // Guest, unlike the upload counterpart: reading is a Guest operation everywhere else, and a
         // Guest is offered *Take a copy* - looking at a save without taking the claim, which is the
         // whole of what a Guest can do with one.
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
+        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(request.RepoId), RepoMembershipLevel.Guest))
             .MapToForbidden();
@@ -58,12 +64,15 @@ public class CreateSavegameDownloadLinkV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }
 
-        if (!await savegameStorageService.CheckIfSavegameExists(new(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash, cancellationToken))
+        if (await savegameStorageService.GetSavegameSize(new(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash, cancellationToken) is not long size)
         {
             return TypedResults.BadRequest(Problems.SavegameFileDoesNotExist(new(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash));
         }
 
         var link = await savegameStorageService.GetDownloadLink(new(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash, cancellationToken);
+
+        dbContext.FileTransfers.Add(new FileTransfer(new(request.RepoId), userId, TransferredFile.Savegame, TransferDirection.Download, size, timeService.Now()));
+        await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(new CreateSavegameDownloadLinkResponse(link));
     }

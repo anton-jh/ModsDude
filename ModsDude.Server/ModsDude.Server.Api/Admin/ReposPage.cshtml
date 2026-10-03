@@ -1,0 +1,124 @@
+@page "/admin/repos"
+@model ReposPageModel
+@{
+    ViewData[AdminLayout.SectionKey] = AdminSection.Repos;
+}
+
+<section>
+    <h2>Repos</h2>
+    <div class="muted">Traffic covers the last @AdminWindows.TrafficDays days, counted when links are issued.</div>
+
+    @if (Model.Repos.Count == 0)
+    {
+        <p class="muted">No repos yet.</p>
+    }
+    else
+    {
+        <div class="rows" style="--columns: minmax(10rem, 2fr) minmax(6rem, 1fr) 5rem 5rem 6.5rem 6.5rem 6.5rem 6.5rem">
+            <div class="rows-header">
+                <span>Repo</span>
+                <span>Game</span>
+                <span class="number">Members</span>
+                <span class="number">Mods</span>
+                <span class="number">Mod size</span>
+                <span class="number">Savegame size</span>
+                <span class="number">Downloaded</span>
+                <span class="number">Uploaded</span>
+            </div>
+
+            @foreach (var repo in Model.Repos)
+            {
+                <details>
+                    <summary>
+                        <span>
+                            @repo.Name
+                            @if (repo.ArchivedAt is not null)
+                            {
+                                <span class="status">Archived</span>
+                            }
+                        </span>
+                        <span class="code">@repo.Game</span>
+                        <span class="number">@AdminFormat.Count(repo.Members.Count)</span>
+                        <span class="number">@AdminFormat.Count(repo.ModCount)</span>
+                        <span class="number">@AdminFormat.Bytes(repo.ModBytes)</span>
+                        <span class="number">@AdminFormat.Bytes(repo.SavegameBytes)</span>
+                        <span class="number">@AdminFormat.Bytes(repo.DownloadedBytes)</span>
+                        <span class="number">@AdminFormat.Bytes(repo.UploadedBytes)</span>
+                    </summary>
+
+                    <div class="row-details">
+                        <dl class="facts">
+                            <div><dt>Created</dt><dd>@AdminFormat.Time(repo.Created)</dd></div>
+                            @if (repo.ArchivedAt is DateTime archivedAt)
+                            {
+                                <div><dt>Archived</dt><dd>@AdminFormat.Time(archivedAt)</dd></div>
+                            }
+                            <div><dt>Mod versions</dt><dd>@AdminFormat.Count(repo.VersionCount)</dd></div>
+                            <div><dt>Savegames</dt><dd>@AdminFormat.Count(repo.SavegameCount)</dd></div>
+                            <div><dt>Scheduled for deletion</dt><dd>@AdminFormat.Bytes(repo.ScheduledForDeletionBytes)</dd></div>
+                            @if (Model.Storage is { } storage && repo.Storage is { } stored)
+                            {
+                                <div><dt>Stored on @AdminFormat.Date(storage.Latest)</dt><dd>@AdminFormat.Bytes(stored.StoredBytes)</dd></div>
+                                @if (stored.ChangeBytes is long change)
+                                {
+                                    <div><dt>Change since @AdminFormat.Date(storage.Baseline)</dt><dd>@AdminFormat.SignedBytes(change)</dd></div>
+                                }
+                            }
+                        </dl>
+
+                        <h3>Members</h3>
+                        @if (repo.Members.Count == 0)
+                        {
+                            <p class="muted">No members.</p>
+                        }
+                        else
+                        {
+                            <div class="scroll-list"><table>
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Level</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var member in repo.Members)
+                                    {
+                                        <tr>
+                                            <td>@member.User</td>
+                                            <td>@member.Level</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table></div>
+                        }
+
+                        <h3>Traffic, last @AdminWindows.TrafficDays days</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>File</th>
+                                    <th class="number">Downloads</th>
+                                    <th class="number">Downloaded</th>
+                                    <th class="number">Uploads</th>
+                                    <th class="number">Uploaded</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in repo.Traffic)
+                                {
+                                    <tr>
+                                        <td>@row.File</td>
+                                        <td class="number">@AdminFormat.Count(row.Downloads)</td>
+                                        <td class="number">@AdminFormat.Bytes(row.DownloadedBytes)</td>
+                                        <td class="number">@AdminFormat.Count(row.Uploads)</td>
+                                        <td class="number">@AdminFormat.Bytes(row.UploadedBytes)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            }
+        </div>
+    }
+</section>

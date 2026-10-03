@@ -49,6 +49,11 @@ public interface ISavegameStorageService
     Task<bool> CheckIfSavegameExists(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
 
     /// <summary>
+    /// How many bytes the stored save holds, or <c>null</c> when there is no such blob.
+    /// </summary>
+    Task<long?> GetSavegameSize(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Whether these bytes are already stored for this savegame, marking the blob as just written
     /// where they are. True is the answer that makes a re-check-in free: the address is the hash, so a
     /// blob that is there is the same save. The mark is what stops the reclamation sweep deleting a

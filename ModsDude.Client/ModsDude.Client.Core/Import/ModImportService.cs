@@ -547,7 +547,8 @@ public sealed class ModImportService(
                         {
                             RepoId = request.RepoId,
                             ModId = version.ModId.Value,
-                            VersionId = version.VersionId.Value
+                            VersionId = version.VersionId.Value,
+                            SizeBytes = Chosen(version).FileLength
                         },
                         cancellationToken);
                 }

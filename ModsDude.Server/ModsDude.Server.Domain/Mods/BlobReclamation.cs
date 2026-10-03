@@ -5,8 +5,7 @@ namespace ModsDude.Server.Domain.Mods;
 
 /// <summary>
 /// A blob as storage reports it: the name it is stored under, when it was last written, and how many
-/// bytes it holds. The length is only filled in where a caller asked for it - the reclamation sweep never
-/// reads it, and a listing that reports it costs nothing extra.
+/// bytes it holds.
 /// </summary>
 /// <param name="Version">
 /// What storage calls this state of the blob (its ETag). The sweep deletes only on it, so a blob written

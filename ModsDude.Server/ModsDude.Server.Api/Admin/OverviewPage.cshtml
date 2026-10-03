@@ -1,0 +1,281 @@
+@page "/admin"
+@model OverviewPageModel
+@using ModsDude.Server.Domain.Statistics
+@using System.Text.Json
+@{
+    ViewData[AdminLayout.SectionKey] = AdminSection.Overview;
+
+    var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+}
+
+<section>
+    <h2>Users and repos</h2>
+    <div class="tiles">
+        <div class="tile"><div class="label">Users</div><div class="value">@AdminFormat.Count(Model.UserCount)</div></div>
+        <div class="tile"><div class="label">Active, @AdminWindows.ActiveUserShortDays days</div><div class="value">@AdminFormat.Count(Model.ActiveShortUserCount)</div></div>
+        <div class="tile"><div class="label">Active, @AdminWindows.ActiveUserLongDays days</div><div class="value">@AdminFormat.Count(Model.ActiveLongUserCount)</div></div>
+        <div class="tile"><div class="label">Trusted</div><div class="value">@AdminFormat.Count(Model.TrustedUserCount)</div></div>
+        <div class="tile"><div class="label">Repos</div><div class="value">@AdminFormat.Count(Model.RepoCount)</div></div>
+        <div class="tile"><div class="label">Archived repos</div><div class="value">@AdminFormat.Count(Model.ArchivedRepoCount)</div></div>
+        <div class="tile"><div class="label">Open invites</div><div class="value">@AdminFormat.Count(Model.OpenInviteCount)</div></div>
+    </div>
+</section>
+
+<section>
+    <h2>Storage</h2>
+    @if (Model.StorageSampledOn is not DateOnly sampledOn)
+    {
+        <p class="muted">No storage sample yet. The storage-statistics job takes one daily.</p>
+    }
+    else
+    {
+        <div class="muted">Sampled on @AdminFormat.Date(sampledOn).</div>
+
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Container</th>
+                        <th class="number">Stored</th>
+                        <th class="number">Blobs</th>
+                        <th class="number">Registered</th>
+                        <th class="number">Unregistered</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var container in Model.Containers)
+                    {
+                        <tr>
+                            <td>@container.Container</td>
+                            <td class="number">@AdminFormat.Bytes(container.StoredBytes)</td>
+                            <td class="number">@AdminFormat.Count(container.BlobCount)</td>
+                            <td class="number">@(container.RegisteredBytes is long registered ? AdminFormat.Bytes(registered) : "")</td>
+                            <td class="number">@(container.RegisteredBytes is long accounted ? AdminFormat.SignedBytes(container.StoredBytes - accounted) : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="tiles">
+            <div class="tile"><div class="label">Mod versions scheduled for deletion</div><div class="value">@AdminFormat.Bytes(Model.ScheduledModBytes)</div></div>
+            <div class="tile"><div class="label">Savegame snapshots scheduled for deletion</div><div class="value">@AdminFormat.Bytes(Model.ScheduledSavegameBytes)</div></div>
+        </div>
+    }
+
+    @if (Model.Trend is { } trend)
+    {
+        <h2>Stored, last @AdminWindows.StorageTrendDays days</h2>
+        <div class="legend">
+            @foreach (var series in trend.Series)
+            {
+                <span><span class="swatch" style="background: var(--series-@series.Slot)"></span>@series.Container</span>
+            }
+        </div>
+        <div class="chart" data-points="@JsonSerializer.Serialize(trend.HoverPoints(), jsonOptions)" data-series="@JsonSerializer.Serialize(trend.Series.Select(x => x.Container.ToString()))">
+            <svg viewBox="@trend.ViewBox" role="img" aria-label="Stored bytes per container per day">
+                @foreach (var line in trend.GridLines)
+                {
+                    <g>
+                        <line class="grid" x1="@StorageTrendChart.Number(StorageTrendChart.PlotLeft)" x2="@StorageTrendChart.Number(StorageTrendChart.PlotRight)" y1="@StorageTrendChart.Number(line.Y)" y2="@StorageTrendChart.Number(line.Y)" />
+                        <text x="@StorageTrendChart.Number(StorageTrendChart.PlotLeft - 8)" y="@StorageTrendChart.Number(line.Y)" text-anchor="end" dominant-baseline="middle">@line.Label</text>
+                    </g>
+                }
+                <text x="@StorageTrendChart.Number(trend.X(0))" y="@StorageTrendChart.Number(StorageTrendChart.Height - 8)" text-anchor="@(trend.Dates.Count > 1 ? "start" : "middle")">@AdminFormat.Date(trend.Dates[0])</text>
+                @if (trend.Dates.Count > 1)
+                {
+                    <g><text x="@StorageTrendChart.Number(trend.X(trend.Dates.Count - 1))" y="@StorageTrendChart.Number(StorageTrendChart.Height - 8)" text-anchor="end">@AdminFormat.Date(trend.Dates[^1])</text></g>
+                }
+                @foreach (var series in trend.Series)
+                {
+                    if (trend.Dates.Count > 1)
+                    {
+                        <polyline class="series" points="@series.Points" style="stroke: var(--series-@series.Slot)" />
+                    }
+                    else
+                    {
+                        <circle cx="@StorageTrendChart.Number(trend.X(0))" cy="@StorageTrendChart.Number(trend.Y(series.Values[0]))" r="4" style="fill: var(--series-@series.Slot)" />
+                    }
+                }
+                @foreach (var label in trend.EndLabels)
+                {
+                    <g><text x="@StorageTrendChart.Number(label.X)" y="@StorageTrendChart.Number(label.Y)" dominant-baseline="middle">@label.Container</text></g>
+                }
+                <line class="crosshair" y1="@StorageTrendChart.Number(StorageTrendChart.PlotTop)" y2="@StorageTrendChart.Number(StorageTrendChart.PlotBottom)" />
+                <rect class="hit" x="@StorageTrendChart.Number(StorageTrendChart.PlotLeft)" y="0" width="@StorageTrendChart.Number(StorageTrendChart.PlotRight - StorageTrendChart.PlotLeft)" height="@StorageTrendChart.Number(StorageTrendChart.Height)" fill="transparent" />
+            </svg>
+            <div class="tooltip"></div>
+        </div>
+
+        <details class="toggle">
+            <summary>Show as table</summary>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            @foreach (var series in trend.Series)
+                            {
+                                <th class="number">@series.Container</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var index = trend.Dates.Count - 1; index >= 0; index--)
+                        {
+                            <tr>
+                                <td>@AdminFormat.Date(trend.Dates[index])</td>
+                                @foreach (var series in trend.Series)
+                                {
+                                    <td class="number">@AdminFormat.Bytes(series.Values[index])</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    }
+</section>
+
+<section>
+    <h2>Traffic, last @AdminWindows.TrafficDays days</h2>
+    <div class="muted">Counted when links are issued, so a cancelled or retried transfer still counts.</div>
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>File</th>
+                    <th class="number">Downloads</th>
+                    <th class="number">Downloaded</th>
+                    <th class="number">Uploads</th>
+                    <th class="number">Uploaded</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Model.Traffic)
+                {
+                    <tr>
+                        <td>@row.File</td>
+                        <td class="number">@AdminFormat.Count(row.Downloads)</td>
+                        <td class="number">@AdminFormat.Bytes(row.DownloadedBytes)</td>
+                        <td class="number">@AdminFormat.Count(row.Uploads)</td>
+                        <td class="number">@AdminFormat.Bytes(row.UploadedBytes)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section>
+    <h2>Largest mod versions</h2>
+    @if (Model.LargestModVersions.Count == 0)
+    {
+        <p class="muted">No mod versions yet.</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Repo</th>
+                        <th>Mod</th>
+                        <th>Version</th>
+                        <th class="number">Size</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.LargestModVersions)
+                    {
+                        <tr>
+                            <td>@row.Repo</td>
+                            <td>@row.Mod</td>
+                            <td class="code">@row.Version</td>
+                            <td class="number">@AdminFormat.Bytes(row.SizeBytes)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section>
+    <h2>Largest savegames</h2>
+    @if (Model.LargestSavegames.Count == 0)
+    {
+        <p class="muted">No savegames yet.</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Repo</th>
+                        <th>Savegame</th>
+                        <th class="number">Stored files</th>
+                        <th class="number">Size</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.LargestSavegames)
+                    {
+                        <tr>
+                            <td>@row.Repo</td>
+                            <td>@row.Savegame</td>
+                            <td class="number">@AdminFormat.Count(row.Blobs)</td>
+                            <td class="number">@AdminFormat.Bytes(row.Bytes)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@section Scripts {
+<script>
+    for (const chart of document.querySelectorAll(".chart[data-points]")) {
+        const points = JSON.parse(chart.dataset.points);
+        const svg = chart.querySelector("svg");
+        const crosshair = chart.querySelector(".crosshair");
+        const tooltip = chart.querySelector(".tooltip");
+        const names = JSON.parse(chart.dataset.series);
+
+        const hide = () => {
+            crosshair.style.visibility = "hidden";
+            tooltip.style.visibility = "hidden";
+        };
+
+        svg.addEventListener("pointermove", event => {
+            const box = svg.getBoundingClientRect();
+            const scale = svg.viewBox.baseVal.width / box.width;
+            const x = (event.clientX - box.left) * scale;
+            const nearest = points.reduce((best, point) => Math.abs(point.x - x) < Math.abs(best.x - x) ? point : best);
+
+            crosshair.setAttribute("x1", nearest.x);
+            crosshair.setAttribute("x2", nearest.x);
+            crosshair.style.visibility = "visible";
+
+            tooltip.replaceChildren();
+            const date = document.createElement("div");
+            date.textContent = nearest.date;
+            tooltip.append(date);
+            nearest.values.forEach((value, index) => {
+                const line = document.createElement("div");
+                line.textContent = `${names[index]}: ${value}`;
+                tooltip.append(line);
+            });
+
+            const left = nearest.x / scale;
+            tooltip.style.left = left > box.width / 2 ? `${left - tooltip.offsetWidth - 12}px` : `${left + 12}px`;
+            tooltip.style.visibility = "visible";
+        });
+
+        svg.addEventListener("pointerleave", hide);
+    }
+</script>
+}

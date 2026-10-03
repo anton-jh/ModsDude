@@ -281,6 +281,13 @@ public static class Problems
         Detail = $"'{hash}' is not a lowercase hex SHA-256."
     };
 
+    public static CustomProblemDetails InvalidFileSize(long sizeBytes) => new()
+    {
+        Type = ProblemType.InvalidFileSize,
+        Title = "Not a valid file size",
+        Detail = $"{sizeBytes} is not a valid file size in bytes."
+    };
+
     public static CustomProblemDetails InvalidImageSet(RepoId repoId, ModId modId, ModVersionId modVersionId) => new()
     {
         Type = ProblemType.InvalidImageSet,
@@ -535,6 +542,10 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "invalid-hash")]
         [JsonStringEnumMemberName(_typeBaseUri + "invalid-hash")]
         InvalidHash,
+
+        [EnumMember(Value = _typeBaseUri + "invalid-file-size")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invalid-file-size")]
+        InvalidFileSize,
 
         [EnumMember(Value = _typeBaseUri + "invalid-image-set")]
         [JsonStringEnumMemberName(_typeBaseUri + "invalid-image-set")]

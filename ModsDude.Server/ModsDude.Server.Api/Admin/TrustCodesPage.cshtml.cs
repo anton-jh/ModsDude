@@ -10,11 +10,11 @@ using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Api.Admin;
 
-public class AdminPageModel(
+public class TrustCodesPageModel(
     ApplicationDbContext dbContext,
     IUnitOfWork unitOfWork,
     ITimeService timeService,
-    ILogger<AdminPageModel> logger)
+    ILogger<TrustCodesPageModel> logger)
     : PageModel
 {
     private const int _listedCodes = 50;
@@ -164,7 +164,7 @@ public class AdminPageModel(
         private static string DescribeUser(UserId userId, IReadOnlyDictionary<UserId, UserNameplate> nameplates)
         {
             return nameplates.TryGetValue(userId, out var nameplate)
-                ? $"{nameplate.DisplayName.Value} {UserTag.For(userId)}"
+                ? AdminFormat.User(userId, nameplate.DisplayName)
                 : userId.Value;
         }
     }

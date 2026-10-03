@@ -3,8 +3,10 @@ using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
+using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Statistics;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
@@ -29,11 +31,15 @@ public class CreateModDownloadLinkV1Endpoint : IEndpoint
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         IModStorageService modStorageService,
+        ITimeService timeService,
+        IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
+        var userId = claimsPrincipal.GetUserId();
+
         // Guest, unlike the upload counterpart: reading mods is a Guest operation everywhere else,
         // and a Guest who can see a profile has to be able to apply it.
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
+        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(request.RepoId), RepoMembershipLevel.Guest))
             .MapToForbidden();
@@ -42,12 +48,15 @@ public class CreateModDownloadLinkV1Endpoint : IEndpoint
             return authResult;
         }
 
-        if (!await modStorageService.CheckIfModExists(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken))
+        if (await modStorageService.GetModSize(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken) is not long size)
         {
             return TypedResults.BadRequest(Problems.ModFileDoesNotExist(new(request.RepoId), new(request.ModId), new(request.VersionId)));
         }
 
         var link = await modStorageService.GetDownloadLink(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken);
+
+        dbContext.FileTransfers.Add(new FileTransfer(new(request.RepoId), userId, TransferredFile.Mod, TransferDirection.Download, size, timeService.Now()));
+        await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(new CreateModDownloadLinkResponse(link));
     }

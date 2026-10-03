@@ -3,9 +3,11 @@ using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
+using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Statistics;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
@@ -21,7 +23,7 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
     }
 
 
-    public record CreateModUploadLinkRequest(Guid RepoId, string ModId, string VersionId);
+    public record CreateModUploadLinkRequest(Guid RepoId, string ModId, string VersionId, long SizeBytes);
 
     /// <param name="ContentHashMetadataKey">
     /// The blob metadata entry the client must write the file's SHA-256 into as it uploads. Named
@@ -36,9 +38,13 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         IModStorageService modStorageService,
+        ITimeService timeService,
+        IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
+        var userId = claimsPrincipal.GetUserId();
+
+        var authResult = await dbContext.Users.GetAsync(userId, cancellationToken)
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(request.RepoId), RepoMembershipLevel.Member))
             .MapToForbidden();
@@ -47,10 +53,15 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
             return authResult;
         }
 
+        if (request.SizeBytes < 0)
+        {
+            return TypedResults.BadRequest(Problems.InvalidFileSize(request.SizeBytes));
+        }
+
         // The two refusals below need opposite responses from the client, so they are distinct
         // problems: there is nothing left to do for a registered version, while an unregistered blob
         // is the orphan a failed import left behind and is finished by registering without
-        // re-uploading. Answering both with one problem made a failed import unretryable.
+        // re-uploading.
         var modVersion = await dbContext.ModVersions.GetAsync(new RepoId(request.RepoId), new ModId(request.ModId), new ModVersionId(request.VersionId), cancellationToken);
         if (modVersion is not null)
         {
@@ -65,6 +76,9 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
         }
 
         var link = await modStorageService.GetUploadLink(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken);
+
+        dbContext.FileTransfers.Add(new FileTransfer(new(request.RepoId), userId, TransferredFile.Mod, TransferDirection.Upload, request.SizeBytes, timeService.Now()));
+        await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(new CreateModUploadLinkResponse(link, modStorageService.ContentHashMetadataKey));
     }

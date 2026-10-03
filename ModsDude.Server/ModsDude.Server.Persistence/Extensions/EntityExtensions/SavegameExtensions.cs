@@ -462,6 +462,43 @@ public static class SavegameExtensions
     }
 
     /// <summary>
+    /// The bytes of every distinct blob address, per repo. Snapshots sharing an address share one blob,
+    /// so it counts once.
+    /// </summary>
+    public static async Task<Dictionary<RepoId, long>> GetRegisteredBytesPerRepoAsync(
+        this DbSet<SavegameSnapshot> dbSet,
+        CancellationToken cancellationToken)
+    {
+        var addresses = await dbSet
+            .AsNoTracking()
+            .GroupBy(x => new { x.RepoId, x.SavegameId, x.ContentHash })
+            .Select(x => new { x.Key.RepoId, Bytes = x.Max(y => y.SizeBytes) })
+            .ToListAsync(cancellationToken);
+
+        return addresses
+            .GroupBy(x => x.RepoId)
+            .ToDictionary(x => x.Key, x => x.Sum(y => y.Bytes));
+    }
+
+    /// <summary>
+    /// The bytes of the snapshots scheduled for deletion, per repo. A snapshot sharing its blob with one
+    /// that is kept frees nothing, so this is an upper bound on what deletion reclaims.
+    /// </summary>
+    public static async Task<Dictionary<RepoId, long>> GetScheduledForDeletionBytesPerRepoAsync(
+        this DbSet<SavegameSnapshot> dbSet,
+        CancellationToken cancellationToken)
+    {
+        var rows = await dbSet
+            .AsNoTracking()
+            .Where(x => x.DeletionScheduledFor != null)
+            .GroupBy(x => x.RepoId)
+            .Select(x => new { RepoId = x.Key, Bytes = x.Sum(y => y.SizeBytes) })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(x => x.RepoId, x => x.Bytes);
+    }
+
+    /// <summary>
     /// Drops the named snapshots of one savegame.
     /// </summary>
     /// <remarks>

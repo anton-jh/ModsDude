@@ -54,6 +54,20 @@ internal class SavegameStorageService(
         return result.Value;
     }
 
+    public async Task<long?> GetSavegameSize(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var properties = await GetBlobClient(repoId, savegameId, contentHash).GetPropertiesAsync(cancellationToken: cancellationToken);
+
+            return properties.Value.ContentLength;
+        }
+        catch (RequestFailedException exception) when (exception.Status == 404)
+        {
+            return null;
+        }
+    }
+
     public async Task<bool> TryReuseSavegame(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
     {
         var blobClient = GetBlobClient(repoId, savegameId, contentHash);
@@ -116,7 +130,11 @@ internal class SavegameStorageService(
         await foreach (var blob in container.GetBlobsAsync(cancellationToken: cancellationToken))
         {
             // See ModStorageService.ListStoredMods on the missing timestamp.
-            yield return new StoredBlob(blob.Name, blob.Properties.LastModified ?? DateTimeOffset.MaxValue, Version: blob.Properties.ETag?.ToString());
+            yield return new StoredBlob(
+                blob.Name,
+                blob.Properties.LastModified ?? DateTimeOffset.MaxValue,
+                blob.Properties.ContentLength ?? 0,
+                blob.Properties.ETag?.ToString());
         }
     }
 

@@ -1,0 +1,71 @@
+@page "/admin/trust-codes"
+@model TrustCodesPageModel
+@{
+    ViewData[AdminLayout.SectionKey] = AdminSection.TrustCodes;
+}
+
+<section>
+    <h2>Trust codes</h2>
+    <div class="muted">Lets one user create repos. Single use, valid for @TrustCode.Lifetime.TotalHours hours.</div>
+
+    <form method="post" asp-page-handler="Issue" class="actions">
+        <input type="hidden" name="requestId" value="@Model.IssueRequestId">
+        <button type="submit" class="accent">Issue trust code</button>
+    </form>
+
+    @if (Model.Error is not null)
+    {
+        <div class="panel error">@Model.Error</div>
+    }
+
+    @if (Model.Issued is { } issued)
+    {
+        <div class="panel">
+            <div class="code">@issued.Code</div>
+            <div class="muted">Expires @AdminFormat.Time(issued.ExpiresAt)</div>
+        </div>
+    }
+
+    @if (Model.TrustCodes.Count == 0)
+    {
+        <p class="muted">No trust codes yet.</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Status</th>
+                        <th>Issued</th>
+                        <th>Expires</th>
+                        <th>Redeemed by</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.TrustCodes)
+                    {
+                        <tr>
+                            <td class="code">@row.Code</td>
+                            <td><span class="status @row.Status">@row.Status</span></td>
+                            <td>@AdminFormat.Time(row.Created)</td>
+                            <td>@AdminFormat.Time(row.ExpiresAt)</td>
+                            <td>@(row.RedeemedBy ?? "")</td>
+                            <td>
+                                @if (row.Status is TrustCodeStatus.Active)
+                                {
+                                    <form method="post" asp-page-handler="Revoke" onsubmit="return confirm('Revoke @row.Code? It stops working at once.')">
+                                        <input type="hidden" name="id" value="@row.Id">
+                                        <button type="submit">Revoke</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

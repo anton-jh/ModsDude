@@ -236,6 +236,10 @@
             "format": "guid",
             "type": "string"
           },
+          "sizeBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
           "versionId": {
             "type": "string"
           }
@@ -329,6 +333,10 @@
           "savegameId": {
             "format": "guid",
             "type": "string"
+          },
+          "sizeBytes": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -951,6 +959,7 @@
           "https://server.modsdude.com/api/problems/cannot-delete-only-mod-version",
           "https://server.modsdude.com/api/problems/hash-mismatch",
           "https://server.modsdude.com/api/problems/invalid-hash",
+          "https://server.modsdude.com/api/problems/invalid-file-size",
           "https://server.modsdude.com/api/problems/invalid-image-set",
           "https://server.modsdude.com/api/problems/cannot-delete-head-savegame-snapshot",
           "https://server.modsdude.com/api/problems/not-archived",
@@ -997,6 +1006,7 @@
           "CannotDeleteOnlyModVersion",
           "HashMismatch",
           "InvalidHash",
+          "InvalidFileSize",
           "InvalidImageSet",
           "CannotDeleteHeadSavegameSnapshot",
           "NotArchived",

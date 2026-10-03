@@ -9,6 +9,7 @@ using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Statistics;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.Extensions;
 
@@ -31,6 +32,8 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<ModHubMod> ModHubMods { get; init; }
     public required DbSet<ModHubCrawlState> ModHubCrawlStates { get; init; }
     public required DbSet<GameActivity> GameActivities { get; init; }
+    public required DbSet<FileTransfer> FileTransfers { get; init; }
+    public required DbSet<StorageUsageSample> StorageUsageSamples { get; init; }
 
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

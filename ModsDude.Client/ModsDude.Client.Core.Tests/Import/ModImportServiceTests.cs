@@ -57,6 +57,16 @@ public class ModImportServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task The_upload_link_is_asked_for_with_the_size_of_the_file()
+    {
+        await ImportAsync([Local("FS25_Plough", "1.0")]);
+
+        var expected = Encoding.UTF8.GetByteCount("mod bytes of FS25_Plough 1.0");
+
+        Assert.Equal(expected, _server.LinkedSize(new ModVersionIdentity(Mod("FS25_Plough"), V("1.0"))));
+    }
+
+    [Fact]
     public async Task The_file_is_in_storage_before_every_registration_even_with_many_mods_at_once()
     {
         var versions = Enumerable.Range(0, 12).Select(x => Local($"FS25_Mod{x}", "1.0")).ToList();

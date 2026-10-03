@@ -102,7 +102,8 @@ public sealed class SavegameTransfer(
         {
             RepoId = repoId,
             SavegameId = savegameId,
-            ContentHash = packed.ContentHash
+            ContentHash = packed.ContentHash,
+            SizeBytes = packed.SizeBytes
         }, ct);
 
         if (link.AlreadyStored)

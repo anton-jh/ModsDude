@@ -51,7 +51,7 @@ public class SavegameCheckInTests
 
         await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
 
-        Assert.Equal(1, harness.Server.UploadLinksMinted);
+        Assert.Single(harness.Server.UploadLinkRequests);
         Assert.Equal(0, harness.Uploader.Uploads);
 
         // And the server minted nothing either: a save that changes nothing costs no line of history.
@@ -73,6 +73,10 @@ public class SavegameCheckInTests
         Assert.Equal(1, harness.Uploader.Uploads);
         Assert.Equal(head.Number + 1, snapshot.Number);
         Assert.Equal("after playing", snapshot.Label);
+
+        // The size is what the server counts the upload's traffic by.
+        var uploadLink = Assert.Single(harness.Server.UploadLinkRequests);
+        Assert.Equal(harness.Server.Blob(uploadLink.ContentHash).Length, uploadLink.SizeBytes);
 
         // Based on the snapshot that was actually in the slot, which is the mechanical half of the
         // one-holder-at-a-time guarantee - the checkout is only the social half.

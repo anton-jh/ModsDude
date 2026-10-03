@@ -17,6 +17,7 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
     private readonly List<ServerCall> _journal = [];
     private readonly Dictionary<ModVersionIdentity, string?> _stored = [];
     private readonly Dictionary<ModKey, List<ModDto>> _registered = [];
+    private readonly Dictionary<ModVersionIdentity, long> _linkedSizes = [];
 
 
     public Guid RepoId { get; } = Guid.NewGuid();
@@ -51,6 +52,15 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
         lock (_lock)
         {
             return _stored.GetValueOrDefault(identity);
+        }
+    }
+
+    /// <summary>The size the client said it would upload when it last asked for a link.</summary>
+    public long? LinkedSize(ModVersionIdentity identity)
+    {
+        lock (_lock)
+        {
+            return _linkedSizes.TryGetValue(identity, out var size) ? size : null;
         }
     }
 
@@ -106,6 +116,7 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
         lock (_lock)
         {
             _journal.Add(new ServerCall(ServerCallKind.Link, identity));
+            _linkedSizes[identity] = request.SizeBytes;
 
             if (IsRegistered(identity))
             {
