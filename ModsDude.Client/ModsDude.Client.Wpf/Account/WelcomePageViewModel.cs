@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Sidebar;
 
@@ -10,21 +11,31 @@ namespace ModsDude.Client.Wpf.Account;
 /// </summary>
 /// <remarks>
 /// The shell's entries rather than pages of its own, so that choosing one here is navigating to it: the
-/// sidebar's header draws it selected, and the trust rule on Create repo is the one the shell applies.
+/// sidebar's header draws it selected.
 /// </remarks>
 public sealed partial class WelcomePageViewModel(
     MenuItemViewModel joinRepo,
     MenuItemViewModel createRepo,
-    Action<MenuItemViewModel> open)
+    Action<MenuItemViewModel> open,
+    AccountViewModel account,
+    TrustCodeFormViewModel trustCode)
     : PageViewModel
 {
-    /// <summary>For the button's availability and, where it is closed, the reason.</summary>
-    public MenuItemViewModel CreateRepoItem { get; } = createRepo;
+    public AccountViewModel Account { get; } = account;
+
+    public TrustCodeFormViewModel TrustCode { get; } = trustCode;
 
 
     [RelayCommand]
     private void JoinRepo() => open(joinRepo);
 
     [RelayCommand]
-    private void CreateRepo() => open(CreateRepoItem);
+    private void CreateRepo() => open(createRepo);
+
+
+    public class Factory(IServiceProvider serviceProvider)
+    {
+        public WelcomePageViewModel Create(MenuItemViewModel joinRepo, MenuItemViewModel createRepo, Action<MenuItemViewModel> open)
+            => ActivatorUtilities.CreateInstance<WelcomePageViewModel>(serviceProvider, joinRepo, createRepo, open);
+    }
 }

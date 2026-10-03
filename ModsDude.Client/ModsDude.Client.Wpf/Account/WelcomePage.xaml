@@ -50,15 +50,18 @@
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                             <TextBlock Grid.Row="1" Margin="0 4 0 16" TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Text="Start one for your group, then invite them from its Members page." />
-                            <!-- Closed the way the header's entry is, with its reason on the button. -->
+                                       Text="Start one for your group, then invite them from its Members page."
+                                       Visibility="{Binding Account.NeedsTrustCode, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                            <TextBlock Grid.Row="1" Margin="0 4 0 16" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Text="Creating repos needs a trust code. Ask whoever runs ModsDude for one."
+                                       Visibility="{Binding Account.NeedsTrustCode, Converter={StaticResource BoolToVisibilityConverter}}" />
                             <Button Grid.Row="2" Content="Create repo"
                                     HorizontalAlignment="Left" MinWidth="140"
                                     Command="{Binding CreateRepoCommand}"
-                                    IsEnabled="{Binding CreateRepoItem.IsAvailable}"
-                                    ToolTip="{Binding CreateRepoItem.UnavailableReason}"
-                                    ToolTipService.ShowOnDisabled="True"
-                                    ToolTipService.InitialShowDelay="200" />
+                                    Visibility="{Binding Account.NeedsTrustCode, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                            <ContentControl Grid.Row="2" Content="{Binding TrustCode}"
+                                            Visibility="{Binding Account.NeedsTrustCode, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </Grid>
                     </Border>
 

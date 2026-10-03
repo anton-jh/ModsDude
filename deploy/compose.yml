@@ -45,7 +45,7 @@ services:
       AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:?}
       AZURE_TENANT_ID: ${AZURE_TENANT_ID:?}
       AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:?}
-      HangfireDashboard__Password: ${HANGFIRE_DASHBOARD_PASSWORD:?}
+      Admin__Password: ${ADMIN_PASSWORD:?}
     logging: *logging
 
   caddy:

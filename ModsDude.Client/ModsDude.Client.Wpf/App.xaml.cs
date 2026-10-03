@@ -539,6 +539,9 @@ public partial class App : Application
         services.AddSingleton<RepoOverviewPageViewModel.Factory>();
         services.AddSingleton<RepoMembersPageViewModel.Factory>();
         services.AddSingleton<JoinRepoPageViewModel.Factory>();
+        services.AddSingleton<CreateRepoPageViewModel.Factory>();
+        services.AddSingleton<WelcomePageViewModel.Factory>();
+        services.AddTransient<TrustCodeFormViewModel>();
         services.AddSingleton<RepoPageViewModel.Factory>();
         services.AddSingleton<CreateProfilePageViewModel.Factory>();
         services.AddSingleton<ProfilePageViewModel.Factory>();
@@ -660,6 +663,7 @@ public partial class App : Application
         services.AddSingleton<IProfileService, ProfileService>();
         services.AddSingleton<IMembershipService, MembershipService>();
         services.AddSingleton<IInviteService, InviteService>();
+        services.AddSingleton<ITrustCodeService, TrustCodeService>();
         services.AddSingleton<ICurrentUserService, CurrentUserService>();
         services.AddSingleton<IUserAccountService, UserAccountService>();
         services.AddSingleton<IGameRepository, GameRepository>();

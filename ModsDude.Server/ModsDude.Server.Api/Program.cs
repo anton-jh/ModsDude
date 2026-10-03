@@ -1,11 +1,13 @@
 using Asp.Versioning;
 using Hangfire;
 using Hangfire.PostgreSql;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.Identity.Web;
+using ModsDude.Server.Api.Admin;
 using ModsDude.Server.Api.Builds;
 using ModsDude.Server.Api.Endpoints;
 using ModsDude.Server.Api.ErrorHandling;
@@ -109,7 +111,23 @@ builder.Services
     {
         builder.Configuration.Bind("EntraExternalId", options);
     });
-builder.Services.AddAuthorization();
+
+builder.Services
+    .Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName))
+    .AddAuthentication()
+    .AddScheme<AuthenticationSchemeOptions, AdminAuthenticationHandler>(AdminAuthenticationHandler.SchemeName, null);
+
+builder.Services
+    .AddAuthorizationBuilder()
+    .AddPolicy(AdminAuthenticationHandler.PolicyName, policy => policy
+        .AddAuthenticationSchemes(AdminAuthenticationHandler.SchemeName)
+        .RequireAuthenticatedUser());
+
+builder.Services.AddRazorPages(options =>
+{
+    options.RootDirectory = "/Admin";
+    options.Conventions.AuthorizeFolder("/", AdminAuthenticationHandler.PolicyName);
+});
 
 builder.Services.AddHttpContextAccessor();
 
@@ -131,8 +149,7 @@ builder.Services.AddModHub(builder.Configuration);
 builder.Services.AddScoped<ModHubCrawlJob>();
 
 builder.Services
-    .Configure<RetentionOptions>(builder.Configuration.GetSection(RetentionOptions.SectionName))
-    .Configure<HangfireDashboardOptions>(builder.Configuration.GetSection(HangfireDashboardOptions.SectionName));
+    .Configure<RetentionOptions>(builder.Configuration.GetSection(RetentionOptions.SectionName));
 builder.Services.AddScoped<RetentionSweeper>();
 builder.Services.AddScoped<RetentionUpkeep>();
 builder.Services.AddScoped<RetentionJobs>();
@@ -175,24 +192,6 @@ var apiVersionSet = app.NewApiVersionSet()
 if (builder.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
-}
-
-var dashboard = app.Services.GetRequiredService<IOptions<HangfireDashboardOptions>>().Value;
-if (isDescribingOnly)
-{
-    // No Hangfire to show.
-}
-else if (dashboard.IsConfigured)
-{
-    app.UseHangfireDashboard(dashboard.Path, new DashboardOptions
-    {
-        Authorization = [new BasicAuthDashboardFilter(dashboard.Username, dashboard.Password)],
-        DisplayStorageConnectionString = false
-    });
-}
-else
-{
-    app.Logger.LogInformation("The Hangfire dashboard has no username or password configured and is not mapped.");
 }
 
 if (app.Environment.IsDevelopment())
@@ -240,6 +239,26 @@ app.MapGroup("api/v{v:apiVersion}")
 
 app.MapClientDownload();
 app.MapHealth();
+
+app.MapRazorPages();
+
+if (!isDescribingOnly)
+{
+    // Authorized by the admin policy alone, so the dashboard's own filters are emptied: its default
+    // one only lets in requests from the machine itself.
+    app.MapHangfireDashboard("/admin/jobs", new DashboardOptions
+        {
+            Authorization = [],
+            AppPath = "/admin",
+            DisplayStorageConnectionString = false
+        })
+        .RequireAuthorization(AdminAuthenticationHandler.PolicyName);
+}
+
+if (!app.Services.GetRequiredService<IOptions<AdminOptions>>().Value.IsConfigured)
+{
+    app.Logger.LogInformation("No admin username or password is configured, so the admin pages let nobody in.");
+}
 
 
 if (!isDescribingOnly)

@@ -1,6 +1,5 @@
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Connectivity;
-using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Repos;
@@ -10,7 +9,6 @@ using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Repos.Archive;
 using ModsDude.Client.Wpf.Repos;
 using ModsDude.Client.Wpf.Settings;
-using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Sidebar;
@@ -31,10 +29,7 @@ public partial class MainPageViewModel
     private readonly IShellNavigationService _shellNavigationService;
     private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
 
-    /// <summary>
-    /// Create repo, one of <see cref="HeaderMenuItems"/>. Held on its own as well, because whether it is
-    /// open to this account is decided here and the Welcome page offers it too.
-    /// </summary>
+    /// <summary>Create repo, one of <see cref="HeaderMenuItems"/>, and offered by the Welcome page.</summary>
     private readonly MenuItemViewModel _createRepoMenuItem;
 
     /// <summary>Join repo, one of <see cref="HeaderMenuItems"/>, and offered by the Welcome page.</summary>
@@ -68,13 +63,13 @@ public partial class MainPageViewModel
         ILastSelectionRepository lastSelectionRepository,
         RepoPageViewModel.Factory repoPageViewModelFactory,
         JoinRepoPageViewModel.Factory joinRepoPageViewModelFactory,
+        CreateRepoPageViewModel.Factory createRepoPageViewModelFactory,
+        WelcomePageViewModel.Factory welcomePageViewModelFactory,
         IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
         IFactory<AccountPageViewModel> accountPageViewModelFactory,
-        IGameAdapterIndex gameAdapterIndex,
         INavigationLockService navigationLockService,
         IShellNavigationService shellNavigationService,
         AccountViewModel account,
-        IFilePickerService filePickerService,
         IModalService modalService,
         IFactory<ArchivePageViewModel> archivePageViewModelFactory,
         IProfileSyncStatusService syncStatus,
@@ -84,7 +79,7 @@ public partial class MainPageViewModel
         _syncStatus = syncStatus;
         _connection = connection;
 
-        _createRepoMenuItem = new MenuItemViewModel("Create repo", () => new CreateRepoPageViewModel(repoService, gameAdapterIndex, navigationLockService, filePickerService, modalService))
+        _createRepoMenuItem = new MenuItemViewModel("Create repo", createRepoPageViewModelFactory.Create)
             .WithIcon(MenuIcons.CreateRepo);
 
         _joinRepoMenuItem = new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create)
@@ -95,7 +90,7 @@ public partial class MainPageViewModel
         _settingsMenuItem = new MenuItemViewModel("Settings", settingsPageViewModelFactory.Create)
             .WithIcon(MenuIcons.Settings);
 
-        _welcomeMenuItem = new MenuItemViewModel("Welcome", () => new WelcomePageViewModel(_joinRepoMenuItem, _createRepoMenuItem, Open));
+        _welcomeMenuItem = new MenuItemViewModel("Welcome", () => welcomePageViewModelFactory.Create(_joinRepoMenuItem, _createRepoMenuItem, Open));
 
         // Everything the repo list leads to that is not a repo. The sidebar holds nothing but the
         // list, so these are behind the "⋯" at its top rather than rows above it.
@@ -107,12 +102,7 @@ public partial class MainPageViewModel
             new MenuItemViewModel("Archived repos", archivePageViewModelFactory.Create).WithIcon(MenuIcons.Archive)
         ];
 
-        // Not a membership level: creating repos is gated on User.IsTrusted, a flag granted by hand
-        // in the database. It arrives with the account's own record a moment after sign-in, so the
-        // entry starts open and closes only once the answer is actually no.
-        Account.PropertyChanged += OnAccountChanged;
         Account.OpenRequested += OnAccountOpenRequested;
-        ApplyTrust();
 
         Repos = [];
 
@@ -211,7 +201,6 @@ public partial class MainPageViewModel
 
         _shellNavigationService.Unregister(this);
 
-        Account.PropertyChanged -= OnAccountChanged;
         Account.OpenRequested -= OnAccountOpenRequested;
         _repoService.RepoCreated -= OnRepoCreated;
         _repoService.PendingChangesChanged -= OnPendingRepoChangesChanged;
@@ -390,25 +379,6 @@ public partial class MainPageViewModel
         {
             entry.RefreshSyncState(_syncStatus);
         }
-    }
-
-    private void OnAccountChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(AccountViewModel.IsTrusted))
-        {
-            ApplyTrust();
-        }
-    }
-
-    /// <summary>
-    /// Null means the answer has not arrived; only an explicit false closes the entry, so a slow
-    /// round trip never briefly tells a trusted user they cannot create repos.
-    /// </summary>
-    private void ApplyTrust()
-    {
-        _createRepoMenuItem.RestrictIf(
-            Account.IsTrusted is false,
-            "Creating repos is granted by hand. Ask whoever runs this server to enable it for your account.");
     }
 
     private void OnRepoCreated(Guid repoId)

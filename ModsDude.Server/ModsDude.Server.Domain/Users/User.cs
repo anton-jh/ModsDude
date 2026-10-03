@@ -41,6 +41,11 @@ public class User(UserId id, DisplayName displayName, DateTime created)
         AvatarHash = avatarHash;
         ProfileLastUpdated = now;
     }
+
+    internal void GrantTrust()
+    {
+        IsTrusted = true;
+    }
 }
 
 public readonly record struct UserId(string Value);

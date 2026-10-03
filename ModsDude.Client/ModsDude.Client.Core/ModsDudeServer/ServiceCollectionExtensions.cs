@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
         AddClient<IReposClient>(services, (configuration, http) => new ReposClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IUsersClient>(services, (configuration, http) => new UsersClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IInvitesClient>(services, (configuration, http) => new InvitesClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<ITrustCodesClient>(services, (configuration, http) => new TrustCodesClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IMembersClient>(services, (configuration, http) => new MembersClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IProfilesClient>(services, (configuration, http) => new ProfilesClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IModDependenciesClient>(services, (configuration, http) => new ModDependenciesClient(configuration, http) { BaseUrl = serverBaseUrl });

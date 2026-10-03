@@ -19,6 +19,7 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<Repo> Repos { get; init; }
     public required DbSet<RepoMembership> RepoMemberships { get; init; }
     public required DbSet<RepoInvite> RepoInvites { get; init; }
+    public required DbSet<TrustCode> TrustCodes { get; init; }
     public required DbSet<Profile> Profiles { get; init; }
     public required DbSet<ProfileRevision> ProfileRevisions { get; init; }
     public required DbSet<ProfileIgnoredMod> ProfileIgnoredMods { get; init; }

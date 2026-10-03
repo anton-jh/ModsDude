@@ -74,12 +74,16 @@ public partial class AccountViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(Description))]
     private string _displayName;
 
-    /// <summary>
-    /// Whether this user may create repos. Null until the server has answered - the shell keeps the
-    /// option open until then rather than closing one that is about to turn out to be theirs.
-    /// </summary>
+    /// <summary>Whether this user may create repos. Null until the server has answered.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NeedsTrustCode))]
     private bool? _isTrusted;
+
+    /// <summary>
+    /// Only an explicit no, so a slow round trip never shows a trusted user the code box in place of
+    /// what they came for.
+    /// </summary>
+    public bool NeedsTrustCode => IsTrusted is false;
 
     /// <summary>Four digits. Not drawn beside the name here - there is only ever one user in this panel.</summary>
     [ObservableProperty]

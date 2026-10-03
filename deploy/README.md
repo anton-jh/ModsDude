@@ -118,8 +118,8 @@ As `modsdude`, in `~/modsdude`:
 | Back up the database | `docker compose exec -T db pg_dump --username modsdude --format custom modsdude > ~/modsdude-$(date +%F).dump` |
 | Update PostgreSQL and Caddy within their versions | `docker compose pull db caddy && docker compose up --detach db caddy` |
 
-The Hangfire dashboard is at `https://modsdude.com/hangfire`, username `admin`, password
-`HANGFIRE_DASHBOARD_PASSWORD`.
+The admin page is at `https://modsdude.com/admin` and the Hangfire dashboard at
+`https://modsdude.com/admin/jobs`, both with username `admin` and password `ADMIN_PASSWORD`.
 
 A new PostgreSQL major version (`postgres:17` to `18` in `compose.yml`) cannot read the old one's data: dump,
 change the version (and the volume's path in the container, if the image moved its data folder, as `postgres:18` did), remove the `modsdude_db` volume, deploy, then restore as when moving.

@@ -18,28 +18,41 @@
 
                 <navigation:PageTitle Text="Create repo" />
 
-                <Label Content="Name" Margin="0 0 0 12"/>
-                <TextBox Width="300" Text="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" />
+                <StackPanel Orientation="Vertical"
+                            Visibility="{Binding Account.NeedsTrustCode, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left"
+                               Text="Creating repos needs a trust code. Ask whoever runs ModsDude for one." />
+                    <ContentControl Width="300" Margin="0 16 0 0" HorizontalAlignment="Left"
+                                    Content="{Binding TrustCode}" />
+                </StackPanel>
 
-                <Label Margin="0 16 0 12" Content="Adapter" />
+                <StackPanel Orientation="Vertical"
+                            Visibility="{Binding Account.NeedsTrustCode, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                    <Label Content="Name" Margin="0 0 0 12"/>
+                    <TextBox Width="300" Text="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" />
 
-                <ComboBox Width="300" HorizontalAlignment="Left"
-                          ItemsSource="{Binding Path=AvailableGameAdapters}"
-                          SelectedValue="{Binding Path=SelectedGameAdapter}"
-                          >
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding Path=DisplayName}" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
+                    <Label Margin="0 16 0 12" Content="Adapter" />
 
-                <games:DynamicFormEditor DataContext="{Binding BaseSettingsEditor}" Margin="0 16 0 0" />
+                    <ComboBox Width="300" HorizontalAlignment="Left"
+                              ItemsSource="{Binding Path=AvailableGameAdapters}"
+                              SelectedValue="{Binding Path=SelectedGameAdapter}"
+                              >
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Path=DisplayName}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <games:DynamicFormEditor DataContext="{Binding BaseSettingsEditor}" Margin="0 16 0 0" />
+                </StackPanel>
 
             </StackPanel>
         </Border>
 
-        <StackPanel Grid.Row="1" Style="{StaticResource PageActions}">
+        <StackPanel Grid.Row="1" Style="{StaticResource PageActions}"
+                    Visibility="{Binding Account.NeedsTrustCode, Converter={StaticResource InverseBoolToVisibilityConverter}}">
             <Button Content="Save" Command="{Binding Path=SubmitCommand}"
                     Style="{DynamicResource AccentButtonStyle}"
                     Width="250" />

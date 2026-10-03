@@ -428,6 +428,38 @@ public static class Problems
         Detail = detail
     };
 
+    public static CustomProblemDetails TrustCodeNotFound => new()
+    {
+        Type = ProblemType.TrustCodeNotFound,
+        Title = "No such trust code",
+        Detail = "No trust code has that code."
+    };
+
+    public static CustomProblemDetails TrustCodeNotUsable(TrustCodeStatus status)
+    {
+        var reason = status switch
+        {
+            TrustCodeStatus.Expired => "This trust code has expired.",
+            TrustCodeStatus.Redeemed => "This trust code has already been used.",
+            TrustCodeStatus.Revoked => "This trust code has been revoked.",
+            _ => throw new UnreachableException("An active trust code is usable")
+        };
+
+        return new()
+        {
+            Type = ProblemType.TrustCodeNotUsable,
+            Title = "Trust code no longer works",
+            Detail = reason + " Ask for a new one."
+        };
+    }
+
+    public static CustomProblemDetails TrustCodeRedemptionConflict => new()
+    {
+        Type = ProblemType.TrustCodeRedemptionConflict,
+        Title = "The trust code changed while you were redeeming it",
+        Detail = "Somebody else used or revoked this trust code at the same moment."
+    };
+
     public static CustomProblemDetails InvalidDisplayName(string detail) => new()
     {
         Type = ProblemType.InvalidDisplayName,
@@ -616,6 +648,18 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "unknown-modhub-game")]
         [JsonStringEnumMemberName(_typeBaseUri + "unknown-modhub-game")]
         UnknownModHubGame,
+
+        [EnumMember(Value = _typeBaseUri + "trust-code-not-found")]
+        [JsonStringEnumMemberName(_typeBaseUri + "trust-code-not-found")]
+        TrustCodeNotFound,
+
+        [EnumMember(Value = _typeBaseUri + "trust-code-not-usable")]
+        [JsonStringEnumMemberName(_typeBaseUri + "trust-code-not-usable")]
+        TrustCodeNotUsable,
+
+        [EnumMember(Value = _typeBaseUri + "trust-code-redemption-conflict")]
+        [JsonStringEnumMemberName(_typeBaseUri + "trust-code-redemption-conflict")]
+        TrustCodeRedemptionConflict,
 
         [EnumMember(Value = _typeBaseUri + "invalid-display-name")]
         [JsonStringEnumMemberName(_typeBaseUri + "invalid-display-name")]

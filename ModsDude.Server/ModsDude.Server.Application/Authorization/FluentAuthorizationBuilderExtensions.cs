@@ -27,7 +27,7 @@ public static class FluentAuthorizationBuilderExtensions
 
     /// <summary>
     /// Creating a repo, and the name check that exists only to support it, are gated on
-    /// <see cref="User.IsTrusted"/> — a flag granted by hand against the database. Expressed through
+    /// <see cref="User.IsTrusted"/>, granted by redeeming a trust code. Expressed through
     /// the same builder as everything else so that both endpoints refuse in one shape, at one status,
     /// with one problem body.
     /// </summary>

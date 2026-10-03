@@ -11,5 +11,8 @@
     <DataTemplate DataType="{x:Type account:AccountPageViewModel}">
         <account:AccountPage />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type account:TrustCodeFormViewModel}">
+        <account:TrustCodeForm />
+    </DataTemplate>
 
 </ResourceDictionary>

@@ -1,8 +1,10 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Wpf.Account;
 using ModsDude.Client.Wpf.Games;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -15,9 +17,16 @@ public partial class CreateRepoPageViewModel(
     IGameAdapterIndex gameAdapterIndex,
     INavigationLockService navigationLockService,
     IFilePickerService filePickerService,
-    IModalService modalService)
+    IModalService modalService,
+    AccountViewModel account,
+    TrustCodeFormViewModel trustCode)
     : PageViewModel, IDisposable
 {
+    public AccountViewModel Account { get; } = account;
+
+    public TrustCodeFormViewModel TrustCode { get; } = trustCode;
+
+
     [ObservableProperty]
     private string _name = "";
 
@@ -97,5 +106,12 @@ public partial class CreateRepoPageViewModel(
             : null;
 
         navigationLockService.AcquireLock(this);
+    }
+
+
+    public class Factory(IServiceProvider serviceProvider)
+    {
+        public CreateRepoPageViewModel Create()
+            => ActivatorUtilities.CreateInstance<CreateRepoPageViewModel>(serviceProvider);
     }
 }
