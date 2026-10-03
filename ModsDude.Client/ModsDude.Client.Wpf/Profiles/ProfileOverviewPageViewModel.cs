@@ -38,6 +38,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     private readonly IShellNavigationService _navigation;
     private readonly IDriftMonitor _driftMonitor;
     private readonly ILogger<ProfileOverviewPageViewModel> _logger;
+    private readonly TimeProvider _time;
 
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
@@ -56,8 +57,10 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         ISavegamePublishFlow publishFlow,
         IShellNavigationService navigation,
         IDriftMonitor driftMonitor,
-        ILogger<ProfileOverviewPageViewModel> logger)
+        ILogger<ProfileOverviewPageViewModel> logger,
+        TimeProvider time)
     {
+        _time = time;
         _repo = repo;
         _profile = profile;
         _profileService = profileService;
@@ -239,9 +242,11 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
             .ThenBy(x => x.Name, NaturalOrder.Comparer)
             .ThenBy(x => x.Id);
 
+        var now = _time.GetUtcNow();
+
         foreach (var savegame in savegames)
         {
-            Savegames.Add(new ProfileSavegameRowViewModel(savegame, OpenSavegameAsync));
+            Savegames.Add(new ProfileSavegameRowViewModel(savegame, now, OpenSavegameAsync));
         }
 
         SavegamesNote = Savegames.Count == 0

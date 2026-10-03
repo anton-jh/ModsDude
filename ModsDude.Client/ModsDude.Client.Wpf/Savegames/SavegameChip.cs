@@ -58,9 +58,10 @@ public static class SavegameWording
     /// How long ago something happened, in the roundest form that is still true. Falls back to a date
     /// once "days ago" stops meaning anything.
     /// </summary>
-    public static string Ago(DateTime moment)
+    /// <param name="now">The present, from the caller's <see cref="TimeProvider"/>.</param>
+    public static string Ago(DateTime moment, DateTimeOffset now)
     {
-        var elapsed = DateTime.UtcNow - DateTime.SpecifyKind(moment, DateTimeKind.Utc);
+        var elapsed = now.UtcDateTime - DateTime.SpecifyKind(moment, DateTimeKind.Utc);
 
         if (elapsed < TimeSpan.Zero)
         {

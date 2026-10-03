@@ -77,6 +77,7 @@ public interface ISavegameRowActions
 public partial class SavegameListItemViewModel : ObservableObject
 {
     private readonly string? _currentUserId;
+    private readonly TimeProvider _time;
     private readonly ISavegameRowActions? _actions;
 
     private bool _hasUnpublishedPlay;
@@ -113,11 +114,13 @@ public partial class SavegameListItemViewModel : ObservableObject
         string? currentUserId,
         bool isMember,
         bool isAmbiguous,
+        TimeProvider time,
         AvatarViewModel? holderAvatar = null,
         ISavegameRowActions? actions = null)
     {
         Savegame = savegame;
         _currentUserId = currentUserId;
+        _time = time;
         _actions = actions;
         IsMember = isMember;
         ShowHolderTag = isAmbiguous;
@@ -362,7 +365,7 @@ public partial class SavegameListItemViewModel : ObservableObject
 
     /// <summary>The head snapshot's number and size, for the row's second line. Empty where nothing has been checked in yet.</summary>
     public string Summary => Savegame.Head is SavegameSnapshotDto head
-        ? $"Snapshot {head.Number} · {SavegameWording.Size(head.SizeBytes)} · {SavegameWording.Ago(head.Created)}{History}"
+        ? $"Snapshot {head.Number} · {SavegameWording.Size(head.SizeBytes)} · {SavegameWording.Ago(head.Created, _time.GetUtcNow())}{History}"
         : "No snapshots yet";
 
     /// <summary>
@@ -639,6 +642,6 @@ public partial class SavegameListItemViewModel : ObservableObject
 
         var name = holder.User.DisplayName;
 
-        return new SavegameChip($"{name} has it, since {SavegameWording.Ago(holder.TakenAt)}", SavegameChipTone.Neutral);
+        return new SavegameChip($"{name} has it, since {SavegameWording.Ago(holder.TakenAt, _time.GetUtcNow())}", SavegameChipTone.Neutral);
     }
 }

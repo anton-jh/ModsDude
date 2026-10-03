@@ -20,7 +20,12 @@ namespace ModsDude.Client.Wpf.Friends;
 /// </summary>
 public sealed partial class FriendActivityRowViewModel : ObservableObject
 {
-    public FriendActivityRowViewModel(GameActivityDto activity, IFriendActivityEnvironment environment, AvatarViewModel avatar, bool showTag)
+    public FriendActivityRowViewModel(
+        GameActivityDto activity,
+        IFriendActivityEnvironment environment,
+        AvatarViewModel avatar,
+        bool showTag,
+        DateTimeOffset now)
     {
         Model = activity;
 
@@ -34,13 +39,13 @@ public sealed partial class FriendActivityRowViewModel : ObservableObject
         ProfileDetail = activity.PinnedRevision is int pinned ? $"rev {pinned}" : "";
 
         var what = activity.Kind is GameActivityKind.SavegameCheckedOut
-            ? $"Checked out {(activity.SavegameName is string save ? $"'{save}'" : "a savegame")} {SavegameWording.Ago(activity.ChangedAt)}"
-            : $"Switched to it {SavegameWording.Ago(activity.ChangedAt)}";
+            ? $"Checked out {(activity.SavegameName is string save ? $"'{save}'" : "a savegame")} {SavegameWording.Ago(activity.ChangedAt, now)}"
+            : $"Switched to it {SavegameWording.Ago(activity.ChangedAt, now)}";
 
         // Only where it says something the first half did not: a re-apply since is somebody still
         // playing on it, and "switched 3 days ago" alone would read as somebody who has stopped.
         Summary = activity.TouchedAt - activity.ChangedAt > TimeSpan.FromMinutes(5)
-            ? $"{what} · active {SavegameWording.Ago(activity.TouchedAt)}"
+            ? $"{what} · active {SavegameWording.Ago(activity.TouchedAt, now)}"
             : what;
 
         CanFollow = availability is FollowAvailability.Available;
@@ -114,6 +119,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     private readonly IGameRepository _games;
     private readonly IToastService _toasts;
     private readonly ILogger _logger;
+    private readonly TimeProvider _time;
     private readonly Guid _repoId;
 
 
@@ -125,8 +131,10 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
         IGameRepository games,
         IToastService toasts,
         ILogger<FriendActivityListViewModel> logger,
+        TimeProvider time,
         Guid repoId)
     {
+        _time = time;
         _friends = friends;
         _environment = environment;
         _avatarFactory = avatarFactory;
@@ -214,9 +222,11 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
 
         Rows.Clear();
 
+        var now = _time.GetUtcNow();
+
         foreach (var row in rows)
         {
-            Rows.Add(new FriendActivityRowViewModel(row, _environment, _avatarFactory.Create(row.User), ambiguous.Contains(row.User.Id)));
+            Rows.Add(new FriendActivityRowViewModel(row, _environment, _avatarFactory.Create(row.User), ambiguous.Contains(row.User.Id), now));
         }
 
         if (_friends.HasLoaded)
@@ -240,6 +250,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
                 serviceProvider.GetRequiredService<IGameRepository>(),
                 serviceProvider.GetRequiredService<IToastService>(),
                 serviceProvider.GetRequiredService<ILogger<FriendActivityListViewModel>>(),
+                serviceProvider.GetRequiredService<TimeProvider>(),
                 repoId);
     }
 }

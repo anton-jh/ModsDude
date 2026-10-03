@@ -8,12 +8,12 @@ namespace ModsDude.Client.Wpf.Profiles;
 /// One of a profile's savegames on its overview: a name that leads to it on the Saves list, when it
 /// was last played, and who has it.
 /// </summary>
-public partial class ProfileSavegameRowViewModel(SavegameDto savegame, Func<Guid, Task> open)
+public partial class ProfileSavegameRowViewModel(SavegameDto savegame, DateTimeOffset now, Func<Guid, Task> open)
 {
     public string Name => savegame.Name;
 
     public string LastPlayedText => savegame.Head is SavegameSnapshotDto head
-        ? SavegameWording.Ago(head.Created)
+        ? SavegameWording.Ago(head.Created, now)
         : "Never";
 
     public string HolderText => savegame.Checkout is { Status: not SavegameCheckoutStatus.Ended } checkout

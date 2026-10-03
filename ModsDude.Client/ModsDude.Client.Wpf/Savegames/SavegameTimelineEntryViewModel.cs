@@ -54,6 +54,7 @@ public sealed class SavegameTimelineEntryViewModel
 {
     private SavegameTimelineEntryViewModel(
         DateTime moment,
+        DateTimeOffset now,
         SavegameTimelineRank rank,
         string title,
         string who,
@@ -65,7 +66,7 @@ public sealed class SavegameTimelineEntryViewModel
         Who = who;
         Detail = detail;
         WhenText = SavegameWording.Exactly(moment);
-        AgoText = SavegameWording.Ago(moment);
+        AgoText = SavegameWording.Ago(moment, now);
     }
 
 
@@ -134,10 +135,11 @@ public sealed class SavegameTimelineEntryViewModel
     public bool HasDetails => Details.Count > 0;
 
 
-    public static SavegameTimelineEntryViewModel ForSnapshot(SavegameSnapshotDto snapshot, bool isHead)
+    public static SavegameTimelineEntryViewModel ForSnapshot(SavegameSnapshotDto snapshot, bool isHead, DateTimeOffset now)
     {
         return new SavegameTimelineEntryViewModel(
             snapshot.Created,
+            now,
             SavegameTimelineRank.Snapshot,
             snapshot.Label is { Length: > 0 } label ? $"Snapshot {snapshot.Number} · {label}" : $"Snapshot {snapshot.Number}",
             snapshot.CreatedBy.DisplayName,
@@ -159,12 +161,13 @@ public sealed class SavegameTimelineEntryViewModel
     /// The moment somebody took the save. It keeps that date whatever became of the claim afterwards;
     /// the fate is <see cref="IsClosed"/>, and the row that ended it.
     /// </summary>
-    public static SavegameTimelineEntryViewModel ForClaimTaken(SavegameCheckoutDto checkout)
+    public static SavegameTimelineEntryViewModel ForClaimTaken(SavegameCheckoutDto checkout, DateTimeOffset now)
     {
         var closed = checkout.EndedAt is not null;
 
         return new SavegameTimelineEntryViewModel(
             checkout.TakenAt,
+            now,
             SavegameTimelineRank.ClaimTaken,
             "Checked out",
             checkout.User.DisplayName,
@@ -180,7 +183,7 @@ public sealed class SavegameTimelineEntryViewModel
     /// The moment a claim ended. Only built for claims no snapshot records - see the remarks on the
     /// type for which endings those are.
     /// </summary>
-    public static SavegameTimelineEntryViewModel ForClaimEnded(SavegameCheckoutDto checkout)
+    public static SavegameTimelineEntryViewModel ForClaimEnded(SavegameCheckoutDto checkout, DateTimeOffset now)
     {
         var (title, detail) = DescribeEnd(checkout.EndedReason);
 
@@ -188,6 +191,7 @@ public sealed class SavegameTimelineEntryViewModel
             // The caller only builds this for a claim that ended. The fallback is so a stray one
             // lands somewhere truthful rather than throwing in the middle of a list build.
             checkout.EndedAt ?? checkout.TakenAt,
+            now,
             SavegameTimelineRank.ClaimEnded,
             title,
             checkout.User.DisplayName,

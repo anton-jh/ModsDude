@@ -65,6 +65,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private readonly IBackgroundProblemReporter _problems;
     private readonly IToastService _toasts;
     private readonly IUserAvatarFactory _avatarFactory;
+    private readonly TimeProvider _time;
 
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
@@ -95,8 +96,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         IErrorReporter errorReporter,
         IBackgroundProblemReporter problems,
         IToastService toasts,
-        IUserAvatarFactory avatarFactory)
+        IUserAvatarFactory avatarFactory,
+        TimeProvider time)
     {
+        _time = time;
         _problems = problems;
         _toasts = toasts;
         _avatarFactory = avatarFactory;
@@ -650,6 +653,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
                 _currentUserId,
                 IsMember,
                 ambiguous.Contains(savegame.Checkout?.User.Id ?? ""),
+                _time,
                 savegame.Checkout?.User is UserDto holder ? _avatarFactory.Create(holder) : null,
                 this);
 
@@ -853,11 +857,13 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         // checking in and taking a save over each write two rows off one clock reading, so the
         // moment alone leaves the tie to whichever read was concatenated first - which is what put
         // a publish above the claim it opened and made the save look checked out before it existed.
+        var now = _time.GetUtcNow();
+
         var entries = snapshots.Snapshots
-            .Select(x => SavegameTimelineEntryViewModel.ForSnapshot(x, x.Number == snapshots.HeadSnapshot))
-            .Concat(checkouts.Checkouts.Select(SavegameTimelineEntryViewModel.ForClaimTaken))
+            .Select(x => SavegameTimelineEntryViewModel.ForSnapshot(x, x.Number == snapshots.HeadSnapshot, now))
+            .Concat(checkouts.Checkouts.Select(x => SavegameTimelineEntryViewModel.ForClaimTaken(x, now)))
             .Concat(SavegameTimelineRules.EndingsToShow(snapshots.Snapshots, checkouts.Checkouts)
-                .Select(SavegameTimelineEntryViewModel.ForClaimEnded))
+                .Select(x => SavegameTimelineEntryViewModel.ForClaimEnded(x, now)))
             .OrderByDescending(x => x.Moment)
             .ThenByDescending(x => x.Rank)
             .ThenByDescending(x => x.SnapshotNumber);
