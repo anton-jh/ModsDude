@@ -297,7 +297,7 @@ public class NoticeBuilderTests
 
         var notice = Assert.Single(notices);
 
-        Assert.Contains("it belongs to a repo you are not in", notice.Headline);
+        Assert.Equal("'Farming Simulator 25' belongs to a repo you are not in", notice.Headline);
         Assert.Empty(notice.Actions);
 
         // It reports a state rather than an event: waving it away would not make it less true, and

@@ -690,6 +690,7 @@ public partial class App : Application
         // still works before anything has been loaded at all.
         services.AddSingleton<IProfileRevisions>(sp => sp.GetRequiredService<IProfileService>());
         services.AddSingleton<IProfileRevisionComparer>(sp => sp.GetRequiredService<IProfileService>());
+        services.AddSingleton<IKnownRepos>(sp => sp.GetRequiredService<IRepoRepository>());
 
         // The savegame counterpart, populated as a side effect of reading a savegame list - the Saves
         // page, or the claim watch reading the lists of whatever this machine holds. Registered under

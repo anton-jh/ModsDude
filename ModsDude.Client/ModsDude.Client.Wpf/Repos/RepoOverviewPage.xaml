@@ -60,15 +60,11 @@
 
                                 <ItemsControl Margin="0 4 0 0"
                                               Grid.IsSharedSizeScope="True"
-                                              ItemsSource="{Binding Game.Folders}" />
+                                              ItemsSource="{Binding Game.Details}" />
 
                                 <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Text="No folders"
                                            Visibility="{Binding Game.HasNoFolders, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                                <TextBlock Margin="0 4 0 0"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Text="{Binding Game.ActiveProfileSummary}" />
 
                                 <!-- Neutral. Holding a savegame in compatibility mode is a state somebody chose and is
                                      playing in, not a problem with the game. -->

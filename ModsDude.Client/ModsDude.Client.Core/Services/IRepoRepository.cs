@@ -6,7 +6,7 @@ using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Services;
 
-public interface IRepoRepository : IUserScopedState
+public interface IRepoRepository : IUserScopedState, IKnownRepos
 {
     /// <summary>
     /// Raised for a repo that did not exist a moment ago, so the shell can navigate to it. Renames

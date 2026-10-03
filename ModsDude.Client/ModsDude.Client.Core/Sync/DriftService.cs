@@ -17,7 +17,7 @@ public enum DriftStatus
     /// <summary>Nothing has been applied to this game yet.</summary>
     NoActiveProfile,
 
-    /// <summary>The active profile was deleted, or the user was removed from its repo.</summary>
+    /// <summary>The active profile's repo was deleted or archived, or this account is no longer in it.</summary>
     DanglingProfile,
 
     /// <summary>
@@ -236,7 +236,7 @@ public sealed class DriftService(
         ModTargetRef target,
         ActiveProfile? activeProfile,
         string? modFolder,
-        bool profileIsMissing = false,
+        bool profileRepoIsGone = false,
         IReadOnlyCollection<DesiredMod>? profileDependencies = null,
         int? currentRevision = null,
         IReadOnlyList<Savegames.SavegameDrift>? savegameDrift = null)
@@ -248,7 +248,7 @@ public sealed class DriftService(
             return DriftReport.For(DriftStatus.NoActiveProfile) with { SavegameDrift = saves };
         }
 
-        if (profileIsMissing)
+        if (profileRepoIsGone)
         {
             return DriftReport.For(DriftStatus.DanglingProfile) with { SavegameDrift = saves };
         }

@@ -41,6 +41,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private readonly Repo _repo;
     private readonly RepoOverviewLinks _links;
     private readonly IProfileService _profileService;
+    private readonly IRepoRepository _repoRepository;
     private readonly IMembershipService _membershipService;
     private readonly IDriftMonitor _driftMonitor;
     private readonly ISavegameBindingStore _bindingStore;
@@ -50,13 +51,23 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private readonly IModalService _modalService;
     private readonly ILogger<RepoOverviewPageViewModel> _logger;
 
+    private readonly CancellationTokenSource _lifetime = new();
+
     private int? _fetchedMemberCount;
+
+    /// <summary>
+    /// The active profile last asked of the server, and its answer once it is in. See
+    /// <see cref="LookUpProfile"/>.
+    /// </summary>
+    private ActiveProfile? _lookupFor;
+    private ProfileLookup? _lookedUp;
 
 
     public RepoOverviewPageViewModel(
         Repo repo,
         RepoOverviewLinks links,
         IProfileService profileService,
+        IRepoRepository repoRepository,
         IMembershipService membershipService,
         IDriftMonitor driftMonitor,
         ISavegameBindingStore bindingStore,
@@ -70,6 +81,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _repo = repo;
         _links = links;
         _profileService = profileService;
+        _repoRepository = repoRepository;
         _membershipService = membershipService;
         _driftMonitor = driftMonitor;
         _bindingStore = bindingStore;
@@ -173,6 +185,9 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _driftMonitor.Changed -= OnDriftChanged;
         _bindingStore.BindingsChanged -= OnBindingsChanged;
         _gameRepository.GameChanged -= OnGameChanged;
+
+        // Cancelled but not disposed: a redraw already queued on the dispatcher may still read its token.
+        _lifetime.Cancel();
 
         Friends.Dispose();
     }
@@ -362,6 +377,8 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
             return;
         }
 
+        LookUpProfile(game.ActiveProfile);
+
         Game = new GameOverviewViewModel(
             game,
             GameInstallation.Read(game, _repo.Adapter, _logger),
@@ -370,23 +387,99 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
             [.. _driftMonitor.Drifted.Where(x => x.Game.Identity == game.Identity)]);
     }
 
-    private string DescribeActiveProfile(Game game)
+    /// <remarks>
+    /// A game is offered by every repo about the same game, so the profile it follows may belong to
+    /// another repo than this one, and that repo may be gone. Gone is the same answer the drift check
+    /// gives, from the same <see cref="IKnownRepos.IsGone"/>.
+    /// </remarks>
+    private GameDetailLine DescribeActiveProfile(Game game)
     {
+        const string label = "Profile";
+
         if (game.ActiveProfile is not ActiveProfile active)
         {
-            return "No profile set";
+            return new(label, "None");
         }
 
-        // A game is offered by every repo targeting the same game, so the one it is currently
-        // set to may well belong to a different repo than the one being looked at.
-        if (active.RepoId != _repo.Id)
+        var gone = new GameDetailLine(label, "No longer exists", IsProblem: true);
+
+        if (_repoRepository.IsGone(active.RepoId))
         {
-            return "Set to a profile in another repo";
+            return gone;
         }
 
-        return _profileService.Profiles.FirstOrDefault(x => x.Id == active.ProfileId) is ProfileDto profile
-            ? $"Set to '{profile.Name}'{(game.PinnedRevision is int pinned ? $" rev {pinned}" : "")}"
-            : "Set to a profile that no longer exists";
+        var profile = _profileService.FindLive(active.RepoId, active.ProfileId);
+
+        if (profile is null && _lookedUp is ProfileLookup answer && answer.For == active)
+        {
+            if (answer.Profile is null)
+            {
+                return gone;
+            }
+
+            profile = answer.Profile;
+        }
+
+        var name = profile?.Name ?? "A profile";
+
+        // The repo's name only where it is another one. Not found is only possible before the repo
+        // list has been read, and then there is nothing to name.
+        var owner = active.RepoId == _repo.Id
+            ? null
+            : _repoRepository.Repos.FirstOrDefault(x => x.Id == active.RepoId);
+
+        string?[] parts =
+        [
+            owner is null ? name : $"{name} in {owner.Name}",
+            profile?.ArchivedAt is null ? null : "archived",
+            game.PinnedRevision is int pinned ? $"rev {pinned}" : null
+        ];
+
+        return new(label, string.Join(" · ", parts.OfType<string>()));
+    }
+
+    /// <summary>
+    /// Asks the server for the active profile where the client holds no list it is in: another
+    /// repo's, or an archived or deleted one of this repo. Once per active profile; the answer
+    /// redraws the card.
+    /// </summary>
+    private void LookUpProfile(ActiveProfile? activeProfile)
+    {
+        if (activeProfile is not ActiveProfile active
+            || _lookupFor == active
+            || _repoRepository.IsGone(active.RepoId)
+            || _profileService.FindLive(active.RepoId, active.ProfileId) is not null)
+        {
+            return;
+        }
+
+        _lookupFor = active;
+
+        // Observes its own failures, so nothing is lost by not awaiting it here.
+        _ = LookUpProfileAsync(active, _lifetime.Token);
+    }
+
+    private async Task LookUpProfileAsync(ActiveProfile active, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var profile = await _profileService.FindProfile(active.RepoId, active.ProfileId, cancellationToken);
+
+            _lookedUp = new ProfileLookup(active, profile);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            // The row says "A profile" rather than a name, which is all that is lost.
+            _logger.LogWarning(exception, "Could not look up profile {Profile} of repo {Repo} for the overview.", active.ProfileId, active.RepoId);
+
+            return;
+        }
+
+        RefreshGame();
     }
 
     /// <summary>
@@ -413,6 +506,10 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
             ? $"Holding a savegame that runs on '{profile}' rev {pinned}. Check it in from Saves to move this game forward."
             : $"Holding a savegame that follows '{profile}'.";
     }
+
+
+    /// <summary>What the server said about one active profile: the profile, or null where it does not exist.</summary>
+    private sealed record ProfileLookup(ActiveProfile For, ProfileDto? Profile);
 
 
     public class Factory(IServiceProvider serviceProvider)

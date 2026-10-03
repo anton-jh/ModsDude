@@ -29,6 +29,12 @@ public interface IProfileService : IUserScopedState, IProfileRevisions, IProfile
     ProfileDto? FindLive(Guid repoId, Guid? profileId);
 
     /// <summary>
+    /// Asks the server for one profile of any repo this account is in, archived ones included, or
+    /// null where it does not exist.
+    /// </summary>
+    Task<ProfileDto?> FindProfile(Guid repoId, Guid profileId, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Which repo <see cref="Profiles"/> was last refreshed for, or null before the first refresh.
     /// </summary>
     /// <remarks>

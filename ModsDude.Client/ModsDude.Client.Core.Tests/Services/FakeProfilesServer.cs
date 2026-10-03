@@ -38,7 +38,12 @@ internal sealed class FakeProfilesServer : IProfilesClient
     public Task<ProfileIgnoredModsDto> SetProfileIgnoredModsV1Async(Guid repoId, Guid profileId, SetProfileIgnoredModsRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<GetProfileRevisionsResponse> GetProfileRevisionsV1Async(Guid repoId, Guid profileId, int? skip = null, int? limit = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<ProfileRevisionDto> SaveProfileRevisionV1Async(Guid repoId, Guid profileId, SaveProfileRevisionRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<ProfileDto> GetProfileV1Async(Guid repoId, Guid profileId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task<ProfileDto> GetProfileV1Async(Guid repoId, Guid profileId, CancellationToken cancellationToken = default)
+        => Profiles.FirstOrDefault(x => x.RepoId == repoId && x.Id == profileId) is ProfileDto profile
+            ? Task.FromResult(profile with { })
+            : throw new ApiException<CustomProblemDetails>(
+                "Not found", 400, null, new Dictionary<string, IEnumerable<string>>(), new CustomProblemDetails { Type = ProblemType.NotFound }, null);
+
     public Task<PruneProfileRevisionsResponse> PruneProfileRevisionsV1Async(Guid repoId, Guid profileId, PruneProfileRevisionsRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<ProfileRevisionDto> RestoreProfileRevisionV1Async(Guid repoId, Guid profileId, int number, RestoreProfileRevisionRequest? request = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<ProfileDto> RestoreProfileV1Async(Guid repoId, Guid profileId, RestoreRequest? request = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();

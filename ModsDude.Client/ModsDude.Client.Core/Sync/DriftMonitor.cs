@@ -3,6 +3,7 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Services;
 
 namespace ModsDude.Client.Core.Sync;
 
@@ -169,6 +170,7 @@ public sealed class DriftMonitor : IDriftMonitor
     private readonly IDriftService _driftService;
     private readonly ISyncManifestStore _manifestStore;
     private readonly IProfileRevisions _profileRevisions;
+    private readonly IKnownRepos _knownRepos;
     private readonly IHeldSavegames _heldSavegames;
     private readonly ISavegameDriftCheck _savegameDrift;
     private readonly IStoreIntegrityService _storeIntegrity;
@@ -192,6 +194,7 @@ public sealed class DriftMonitor : IDriftMonitor
         IDriftService driftService,
         ISyncManifestStore manifestStore,
         IProfileRevisions profileRevisions,
+        IKnownRepos knownRepos,
         TimeProvider timeProvider,
         IHeldSavegames heldSavegames,
         ISavegameDriftCheck savegameDrift,
@@ -203,6 +206,7 @@ public sealed class DriftMonitor : IDriftMonitor
         _driftService = driftService;
         _manifestStore = manifestStore;
         _profileRevisions = profileRevisions;
+        _knownRepos = knownRepos;
         _heldSavegames = heldSavegames;
         _savegameDrift = savegameDrift;
         _storeIntegrity = storeIntegrity;
@@ -407,6 +411,7 @@ public sealed class DriftMonitor : IDriftMonitor
                 target.Target,
                 active,
                 target.ModFolder,
+                profileRepoIsGone: _knownRepos.IsGone(active.RepoId),
                 // A savegame held here in compatibility mode pins the folder to its revision, and that is what
                 // "up to date" means for this game until it is checked in. Nothing is suppressed
                 // to achieve it: the comparison is against the number the game is supposed to be

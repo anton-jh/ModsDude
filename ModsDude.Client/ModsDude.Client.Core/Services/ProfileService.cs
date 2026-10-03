@@ -34,6 +34,18 @@ public class ProfileService(
             ? Profiles.FirstOrDefault(x => x.Id == id && x.RepoId == repoId)
             : null;
 
+    public async Task<ProfileDto?> FindProfile(Guid repoId, Guid profileId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await profileClient.GetProfileV1Async(repoId, profileId, cancellationToken);
+        }
+        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.NotFound)
+        {
+            return null;
+        }
+    }
+
     public async Task CheckForChanges(CancellationToken cancellationToken)
     {
         if (HeldRepoId is not Guid repoId)

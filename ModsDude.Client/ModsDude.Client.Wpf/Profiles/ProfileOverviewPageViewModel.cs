@@ -334,10 +334,10 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
             Games.Add(new GameOverviewViewModel(
                 game,
                 GameInstallation.Read(game, _repo.Adapter, _logger),
-                "Set to this profile",
-                // Null: this page lists the profile's savegames itself, which is the same fact from
-                // the end somebody reading a profile cares about. The repo's Overview is where the
-                // hold is said as a fact about the machine.
+                // Nulls: this page is the profile, and it lists the profile's savegames itself, which
+                // is the same fact from the end somebody reading a profile cares about. The repo's
+                // Overview is where the hold is said as a fact about the machine.
+                activeProfile: null,
                 holdingSummary: null,
                 drifted.GetValueOrDefault(game.Identity, [])));
         }

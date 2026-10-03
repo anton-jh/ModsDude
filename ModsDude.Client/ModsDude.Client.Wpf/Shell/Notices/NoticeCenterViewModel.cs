@@ -525,10 +525,18 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     private void OnRedrawNeeded(object? sender, EventArgs e) => Post(Refresh);
 
     /// <summary>
-    /// The repo list arriving, or being swapped for another account's. No drift check is needed - the
-    /// drift has not changed, only what is known about who the user is in the repo it belongs to.
+    /// The repo list arriving, changing, or being swapped for another account's. Checked again as
+    /// well as redrawn: a game following a profile in a repo that left the list is no longer drift.
     /// </summary>
-    private void OnReposChanged(object? sender, NotifyCollectionChangedEventArgs e) => Post(Refresh);
+    /// <remarks>
+    /// Posted, so it runs once the refresh raising this has finished and the list is complete.
+    /// </remarks>
+    private void OnReposChanged(object? sender, NotifyCollectionChangedEventArgs e) => Post(() =>
+    {
+        Refresh();
+
+        _ = _monitor.CheckAsync();
+    });
 
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {

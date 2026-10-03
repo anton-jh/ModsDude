@@ -459,15 +459,14 @@ public static class NoticeBuilder
     /// <para>
     /// <b>Two causes, and only one is worth alarming anybody about.</b> Before the repo list has been
     /// read this is a shell that started a moment ago, and the notice says so and waits. After a
-    /// successful read it is a game connected to a repo this account was removed from, left, or
-    /// archived - a standing state somebody has to be told about, because nothing else in the app
-    /// mentions it.
+    /// successful read it is a game none of this account's repos is about, holding a savegame of a
+    /// repo it is no longer in. Mod folders following a gone repo's profile never get here: the drift
+    /// check reports them as <see cref="DriftStatus.DanglingProfile"/>, which is not drift.
     /// </para>
     /// <para>
     /// <b>Not dismissible, and it offers nothing.</b> It reports a state rather than an event, so
     /// waving it away would not make it less true; and it cannot offer the way out, because
-    /// disconnecting a game is reached through the very repo that is gone. See
-    /// docs/08-known-issues.md.
+    /// disconnecting a game is reached through a repo about it.
     /// </para>
     /// </remarks>
     private static Notice Unreachable(string gameName, GameIdentity game, bool reposLoaded)
@@ -476,13 +475,10 @@ public static class NoticeBuilder
             $"unreachable/{game}",
             NoticeSeverity.Warning,
             reposLoaded
-                ? $"'{gameName}' has drifted, and it belongs to a repo you are not in"
+                ? $"'{gameName}' belongs to a repo you are not in"
                 : $"'{gameName}' has drifted",
             reposLoaded
-                ? "Its mod folders still follow a profile in a repo this account cannot see - it was left, "
-                    + "or the membership was removed, or the repo was archived. Nothing here can put them right "
-                    + "or say what changed, because everything that would is behind that repo. Sign in as "
-                    + "somebody who is in it, or ask to be let back in."
+                ? "Nothing here can act on it."
                 : "Checking which repo it belongs to...",
             footnote: null,
             actions: [],

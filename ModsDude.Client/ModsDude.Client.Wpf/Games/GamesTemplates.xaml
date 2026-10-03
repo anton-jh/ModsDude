@@ -9,12 +9,12 @@
         <games:GameSettingsPage />
     </DataTemplate>
 
-    <!-- A label/value row. The label column is shared across the rows of one list, so the paths line
+    <!-- A label/value row. The label column is shared across the rows of one list, so the values line
          up; the list sets Grid.IsSharedSizeScope. -->
-    <DataTemplate DataType="{x:Type games:GameFolderLine}">
+    <DataTemplate DataType="{x:Type games:GameDetailLine}">
         <Grid RowDefinitions="Auto, Auto">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" SharedSizeGroup="GameFolderLabel" />
+                <ColumnDefinition Width="Auto" SharedSizeGroup="GameDetailLabel" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
@@ -22,15 +22,25 @@
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="{Binding Label}" />
             <TextBlock Grid.Column="1"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                        TextTrimming="CharacterEllipsis"
-                       ToolTip="{Binding Path}"
-                       Text="{Binding Path}" />
+                       ToolTip="{Binding Value}"
+                       Text="{Binding Value}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsProblem}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <TextBlock Grid.Row="1" Grid.Column="1"
                        Foreground="{DynamicResource SystemFillColorCautionBrush}"
                        TextWrapping="Wrap"
-                       Text="{Binding Drift}"
-                       Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibilityConverter}}" />
+                       Text="{Binding Note}"
+                       Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibilityConverter}}" />
         </Grid>
     </DataTemplate>
 

@@ -13,8 +13,8 @@ public interface IDriftService
     /// Null where the game reaches no folder at all - somebody connected it and has not filled a
     /// path in. Unknown rather than drifted, like any other unreachable folder.
     /// </param>
-    /// <param name="profileIsMissing">
-    /// Whether the repo says the active profile is gone. The caller knows; this cannot ask.
+    /// <param name="profileRepoIsGone">
+    /// Whether the active profile's repo is gone. The caller knows; this cannot ask.
     /// </param>
     /// <param name="profileDependencies">
     /// What the profile pins right now, where the caller already had it. Null skips the
@@ -31,14 +31,14 @@ public interface IDriftService
     /// targets hands the same list to each. Carried through
     /// rather than computed here - see <see cref="DriftReport.SavegameDrift"/> - and attached
     /// to <em>every</em> answer including the ones that stop early: a held savegame with an evening in
-    /// it is worth saying whatever the mod folder turned out to be, and a game whose profile was
-    /// deleted underneath it is precisely a case where somebody wants to hear about their save.
+    /// it is worth saying whatever the mod folder turned out to be, and a game whose profile's repo
+    /// is gone is precisely a case where somebody wants to hear about their save.
     /// </param>
     DriftReport Check(
         ModTargetRef target,
         ActiveProfile? activeProfile,
         string? modFolder,
-        bool profileIsMissing = false,
+        bool profileRepoIsGone = false,
         IReadOnlyCollection<DesiredMod>? profileDependencies = null,
         int? currentRevision = null,
         IReadOnlyList<Savegames.SavegameDrift>? savegameDrift = null);

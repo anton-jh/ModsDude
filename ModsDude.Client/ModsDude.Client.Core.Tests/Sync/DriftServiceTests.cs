@@ -66,7 +66,7 @@ public class DriftServiceTests
     }
 
     [Fact]
-    public void A_deleted_profile_is_said_so_rather_than_reported_as_drift()
+    public void A_profile_whose_repo_is_gone_is_said_so_rather_than_reported_as_drift()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "one"));
@@ -75,7 +75,7 @@ public class DriftServiceTests
             fixture.Target,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
-            profileIsMissing: true);
+            profileRepoIsGone: true);
 
         Assert.Equal(DriftStatus.DanglingProfile, report.Status);
     }

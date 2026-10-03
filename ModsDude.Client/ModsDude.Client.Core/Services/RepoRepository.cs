@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Repos;
+using System.Collections.Frozen;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Services;
@@ -26,6 +27,16 @@ public class RepoRepository(
 
     public event EventHandler? PendingChangesChanged;
 
+    /// <summary>
+    /// The ids in <see cref="Repos"/>, or null before the list has been read. A snapshot replaced
+    /// whole, because <see cref="IsGone"/> is asked off the UI thread while the collection is not
+    /// safe to read there.
+    /// </summary>
+    private volatile FrozenSet<Guid>? _knownIds;
+
+
+    public bool IsGone(Guid repoId)
+        => _knownIds is FrozenSet<Guid> known && known.Contains(repoId) is false;
 
     public async Task CheckForChanges(CancellationToken cancellationToken)
     {
@@ -71,7 +82,7 @@ public class RepoRepository(
             }
             else
             {
-                Repos.Add(MapRepoModel(dto));
+                Add(MapRepoModel(dto));
             }
         }
 
@@ -83,6 +94,7 @@ public class RepoRepository(
         // Last, so that a listener woken by the collection changing above sees the list before it
         // sees the flag saying the list is complete.
         HasLoaded = true;
+        PublishKnownIds();
 
         SetPendingChanges(null);
     }
@@ -141,7 +153,7 @@ public class RepoRepository(
             MembershipLevel = RepoMembershipLevel.Admin
         });
 
-        Repos.Add(created);
+        Add(created);
 
         // Before the shell navigates to it, so it opens with its game already there.
         CatchUpGame(created);
@@ -158,7 +170,7 @@ public class RepoRepository(
 
         var joined = MapRepoModel(membership);
 
-        Repos.Add(joined);
+        Add(joined);
         CatchUpGame(joined);
         RepoCreated?.Invoke(membership.Repo.Id);
     }
@@ -191,6 +203,7 @@ public class RepoRepository(
         // rather than known to be none, and a notice reading the difference must not answer for the
         // account that just left.
         HasLoaded = false;
+        PublishKnownIds();
 
         SetPendingChanges(null);
     }
@@ -252,10 +265,22 @@ public class RepoRepository(
         PendingChangesChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private void Add(Repo repo)
+    {
+        Repos.Add(repo);
+        PublishKnownIds();
+    }
+
     private void Remove(Repo repo)
     {
         Repos.Remove(repo);
         repo.Dispose();
+        PublishKnownIds();
+    }
+
+    private void PublishKnownIds()
+    {
+        _knownIds = HasLoaded ? Repos.Select(x => x.Id).ToFrozenSet() : null;
     }
 
     private Repo MapRepoModel(RepoMembershipDto repoMembership)

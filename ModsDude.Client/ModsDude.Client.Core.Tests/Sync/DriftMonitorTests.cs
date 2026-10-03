@@ -2,6 +2,7 @@ using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using System.Security.Cryptography;
 using System.Text;
@@ -52,6 +53,55 @@ public class DriftMonitorTests
 
         // Nothing in the folder differs, so a difference count would have said "0 differences".
         Assert.Equal(0, drift.Report.DifferenceCount);
+    }
+
+    /// <summary>
+    /// Nothing behind a gone repo can be re-applied or reviewed, so its folders are not drift to act
+    /// on: the overview says the profile is gone and offers to deactivate.
+    /// </summary>
+    [Fact]
+    public void A_game_whose_profiles_repo_is_gone_is_dangling_rather_than_drifted()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
+
+        fixture.KnownRepos.Gone.Add(_repoId);
+        fixture.Monitor.Check();
+
+        Assert.False(fixture.Monitor.HasDrift);
+    }
+
+    [Fact]
+    public void A_game_whose_profiles_repo_is_not_known_to_be_gone_is_still_checked()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
+
+        fixture.KnownRepos.Gone.Add(Guid.NewGuid());
+        fixture.Monitor.Check();
+
+        var drift = Assert.Single(fixture.Monitor.Drifted);
+
+        Assert.Equal(DriftStatus.Drifted, drift.Report.Status);
+    }
+
+    /// <summary>A held savegame is worth saying whatever happened to the profile.</summary>
+    [Fact]
+    public void A_game_whose_profiles_repo_is_gone_still_reports_its_held_savegames()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+
+        fixture.KnownRepos.Gone.Add(_repoId);
+        fixture.Held.Drifted(Keys.Slot("savegame1"));
+        fixture.Monitor.Check();
+
+        var drift = Assert.Single(fixture.Monitor.Drifted);
+
+        Assert.Equal(DriftStatus.DanglingProfile, drift.Report.Status);
+        Assert.True(drift.Report.HasSavegameDrift);
     }
 
     [Fact]
@@ -588,6 +638,13 @@ public class DriftMonitorTests
         public int? GetHeadRevision(ActiveProfile profile) => Head;
     }
 
+    private sealed class FakeKnownRepos : IKnownRepos
+    {
+        public HashSet<Guid> Gone { get; } = [];
+
+        public bool IsGone(Guid repoId) => Gone.Contains(repoId);
+    }
+
     /// <summary>Finds nothing, for the fixtures with no store on a real volume to check.</summary>
     private sealed class NoStoreIntegrity : IStoreIntegrityService
     {
@@ -708,7 +765,7 @@ public class DriftMonitorTests
 
             Held = new FakeHeldSavegames(Manifests);
 
-            Monitor = new DriftMonitor(Candidates, Drift, Manifests, Revisions, Time, Held, Held, Integrity, NullLogger<DriftMonitor>.Instance);
+            Monitor = new DriftMonitor(Candidates, Drift, Manifests, Revisions, KnownRepos, Time, Held, Held, Integrity, NullLogger<DriftMonitor>.Instance);
         }
 
 
@@ -727,6 +784,9 @@ public class DriftMonitorTests
 
         /// <summary>Answers nothing by default, which is the state before any repo has been loaded.</summary>
         public FakeProfileRevisions Revisions { get; } = new();
+
+        /// <summary>Knows of no gone repo by default, which is also the state before the repo list is read.</summary>
+        public FakeKnownRepos KnownRepos { get; } = new();
 
         /// <summary>Holding nothing by default, which is nearly every game nearly all the time.</summary>
         public FakeHeldSavegames Held { get; }
@@ -812,7 +872,7 @@ public class DriftMonitorTests
 
         /// <summary>A second monitor over the same state - what the next launch has.</summary>
         public DriftMonitor Restart()
-            => new(Candidates, Drift, Manifests, Revisions, Time, Held, Held, Integrity, NullLogger<DriftMonitor>.Instance);
+            => new(Candidates, Drift, Manifests, Revisions, KnownRepos, Time, Held, Held, Integrity, NullLogger<DriftMonitor>.Instance);
 
         public void Dispose()
         {
