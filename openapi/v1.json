@@ -1244,6 +1244,9 @@
             "nullable": true,
             "type": "array"
           },
+          "keepPlaying": {
+            "type": "boolean"
+          },
           "label": {
             "nullable": true,
             "type": "string"
@@ -1261,6 +1264,10 @@
             "nullable": true,
             "type": "integer"
           },
+          "requestId": {
+            "format": "guid",
+            "type": "string"
+          },
           "savegameId": {
             "format": "guid",
             "type": "string"
@@ -1268,6 +1275,18 @@
           "sizeBytes": {
             "format": "int64",
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PublishSavegameResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "holdsClaim": {
+            "type": "boolean"
+          },
+          "savegame": {
+            "$ref": "#/components/schemas/SavegameDto"
           }
         },
         "type": "object"
@@ -6080,7 +6099,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SavegameDto"
+                  "$ref": "#/components/schemas/PublishSavegameResponse"
                 }
               }
             },

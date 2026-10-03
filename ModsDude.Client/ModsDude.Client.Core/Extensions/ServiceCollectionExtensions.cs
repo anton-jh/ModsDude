@@ -50,6 +50,7 @@ public static class ServiceCollectionExtensions
         // rewriting the developer's own state.json.
         services.AddSingleton<Savegames.IPersistedGameState, Savegames.StateStoreGameState>();
         services.AddSingleton<Savegames.ISavegameBindingStore, Savegames.SavegameBindingStore>();
+        services.AddSingleton<Savegames.ISavegamePendingPublishes, Savegames.SavegamePendingPublishes>();
 
         // TryAdd so a host that knows its repos by another route keeps its own.
         services.TryAddSingleton<Savegames.ILocalSavegameAdapters, Savegames.RepoSavegameAdapters>();

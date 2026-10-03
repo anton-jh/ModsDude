@@ -29,6 +29,7 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     private readonly UserDto _me = new() { Id = "me", DisplayName = "Me", Tag = "0002" };
 
     private (Guid RequestId, CheckInSavegameResponse Response)? _lastCheckIn;
+    private readonly Dictionary<Guid, PublishSavegameResponse> _publishAnswers = [];
 
     private SavegameDto _savegame = null!;
 
@@ -239,9 +240,23 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
         return (true, takenFrom);
     }
 
-    public Task<SavegameDto> PublishSavegameV1Async(Guid repoId, PublishSavegameRequest request, CancellationToken cancellationToken = default)
+    /// <summary>The next publish is recorded and answered, and the answer never reaches the client.</summary>
+    public bool LoseNextPublishAnswer { get; set; }
+
+    public Task<PublishSavegameResponse> PublishSavegameV1Async(Guid repoId, PublishSavegameRequest request, CancellationToken cancellationToken = default)
     {
         Publishes.Add(request);
+
+        // A repeat is answered as the original was, before the name check it would otherwise fail.
+        if (_publishAnswers.TryGetValue(request.RequestId, out var original))
+        {
+            return Task.FromResult(original);
+        }
+
+        if (_publishAnswers.Count > 0 && _savegame.Name == request.Name)
+        {
+            throw Problem(ProblemType.NameTaken, $"A savegame called '{request.Name}' already exists.");
+        }
 
         if (_blobs.ContainsKey(request.ContentHash) is false)
         {
@@ -257,9 +272,24 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 
         AddSnapshot(request.ContentHash, request.SizeBytes, request.ProfileRevision, SavegameSnapshotOrigin.Created, null, request.Label);
 
-        Claim = Checkout();
+        // No claim at all where the publisher is not keeping it: the save is anybody's to take.
+        if (request.KeepPlaying)
+        {
+            Claim = Checkout();
+        }
 
-        return Task.FromResult(_savegame);
+        var response = new PublishSavegameResponse { Savegame = _savegame, HoldsClaim = request.KeepPlaying };
+
+        _publishAnswers[request.RequestId] = response;
+
+        if (LoseNextPublishAnswer)
+        {
+            LoseNextPublishAnswer = false;
+
+            throw new HttpRequestException("The connection dropped before the answer arrived.");
+        }
+
+        return Task.FromResult(response);
     }
 
     public Task<GetSavegameSnapshotsResponse> GetSavegameSnapshotsV1Async(Guid repoId, Guid savegameId, int? skip = null, int? limit = null, CancellationToken cancellationToken = default)

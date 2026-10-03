@@ -10,6 +10,7 @@ using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
@@ -19,7 +20,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 
 /// <summary>
 /// Puts a save that only existed in somebody's game folder into the repo, as a new savegame with a
-/// first snapshot, held by whoever published it.
+/// first snapshot.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -29,11 +30,13 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// silently do the other's job.
 /// </para>
 /// <para>
-/// <b>Publishing leaves the save checked out to the publisher.</b> Somebody who has just uploaded
-/// the savegame they are playing has not handed it back, and a publish that left the slot free would
-/// invite the next person to take a save whose owner is still in it. The claim is opened in the same
-/// transaction as the savegame and its first snapshot, so there is no window in which the save exists
-/// unheld.
+/// <b>The publisher chooses whether to keep playing.</b> Keeping it opens a claim in the same
+/// transaction as the savegame and its first snapshot, so a save its publisher is still in never
+/// exists unheld. Otherwise no claim is opened and the save is anybody's to take.
+/// </para>
+/// <para>
+/// <b>A repeat is answered as the original was.</b> The request id is recorded beside the savegame, so
+/// a retry after a lost response gets the savegame it created rather than "name taken".
 /// </para>
 /// <para>
 /// <b>The bytes are checked for before anything is written.</b> A registration whose blob is absent
@@ -64,7 +67,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<SavegameDto>, BadRequest<CustomProblemDetails>>> Publish(
+    private static async Task<Results<Ok<PublishSavegameResponse>, BadRequest<CustomProblemDetails>>> Publish(
         Guid repoId,
         PublishSavegameRequest request,
         ClaimsPrincipal claimsPrincipal,
@@ -76,6 +79,14 @@ public class PublishSavegameV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
+        var repo = new RepoId(repoId);
+        var requestId = new SavegamePublishRequestId(request.RequestId);
+
+        // Before the name check, which a repeat would otherwise fail on its own savegame.
+        if (await FindRepeatAsync(dbContext, repo, userId, requestId, cancellationToken) is SavegamePublishRequest original)
+        {
+            return await AnswerAgainAsync(dbContext, original, cancellationToken);
+        }
 
         var savegameId = new SavegameId(request.SavegameId);
 
@@ -90,7 +101,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
         var profileId = request.ProfileId is Guid chosen ? new ProfileId(chosen) : (ProfileId?)null;
         var profileRevision = request.ProfileRevision is int declared ? new RevisionNumber(declared) : (RevisionNumber?)null;
 
-        if (await dbContext.Savegames.CheckNameIsTaken(new RepoId(repoId), new SavegameName(request.Name), cancellationToken))
+        if (await dbContext.Savegames.CheckNameIsTaken(repo, new SavegameName(request.Name), cancellationToken))
         {
             return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
@@ -102,7 +113,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
         // together is a fact about the request, and stating it here is what lets the compiler agree
         // rather than being told to.
         if (profileId is ProfileId profile && profileRevision is RevisionNumber declaredRevision
-            && !await dbContext.ProfileRevisions.ExistsAsync(new RepoId(repoId), profile, declaredRevision, cancellationToken))
+            && !await dbContext.ProfileRevisions.ExistsAsync(repo, profile, declaredRevision, cancellationToken))
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{request.ProfileId}' has no revision {request.ProfileRevision}"));
         }
@@ -115,14 +126,14 @@ public class PublishSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }
 
-        if (!await savegameStorageService.CheckIfSavegameExists(new RepoId(repoId), savegameId, request.ContentHash, cancellationToken))
+        if (!await savegameStorageService.CheckIfSavegameExists(repo, savegameId, request.ContentHash, cancellationToken))
         {
-            return TypedResults.BadRequest(Problems.SavegameFileDoesNotExist(new RepoId(repoId), savegameId, request.ContentHash));
+            return TypedResults.BadRequest(Problems.SavegameFileDoesNotExist(repo, savegameId, request.ContentHash));
         }
 
         var now = timeService.Now();
 
-        var savegame = new Savegame(new RepoId(repoId), new SavegameName(request.Name), profileId, now)
+        var savegame = new Savegame(repo, new SavegameName(request.Name), profileId, now)
         {
             Id = savegameId
         };
@@ -139,14 +150,17 @@ public class PublishSavegameV1Endpoint : IEndpoint
             SavegameSnapshotOrigin.Created,
             details: SavegameDetails.From(request.Details));
 
-        // The snapshot carries no CheckoutId even though a claim is opened beside it. CheckoutId
-        // names the claim a snapshot was checked in *against*, and this claim starts here rather
-        // than ending here - the play it will eventually record has not happened yet.
-        var checkout = new SavegameCheckout(new RepoId(repoId), savegameId, userId, now, profileRevision);
-
         dbContext.Savegames.Add(savegame);
         dbContext.SavegameSnapshots.Add(snapshot);
-        dbContext.SavegameCheckouts.Add(checkout);
+        dbContext.SavegamePublishRequests.Add(new SavegamePublishRequest(repo, savegameId, userId, requestId, now, request.KeepPlaying));
+
+        if (request.KeepPlaying)
+        {
+            // The snapshot carries no CheckoutId even though a claim is opened beside it. CheckoutId
+            // names the claim a snapshot was checked in *against*, and this claim starts here rather
+            // than ending here - the play it will eventually record has not happened yet.
+            dbContext.SavegameCheckouts.Add(new SavegameCheckout(repo, savegameId, userId, now, profileRevision));
+        }
 
         try
         {
@@ -154,20 +168,56 @@ public class PublishSavegameV1Endpoint : IEndpoint
         }
         catch (DbUpdateException)
         {
+            // What failed to commit is still tracked, and would otherwise be read back as if it had.
+            dbContext.ChangeTracker.Clear();
+
+            // The same publish sent twice at once: the other copy committed first, and its answer is
+            // this one's too.
+            if (await FindRepeatAsync(dbContext, repo, userId, requestId, cancellationToken) is SavegamePublishRequest concurrent)
+            {
+                return await AnswerAgainAsync(dbContext, concurrent, cancellationToken);
+            }
+
             // Two people published the same name in the same instant. The check above is what gives
             // the good error message; the unique index on (RepoId, Name) is what makes one of them
-            // lose rather than both succeeding. A client re-sending a publish it already made lands
-            // here too, on the primary key rather than the name - the same refusal, and the right
-            // one, since the savegame it is asking for exists.
+            // lose rather than both succeeding.
             return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
 
         await CheckInSavegameV1Endpoint.ReleaseAfterNewSnapshotAsync(retentionUpkeep, savegame, cancellationToken);
 
-        return TypedResults.Ok(await SavegameReads.DescribeAsync(dbContext, savegame, cancellationToken));
+        return TypedResults.Ok(new PublishSavegameResponse(
+            await SavegameReads.DescribeAsync(dbContext, savegame, cancellationToken),
+            request.KeepPlaying));
+    }
+
+    private static Task<SavegamePublishRequest?> FindRepeatAsync(
+        ApplicationDbContext dbContext,
+        RepoId repoId,
+        UserId userId,
+        SavegamePublishRequestId requestId,
+        CancellationToken cancellationToken)
+        => dbContext.SavegamePublishRequests.AsNoTracking().FirstOrDefaultAsync(
+            x => x.RequestId == requestId && x.RepoId == repoId && x.UserId == userId, cancellationToken);
+
+    private static async Task<Results<Ok<PublishSavegameResponse>, BadRequest<CustomProblemDetails>>> AnswerAgainAsync(
+        ApplicationDbContext dbContext,
+        SavegamePublishRequest original,
+        CancellationToken cancellationToken)
+    {
+        var savegame = await dbContext.Savegames.AsNoTracking().FirstAsync(
+            x => x.RepoId == original.RepoId && x.Id == original.SavegameId, cancellationToken);
+
+        return TypedResults.Ok(new PublishSavegameResponse(
+            await SavegameReads.DescribeAsync(dbContext, savegame, cancellationToken),
+            original.CallerHoldsClaim));
     }
 
 
+    /// <param name="RequestId">
+    /// Chosen by the client and sent again with a repeat of the same publish, which is then answered
+    /// as the original was.
+    /// </param>
     /// <param name="SavegameId">
     /// The id the client uploaded the bytes under, and the id the savegame is created with. See the
     /// remarks on the endpoint for why this end chooses it.
@@ -200,7 +250,9 @@ public class PublishSavegameV1Endpoint : IEndpoint
     /// What the client's adapter says about the save - the map, when it was played. Opaque here and
     /// never parsed; optional, because an adapter that describes nothing is a perfectly ordinary one.
     /// </param>
+    /// <param name="KeepPlaying">Open a claim for the publisher instead of leaving the save free to take.</param>
     public record PublishSavegameRequest(
+        Guid RequestId,
         Guid SavegameId,
         string Name,
         Guid? ProfileId,
@@ -208,5 +260,11 @@ public class PublishSavegameV1Endpoint : IEndpoint
         string ContentHash,
         long SizeBytes,
         string? Label,
-        IEnumerable<SavegameDetailDto>? Details);
+        IEnumerable<SavegameDetailDto>? Details,
+        bool KeepPlaying);
+
+    /// <param name="HoldsClaim">Whether the caller holds the savegame now. The client keeps or hands back its copy by this.</param>
+    public record PublishSavegameResponse(
+        SavegameDto Savegame,
+        bool HoldsClaim);
 }

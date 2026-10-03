@@ -390,6 +390,9 @@ internal sealed class FakeHeldSavegames(SyncManifestStore manifests)
     public SavegameCheckoutBinding? FindProfileHold(GameIdentity game)
         => SavegameHoldRules.FindProfileHold(_held);
 
+    public SavegameKeepRefusal DecideKeepPublished(Game game, Guid repoId, Guid? profileId)
+        => SavegameHoldRules.DecideKeepPublished(_held, game.ActiveProfile, repoId, profileId);
+
     /// <summary>
     /// Whatever a test put there, which is nothing by default: what the notice <em>says</em> about a
     /// held slot is <see cref="SavegameDriftRules"/>'s and is exercised where that lives. What is

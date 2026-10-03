@@ -95,6 +95,9 @@ public class LocalStateTests
 
         game.SavegameSlotHints.Add(new SavegameSlotHint(Guid.NewGuid(), savegameId, slot));
 
+        var pending = new SavegamePendingPublish(slot, "bbbb", Guid.NewGuid(), Guid.NewGuid());
+        game.SavegamePendingPublishes.Add(pending);
+
         state.Games[_fs25] = game;
 
         Assert.Contains("\"client:savegame3\"", JsonSerializer.Serialize(state));
@@ -103,6 +106,7 @@ public class LocalStateTests
 
         Assert.Equal(slot, Assert.Single(read.SavegameCheckouts).Slot);
         Assert.Equal(slot, Assert.Single(read.SavegameSlotHints).Slot);
+        Assert.Equal(pending, Assert.Single(read.SavegamePendingPublishes));
     }
 
     /// <summary>

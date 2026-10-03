@@ -81,8 +81,9 @@ internal sealed class SavegameHarness : IDisposable
         CheckIn = new SavegameCheckIn(
             Server, packer, Bindings, adapters, Slots, transfer, recycler, renamer, Holds, PlayAttribution, Guard, time,
             NullLogger<SavegameCheckIn>.Instance);
+        PendingPublishes = new SavegamePendingPublishes(State);
         Publisher = new SavegamePublisher(
-            Server, packer, Bindings, adapters, Slots, transfer, recycler, renamer, Holds, Guard, time,
+            Server, packer, Bindings, PendingPublishes, HeldSavegames, adapters, Slots, transfer, recycler, renamer, Guard, time,
             NullLogger<SavegamePublisher>.Instance);
     }
 
@@ -110,6 +111,7 @@ internal sealed class SavegameHarness : IDisposable
     public SavegameHolds Holds { get; }
     public SavegameCheckOut CheckOut { get; }
     public SavegameCheckIn CheckIn { get; }
+    public SavegamePendingPublishes PendingPublishes { get; }
     public SavegamePublisher Publisher { get; }
 
     public Guid ProfileId => Server.ProfileId;

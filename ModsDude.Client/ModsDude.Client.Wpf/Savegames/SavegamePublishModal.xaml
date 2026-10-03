@@ -76,16 +76,14 @@
                 <TextBox Text="{Binding Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          FontSize="14" />
 
-                <!-- The same choice check-in offers, refused on the one answer that would leave a save
-                     checked out into a mod folder running a different list. Disabled rather than
-                     hidden: a control that vanishes reads as a feature that is missing, and the
-                     sentence below it is the whole explanation. -->
+                <!-- The same choice check-in offers, refused where the save could not be held beside
+                     what this game already holds. Disabled rather than hidden: a control that vanishes
+                     reads as a feature that is missing, and the sentence below it says why. -->
                 <CheckBox Margin="0 16 0 0"
                           Content="Keep playing - keep the save and the claim"
                           IsEnabled="{Binding CanKeepPlaying}"
                           IsChecked="{Binding KeepPlaying, Mode=TwoWay}" />
 
-                <!-- Caution rather than secondary: this one is a folder about to be emptied. -->
                 <TextBlock Text="{Binding HandOverNotice}"
                            Margin="0 8 0 0"
                            TextWrapping="Wrap"
