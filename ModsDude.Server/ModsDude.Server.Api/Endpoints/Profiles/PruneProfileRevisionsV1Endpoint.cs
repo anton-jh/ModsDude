@@ -70,7 +70,7 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
         PruneProfileRevisionsRequest request,
         ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
-        RetentionUpkeep retentionUpkeep,
+        IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var requested = request.Revisions.Distinct().Select(x => new RevisionNumber(x)).ToList();

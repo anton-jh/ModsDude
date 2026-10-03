@@ -44,7 +44,7 @@ public class MoveModVersionV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
-        RetentionUpkeep retentionUpkeep,
+        IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var siblings = await dbContext.ModVersions.GetVersionsOfModAsync(new RepoId(repoId), new ModId(modId), cancellationToken);

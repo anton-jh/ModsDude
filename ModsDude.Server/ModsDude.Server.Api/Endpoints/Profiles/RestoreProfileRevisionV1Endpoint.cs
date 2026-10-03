@@ -54,7 +54,7 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
-        RetentionUpkeep retentionUpkeep,
+        IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();

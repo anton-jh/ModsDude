@@ -36,10 +36,8 @@ namespace ModsDude.Server.Persistence.Retention;
 /// one question that makes deleting bytes safe: whether anything still refers to the address.
 /// </para>
 /// </remarks>
-public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionSweeper> logger)
+public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionSweeper> logger) : IRetentionSweeper
 {
-    /// <param name="today">The date the schedules count from, in the zone the jobs run in.</param>
-    /// <param name="now">What a rescheduled mod version's <see cref="ModVersion.Updated"/> moves to.</param>
     public async Task ScheduleAsync(DateOnly today, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var totals = new SweepTotals();
@@ -61,8 +59,6 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
             totals.Scheduled, totals.Unscheduled);
     }
 
-    /// <param name="today">Anything scheduled for this date or earlier is due.</param>
-    /// <param name="now">What the versions left behind a deleted mod version are stamped with.</param>
     public async Task DeleteDueAsync(DateOnly today, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var totals = new SweepTotals();

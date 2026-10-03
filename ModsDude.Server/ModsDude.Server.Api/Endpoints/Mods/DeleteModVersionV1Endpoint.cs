@@ -28,7 +28,7 @@ public class DeleteModVersionV1Endpoint : IEndpoint
         IModStorageService storageService,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
-        RetentionUpkeep retentionUpkeep,
+        IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var siblings = await dbContext.ModVersions.GetVersionsOfModAsync(new RepoId(repoId), new ModId(modId), cancellationToken);

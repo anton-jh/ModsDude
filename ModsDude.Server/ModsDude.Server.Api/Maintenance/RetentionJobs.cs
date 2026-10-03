@@ -10,7 +10,7 @@ namespace ModsDude.Server.Api.Maintenance;
 /// <see cref="RetentionSweeper"/>; this only works out what day it is where the jobs run.
 /// </summary>
 public class RetentionJobs(
-    RetentionSweeper sweeper,
+    IRetentionSweeper sweeper,
     ITimeService timeService,
     IOptions<RetentionOptions> options)
 {

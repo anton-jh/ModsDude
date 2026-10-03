@@ -119,7 +119,8 @@ A change is done only when all of these hold:
 
 ### Design
 
-- Every service registered in DI gets an interface. View models, pages, windows, factories and options classes don't.
+- Every service registered in DI gets an interface. View models, pages, windows, factories, options classes and middleware don't.
+  - Hangfire job classes aren't registered at all; Hangfire builds them itself, in a scope per job.
 - Get behaviour from structure, not logic: prefer derived state, types, data binding and composition over imperative code that keeps things in sync.
   - Why: flags, manual refreshes and re-entrancy guards cause "doesn't update until I touch something else" bugs.
   - Look for a single source of truth that everything else derives from, instead of adding another refresh call or guard flag.

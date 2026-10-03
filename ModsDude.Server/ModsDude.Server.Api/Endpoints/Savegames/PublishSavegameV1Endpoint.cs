@@ -72,7 +72,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
         ISavegameStorageService savegameStorageService,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
-        RetentionUpkeep retentionUpkeep,
+        IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
