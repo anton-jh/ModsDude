@@ -91,6 +91,7 @@
                     <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
                     <Setter Property="ToolTipService.InitialShowDelay" Value="200" />
                     <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                    <Setter Property="Cursor" Value="Hand" />
                     <!-- The theme's row is at least 88 wide and pads itself 16 and 12 either side; the row
                          lays itself out instead. -->
                     <Setter Property="MinWidth" Value="0" />
@@ -373,6 +374,7 @@
                     <Setter Property="ToolTipService.InitialShowDelay" Value="0" />
                     <Setter Property="ToolTipService.BetweenShowDelay" Value="0" />
                     <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                    <Setter Property="Cursor" Value="Hand" />
                     <Setter Property="FocusVisualStyle" Value="{StaticResource RailFocusVisual}" />
                     <Setter Property="Template">
                         <Setter.Value>
@@ -416,6 +418,7 @@
         <Setter Property="ToolTipService.Placement" Value="Right" />
         <Setter Property="ToolTipService.InitialShowDelay" Value="0" />
         <Setter Property="ToolTipService.BetweenShowDelay" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
         <Setter Property="FocusVisualStyle" Value="{StaticResource RailFocusVisual}" />
         <Setter Property="Template">
             <Setter.Value>

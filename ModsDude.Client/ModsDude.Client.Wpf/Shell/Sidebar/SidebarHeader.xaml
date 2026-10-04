@@ -78,6 +78,7 @@
                 Command="{Binding Command, RelativeSource={RelativeSource AncestorType=UserControl}}"
                 ToolTip="{Binding ActionToolTip, RelativeSource={RelativeSource AncestorType=UserControl}}"
                 ToolTipService.InitialShowDelay="200"
+                Cursor="Hand"
                 Background="Transparent"
                 BorderThickness="0"
                 Padding="4"
