@@ -14,6 +14,9 @@ internal class RepoInviteEntityTypeConfiguration : IEntityTypeConfiguration<Repo
         builder.Property(x => x.Code);
         builder.HasIndex(x => x.Code).IsUnique();
 
+        // Per repo, so a request ID sent to another repo cannot return that repo's invite.
+        builder.HasIndex(x => new { x.RepoId, x.RequestId }).IsUnique();
+
         builder.Property(x => x.GrantedLevel)
             .HasConversion<RepoMembershipLevelValueConverter>();
 

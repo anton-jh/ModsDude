@@ -7,6 +7,7 @@ using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Invites;
 
 namespace ModsDude.Server.Api.Admin;
 
@@ -18,9 +19,6 @@ public class TrustCodesPageModel(
     : PageModel
 {
     private const int _listedCodes = 50;
-
-    /// <summary>The unique index makes a repeat impossible rather than unlikely; this is for the unlikely.</summary>
-    private const int _maximumCodeAttempts = 3;
 
 
     /// <summary>Rendered into the issue form, so a resubmit of the same form is recognised as a repeat.</summary>
@@ -60,31 +58,16 @@ public class TrustCodesPageModel(
             return ShowIssued(repeat);
         }
 
-        for (var attempt = 1; ; attempt++)
-        {
-            var trustCode = new TrustCode(InviteCodes.Generate(), request, timeService.Now());
-            dbContext.TrustCodes.Add(trustCode);
+        var now = timeService.Now();
+        var trustCode = await dbContext.IssueAsync(
+            code => new TrustCode(code, request, now),
+            ct => dbContext.TrustCodes.GetByRequestIdAsync(request, ct),
+            logger,
+            cancellationToken);
 
-            try
-            {
-                await unitOfWork.CommitAsync(cancellationToken);
-                logger.LogInformation("Admin {Operator} issued trust code {TrustCodeId}.", User.OperatorName(), trustCode.Id.Value);
+        logger.LogInformation("Admin {Operator} issued trust code {TrustCodeId}.", User.OperatorName(), trustCode.Id.Value);
 
-                return ShowIssued(trustCode);
-            }
-            catch (DbUpdateException exception) when (attempt < _maximumCodeAttempts)
-            {
-                dbContext.Entry(trustCode).State = EntityState.Detached;
-
-                // The same form submitted twice at once, or a code that happened to be taken.
-                if (await dbContext.TrustCodes.GetByRequestIdAsync(request, cancellationToken) is TrustCode concurrent)
-                {
-                    return ShowIssued(concurrent);
-                }
-
-                logger.LogWarning(exception, "Issuing a trust code collided on attempt {Attempt}; trying a new code.", attempt);
-            }
-        }
+        return ShowIssued(trustCode);
     }
 
     public async Task<IActionResult> OnPostRevokeAsync(Guid id, CancellationToken cancellationToken)

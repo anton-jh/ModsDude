@@ -29,8 +29,9 @@ public class RepoInvite
     public RepoInvite(
         RepoId repoId,
         InviteCode code,
+        RepoInviteRequestId requestId,
         RepoMembershipLevel grantedLevel,
-        UserId createdBy,
+        UserId? createdBy,
         DateTime created,
         DateTime? expiresAt,
         int? maximumUses)
@@ -52,6 +53,7 @@ public class RepoInvite
 
         RepoId = repoId;
         Code = code;
+        RequestId = requestId;
         GrantedLevel = grantedLevel;
         CreatedBy = createdBy;
         Created = created;
@@ -64,8 +66,10 @@ public class RepoInvite
 
     public RepoId RepoId { get; private set; }
     public InviteCode Code { get; private set; }
+    public RepoInviteRequestId RequestId { get; private set; }
     public RepoMembershipLevel GrantedLevel { get; private set; }
-    public UserId CreatedBy { get; private set; }
+    /// <summary>Null where an operator created it on the admin pages.</summary>
+    public UserId? CreatedBy { get; private set; }
     public DateTime Created { get; private set; }
 
     /// <summary>Null where the invite was created without a time limit.</summary>
@@ -172,6 +176,8 @@ public class RepoInvite
 }
 
 public readonly record struct RepoInviteId(Guid Value);
+
+public readonly record struct RepoInviteRequestId(Guid Value);
 
 public enum InviteStatus
 {

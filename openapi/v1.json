@@ -197,6 +197,10 @@
           },
           "membershipLevel": {
             "$ref": "#/components/schemas/RepoMembershipLevel"
+          },
+          "requestId": {
+            "format": "guid",
+            "type": "string"
           }
         },
         "type": "object"

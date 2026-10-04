@@ -22,6 +22,17 @@ public class RepoInviteTests
     }
 
     [Fact]
+    public void An_invite_created_on_the_admin_pages_has_no_creator_and_still_works()
+    {
+        var invite = new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Guest, createdBy: null, _created, null, null);
+
+        invite.Redeem(_created);
+
+        Assert.Null(invite.CreatedBy);
+        Assert.Equal(1, invite.Uses);
+    }
+
+    [Fact]
     public void Redeeming_counts_a_join()
     {
         var invite = CreateInvite();
@@ -145,7 +156,7 @@ public class RepoInviteTests
     public void An_invite_cannot_grant_admin()
     {
         Assert.Throws<DomainValidationException>(
-            () => new RepoInvite(_repo, InviteCodes.Generate(), RepoMembershipLevel.Admin, _creator, _created, null, null));
+            () => new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Admin, _creator, _created, null, null));
     }
 
     [Fact]
@@ -160,6 +171,7 @@ public class RepoInviteTests
         return new RepoInvite(
             _repo,
             InviteCodes.Generate(),
+            new RepoInviteRequestId(Guid.NewGuid()),
             RepoMembershipLevel.Member,
             _creator,
             _created,

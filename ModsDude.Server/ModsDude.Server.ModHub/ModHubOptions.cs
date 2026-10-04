@@ -31,10 +31,13 @@ public class ModHubOptions
     public TimeSpan RequestDelay { get; set; } = TimeSpan.FromSeconds(1);
 
     /// <summary>
-    /// When the crawl runs, in UTC: each run checks the top of the listing for new and updated mods, and
-    /// sweeps or refreshes as needed. A run still going when the next is due makes that one a no-op.
+    /// When the crawl runs, in <see cref="TimeZone"/>: each run checks the top of the listing for new and
+    /// updated mods, and sweeps or refreshes as needed. A run still going when the next is due makes that
+    /// one a no-op.
     /// </summary>
-    public string PollCron { get; set; } = "0 * * * *";
+    public string PollCron { get; set; } = "0 19 * * *";
+
+    public string TimeZone { get; set; } = "Europe/Stockholm";
 
     /// <summary>
     /// How often every listing page is read to find mods a poll missed. The first sweep of a game is
@@ -46,12 +49,12 @@ public class ModHubOptions
     /// How far down a poll reads looking for where the previous one left off before giving up and
     /// taking everything it read as changed.
     /// </summary>
-    public int PollPageLimit { get; set; } = 5;
+    public int PollPageLimit { get; set; } = 10;
 
     /// <summary>
     /// How many of the longest-unread mods each poll reads again. This is what catches what the listing
-    /// order cannot show and what removes mods ModHub no longer has: 40 an hour goes through six
+    /// order cannot show and what removes mods ModHub no longer has: 900 a day goes through six
     /// thousand mods in about a week.
     /// </summary>
-    public int RefreshPerPoll { get; set; } = 40;
+    public int RefreshPerPoll { get; set; } = 900;
 }

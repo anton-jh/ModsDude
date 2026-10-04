@@ -26,8 +26,10 @@ public class InviteService(
         DateTime? expiresAt,
         CancellationToken cancellationToken)
     {
+        // One per call, so a retry of this request returns the invite it made rather than a second one.
         var request = new CreateInviteRequest()
         {
+            RequestId = Guid.NewGuid(),
             MembershipLevel = level,
             MaximumUses = maximumUses,
             ExpiresAt = expiresAt

@@ -71,7 +71,12 @@ public class ModHubCrawlJob(
             return;
         }
 
-        recurringJobs.AddOrUpdate<ModHubCrawlJob>(JobId, x => x.CrawlAsync(null!, CancellationToken.None), options.PollCron);
+        var jobOptions = new RecurringJobOptions
+        {
+            TimeZone = TimeZoneInfo.FindSystemTimeZoneById(options.TimeZone)
+        };
+
+        recurringJobs.AddOrUpdate<ModHubCrawlJob>(JobId, x => x.CrawlAsync(null!, CancellationToken.None), options.PollCron, jobOptions);
     }
 
 

@@ -182,6 +182,7 @@ public class RepoDeletionTests(DatabaseFixture fixture)
         dbContext.RepoInvites.Add(new RepoInvite(
             repoId,
             InviteCodes.Generate(),
+            new RepoInviteRequestId(Guid.NewGuid()),
             RepoMembershipLevel.Member,
             _author,
             DateTime.UtcNow,

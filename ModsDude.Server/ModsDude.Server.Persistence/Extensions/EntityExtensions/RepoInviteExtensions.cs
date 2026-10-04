@@ -19,6 +19,11 @@ public static class RepoInviteExtensions
         return dbSet.FirstOrDefaultAsync(x => x.Code == code, cancellationToken);
     }
 
+    public static Task<RepoInvite?> GetByRequestIdAsync(this DbSet<RepoInvite> dbSet, RepoId repoId, RepoInviteRequestId requestId, CancellationToken cancellationToken)
+    {
+        return dbSet.FirstOrDefaultAsync(x => x.RepoId == repoId && x.RequestId == requestId, cancellationToken);
+    }
+
     /// <summary>
     /// The repo's invite list: everything that has not been taken off it.
     /// </summary>

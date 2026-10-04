@@ -9,6 +9,7 @@ using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Invites;
 using ModsDude.Server.Persistence.Retention;
 
 namespace ModsDude.Server.Api.Admin;
@@ -29,6 +30,12 @@ public class ReposPageModel(
     public StorageComparison? Storage { get; private set; }
 
     public IReadOnlyList<RepoRow> Repos { get; private set; } = [];
+
+    /// <summary>
+    /// Rendered into every create invite form, so a resubmit of one is recognised as a repeat. Request
+    /// IDs are per repo, so the forms of different repos can share it.
+    /// </summary>
+    public Guid InviteRequestId { get; } = Guid.NewGuid();
 
     /// <summary>The repo whose row is shown open, after an action on it.</summary>
     public Guid? Open { get; private set; }
@@ -279,6 +286,67 @@ public class ReposPageModel(
         return ShowNotice(repoId, $"Deleted {AdminFormat.Count(result.Deleted)} {Describe(history)}.");
     }
 
+    public async Task<IActionResult> OnPostCreateInviteAsync(
+        Guid repoId,
+        Guid requestId,
+        RepoMembershipLevel level,
+        int? maximumUses,
+        int? expiresInHours,
+        CancellationToken cancellationToken)
+    {
+        var id = new RepoId(repoId);
+        var request = new RepoInviteRequestId(requestId);
+
+        if (await dbContext.RepoInvites.GetByRequestIdAsync(id, request, cancellationToken) is { } repeat)
+        {
+            return ShowNotice(repoId, InviteCreated(repeat));
+        }
+
+        if (await dbContext.Repos.GetAsync(id, cancellationToken) is not { } repo)
+        {
+            return ShowError(repoId, _repoGone);
+        }
+
+        if (repo.IsArchived)
+        {
+            return ShowError(repoId, "Restore the repo before inviting to it.");
+        }
+
+        if (!InvitableLevels.Contains(level))
+        {
+            return ShowError(repoId, "Pick a level below Admin.");
+        }
+
+        if (!ModelState.IsValid || maximumUses is <= 0)
+        {
+            return ShowError(repoId, "Max joins must be at least 1.");
+        }
+
+        if (expiresInHours is not null && !InviteExpiryOptions.Any(x => x.Hours == expiresInHours))
+        {
+            return ShowError(repoId, "Pick when the invite expires.");
+        }
+
+        var now = timeService.Now();
+        var invite = await dbContext.IssueAsync(
+            code => new RepoInvite(
+                id,
+                code,
+                request,
+                level,
+                createdBy: null,
+                now,
+                expiresInHours is int hours ? now.AddHours(hours) : null,
+                maximumUses),
+            ct => dbContext.RepoInvites.GetByRequestIdAsync(id, request, ct),
+            logger,
+            cancellationToken);
+
+        logger.LogInformation("Admin {Operator} created invite {InviteId} of repo {RepoId}.", User.OperatorName(), invite.Id.Value, repoId);
+
+        return ShowNotice(repoId, InviteCreated(invite));
+    }
+
     public async Task<IActionResult> OnPostRevokeInviteAsync(Guid repoId, Guid inviteId, CancellationToken cancellationToken)
     {
         var invite = await dbContext.RepoInvites.GetAsync(new RepoInviteId(inviteId), cancellationToken);
@@ -355,6 +423,8 @@ public class ReposPageModel(
         }
     }
 
+    private static string InviteCreated(RepoInvite invite) => $"Invite {InviteCodes.Format(invite.Code)} created.";
+
     private RedirectToPageResult ShowOutcome(Guid repoId, string? error, string notice)
     {
         return error is null ? ShowNotice(repoId, notice) : ShowError(repoId, error);
@@ -379,6 +449,20 @@ public class ReposPageModel(
         return RedirectToPage(null, null, new { open = repoId }, RowAnchor(repoId));
     }
 
+
+    /// <summary>An invite can never grant Admin; see <see cref="RepoInvite"/>.</summary>
+    public static IReadOnlyList<RepoMembershipLevel> InvitableLevels { get; } =
+        [.. Enum.GetValues<RepoMembershipLevel>().Where(x => x < RepoMembershipLevel.Admin)];
+
+    /// <summary>The same choices the client offers. <c>null</c> hours is no expiry.</summary>
+    public static IReadOnlyList<InviteExpiryOption> InviteExpiryOptions { get; } =
+    [
+        new("Never", null),
+        new("1 hour", 1),
+        new("1 day", 24),
+        new("7 days", 7 * 24),
+        new("30 days", 30 * 24)
+    ];
 
     public static string RowAnchor(Guid repoId) => $"repo-{repoId}";
 
@@ -427,4 +511,6 @@ public class ReposPageModel(
     public record UserOption(string Id, string Name);
 
     public record InviteRow(Guid Id, string Code, RepoMembershipLevel Level, DateTime Created, DateTime? ExpiresAt, int Uses, int? MaximumUses);
+
+    public record InviteExpiryOption(string Label, int? Hours);
 }

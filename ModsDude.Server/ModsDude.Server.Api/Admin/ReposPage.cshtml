@@ -233,6 +233,53 @@
                             </table></div>
                         }
 
+                        @if (repo.ArchivedAt is not null)
+                        {
+                            <div class="toolbar">
+                                <span title="Restore the repo to invite to it."><button type="button" disabled>Create invite</button></span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="toolbar">
+                                <button type="button" data-open-dialog="create-invite-@repo.Id">Create invite</button>
+                            </div>
+
+                            <dialog id="create-invite-@repo.Id">
+                                <form method="post" asp-page-handler="CreateInvite" class="dialog-form">
+                                    <h2>Create invite to @repo.Name</h2>
+                                    <input type="hidden" name="repoId" value="@repo.Id">
+                                    <input type="hidden" name="requestId" value="@Model.InviteRequestId">
+                                    <label class="field">
+                                        <span>Joins as</span>
+                                        <select name="level">
+                                            @foreach (var level in ReposPageModel.InvitableLevels)
+                                            {
+                                                <option value="@level" selected="@(level == RepoMembershipLevel.Member)">@level</option>
+                                            }
+                                        </select>
+                                    </label>
+                                    <label class="field">
+                                        <span>Max joins</span>
+                                        <input type="number" name="maximumUses" min="1" step="1" placeholder="No limit">
+                                    </label>
+                                    <label class="field">
+                                        <span>Expires</span>
+                                        <select name="expiresInHours">
+                                            @foreach (var expiry in ReposPageModel.InviteExpiryOptions)
+                                            {
+                                                <option value="@(expiry.Hours?.ToString() ?? "")">@expiry.Label</option>
+                                            }
+                                        </select>
+                                    </label>
+                                    <div class="dialog-actions">
+                                        <button type="button" data-close-dialog>Cancel</button>
+                                        <button type="submit" class="accent">Create</button>
+                                    </div>
+                                </form>
+                            </dialog>
+                        }
+
                         <h3>Prune now</h3>
                         <div class="toolbar">
                             @foreach (var history in Enum.GetValues<PrunableHistory>())

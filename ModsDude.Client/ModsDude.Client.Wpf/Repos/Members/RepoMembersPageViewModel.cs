@@ -31,6 +31,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
     private readonly IUserAvatarFactory _avatarFactory;
+    private readonly TimeProvider _time;
 
     private IReadOnlyList<RepoMemberDto> _fetchedMembers = [];
     private IReadOnlyList<RepoInviteDto> _fetchedInvites = [];
@@ -46,7 +47,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         INavigationLockService navigationLockService,
         IModalService modalService,
         IErrorReporter errorReporter,
-        IUserAvatarFactory avatarFactory)
+        IUserAvatarFactory avatarFactory,
+        TimeProvider time)
     {
         _repo = repo;
         _membershipService = membershipService;
@@ -57,6 +59,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         _modalService = modalService;
         _errorReporter = errorReporter;
         _avatarFactory = avatarFactory;
+        _time = time;
 
         Members = [];
         Invites = [];
@@ -170,7 +173,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
             _repo.Id,
             NewInviteLevel,
             maximumUses,
-            NewInviteExpiry.Duration is TimeSpan duration ? DateTime.UtcNow + duration : null,
+            NewInviteExpiry.Duration is TimeSpan duration ? _time.GetUtcNow().UtcDateTime + duration : null,
             cancellationToken);
 
         NewInviteMaximumUses = "";
