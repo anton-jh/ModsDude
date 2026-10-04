@@ -1,71 +1,76 @@
-﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:account="clr-namespace:ModsDude.Client.Wpf.Account"
                     xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
-                    xmlns:sidebar="clr-namespace:ModsDude.Client.Wpf.Shell.Sidebar">
+                    xmlns:sidebar="clr-namespace:ModsDude.Client.Wpf.Shell.Sidebar"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
     <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="../../Shared/Resources/Controls.xaml" />
     </ResourceDictionary.MergedDictionaries>
-    <!-- A heading inside a sidebar list, for a list that is grouped. Deliberately quieter than
-         SidebarHeader, which names a whole list and carries an action: this one only says
-         which run of rows follows, so it is a caption and a rule and nothing else. -->
-    <GroupStyle x:Key="SidebarGroupStyle">
-        <!-- The theme's group container indents what is in it, which put a grouped list's pictures
-             a few pixels to the right of an ungrouped one's - and, in a rail, off the centre. The
-             heading and the rows are all this needs. -->
-        <GroupStyle.ContainerStyle>
-            <Style TargetType="GroupItem">
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="GroupItem">
-                            <StackPanel>
-                                <ContentPresenter />
-                                <ItemsPresenter />
-                            </StackPanel>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-        </GroupStyle.ContainerStyle>
-        <GroupStyle.HeaderTemplate>
-            <DataTemplate>
-                <StackPanel Margin="0 8 0 2">
-                    <!-- The group's Name is the whole GameHeading, not a string. In a rail it is the
-                         game's short name, centred over the rule, since the full one does not fit -
-                         same font and line, so the heading keeps its height and the rows under it
-                         sit where they do at full width. -->
-                    <TextBlock FontSize="11"
-                               FontWeight="SemiBold"
-                               TextTrimming="CharacterEllipsis"
-                               Opacity="0.7"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Text" Value="{Binding Name.Name}" />
-                                <Setter Property="Margin" Value="16 0 16 4" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Path=(sidebar:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
-                                        <Setter Property="Text" Value="{Binding Name.ShortName}" />
-                                        <Setter Property="Margin" Value="4 0 4 4" />
-                                        <Setter Property="TextAlignment" Value="Center" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
 
-                    <Border Height="1"
-                            Margin="16 0"
-                            Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-                </StackPanel>
-            </DataTemplate>
-        </GroupStyle.HeaderTemplate>
-    </GroupStyle>
+    <!-- What a repo or a profile is drawn as: a plain square with its first letter. Where the game follows
+         the profile - or where a repo's does and has drifted - the letter gives way to the status: green
+         check, amber warning, or an arrow that turns while an apply runs. Sized by whoever places it; the
+         letter takes the placing control's font size. -->
+    <DataTemplate x:Key="EntityTile" DataType="{x:Type sidebar:MenuItemViewModel}">
+        <Border CornerRadius="6"
+                Background="{DynamicResource ControlFillColorSecondaryBrush}">
+            <Grid>
+                <TextBlock Text="{Binding Initial}"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Visibility="{Binding HasStatus, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
 
-    <!-- The cell every row's picture sits in, and the one number that keeps it still: it is as wide as
-         a rail is, less what the list and its rows take off either side, so a glyph or a tile is drawn
-         at the same x whether the sidebar is a rail or open. Widen the rail (SidebarShell.CollapsedWidth)
-         and this has to move with it. -->
+                <TextBlock Text="{Binding DisplayIcon}"
+                           FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                           FontSize="14"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           RenderTransformOrigin="0.5 0.5"
+                           Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock.RenderTransform>
+                        <RotateTransform Angle="0" />
+                    </TextBlock.RenderTransform>
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SyncState}" Value="InSync">
+                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SyncState}" Value="Drifted">
+                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SyncState}" Value="NotApplied">
+                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SyncState}" Value="Applying">
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="SpinIcon">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.Angle"
+                                                                 From="0" To="360" Duration="0:0:1.2"
+                                                                 RepeatBehavior="Forever" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="SpinIcon" />
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+        </Border>
+    </DataTemplate>
+
+    <!-- The cell every row's picture sits in, so a glyph and a tile start their titles at the same x. -->
     <GridLength x:Key="SidebarIconColumn">56</GridLength>
 
     <Style x:Key="SidebarList" TargetType="ListView" BasedOn="{StaticResource {x:Type ListView}}">
@@ -85,9 +90,9 @@
                     <Setter Property="ToolTip" Value="{Binding ToolTip}" />
                     <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
                     <Setter Property="ToolTipService.InitialShowDelay" Value="200" />
-                    <!-- The theme's row is at least 88 wide and pads itself 16 and 12 either side,
-                         which is more than a rail has, and would put the picture at a different x
-                         in a rail than open. The row lays itself out instead. -->
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                    <!-- The theme's row is at least 88 wide and pads itself 16 and 12 either side; the row
+                         lays itself out instead. -->
                     <Setter Property="MinWidth" Value="0" />
                     <Setter Property="Padding" Value="0" />
                 </Style>
@@ -113,21 +118,15 @@
 
                         <!-- The picture, the title and the tag in cells of their own rather than runs of
                              one TextBlock, so that the tag survives a name long enough to be trimmed. It
-                             is the half that says which of the two repos this is, so it must not be the
+                             is the half that says which of the two profiles this is, so it must not be the
                              half the ellipsis eats.
 
-                             The picture is always in the first cell, and the cell is always the same
-                             width: that is what keeps it still when the sidebar opens and closes. In a
-                             rail nothing else is drawn and the row is centred, which puts that cell in
-                             the middle of the rail; open, the row starts at the left edge, which puts it
-                             in the same place.
-
                              A menu entry stays as wide as its content, so the tag follows its name
-                             immediately. A repo or a profile is different in two ways, both because its
-                             name is the one thing here that is not chosen by us and can be long. It gets
-                             two lines, in a row that is two lines tall whether or not the name needs them,
-                             so a list of them keeps one rhythm. And it fills the row, so the tag sits in
-                             the bottom-right corner rather than trailing a name that may have wrapped. -->
+                             immediately. A profile is different in two ways, both because its name is the
+                             one thing here that is not chosen by us and can be long. It gets two lines, in
+                             a row that is two lines tall whether or not the name needs them, so a list of
+                             them keeps one rhythm. And it fills the row, so the tag sits in the
+                             bottom-right corner rather than trailing a name that may have wrapped. -->
                         <Grid MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ContentPresenter}}">
                             <Grid.Style>
                                 <Style TargetType="Grid">
@@ -136,9 +135,6 @@
                                         <DataTrigger Binding="{Binding IsEntity}" Value="True">
                                             <Setter Property="HorizontalAlignment" Value="Stretch" />
                                             <Setter Property="MinHeight" Value="56" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding Path=(sidebar:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
-                                            <Setter Property="HorizontalAlignment" Value="Center" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -170,81 +166,16 @@
                                 </TextBlock.Style>
                             </TextBlock>
 
-                            <!-- What a repo or a profile is instead: a plain square with its first letter,
-                                 the same at every width so that opening the sidebar only adds the name
-                                 beside it. Where the game follows the profile - or where a repo's does and
-                                 has drifted - the letter gives way to the status: green check, amber
-                                 warning, or an arrow that turns while an apply runs. -->
-                            <Border Grid.Column="0"
-                                    Width="28" Height="28"
-                                    Margin="0 14"
-                                    CornerRadius="6"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    Background="{DynamicResource ControlFillColorSecondaryBrush}">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsEntity}" Value="True">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <TextBlock Text="{Binding Initial}"
-                                               FontSize="13"
-                                               FontWeight="SemiBold"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               Visibility="{Binding HasStatus, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
-
-                                    <TextBlock Text="{Binding DisplayIcon}"
-                                               FontFamily="{DynamicResource SymbolThemeFontFamily}"
-                                               FontSize="14"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               RenderTransformOrigin="0.5 0.5"
-                                               Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <TextBlock.RenderTransform>
-                                            <RotateTransform Angle="0" />
-                                        </TextBlock.RenderTransform>
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding SyncState}" Value="InSync">
-                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding SyncState}" Value="Drifted">
-                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding SyncState}" Value="NotApplied">
-                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding SyncState}" Value="Applying">
-                                                        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-                                                        <DataTrigger.EnterActions>
-                                                            <BeginStoryboard x:Name="SpinIcon">
-                                                                <Storyboard>
-                                                                    <DoubleAnimation Storyboard.TargetProperty="RenderTransform.Angle"
-                                                                                     From="0" To="360" Duration="0:0:1.2"
-                                                                                     RepeatBehavior="Forever" />
-                                                                </Storyboard>
-                                                            </BeginStoryboard>
-                                                        </DataTrigger.EnterActions>
-                                                        <DataTrigger.ExitActions>
-                                                            <StopStoryboard BeginStoryboardName="SpinIcon" />
-                                                        </DataTrigger.ExitActions>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </Grid>
-                            </Border>
+                            <ContentControl Grid.Column="0"
+                                            Width="28" Height="28"
+                                            Margin="0 14"
+                                            FontSize="13"
+                                            Focusable="False"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Content="{Binding}"
+                                            ContentTemplate="{StaticResource EntityTile}"
+                                            Visibility="{Binding IsEntity, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                             <TextBlock Grid.Column="1"
                                        Text="{Binding Path=Title}"
@@ -254,9 +185,6 @@
                                     <Style TargetType="TextBlock">
                                         <Setter Property="TextWrapping" Value="NoWrap" />
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Path=(sidebar:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                            </DataTrigger>
                                             <!-- Exactly two lines' worth of room, whatever the name
                                                  needs: the block line height is what makes the cap
                                                  a number of lines rather than of pixels, and it is
@@ -283,9 +211,6 @@
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Path=(sidebar:Sidebar.IsCompact), RelativeSource={RelativeSource Self}}" Value="True">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                            </DataTrigger>
                                             <DataTrigger Binding="{Binding IsEntity}" Value="True">
                                                 <Setter Property="VerticalAlignment" Value="Bottom" />
                                                 <Setter Property="FontSize" Value="12" />
@@ -300,5 +225,249 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+
+    <!-- The main rail: pictures only, each one's name in a label that comes out of it on hover. -->
+
+    <sys:Double x:Key="RailWidth">60</sys:Double>
+
+    <!-- The label a rail item shows on hover: the hovered row's band carried on over the page, so the item
+         reads as growing rather than as a tooltip beside it. At least as tall as the item, with the same
+         inset as the band, so the two line up; a longer text grows it downwards. Applied to every tooltip
+         in the rail by an implicit style there. -->
+    <Style x:Key="RailLabel" TargetType="ToolTip">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="HasDropShadow" Value="False" />
+        <Setter Property="MinHeight" Value="{Binding PlacementTarget.ActualHeight, RelativeSource={RelativeSource Self}}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Margin="0 2"
+                            Padding="10 6 16 6"
+                            MaxWidth="320"
+                            CornerRadius="0 6 6 0"
+                            Background="{DynamicResource SidebarHoverBrush}">
+                        <TextBlock VerticalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The hover band behind a rail item, running from just inside the rail to its edge, where the label
+         carries it on. -->
+    <Style x:Key="RailBand" TargetType="Border">
+        <Setter Property="Margin" Value="6 2 0 2" />
+        <Setter Property="CornerRadius" Value="6 0 0 6" />
+        <Setter Property="Background" Value="{DynamicResource SidebarHoverBrush}" />
+        <Setter Property="Visibility" Value="Hidden" />
+    </Style>
+
+    <!-- The frame every rail picture sits in. Outlined for a place the app offers, so those never read
+         as one more repo; a repo's filled square sits inside it with the outline off. The accent while
+         it is the page showing. -->
+    <Style x:Key="RailTile" TargetType="Border">
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+    </Style>
+
+    <Style x:Key="RailGlyph" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource SymbolThemeFontFamily}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <DataTemplate x:Key="RailItemTemplate" DataType="{x:Type sidebar:MenuItemViewModel}">
+        <Border x:Name="Tile" Style="{StaticResource RailTile}">
+            <Grid>
+                <TextBlock x:Name="Glyph" Style="{StaticResource RailGlyph}" Text="{Binding Icon}" />
+                <ContentControl x:Name="Entity"
+                                Focusable="False"
+                                FontSize="15"
+                                Content="{Binding}"
+                                ContentTemplate="{StaticResource EntityTile}"
+                                Visibility="Collapsed" />
+            </Grid>
+        </Border>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsEntity}" Value="True">
+                <Setter TargetName="Tile" Property="BorderBrush" Value="Transparent" />
+                <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="Entity" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
+                <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- The account: the user's own avatar in a round frame, or a person glyph until the server has
+         answered with their colour. -->
+    <DataTemplate x:Key="RailAccountTemplate" DataType="{x:Type account:AccountItemViewModel}">
+        <Border x:Name="Tile" Style="{StaticResource RailTile}" CornerRadius="18" BorderBrush="Transparent">
+            <Grid>
+                <Grid Visibility="{Binding Account.HasAvatar, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <account:UserAvatar Width="31" Height="31" FontSize="14"
+                                        DataContext="{Binding Account.Avatar}" />
+                </Grid>
+                <TextBlock Style="{StaticResource RailGlyph}" Text="&#xE77B;"
+                           Visibility="{Binding Account.HasAvatar, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+            </Grid>
+        </Border>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
+                <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <sidebar:RailItemTemplateSelector x:Key="RailItemTemplateSelector"
+                                      Item="{StaticResource RailItemTemplate}"
+                                      Account="{StaticResource RailAccountTemplate}" />
+
+    <!-- A list in the rail. No scroll viewer of its own: the rail's lists sit in one, so the places after
+         the repos follow the last repo and scroll with it. -->
+    <Style x:Key="RailList" TargetType="ListView">
+        <Setter Property="SelectionMode" Value="Single" />
+        <Setter Property="behaviors:DragSelection.Suppressed" Value="True" />
+        <Setter Property="ItemTemplateSelector" Value="{StaticResource RailItemTemplateSelector}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListView">
+                    <ItemsPresenter />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="ItemContainerStyle">
+            <Setter.Value>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+                    <Setter Property="ToolTip" Value="{Binding ToolTip}" />
+                    <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+                    <Setter Property="ToolTipService.Placement" Value="Right" />
+                    <Setter Property="ToolTipService.InitialShowDelay" Value="0" />
+                    <Setter Property="ToolTipService.BetweenShowDelay" Value="0" />
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListViewItem">
+                                <Grid Background="Transparent">
+                                    <Border x:Name="Band" Style="{StaticResource RailBand}" />
+                                    <!-- Which page is showing, on the rail's edge. -->
+                                    <Border x:Name="Indicator"
+                                            Width="4" Height="20"
+                                            CornerRadius="0 2 2 0"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                            Visibility="Hidden" />
+                                    <ContentPresenter x:Name="Content"
+                                                      Margin="0 6"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center" />
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Band" Property="Visibility" Value="Visible" />
+                                    </Trigger>
+                                    <Trigger Property="IsKeyboardFocused" Value="True">
+                                        <Setter TargetName="Band" Property="Visibility" Value="Visible" />
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter TargetName="Content" Property="Opacity" Value="0.4" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A rail item that acts rather than goes somewhere, drawn the way a rail row is. -->
+    <Style x:Key="RailButton" TargetType="Button">
+        <Setter Property="ToolTipService.Placement" Value="Right" />
+        <Setter Property="ToolTipService.InitialShowDelay" Value="0" />
+        <Setter Property="ToolTipService.BetweenShowDelay" Value="0" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid Background="Transparent">
+                        <Border x:Name="Band" Style="{StaticResource RailBand}" />
+                        <ContentPresenter Margin="0 6"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Band" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Band" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A heading over one game's repos in the rail: the game's short name over a rule, and its full name
+         in the hover label. -->
+    <GroupStyle x:Key="RailGroupStyle">
+        <!-- The theme's group container indents what is in it, which would put the pictures off the rail's
+             centre. The heading and the rows are all this needs. -->
+        <GroupStyle.ContainerStyle>
+            <Style TargetType="GroupItem">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="GroupItem">
+                            <StackPanel>
+                                <ContentPresenter />
+                                <ItemsPresenter />
+                            </StackPanel>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </GroupStyle.ContainerStyle>
+        <GroupStyle.HeaderTemplate>
+            <!-- The group's Name is the whole GameHeading, not a string. -->
+            <DataTemplate>
+                <StackPanel Margin="0 8 0 2"
+                            Background="Transparent"
+                            ToolTip="{Binding Name.Name}"
+                            ToolTipService.Placement="Right"
+                            ToolTipService.InitialShowDelay="0"
+                            ToolTipService.BetweenShowDelay="0">
+                    <TextBlock Text="{Binding Name.ShortName}"
+                               Margin="4 0 4 4"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               TextAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Opacity="0.7"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <Border Height="1"
+                            Margin="12 0"
+                            Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                </StackPanel>
+            </DataTemplate>
+        </GroupStyle.HeaderTemplate>
+    </GroupStyle>
 
 </ResourceDictionary>

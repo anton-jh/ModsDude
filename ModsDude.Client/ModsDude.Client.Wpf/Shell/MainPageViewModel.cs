@@ -29,28 +29,13 @@ public partial class MainPageViewModel
     private readonly IShellNavigationService _shellNavigationService;
     private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
 
-    /// <summary>Create repo, one of <see cref="HeaderMenuItems"/>, and offered by the Welcome page.</summary>
-    private readonly MenuItemViewModel _createRepoMenuItem;
-
-    /// <summary>Join repo, one of <see cref="HeaderMenuItems"/>, and offered by the Welcome page.</summary>
-    private readonly MenuItemViewModel _joinRepoMenuItem;
-
     /// <summary>
-    /// The account page, reached from the account card at the foot of the sidebar: it is about who is
-    /// using the app, not a place in it. Still an entry, so that selecting it opens the page the way
-    /// every other way somewhere does.
+    /// Joining or creating a repo: the first of <see cref="PlaceItems"/>, and where the app lands when
+    /// there is no repo to open.
     /// </summary>
-    private readonly MenuItemViewModel _accountMenuItem;
+    private readonly MenuItemViewModel _joinOrCreateMenuItem;
 
-    /// <summary>Settings, reached from the gear on the account card for the same reason as the account page.</summary>
-    private readonly MenuItemViewModel _settingsMenuItem;
-
-    /// <summary>
-    /// What the page shows when there is no repo to show: no repos yet, or the open one just went away.
-    /// Not in any list - nobody navigates to it, it is where the app lands.
-    /// </summary>
-    private readonly MenuItemViewModel _welcomeMenuItem;
-
+    private readonly AccountViewModel _account;
     private readonly IProfileSyncStatusService _syncStatus;
     private readonly IConnectionRetry _connection;
     private readonly CancellationTokenSource _disposed = new();
@@ -62,9 +47,7 @@ public partial class MainPageViewModel
         IRepoRepository repoService,
         ILastSelectionRepository lastSelectionRepository,
         RepoPageViewModel.Factory repoPageViewModelFactory,
-        JoinRepoPageViewModel.Factory joinRepoPageViewModelFactory,
-        CreateRepoPageViewModel.Factory createRepoPageViewModelFactory,
-        WelcomePageViewModel.Factory welcomePageViewModelFactory,
+        IFactory<JoinOrCreatePageViewModel> joinOrCreatePageViewModelFactory,
         IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
         IFactory<AccountPageViewModel> accountPageViewModelFactory,
         INavigationLockService navigationLockService,
@@ -75,39 +58,31 @@ public partial class MainPageViewModel
         IProfileSyncStatusService syncStatus,
         IConnectionRetry connection)
     {
-        Account = account;
+        _account = account;
         _syncStatus = syncStatus;
         _connection = connection;
 
-        _createRepoMenuItem = new MenuItemViewModel("Create repo", createRepoPageViewModelFactory.Create)
-            .WithIcon(MenuIcons.CreateRepo);
+        _joinOrCreateMenuItem = new MenuItemViewModel("Join or create", joinOrCreatePageViewModelFactory.Create)
+            .WithIcon(MenuIcons.JoinOrCreate);
 
-        _joinRepoMenuItem = new MenuItemViewModel("Join repo", joinRepoPageViewModelFactory.Create)
-            .WithIcon(MenuIcons.JoinRepo);
-
-        _accountMenuItem = new MenuItemViewModel("Account", accountPageViewModelFactory.Create);
-
-        _settingsMenuItem = new MenuItemViewModel("Settings", settingsPageViewModelFactory.Create)
-            .WithIcon(MenuIcons.Settings);
-
-        _welcomeMenuItem = new MenuItemViewModel("Welcome", () => welcomePageViewModelFactory.Create(_joinRepoMenuItem, _createRepoMenuItem, Open));
-
-        // Everything the repo list leads to that is not a repo. The sidebar holds nothing but the
-        // list, so these are behind the "⋯" at its top rather than rows above it.
-        HeaderMenuItems = [
-            _joinRepoMenuItem,
-            _createRepoMenuItem,
-            // A repo archived by any admin leaves every member's sidebar, so this is where somebody
-            // looks when one they were using is suddenly not there.
-            new MenuItemViewModel("Archived repos", archivePageViewModelFactory.Create).WithIcon(MenuIcons.Archive)
+        // Everything the rail leads to that is not a repo, straight after the last one.
+        PlaceItems = [
+            _joinOrCreateMenuItem,
+            // A repo archived by any admin leaves every member's rail, so this is where somebody looks
+            // when one they were using is suddenly not there.
+            new MenuItemViewModel("Archive", archivePageViewModelFactory.Create).WithIcon(MenuIcons.Archive)
         ];
 
-        Account.OpenRequested += OnAccountOpenRequested;
+        // About who is using the app rather than places in it, so at the foot of the rail.
+        AccountItems = [
+            new MenuItemViewModel("Settings", settingsPageViewModelFactory.Create).WithIcon(MenuIcons.Settings),
+            new AccountItemViewModel(account, accountPageViewModelFactory.Create)
+        ];
 
         Repos = [];
 
         // Nothing until the repo list is in: the first load decides between the last repo and the
-        // Welcome page, and showing either before then would be showing a guess.
+        // Join or create page, and showing either before then would be showing a guess.
         NavManager = new(navigationLockService, modalService);
 
         _repoService = repoService;
@@ -122,10 +97,9 @@ public partial class MainPageViewModel
         Repos.CollectionChanged += OnReposChanged;
         ApplyTags();
 
-        // One heading per game, because the sidebar's repos are only interchangeable within one. An
-        // game belongs to a game, so two repos of one adapter configured for different games
-        // offer disjoint game lists and nothing that works in one works in the other; running
-        // them together in one alphabetical column made that invisible.
+        // One heading per game, because the rail's repos are only interchangeable within one. A game
+        // installation belongs to a game, so two repos of one adapter configured for different games
+        // offer disjoint game lists and nothing that works in one works in the other.
         ReposView = CollectionViewSource.GetDefaultView(Repos);
         ReposView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(RepoItemViewModel.Game)));
 
@@ -138,20 +112,12 @@ public partial class MainPageViewModel
     }
 
 
-    /// <summary>
-    /// Outlives this page rather than belonging to it: switching user is what replaces the shell.
-    /// </summary>
-    public AccountViewModel Account { get; }
-
     public NavigationManager NavManager { get; }
-
-    /// <summary>The entries behind the "⋯" at the top of the repo list, under Refresh.</summary>
-    public IReadOnlyList<MenuItemViewModel> HeaderMenuItems { get; }
 
     public ObservableCollection<MenuItemViewModel> Repos { get; }
 
     /// <summary>
-    /// The repo list as the sidebar draws it: the same entries, under one heading per game.
+    /// The repo list as the rail draws it: the same entries, under one heading per game.
     /// </summary>
     /// <remarks>
     /// <b>Grouping only, no sorting of its own.</b> The order inside a group is the synchronizer's -
@@ -162,31 +128,22 @@ public partial class MainPageViewModel
     /// </remarks>
     public ICollectionView ReposView { get; }
 
-    /// <summary>
-    /// Whether this sidebar is a rail: while a repo is open, its own sidebar is the deepest one there is,
-    /// and this one is what is left of the way there. Opening it again is a hover away.
-    /// </summary>
-    public bool IsSidebarCollapsed => NavManager.CurrentPage is RepoPageViewModel;
+    /// <summary>Join or create, and the archive of repos.</summary>
+    public IReadOnlyList<MenuItemViewModel> PlaceItems { get; }
 
-    /// <summary>Whether one of the header menu's pages is showing, for the "⋯" to draw as selected.</summary>
-    public bool IsHeaderMenuSelected => NavManager.Selected is { } selected && HeaderMenuItems.Contains(selected);
-
-    /// <summary>Whether the settings page is showing, for the card's gear to draw as selected.</summary>
-    public bool IsSettingsSelected => ReferenceEquals(NavManager.Selected, _settingsMenuItem);
+    /// <summary>Settings and the account page.</summary>
+    public IReadOnlyList<MenuItemViewModel> AccountItems { get; }
 
     /// <summary>
-    /// Whether the server has repo changes the list does not show yet. Brought in by the menu's
-    /// Refresh and nothing else - see <see cref="Shared.RemoteChangeWatcher"/>.
+    /// Whether the server has repo changes the list does not show yet, which is the only time the
+    /// rail offers Refresh - see <see cref="Shared.RemoteChangeWatcher"/>.
     /// </summary>
     public bool HasPendingRepoChanges => _repoService.PendingChanges is not null;
 
-    /// <summary>What the menu's Refresh would bring in, drawn under it. Null while the server has said nothing.</summary>
-    public string? PendingRepoChangesText => _repoService.PendingChanges?.Describe();
-
-    /// <summary>The "⋯"'s tooltip, which says what is waiting when something is.</summary>
-    public string MenuToolTip => _repoService.PendingChanges is { } changes
-        ? $"{changes.Describe()}{Environment.NewLine}{Environment.NewLine}Refresh from this menu to bring the changes in."
-        : "Refresh, join, create and archived repos";
+    /// <summary>Refresh's label, which says what it would bring in.</summary>
+    public string RefreshToolTip => _repoService.PendingChanges is { } changes
+        ? $"Refresh{Environment.NewLine}{changes.Describe()}"
+        : "Refresh";
 
 
     protected override void Init()
@@ -201,7 +158,6 @@ public partial class MainPageViewModel
 
         _shellNavigationService.Unregister(this);
 
-        Account.OpenRequested -= OnAccountOpenRequested;
         _repoService.RepoCreated -= OnRepoCreated;
         _repoService.PendingChangesChanged -= OnPendingRepoChangesChanged;
         NavManager.PropertyChanged -= OnNavigationChanged;
@@ -218,7 +174,7 @@ public partial class MainPageViewModel
     }
 
     /// <summary>
-    /// Selects a repo and hands back the page it opened, for a deep link from outside the sidebar.
+    /// Selects a repo and hands back the page it opened, for a deep link from outside the rail.
     /// </summary>
     /// <returns>
     /// Null where the repo is not one of this account's, or where the page in front of the user
@@ -250,7 +206,7 @@ public partial class MainPageViewModel
     /// </summary>
     /// <remarks>
     /// Async void for the same reason the command's own Execute rethrows: a failure that waiting will
-    /// not fix still reaches the error modal on the UI thread, as it did before this retried at all.
+    /// not fix still reaches the error modal on the UI thread.
     /// </remarks>
     private async void LoadInitialRepos()
     {
@@ -260,26 +216,8 @@ public partial class MainPageViewModel
         if (await _connection.RunAsync(ConnectionTarget.Server, attempt, _disposed.Token))
         {
             // Asked for alongside the list and missing for the same reason, and nothing else asks again.
-            await Account.RefreshIdentityIfMissingAsync();
+            await _account.RefreshIdentityIfMissingAsync();
         }
-    }
-
-    /// <summary>Opens a page that is not a row in the repo list - one from the header's menu, say.</summary>
-    [RelayCommand]
-    private void Open(MenuItemViewModel entry)
-    {
-        NavManager.Selected = entry;
-    }
-
-    [RelayCommand]
-    private void OpenSettings()
-    {
-        NavManager.Selected = _settingsMenuItem;
-    }
-
-    private void OnAccountOpenRequested(object? sender, EventArgs e)
-    {
-        NavManager.Selected = _accountMenuItem;
     }
 
     [RelayCommand]
@@ -295,7 +233,7 @@ public partial class MainPageViewModel
     }
 
     /// <summary>
-    /// Where the app opens: the repo last open, else the first one the sidebar lists, else Welcome.
+    /// Where the app opens: the repo last open, else the first one the rail lists, else Join or create.
     /// </summary>
     /// <remarks>
     /// Only on the first load. Refresh runs the same command, and jumping the user back to
@@ -318,48 +256,42 @@ public partial class MainPageViewModel
 
         var entries = Repos.OfType<RepoItemViewModel>().ToList();
 
-        // First as drawn, which is first in the first game's group - and groups come in the order of
-        // their first repo, so that is the head of the list.
         NavManager.Selected = _lastSelectionRepository.GetLastRepo(entries.Select(x => x.Id)) is Guid repoId
             ? entries.First(x => x.Id == repoId)
-            : entries.FirstOrDefault() ?? _welcomeMenuItem;
+            : DefaultEntry();
     }
 
     /// <summary>
-    /// Puts Welcome up where the page has gone blank - which is the open repo leaving the list, archived or
-    /// left, and the repo list letting go of it as its row went.
+    /// Opens the default entry where the page has gone blank - which is the open repo leaving the list,
+    /// archived or left, and the repo list letting go of it as its row went.
     /// </summary>
     /// <remarks>
     /// Looked at once the dispatcher is idle rather than at once, because every navigation passes through
     /// nothing on its way to the next page, and only a nothing still there afterwards is a blank page.
     /// </remarks>
-    private void FallBackToWelcome()
+    private void FallBackToDefault()
     {
         Application.Current?.Dispatcher.BeginInvoke(() =>
         {
             if (_disposed.IsCancellationRequested is false && NavManager.Selected is null && NavManager.CurrentPage is null)
             {
-                NavManager.Selected = _welcomeMenuItem;
+                NavManager.Selected = DefaultEntry();
             }
         }, DispatcherPriority.ApplicationIdle);
     }
 
+    /// <summary>
+    /// The first repo as drawn, which is first in the first game's group - groups come in the order of
+    /// their first repo, so that is the head of the list - or Join or create where there is none.
+    /// </summary>
+    private MenuItemViewModel DefaultEntry()
+        => Repos.OfType<RepoItemViewModel>().FirstOrDefault() ?? _joinOrCreateMenuItem;
+
     private void OnNavigationChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(NavigationManager.CurrentPage))
-        {
-            OnPropertyChanged(nameof(IsSidebarCollapsed));
-        }
-
-        if (e.PropertyName == nameof(NavigationManager.Selected))
-        {
-            OnPropertyChanged(nameof(IsHeaderMenuSelected));
-            OnPropertyChanged(nameof(IsSettingsSelected));
-        }
-
         if (e.PropertyName == nameof(NavigationManager.CurrentPage) && NavManager.CurrentPage is null && _selectionRestored)
         {
-            FallBackToWelcome();
+            FallBackToDefault();
         }
 
         if (e.PropertyName == nameof(NavigationManager.Selected) &&
@@ -392,8 +324,7 @@ public partial class MainPageViewModel
     private void OnPendingRepoChangesChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(HasPendingRepoChanges));
-        OnPropertyChanged(nameof(PendingRepoChangesText));
-        OnPropertyChanged(nameof(MenuToolTip));
+        OnPropertyChanged(nameof(RefreshToolTip));
     }
 
     private void OnReposChanged(object? sender, NotifyCollectionChangedEventArgs e)

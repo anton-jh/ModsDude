@@ -1,7 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 
 namespace ModsDude.Client.Wpf.Shell.Sidebar;
 
@@ -66,8 +65,7 @@ public partial class SidebarHeader : UserControl
 
     /// <summary>
     /// Whether the server has changes the list below does not show yet. Drawn as a dot on the refresh
-    /// button, and beside the heading in a rail, where the button is not drawn at all; the tooltip is
-    /// the owner's to reword, in <see cref="ActionToolTip"/>.
+    /// button; the tooltip is the owner's to reword, in <see cref="ActionToolTip"/>.
     /// </summary>
     public static readonly DependencyProperty HasPendingChangesProperty =
         DependencyProperty.Register(
@@ -145,59 +143,8 @@ public partial class SidebarHeader : UserControl
     }
 
 
-    /// <summary>
-    /// Never closer to the left edge than this, for a heading too wide to be centred in a rail. A rail cuts
-    /// off what does not fit, and a few pixels of margin is what keeps the start of the word readable.
-    /// </summary>
-    private const double MinInset = 4;
-
-    /// <summary>Used only where there is no shell to ask, as in a designer.</summary>
-    private const double FallbackRailWidth = 60;
-
-
     public SidebarHeader()
     {
         InitializeComponent();
-
-        Loaded += (_, _) => PositionTitle();
-        IsVisibleChanged += (_, _) => PositionTitle();
-    }
-
-
-    /// <summary>
-    /// Puts the heading where a rail would centre it, and leaves it there. It is at that place open as
-    /// well as collapsed, so opening the sidebar changes nothing about it: the heading is part of the
-    /// rail's column, and the column does not move.
-    /// </summary>
-    /// <remarks>
-    /// Worked out from the shell's rail width rather than from this control's own width, because this
-    /// control is a full sidebar wide when the sidebar is open.
-    /// </remarks>
-    private void PositionTitle()
-    {
-        TitleText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-
-        var railWidth = RailWidth();
-
-        TitleShift.X = Math.Max(MinInset, (railWidth - TitleText.DesiredSize.Width) / 2);
-
-        // Just past the end of the word, or as far as the rail allows: a dot the rail cuts off is no dot,
-        // so it is pulled back over the last letter's shoulder instead.
-        TitleDotShift.X = Math.Min(
-            TitleShift.X + TitleText.DesiredSize.Width + 1,
-            railWidth - TitleDot.Width - 2);
-    }
-
-    private double RailWidth()
-    {
-        for (DependencyObject? current = this; current is not null; current = VisualTreeHelper.GetParent(current))
-        {
-            if (current is SidebarShell shell)
-            {
-                return shell.CollapsedWidth;
-            }
-        }
-
-        return FallbackRailWidth;
     }
 }

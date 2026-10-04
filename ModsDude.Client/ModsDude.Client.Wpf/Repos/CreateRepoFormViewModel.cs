@@ -1,6 +1,5 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Services;
@@ -12,7 +11,8 @@ using ModsDude.Client.Wpf.Shell.Navigation;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.Repos;
-public partial class CreateRepoPageViewModel(
+
+public partial class CreateRepoFormViewModel(
     IRepoRepository repoRepository,
     IGameAdapterIndex gameAdapterIndex,
     INavigationLockService navigationLockService,
@@ -20,7 +20,7 @@ public partial class CreateRepoPageViewModel(
     IModalService modalService,
     AccountViewModel account,
     TrustCodeFormViewModel trustCode)
-    : PageViewModel, IDisposable
+    : ObservableObject, IDisposable
 {
     public AccountViewModel Account { get; } = account;
 
@@ -49,7 +49,7 @@ public partial class CreateRepoPageViewModel(
 
 
     [RelayCommand]
-    public async Task Submit(CancellationToken cancellationToken)
+    private async Task Submit(CancellationToken cancellationToken)
     {
         if (!IsValid || SelectedGameAdapter is null || string.IsNullOrWhiteSpace(Name) || BaseSettingsEditor is null)
         {
@@ -106,12 +106,5 @@ public partial class CreateRepoPageViewModel(
             : null;
 
         navigationLockService.AcquireLock(this);
-    }
-
-
-    public class Factory(IServiceProvider serviceProvider)
-    {
-        public CreateRepoPageViewModel Create()
-            => ActivatorUtilities.CreateInstance<CreateRepoPageViewModel>(serviceProvider);
     }
 }

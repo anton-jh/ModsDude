@@ -236,12 +236,6 @@ public partial class RepoPageViewModel
     public bool HasOpenProfile => OpenProfile is not null;
 
     /// <summary>
-    /// Whether this sidebar is a rail: a profile's own sidebar is the deepest one there is while one is
-    /// open, so this is what is left of the way to it. Opening it again is a hover away.
-    /// </summary>
-    public bool IsSidebarCollapsed => HasOpenProfile;
-
-    /// <summary>
     /// Whether the header offers to connect a game: only while none is, and not on the page that does
     /// it.
     /// </summary>
@@ -532,7 +526,6 @@ public partial class RepoPageViewModel
         {
             OnPropertyChanged(nameof(OpenProfile));
             OnPropertyChanged(nameof(HasOpenProfile));
-            OnPropertyChanged(nameof(IsSidebarCollapsed));
 
             return;
         }

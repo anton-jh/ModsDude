@@ -10,14 +10,14 @@ using ModsDude.Client.Wpf.Shell.Sidebar;
 namespace ModsDude.Client.Wpf.Account;
 
 /// <summary>
-/// Who is signed in: the sidebar's account card, and the state the account page edits. Switching is
+/// Who is signed in: the rail's account entry, and the state the account page edits. Switching is
 /// the only thing it does to the account itself - there is no signing out, because an account is the
 /// only state in which the app has anything to show.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A singleton, unlike the sidebar it is drawn in: the shell is rebuilt by the very transition this
-/// starts, and an account panel that had to be torn down and resubscribed on each switch would be a
+/// A singleton, unlike the rail it is drawn in: the shell is rebuilt by the very transition this
+/// starts, and an account entry that had to be torn down and resubscribed on each switch would be a
 /// leak waiting for its first user.
 /// </para>
 /// <para>
@@ -57,17 +57,13 @@ public partial class AccountViewModel : ObservableObject
 
         _authenticationService.AccountChanged += OnAccountChanged;
 
-        // Signing in happens before this panel exists, so the account it is being built around has
+        // Signing in happens before this exists, so the account it is being built around has
         // usually already raised its event and will not raise another one.
         if (authenticationService.CurrentAccount is not null)
         {
             _ = RefreshIdentityAsync();
         }
     }
-
-
-    /// <summary>Raised by the card's Account button. The shell owns navigation, so it does the opening.</summary>
-    public event EventHandler? OpenRequested;
 
 
     [ObservableProperty]
@@ -85,7 +81,7 @@ public partial class AccountViewModel : ObservableObject
     /// </summary>
     public bool NeedsTrustCode => IsTrusted is false;
 
-    /// <summary>Four digits. Not drawn beside the name here - there is only ever one user in this panel.</summary>
+    /// <summary>Four digits, shown in the rail's label - the one place a user can read their own tag.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Description))]
     private string? _tag;
@@ -128,12 +124,6 @@ public partial class AccountViewModel : ObservableObject
     public Task RefreshIdentityIfMissingAsync()
         => Tag is null ? RefreshIdentityAsync() : Task.CompletedTask;
 
-
-    [RelayCommand]
-    private void Open()
-    {
-        OpenRequested?.Invoke(this, EventArgs.Empty);
-    }
 
     // Never greyed out while running: a sign-in tab closed without finishing never answers, and
     // clicking again is how the user gets a new one - which ends the old attempt.

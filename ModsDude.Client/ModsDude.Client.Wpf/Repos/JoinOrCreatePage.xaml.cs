@@ -2,9 +2,9 @@ using System.Windows.Controls;
 
 namespace ModsDude.Client.Wpf.Repos;
 
-public partial class JoinRepoPage : Page
+public partial class JoinOrCreatePage : Page
 {
-    public JoinRepoPage()
+    public JoinOrCreatePage()
     {
         InitializeComponent();
     }

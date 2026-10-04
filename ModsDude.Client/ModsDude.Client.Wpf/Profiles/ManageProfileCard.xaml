@@ -1,0 +1,33 @@
+<UserControl x:Class="ModsDude.Client.Wpf.Profiles.ManageProfileCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:profiles="clr-namespace:ModsDude.Client.Wpf.Profiles"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=profiles:ManageProfileViewModel, IsDesignTimeCreatable=False}">
+
+    <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+            CornerRadius="4"
+            Padding="16">
+        <GroupBox Header="Manage" Padding="0 16 0 16">
+            <StackPanel Orientation="Vertical">
+
+                <Label Content="Name" Margin="0 0 0 8" />
+                <StackPanel Orientation="Horizontal">
+                    <TextBox Width="300"
+                             Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Content="Save" Margin="8 0 0 0"
+                            Style="{DynamicResource AccentButtonStyle}"
+                            Command="{Binding SaveChangesCommand}" />
+                </StackPanel>
+
+                <Button Content="Archive profile" Margin="0 24 0 0"
+                        HorizontalAlignment="Left"
+                        ToolTip="Takes it out of the sidebar and frees its name. Everything else stays, and it can be brought back from the Archive."
+                        Command="{Binding ArchiveProfileCommand}" />
+
+            </StackPanel>
+        </GroupBox>
+    </Border>
+</UserControl>

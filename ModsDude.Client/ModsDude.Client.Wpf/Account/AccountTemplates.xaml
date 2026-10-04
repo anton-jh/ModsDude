@@ -2,9 +2,6 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:account="clr-namespace:ModsDude.Client.Wpf.Account">
 
-    <DataTemplate DataType="{x:Type account:WelcomePageViewModel}">
-        <account:WelcomePage />
-    </DataTemplate>
     <DataTemplate DataType="{x:Type account:LoginPageViewModel}">
         <account:LoginPage />
     </DataTemplate>

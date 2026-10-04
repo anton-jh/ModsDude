@@ -4,11 +4,14 @@
                     xmlns:members="clr-namespace:ModsDude.Client.Wpf.Repos.Members"
                     xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos">
 
-    <DataTemplate DataType="{x:Type repos:CreateRepoPageViewModel}">
-        <repos:CreateRepoPage />
+    <DataTemplate DataType="{x:Type repos:JoinOrCreatePageViewModel}">
+        <repos:JoinOrCreatePage />
     </DataTemplate>
-    <DataTemplate DataType="{x:Type repos:JoinRepoPageViewModel}">
-        <repos:JoinRepoPage />
+    <DataTemplate DataType="{x:Type repos:JoinRepoFormViewModel}">
+        <repos:JoinRepoForm />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type repos:CreateRepoFormViewModel}">
+        <repos:CreateRepoForm />
     </DataTemplate>
     <DataTemplate DataType="{x:Type repos:RepoPageViewModel}">
         <repos:RepoPage />

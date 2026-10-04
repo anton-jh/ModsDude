@@ -2,7 +2,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:converters="clr-namespace:ModsDude.Client.Wpf.Shared.Converters"
                     xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
-                    xmlns:sidebar="clr-namespace:ModsDude.Client.Wpf.Shell.Sidebar">
+                    xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors">
 
     <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
     <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
@@ -701,77 +701,81 @@
     </Style>
 
 
-    <!-- What every sidebar is drawn on, open, collapsed or peeked: the card tint over the window's base
-         colour, worked out once. Opaque because the peek lies over the page's content, and the same brush
-         for the others so that the three cannot come out as different shades. The app is dark only; if it
-         ever has a light theme this needs a value for it. -->
+    <!-- What every sidebar is drawn on: the card tint over the window's base colour, worked out once.
+         Opaque so that the rail's hover labels, which lie over the page, match the rail they come out
+         of. The app is dark only; if it ever has a light theme this needs a value for it. -->
     <SolidColorBrush x:Key="SidebarSurfaceBrush" Color="#2B2B2B" />
 
-    <!-- A sidebar and the page beside it; see SidebarShell. The docked sidebar takes the first column at
-         whatever width the control sets; the peek is a second copy at full width drawn over both
-         columns, above everything in this shell's page, and is only visible while the control says it
-         is peeking. It has its own opaque surface because it lies over the page's content. It opens by
-         growing out of the rail's own edge (the width is animated in SidebarShell), short on purpose: it
-         is there to say where the panel came from, not to be watched. -->
-    <Style x:Key="SidebarShellStyle" TargetType="sidebar:SidebarShell">
+    <!-- A hovered row on that surface, opaque for the same reason. -->
+    <SolidColorBrush x:Key="SidebarHoverBrush" Color="#3A3A3A" />
+
+    <!-- A sidebar is a strip of its own rather than part of the page: a tint behind it and a rule down
+         its edge, so that two side by side read as two, and neither as the start of the page beside it. -->
+    <Style x:Key="SidebarSurface" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource SidebarSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="0 0 1 0" />
+    </Style>
+
+    <!-- The pages of one thing, side by side across the top of the area they open in: an item list of
+         MenuItemViewModels, selected the way a sidebar list is. The selected tab is underlined in the
+         accent colour. A closed entry is dimmed and says why in its tooltip. -->
+    <Style x:Key="PageTabs" TargetType="ListBox">
+        <Setter Property="SelectionMode" Value="Single" />
+        <Setter Property="behaviors:DragSelection.Suppressed" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
-                <ControlTemplate TargetType="sidebar:SidebarShell">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-
-                        <!-- A sidebar is a strip of its own rather than part of the page: a tint behind it and a
-                             rule down its edge, so that two side by side read as two, and neither as the start
-                             of the page beside it. -->
-                        <Border Grid.Column="0"
-                                Background="{DynamicResource SidebarSurfaceBrush}" />
-
-                        <ContentControl x:Name="PART_Docked"
-                                        Grid.Column="0"
-                                        ClipToBounds="True"
-                                        HorizontalContentAlignment="Stretch"
-                                        VerticalContentAlignment="Stretch"
-                                        ContentTemplate="{TemplateBinding SidebarTemplate}"
-                                        Content="{TemplateBinding DataContext}" />
-
-                        <Border Grid.Column="0"
-                                Width="1"
-                                HorizontalAlignment="Right"
-                                IsHitTestVisible="False"
-                                Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
-
-                        <ContentPresenter Grid.Column="1" />
-
-                        <Border x:Name="PART_Peek"
-                                Grid.ColumnSpan="2"
-                                Panel.ZIndex="100"
-                                HorizontalAlignment="Left"
-                                Visibility="Collapsed"
-                                BorderThickness="0 0 1 0"
-                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                ClipToBounds="True"
-                                Background="{DynamicResource SidebarSurfaceBrush}">
-                            <!-- Always laid out at full width and clipped by the border, which is what opens: the
-                                 panel is revealed to the right of the rail rather than slid in from beside it, so
-                                 the rail's icons and this copy's are never seen in two places. -->
-                            <ContentControl x:Name="PART_PeekContent"
-                                            HorizontalAlignment="Left"
-                                            HorizontalContentAlignment="Stretch"
-                                            VerticalContentAlignment="Stretch"
-                                            ContentTemplate="{TemplateBinding SidebarTemplate}"
-                                            Content="{TemplateBinding DataContext}" />
-                        </Border>
-                    </Grid>
-
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsPeekVisible" Value="True">
-                            <Setter TargetName="PART_Peek" Property="Visibility" Value="Visible" />
-                        </Trigger>
-                    </ControlTemplate.Triggers>
+                <ControlTemplate TargetType="ListBox">
+                    <ItemsPresenter />
                 </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="ItemsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="ItemContainerStyle">
+            <Setter.Value>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+                    <Setter Property="ToolTip" Value="{Binding UnavailableReason}" />
+                    <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                    <Setter Property="Cursor" Value="Hand" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <Grid Margin="0 0 24 0" Background="Transparent">
+                                    <TextBlock x:Name="Title"
+                                               Text="{Binding Title}"
+                                               Margin="0 8 0 10"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <Border x:Name="Underline"
+                                            Height="3"
+                                            CornerRadius="1.5"
+                                            VerticalAlignment="Bottom"
+                                            Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                            Visibility="Hidden" />
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                        <Setter TargetName="Underline" Property="Visibility" Value="Visible" />
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter TargetName="Title" Property="Opacity" Value="0.4" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
             </Setter.Value>
         </Setter>
     </Style>

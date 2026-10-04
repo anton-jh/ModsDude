@@ -1,0 +1,48 @@
+<UserControl x:Class="ModsDude.Client.Wpf.Repos.CreateRepoForm"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:games="clr-namespace:ModsDude.Client.Wpf.Games"
+             xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=repos:CreateRepoFormViewModel, IsDesignTimeCreatable=False}">
+
+    <StackPanel Orientation="Vertical">
+
+        <StackPanel Orientation="Vertical"
+                    Visibility="{Binding Account.NeedsTrustCode, Converter={StaticResource BoolToVisibilityConverter}}">
+            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left"
+                       Text="Creating repos needs a trust code. Ask whoever runs ModsDude for one." />
+            <ContentControl Width="300" Margin="0 16 0 0" HorizontalAlignment="Left"
+                            Content="{Binding TrustCode}" />
+        </StackPanel>
+
+        <StackPanel Orientation="Vertical"
+                    Visibility="{Binding Account.NeedsTrustCode, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+            <Label Content="Name" Margin="0 0 0 8" />
+            <TextBox Width="300" HorizontalAlignment="Left"
+                     Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+            <Label Content="Adapter" Margin="0 16 0 8" />
+            <ComboBox Width="300" HorizontalAlignment="Left"
+                      ItemsSource="{Binding AvailableGameAdapters}"
+                      SelectedValue="{Binding SelectedGameAdapter}">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding DisplayName}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <games:DynamicFormEditor DataContext="{Binding BaseSettingsEditor}" Margin="0 16 0 0" />
+
+            <Button Content="Create" Margin="0 16 0 0" MinWidth="140"
+                    HorizontalAlignment="Left"
+                    Style="{DynamicResource AccentButtonStyle}"
+                    Command="{Binding SubmitCommand}" />
+        </StackPanel>
+
+    </StackPanel>
+</UserControl>

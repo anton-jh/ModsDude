@@ -18,8 +18,8 @@
     <DataTemplate DataType="{x:Type profiles:ProfileHistoryPageViewModel}">
         <profiles:ProfileHistoryPage />
     </DataTemplate>
-    <DataTemplate DataType="{x:Type profiles:EditProfilePageViewModel}">
-        <profiles:EditProfilePage />
+    <DataTemplate DataType="{x:Type profiles:ManageProfileViewModel}">
+        <profiles:ManageProfileCard />
     </DataTemplate>
     <DataTemplate DataType="{x:Type editor:ProfileModsEditorPageViewModel}">
         <editor:ProfileModsEditorPage />

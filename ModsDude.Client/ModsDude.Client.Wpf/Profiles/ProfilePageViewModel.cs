@@ -20,33 +20,22 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.Profiles;
 
 /// <summary>
-/// The profile's shell, and the only place a profile is activated.
+/// The profile's shell: its tabs, and the activation the repo's header draws for it.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The activation control sits here rather than on Overview so that it is present on every sub-page,
-/// and it takes no target: a repo is about one game and a machine configures that game once, so
-/// there is nothing to pick. The picker it used to have was the answer to "which folder does this
-/// act on" while policy lived on folders; a game reaching three of them applies to all three, which
-/// is the apply's own loop rather than a question for the user.
-/// </para>
-/// <para>
-/// <b>It is a bar across the top of the profile, not a button at the foot of its sidebar.</b> The
-/// shell is the right owner and always was; the foot of a 200px column was the wrong place in it.
-/// Applying a profile to the game is the act the rest of the app exists to set up, and it was in the
-/// least prominent position the window has, under two paragraphs of caption. The long sentence is
-/// still said - it is the one thing standing between the user and files being moved - but beside the
-/// button rather than below it.
+/// Activation lives here rather than on a tab so it is the same from every tab, and it takes no
+/// target: a repo is about one game and a machine configures that game once, so there is nothing to
+/// pick. A game reaching three folders applies to all three.
 /// </para>
 /// <para>
 /// It is <b>labelled for what it will do</b>: a game already on this profile is being re-applied,
 /// one on another profile or none is being moved, and moving it uninstalls whatever the previous
-/// profile put in the folder. See docs/07-mod-sync-design.md#activating-is-intent-applying-is-work.
+/// profile put in the folder.
 /// </para>
 /// <para>
 /// <b>And refused before the click where a held savegame forbids it.</b> The apply table refuses it
-/// anyway; asking here is what makes the refusal arrive before the click rather than after it, which
-/// is the rule slice 4 set out to hold everywhere.
+/// anyway; asking here makes the refusal arrive before the click rather than after it.
 /// </para>
 /// </remarks>
 public partial class ProfilePageViewModel : PageViewModel, IDisposable
@@ -86,7 +75,6 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         IResourceLeases leases,
         IToastService toasts,
         ProfileOverviewPageViewModel.Factory profileOverviewPageViewModelFactory,
-        EditProfilePageViewModel.Factory editProfilePageViewModelFactory,
         ProfileModsEditorPageViewModel.Factory profileModsEditorPageViewModelFactory,
         ProfileModsPageViewModel.Factory profileModsPageViewModelFactory,
         ProfileHistoryPageViewModel.Factory profileHistoryPageViewModelFactory)
@@ -124,7 +112,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             _scanTargetOnce = null;
 
             return profileModsEditorPageViewModelFactory.Create(repo, profile, scanTarget);
-        }).WithIcon(MenuIcons.Mods);
+        });
 
         // Open to a guest, like the read-only mod list and for the same reason: somebody who syncs
         // this profile without curating it is exactly the person who wants to know what changed under
@@ -136,17 +124,13 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             _selectRevisionOnce = null;
 
             return profileHistoryPageViewModelFactory.Create(repo, profile, selectRevision);
-        }).WithIcon(MenuIcons.History);
+        });
 
         NavManager = navigationManager;
         MenuItems = [
-            new MenuItemViewModel("Overview", () => profileOverviewPageViewModelFactory.Create(repo, profile))
-                .WithIcon(MenuIcons.Overview),
+            new MenuItemViewModel("Overview", () => profileOverviewPageViewModelFactory.Create(repo, profile)),
             _modsMenuItem,
-            _historyMenuItem,
-            new MenuItemViewModel("Manage", () => editProfilePageViewModelFactory.Create(repo, profile))
-                .WithIcon(MenuIcons.Manage)
-                .RestrictIf(canEditMods is false, "Guests cannot rename or delete a profile. Ask an admin for a higher membership level.")
+            _historyMenuItem
         ];
 
         NavManager.Selected = MenuItems.First();
@@ -525,7 +509,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     public bool TrySelectMods(ModTargetRef? scanTarget = null)
     {
         // Read and cleared by the menu item's factory, so it applies to the page this call opens and
-        // not to the next one somebody reaches through the sidebar.
+        // not to the next one somebody reaches through the tabs.
         _scanTargetOnce = scanTarget;
 
         if (ReferenceEquals(NavManager.Selected, _modsMenuItem) is false)

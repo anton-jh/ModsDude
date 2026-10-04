@@ -13,9 +13,8 @@ namespace ModsDude.Client.Wpf.Shell.Sidebar;
 /// </remarks>
 internal static class MenuIcons
 {
-    // Top level
-    public const string CreateRepo = "\xE710";
-    public const string JoinRepo = "\xE71B";
+    // Rail
+    public const string JoinOrCreate = "\xE710";
     public const string Archive = "\xE7B8";
     public const string Settings = "\xE713";
 
@@ -27,10 +26,6 @@ internal static class MenuIcons
     public const string Saves = "\xE74E";
     public const string CreateProfile = "\xE710";
     public const string Game = "\xE7FC";
-
-    // Profile
-    public const string History = "\xE81C";
-    public const string Manage = "\xE713";
 
     // The kinds of entity a sidebar names.
     public const string Repo = "\xE8B7";

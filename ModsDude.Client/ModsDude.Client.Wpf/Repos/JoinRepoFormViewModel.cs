@@ -1,8 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
-using ModsDude.Client.Wpf.Shell.Navigation;
 
 namespace ModsDude.Client.Wpf.Repos;
 
@@ -14,17 +15,11 @@ namespace ModsDude.Client.Wpf.Repos;
 /// were handed, which is what makes it safe for two people to be called the same thing - and what
 /// stops anybody being added to a repo they never asked to be in.
 /// </remarks>
-public partial class JoinRepoPageViewModel : PageViewModel
+public partial class JoinRepoFormViewModel(
+    IInviteService inviteService,
+    ILogger<JoinRepoFormViewModel> logger)
+    : ObservableObject
 {
-    private readonly IInviteService _inviteService;
-
-
-    public JoinRepoPageViewModel(IInviteService inviteService)
-    {
-        _inviteService = inviteService;
-    }
-
-
     /// <summary>
     /// Taken as typed. The server accepts any casing, any spacing and the letters people reach for
     /// in place of digits, so nothing is corrected on the way out of this box.
@@ -37,15 +32,32 @@ public partial class JoinRepoPageViewModel : PageViewModel
     [NotifyPropertyChangedFor(nameof(HasJoined))]
     private string? _joinedRepoName;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasError))]
+    private string? _error;
+
     public bool HasJoined => JoinedRepoName is not null;
+
+    public bool HasError => Error is not null;
 
     public bool CanJoin => !string.IsNullOrWhiteSpace(Code);
 
 
     [RelayCommand(CanExecute = nameof(CanJoin))]
-    public async Task Join(CancellationToken cancellationToken)
+    private async Task Join(CancellationToken cancellationToken)
     {
-        var membership = await _inviteService.RedeemInvite(Code, cancellationToken);
+        RepoMembershipDto membership;
+
+        try
+        {
+            membership = await inviteService.RedeemInvite(Code, cancellationToken);
+        }
+        catch (UserFriendlyException exception)
+        {
+            logger.LogInformation("Invite not redeemed: {Reason}", exception.DeveloperMessage);
+            Error = exception.UserMessage;
+            return;
+        }
 
         // Redeeming puts the repo in the shell's list, which navigates to it. The message is for the
         // case where it does not - a repo the user was already in, which the shell already had.
@@ -58,12 +70,6 @@ public partial class JoinRepoPageViewModel : PageViewModel
     partial void OnCodeChanged(string value)
     {
         JoinedRepoName = null;
-    }
-
-
-    public class Factory(IServiceProvider serviceProvider)
-    {
-        public JoinRepoPageViewModel Create()
-            => ActivatorUtilities.CreateInstance<JoinRepoPageViewModel>(serviceProvider);
+        Error = null;
     }
 }

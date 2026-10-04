@@ -129,6 +129,10 @@
                     </GroupBox>
                 </Border>
 
+                <ContentControl Margin="0 16 0 0"
+                                Content="{Binding Manage}"
+                                Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
+
             </StackPanel>
         </ScrollViewer>
     </Border>

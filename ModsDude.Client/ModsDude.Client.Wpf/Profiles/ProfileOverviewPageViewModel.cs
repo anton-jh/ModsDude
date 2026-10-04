@@ -58,7 +58,8 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         IShellNavigationService navigation,
         IDriftMonitor driftMonitor,
         ILogger<ProfileOverviewPageViewModel> logger,
-        TimeProvider time)
+        TimeProvider time,
+        ManageProfileViewModel.Factory manageProfileViewModelFactory)
     {
         _time = time;
         _repo = repo;
@@ -77,6 +78,9 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         // Member, like the Saves list: publishing writes to the repo, and a guest is not offered a
         // button that leads to a refusal.
         IsMember = repo.MembershipLevel >= RepoMembershipLevel.Member;
+
+        // Member too: a guest cannot rename or archive a profile, so the card is absent for them.
+        Manage = IsMember ? manageProfileViewModelFactory.Create(profile) : null;
 
         Games = [];
         Savegames = [];
@@ -101,6 +105,9 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     /// <summary>Whether Publish is offered. A guest reads the card and nothing more.</summary>
     public bool IsMember { get; }
+
+    /// <summary>Renaming and archiving, or null for a guest.</summary>
+    public ManageProfileViewModel? Manage { get; }
 
     [ObservableProperty]
     private string _modSummary = "Counting mods...";
@@ -136,6 +143,8 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         _driftMonitor.Changed -= OnDriftChanged;
 
         _pageLifetime.Dispose();
+
+        Manage?.Dispose();
     }
 
 

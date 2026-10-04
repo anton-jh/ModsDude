@@ -297,50 +297,43 @@
             </Grid>
         </Border>
 
-        <!-- The sidebar is a rail while a profile is open - the profile's own sidebar is the one in use
-             then - and a hover shows it in full over the top of the page, the profile's sidebar included.
-             See SidebarShell. -->
-        <sidebar:SidebarShell Grid.Row="1"
-                         Style="{StaticResource SidebarShellStyle}"
-                         IsCollapsed="{Binding IsSidebarCollapsed}">
+        <Grid Grid.Row="1" ColumnDefinitions="200 *">
 
-            <sidebar:SidebarShell.SidebarTemplate>
-                <DataTemplate>
-                    <Grid RowDefinitions="auto auto * auto auto">
+            <Border Grid.Column="0" Style="{StaticResource SidebarSurface}">
+                <Grid RowDefinitions="auto auto * auto auto">
 
-                        <ListView Grid.Row="0"
-                                  Style="{StaticResource SidebarList}"
-                                  ItemsSource="{Binding Path=MenuItems}"
-                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+                    <ListView Grid.Row="0"
+                              Style="{StaticResource SidebarList}"
+                              ItemsSource="{Binding Path=MenuItems}"
+                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
-                        <sidebar:SidebarHeader Grid.Row="1" Title="Profiles" Command="{Binding LoadProfilesCommand}" ActionIcon="&#xE72C;" ActionToolTip="{Binding RefreshProfilesToolTip}"
-                                          HasPendingChanges="{Binding HasPendingProfileChanges}"
-                                          AddCommand="{Binding CreateProfileCommand}"
-                                          IsAddSelected="{Binding IsCreateProfileSelected}"
-                                          IsAddEnabled="{Binding CreateProfileItem.IsAvailable}"
-                                          AddToolTip="{Binding CreateProfileItem.ToolTip}" />
+                    <sidebar:SidebarHeader Grid.Row="1" Title="Profiles" Command="{Binding LoadProfilesCommand}" ActionIcon="&#xE72C;" ActionToolTip="{Binding RefreshProfilesToolTip}"
+                                           HasPendingChanges="{Binding HasPendingProfileChanges}"
+                                           AddCommand="{Binding CreateProfileCommand}"
+                                           IsAddSelected="{Binding IsCreateProfileSelected}"
+                                           IsAddEnabled="{Binding CreateProfileItem.IsAvailable}"
+                                           AddToolTip="{Binding CreateProfileItem.ToolTip}" />
 
-                        <ListView Grid.Row="2"
-                                  ItemsSource="{Binding Path=Profiles}"
-                                  Style="{StaticResource SidebarList}"
-                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+                    <ListView Grid.Row="2"
+                              ItemsSource="{Binding Path=Profiles}"
+                              Style="{StaticResource SidebarList}"
+                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
 
-                        <!-- At most one row, and only while a link into an archived profile is being followed.
-                             Under its own heading so it reads as reached through the archive rather than as
-                             back in the list above; it goes away on the next navigation. -->
-                        <sidebar:SidebarHeader Grid.Row="3" Title="From the archive" Command="" ActionIcon=""
-                                          Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    <!-- At most one row, and only while a link into an archived profile is being followed.
+                         Under its own heading so it reads as reached through the archive rather than as
+                         back in the list above; it goes away on the next navigation. -->
+                    <sidebar:SidebarHeader Grid.Row="3" Title="From the archive"
+                                           Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                        <ListView Grid.Row="4"
-                                  Style="{StaticResource SidebarList}"
-                                  ItemsSource="{Binding Path=ArchivedProfiles}"
-                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
-                                  Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
-                    </Grid>
-                </DataTemplate>
-            </sidebar:SidebarShell.SidebarTemplate>
+                    <ListView Grid.Row="4"
+                              Style="{StaticResource SidebarList}"
+                              ItemsSource="{Binding Path=ArchivedProfiles}"
+                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                              Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </Grid>
+            </Border>
 
-            <Frame Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
-        </sidebar:SidebarShell>
+            <Frame Grid.Column="1" Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
+        </Grid>
     </Grid>
 </Page>

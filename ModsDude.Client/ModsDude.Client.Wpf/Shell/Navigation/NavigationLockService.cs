@@ -1,42 +1,41 @@
-﻿
 namespace ModsDude.Client.Wpf.Shell.Navigation;
 
 public class NavigationLockService : INavigationLockService
 {
-    public PageViewModel? Lock { get; private set; }
+    private object? _owner;
 
 
-    public void AcquireLock(PageViewModel page)
+    public void AcquireLock(object owner)
     {
-        if (Lock is not null && Lock != page)
+        if (_owner is not null && _owner != owner)
         {
             throw new InvalidOperationException("Cannot acquire navigation lock: Taken");
         }
 
-        Lock = page;
+        _owner = owner;
     }
 
-    public void ReleaseLock(PageViewModel page)
+    public void ReleaseLock(object owner)
     {
-        if (Lock == page)
+        if (_owner == owner)
         {
-            Lock = null;
+            _owner = null;
         }
     }
 
     public bool HasLock()
     {
-        return Lock is not null;
+        return _owner is not null;
     }
 
     public void Clear()
     {
-        Lock = null;
+        _owner = null;
     }
 
     public void Dispose()
     {
-        if (Lock is IDisposable disposable)
+        if (_owner is IDisposable disposable)
         {
             disposable.Dispose();
         }
