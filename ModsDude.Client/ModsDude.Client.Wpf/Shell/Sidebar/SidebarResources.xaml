@@ -283,16 +283,17 @@
 
     <!-- The frame every rail picture sits in. Outlined for a place the app offers, so those never read
          as one more repo; a repo's filled square sits inside it with the outline off. The accent while
-         it is the page showing. -->
+         it is the page showing. The border leaves an even inner width, so a 16px glyph centres on a whole
+         pixel. -->
     <Style x:Key="RailTile" TargetType="Border">
         <Setter Property="Width" Value="36" />
         <Setter Property="Height" Value="36" />
         <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="BorderThickness" Value="1.5" />
+        <Setter Property="BorderThickness" Value="2" />
         <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
     </Style>
 
-    <Style x:Key="RailGlyph" TargetType="TextBlock">
+    <Style x:Key="RailGlyph" TargetType="TextBlock" BasedOn="{StaticResource CenteredGlyph}">
         <Setter Property="FontFamily" Value="{DynamicResource SymbolThemeFontFamily}" />
         <Setter Property="FontSize" Value="16" />
         <Setter Property="HorizontalAlignment" Value="Center" />
@@ -331,7 +332,7 @@
         <Border x:Name="Tile" Style="{StaticResource RailTile}" CornerRadius="18" BorderBrush="Transparent">
             <Grid>
                 <Grid Visibility="{Binding Account.HasAvatar, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <account:UserAvatar Width="31" Height="31" FontSize="14"
+                    <account:UserAvatar Width="30" Height="30" FontSize="14"
                                         DataContext="{Binding Account.Avatar}" />
                 </Grid>
                 <TextBlock Style="{StaticResource RailGlyph}" Text="&#xE77B;"

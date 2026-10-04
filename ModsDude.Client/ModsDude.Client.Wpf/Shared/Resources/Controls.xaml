@@ -8,6 +8,21 @@
     <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
     <converters:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
     <converters:IconKindToStringConverter x:Key="IconKindToStringConverter" />
+    <converters:GlyphCenteringConverter x:Key="GlyphCenteringConverter" />
+
+    <!-- An icon glyph drawn centred in a frame: nudged so its ink is centred, not just its box. See
+         GlyphCenteringConverter. -->
+    <Style x:Key="CenteredGlyph" TargetType="TextBlock">
+        <Setter Property="RenderTransform">
+            <Setter.Value>
+                <MultiBinding Converter="{StaticResource GlyphCenteringConverter}">
+                    <Binding Path="Text" RelativeSource="{RelativeSource Self}" />
+                    <Binding Path="FontFamily" RelativeSource="{RelativeSource Self}" />
+                    <Binding Path="FontSize" RelativeSource="{RelativeSource Self}" />
+                </MultiBinding>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
     <!-- Text that reads as a TextBlock and selects like a TextBox. WPF's TextBlock has no selection
          of its own, so anything a user might want to take away - an error message, an exception - has

@@ -55,7 +55,7 @@
                     ToolTipService.InitialShowDelay="200">
                 <TextBlock Text="&#xE710;" FontSize="12">
                     <TextBlock.Style>
-                        <Style TargetType="TextBlock">
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource CenteredGlyph}">
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsAddSelected, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
