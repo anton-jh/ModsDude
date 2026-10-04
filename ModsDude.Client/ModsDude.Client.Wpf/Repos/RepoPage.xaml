@@ -5,7 +5,6 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:converters="clr-namespace:ModsDude.Client.Wpf.Shared.Converters"
       xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos"
-      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       xmlns:sidebar="clr-namespace:ModsDude.Client.Wpf.Shell.Sidebar"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
@@ -26,15 +25,13 @@
 
         <!-- One header for everything under this repo, across the top of the sidebar and the page both.
              It says where you are - the repo, its game, and the profile when one is open - so the pages
-             under it do not have to, and it is where the primary act of the app lives: putting a profile on
-             the game. That act used to be a bar on the profile's shell; it is here because it is the same
-             act from every page of the profile.
+             under it do not have to.
 
-             The button follows the words rather than sitting in the far corner, behind a divider. The words
-             are a fixed width where there is room for it, so the button is in the same place on every page of
-             every profile whatever the names are: a button that moves under the pointer with the length of a
-             name is one that gets missed. Where there is not room, the words give way and the button does not.
-             What does not fit is trimmed rather than wrapped, and the full name is in a tooltip. -->
+             A button follows the words rather than sitting in the far corner. The words are a fixed width
+             where there is room for it, so the button is in the same place whatever the names are: a button
+             that moves under the pointer with the length of a name is one that gets missed. Where there is
+             not room, the words give way and the button does not. What does not fit is trimmed rather than
+             wrapped, and the full name is in a tooltip. -->
         <Border Grid.Row="0"
                 Padding="24 16"
                 MinHeight="84"
@@ -224,75 +221,24 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- Behind a divider, and labelled for what it will do - Activate, or Re-apply where the game is
-                     already on this profile - taking no target: a repo is about one game, so there is nothing to
-                     pick. Where there is no game to put anything on, the one thing to do is connect one, which
-                     goes to the Connect game entry in the sidebar rather than opening a page of its own, so the
-                     sidebar still says where you are. Only one of the two is ever showing. -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <!-- Where there is no game to put anything on, the one thing to do is connect one, which goes to
+                     the Connect game entry rather than opening a page of its own, so the sidebar still says where
+                     you are. Behind a divider. A profile's own act, applying it, is on its tab bar. -->
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            Visibility="{Binding ShowConnectGame, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Border Width="1"
+                            Margin="32 0"
+                            Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
 
-                    <StackPanel Orientation="Horizontal"
-                                Visibility="{Binding OpenProfile.HasActivation, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
-                        <Border Width="1"
-                                Margin="32 0"
-                                Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-
-                        <!-- Where the game already follows this profile, the ways of deactivating are behind
-                             a caret rather than beside the button, because they are the rare act and this is
-                             the everyday one. -->
-                        <shared:SplitButton MinWidth="150"
-                                            Padding="28 10"
-                                            VerticalAlignment="Center"
-                                            FontSize="15"
-                                            FontWeight="SemiBold"
-                                            IsAccent="True"
-                                            Header="{Binding OpenProfile.ActivationLabel}"
-                                            ToolTip="{Binding OpenProfile.ActivationDescription}"
-                                            ToolTipService.ShowOnDisabled="True"
-                                            ToolTipService.InitialShowDelay="200"
-                                            Command="{Binding OpenProfile.ActivateCommand}"
-                                            IsMenuAvailable="{Binding OpenProfile.HasDeactivation, FallbackValue=False}"
-                                            CaretToolTip="{Binding OpenProfile.DeactivationDescription}">
-                            <Button Width="340"
-                                    Style="{DynamicResource SubtleMenuButton}"
-                                    Command="{Binding OpenProfile.DeactivateCommand}">
-                                <StackPanel Orientation="Vertical">
-                                    <TextBlock Text="Deactivate, keep the mods" FontWeight="SemiBold" />
-                                    <TextBlock Text="Stop following this profile and leave the mod folder exactly as it is - for managing the mods yourself for a while."
-                                               Margin="0 2 0 0"
-                                               TextWrapping="Wrap"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                </StackPanel>
-                            </Button>
-                            <Button Width="340"
-                                    Style="{DynamicResource SubtleMenuButton}"
-                                    Command="{Binding OpenProfile.DeactivateAndClearCommand}">
-                                <StackPanel Orientation="Vertical">
-                                    <TextBlock Text="Deactivate and clear the mods" FontWeight="SemiBold" />
-                                    <TextBlock Text="Stop following this profile and take every mod out of the mod folder. You are shown what goes first."
-                                               Margin="0 2 0 0"
-                                               TextWrapping="Wrap"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                </StackPanel>
-                            </Button>
-                        </shared:SplitButton>
-                    </StackPanel>
-
-                    <StackPanel Orientation="Horizontal"
-                                Visibility="{Binding ShowConnectGame, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <Border Width="1"
-                                Margin="32 0"
-                                Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-
-                        <Button MinWidth="150"
-                                Padding="28 10"
-                                VerticalAlignment="Center"
-                                FontSize="15"
-                                FontWeight="SemiBold"
-                                Style="{DynamicResource AccentButtonStyle}"
-                                Content="Connect game"
-                                Command="{Binding ConnectGameCommand}" />
-                    </StackPanel>
+                    <Button MinWidth="150"
+                            Padding="28 10"
+                            VerticalAlignment="Center"
+                            FontSize="15"
+                            FontWeight="SemiBold"
+                            Style="{DynamicResource AccentButtonStyle}"
+                            Content="Connect game"
+                            Command="{Binding ConnectGameCommand}" />
                 </StackPanel>
             </Grid>
         </Border>

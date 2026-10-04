@@ -266,6 +266,21 @@
         <Setter Property="Visibility" Value="Hidden" />
     </Style>
 
+    <!-- Keyboard focus on a rail item: the band's outline. A focus visual rather than a focus trigger,
+         because WPF draws it only for keyboard navigation and never leaves it behind after a click. -->
+    <Style x:Key="RailFocusVisual">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Margin="6 2 0 2"
+                            CornerRadius="6 0 0 6"
+                            BorderThickness="2 2 0 2"
+                            BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- The frame every rail picture sits in. Outlined for a place the app offers, so those never read
          as one more repo; a repo's filled square sits inside it with the outline off. The accent while
          it is the page showing. -->
@@ -357,7 +372,7 @@
                     <Setter Property="ToolTipService.InitialShowDelay" Value="0" />
                     <Setter Property="ToolTipService.BetweenShowDelay" Value="0" />
                     <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
-                    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                    <Setter Property="FocusVisualStyle" Value="{StaticResource RailFocusVisual}" />
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="ListViewItem">
@@ -380,9 +395,6 @@
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter TargetName="Band" Property="Visibility" Value="Visible" />
                                     </Trigger>
-                                    <Trigger Property="IsKeyboardFocused" Value="True">
-                                        <Setter TargetName="Band" Property="Visibility" Value="Visible" />
-                                    </Trigger>
                                     <Trigger Property="IsSelected" Value="True">
                                         <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
                                     </Trigger>
@@ -403,7 +415,7 @@
         <Setter Property="ToolTipService.Placement" Value="Right" />
         <Setter Property="ToolTipService.InitialShowDelay" Value="0" />
         <Setter Property="ToolTipService.BetweenShowDelay" Value="0" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource RailFocusVisual}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -415,9 +427,6 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Band" Property="Visibility" Value="Visible" />
-                        </Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Band" Property="Visibility" Value="Visible" />
                         </Trigger>
                     </ControlTemplate.Triggers>

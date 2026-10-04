@@ -717,9 +717,9 @@
         <Setter Property="BorderThickness" Value="0 0 1 0" />
     </Style>
 
-    <!-- The pages of one thing, side by side across the top of the area they open in: an item list of
-         MenuItemViewModels, selected the way a sidebar list is. The selected tab is underlined in the
-         accent colour. A closed entry is dimmed and says why in its tooltip. -->
+    <!-- The pages of one thing, side by side along a bar: an item list of MenuItemViewModels, selected the
+         way a sidebar list is. Each tab is the bar's full height, so the accent underline of the selected
+         one sits on the bar's bottom edge. A closed entry is dimmed and says why in its tooltip. -->
     <Style x:Key="PageTabs" TargetType="ListBox">
         <Setter Property="SelectionMode" Value="Single" />
         <Setter Property="behaviors:DragSelection.Suppressed" Value="True" />
@@ -748,28 +748,47 @@
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="ListBoxItem">
-                                <Grid Margin="0 0 24 0" Background="Transparent">
-                                    <TextBlock x:Name="Title"
-                                               Text="{Binding Title}"
-                                               Margin="0 8 0 10"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <Grid Background="Transparent">
+                                    <Border x:Name="Hover"
+                                            Margin="0 10"
+                                            CornerRadius="{DynamicResource ControlCornerRadius}"
+                                            Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                            Visibility="Hidden" />
+                                    <StackPanel Margin="16 0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock x:Name="Icon"
+                                                   Text="{Binding Icon}"
+                                                   Margin="0 0 10 0"
+                                                   VerticalAlignment="Center"
+                                                   FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                                   FontSize="16"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock x:Name="Title"
+                                                   Text="{Binding Title}"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="16"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
                                     <Border x:Name="Underline"
                                             Height="3"
-                                            CornerRadius="1.5"
+                                            Margin="12 0"
+                                            CornerRadius="1.5 1.5 0 0"
                                             VerticalAlignment="Bottom"
                                             Background="{DynamicResource AccentFillColorDefaultBrush}"
                                             Visibility="Hidden" />
                                 </Grid>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Hover" Property="Visibility" Value="Visible" />
                                         <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                        <Setter TargetName="Icon" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                                     </Trigger>
                                     <Trigger Property="IsSelected" Value="True">
                                         <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                        <Setter TargetName="Icon" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                         <Setter TargetName="Underline" Property="Visibility" Value="Visible" />
                                     </Trigger>
                                     <Trigger Property="IsEnabled" Value="False">
-                                        <Setter TargetName="Title" Property="Opacity" Value="0.4" />
+                                        <Setter Property="Opacity" Value="0.4" />
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>

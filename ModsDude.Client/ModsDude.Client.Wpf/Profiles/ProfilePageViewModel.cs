@@ -20,7 +20,7 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.Profiles;
 
 /// <summary>
-/// The profile's shell: its tabs, and the activation the repo's header draws for it.
+/// The profile's shell: its tabs, and the activation beside them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -112,7 +112,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             _scanTargetOnce = null;
 
             return profileModsEditorPageViewModelFactory.Create(repo, profile, scanTarget);
-        });
+        }).WithIcon(MenuIcons.Mods);
 
         // Open to a guest, like the read-only mod list and for the same reason: somebody who syncs
         // this profile without curating it is exactly the person who wants to know what changed under
@@ -124,11 +124,12 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             _selectRevisionOnce = null;
 
             return profileHistoryPageViewModelFactory.Create(repo, profile, selectRevision);
-        });
+        }).WithIcon(MenuIcons.History);
 
         NavManager = navigationManager;
         MenuItems = [
-            new MenuItemViewModel("Overview", () => profileOverviewPageViewModelFactory.Create(repo, profile)),
+            new MenuItemViewModel("Overview", () => profileOverviewPageViewModelFactory.Create(repo, profile))
+                .WithIcon(MenuIcons.Overview),
             _modsMenuItem,
             _historyMenuItem
         ];

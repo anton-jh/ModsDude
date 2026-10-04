@@ -4,21 +4,80 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:profiles="clr-namespace:ModsDude.Client.Wpf.Profiles"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=profiles:ProfilePageViewModel, IsDesignTimeCreatable=False}"
       Title="ProfilePage">
 
-    <!-- The profile's name and the button that applies it are in the repo's header, above this: the
-         header spans the whole repo, so it is the same one from every tab of every profile. What is
-         left here is the profile's tabs and the page each opens. -->
     <Grid RowDefinitions="auto *">
 
-        <ListBox Grid.Row="0"
-                 Margin="32 4 32 4"
-                 Style="{StaticResource PageTabs}"
-                 ItemsSource="{Binding MenuItems}"
-                 SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}" />
+        <!-- The profile's tab bar, in the repo header's fill so it reads as part of the header, which names
+             the profile above it. The tabs are always the same three, so the button straight after them is
+             in the same place on every profile; it is the primary act of the app, putting the profile on the
+             game, and the same act from every tab. -->
+        <Border Grid.Row="0"
+                MinHeight="64"
+                Padding="16 0 24 0"
+                CornerRadius="0 0 4 4"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+            <StackPanel Orientation="Horizontal">
+
+                <ListBox Style="{StaticResource PageTabs}"
+                         ItemsSource="{Binding MenuItems}"
+                         SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}" />
+
+                <!-- Labelled for what it will do - Activate, or Re-apply where the game is already on this
+                     profile - taking no target: a repo is about one game, so there is nothing to pick. Absent
+                     where no game is connected, where the header offers to connect one instead. -->
+                <StackPanel Orientation="Horizontal"
+                            Visibility="{Binding HasActivation, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Border Width="1"
+                            Margin="16 16"
+                            Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+
+                    <!-- Where the game already follows this profile, the ways of deactivating are behind a
+                         caret rather than beside the button, because they are the rare act and this is the
+                         everyday one. -->
+                    <shared:SplitButton MinWidth="150"
+                                        Padding="28 10"
+                                        VerticalAlignment="Center"
+                                        FontSize="15"
+                                        FontWeight="SemiBold"
+                                        IsAccent="True"
+                                        Header="{Binding ActivationLabel}"
+                                        ToolTip="{Binding ActivationDescription}"
+                                        ToolTipService.ShowOnDisabled="True"
+                                        ToolTipService.InitialShowDelay="200"
+                                        Command="{Binding ActivateCommand}"
+                                        IsMenuAvailable="{Binding HasDeactivation}"
+                                        CaretToolTip="{Binding DeactivationDescription}">
+                        <Button Width="340"
+                                Style="{DynamicResource SubtleMenuButton}"
+                                Command="{Binding DeactivateCommand}">
+                            <StackPanel Orientation="Vertical">
+                                <TextBlock Text="Deactivate, keep the mods" FontWeight="SemiBold" />
+                                <TextBlock Text="Stop following this profile and leave the mod folder exactly as it is - for managing the mods yourself for a while."
+                                           Margin="0 2 0 0"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Button>
+                        <Button Width="340"
+                                Style="{DynamicResource SubtleMenuButton}"
+                                Command="{Binding DeactivateAndClearCommand}">
+                            <StackPanel Orientation="Vertical">
+                                <TextBlock Text="Deactivate and clear the mods" FontWeight="SemiBold" />
+                                <TextBlock Text="Stop following this profile and take every mod out of the mod folder. You are shown what goes first."
+                                           Margin="0 2 0 0"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Button>
+                    </shared:SplitButton>
+                </StackPanel>
+            </StackPanel>
+        </Border>
 
         <Frame Grid.Row="1"
                Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />

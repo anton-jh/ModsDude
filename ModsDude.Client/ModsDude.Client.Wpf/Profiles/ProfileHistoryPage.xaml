@@ -2,7 +2,6 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
-      xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
       xmlns:profiles="clr-namespace:ModsDude.Client.Wpf.Profiles"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -26,17 +25,15 @@
     </Page.Resources>
 
     <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
-        <Grid RowDefinitions="auto auto *">
+        <Grid RowDefinitions="auto *">
 
-            <navigation:PageTitle Grid.Row="0" Text="History" />
-
-            <TextBlock Grid.Row="1"
+            <TextBlock Grid.Row="0"
                        Margin="0 0 0 12"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"
                        Text="Every save this profile has had, newest first. Pick one to see what it pinned. Restoring copies an old list back to the front - nothing in between is deleted, so a restore can itself be undone." />
 
-            <Grid Grid.Row="2" ColumnDefinitions="400 *">
+            <Grid Grid.Row="1" ColumnDefinitions="400 *">
 
                 <!-- The revisions, with the profile editor's selection: click, ctrl/shift-click, the
                      arrow keys, and a box for all of them. One pick is a revision to read; several

@@ -228,8 +228,7 @@ public partial class RepoPageViewModel
 
     /// <summary>
     /// The profile page in front of the user, or null on any of the repo's own pages. The header reads
-    /// its name, its sync state and its activation control off this, so there is one activation
-    /// control however deep in the profile the user is.
+    /// its sync state off this.
     /// </summary>
     public ProfilePageViewModel? OpenProfile => NavManager.CurrentPage as ProfilePageViewModel;
 

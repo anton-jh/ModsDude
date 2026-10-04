@@ -27,6 +27,9 @@ internal static class MenuIcons
     public const string CreateProfile = "\xE710";
     public const string Game = "\xE7FC";
 
+    // Profile
+    public const string History = "\xE81C";
+
     // The kinds of entity a sidebar names.
     public const string Repo = "\xE8B7";
     public const string Profile = "\xE8FD";
