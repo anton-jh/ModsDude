@@ -132,7 +132,7 @@ public class StorageStatisticsRecorderTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task Concurrent_runs_for_one_day_never_leave_two_sets_of_samples()
+    public async Task Concurrent_runs_for_one_day_all_succeed_and_leave_one_set_of_samples()
     {
         var date = new DateOnly(2001, 1, 7);
         var (repoId, _) = await GivenARepo(modVersionSizes: [], snapshots: []);
@@ -140,17 +140,7 @@ public class StorageStatisticsRecorderTests(DatabaseFixture fixture)
         var storage = new FakeBlobStorage();
         storage.Mods.Add(Blob($"{repoId.Value}/a_mod/1", 10));
 
-        var runs = Enumerable.Range(0, 4).Select(_ => Task.Run(async () =>
-        {
-            try
-            {
-                await Record(storage, date);
-            }
-            catch (DbUpdateException)
-            {
-                // Losing to a concurrent run on the unique index is the expected way for one to fail.
-            }
-        }));
+        var runs = Enumerable.Range(0, 8).Select(_ => Task.Run(() => Record(storage, date)));
 
         await Task.WhenAll(runs);
 

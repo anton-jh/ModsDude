@@ -16,6 +16,9 @@ public class StorageStatisticsRecorder(
     ILogger<StorageStatisticsRecorder> logger)
     : IStorageStatisticsRecorder
 {
+    private const int AdvisoryLockNamespace = 1;
+
+
     public async Task RecordAsync(DateOnly date, CancellationToken cancellationToken)
     {
         var tally = new StorageTally();
@@ -30,6 +33,11 @@ public class StorageStatisticsRecorder(
             await dbContext.SavegameSnapshots.GetRegisteredBytesPerRepoAsync(cancellationToken));
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        // Concurrent runs for one day otherwise interleave their inserts and deadlock on the unique index.
+        await dbContext.Database.ExecuteSqlAsync(
+            $"SELECT pg_advisory_xact_lock({AdvisoryLockNamespace}, {date.DayNumber})",
+            cancellationToken);
 
         await dbContext.StorageUsageSamples
             .Where(x => x.Date == date)
