@@ -24,6 +24,7 @@ public partial class ConnectGamePageViewModel
 
     public ConnectGamePageViewModel(
         Repo repo,
+        IAsyncRelayCommand back,
         IGameRepository gameRepository,
         IFilePickerService filePickerService,
         INavigationLockService navigationLockService,
@@ -34,6 +35,7 @@ public partial class ConnectGamePageViewModel
         _alreadyConnected = gameRepository.Find(repo.Scope) is not null;
 
         _repo = repo;
+        BackCommand = back;
         _gameRepository = gameRepository;
         _navigationLockService = navigationLockService;
         _modalService = modalService;
@@ -57,6 +59,8 @@ public partial class ConnectGamePageViewModel
     public bool IsValid => _alreadyConnected is false && LocalSettingsEditor.IsValid && FindFolderConflict() is null;
 
     public DynamicFormViewModel LocalSettingsEditor { get; }
+
+    public IAsyncRelayCommand BackCommand { get; }
 
     [RelayCommand]
     public async Task SaveChanges()
@@ -133,7 +137,7 @@ public partial class ConnectGamePageViewModel
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ConnectGamePageViewModel Create(Repo repo)
-            => ActivatorUtilities.CreateInstance<ConnectGamePageViewModel>(serviceProvider, repo);
+        public ConnectGamePageViewModel Create(Repo repo, IAsyncRelayCommand back)
+            => ActivatorUtilities.CreateInstance<ConnectGamePageViewModel>(serviceProvider, repo, back);
     }
 }

@@ -513,7 +513,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
         // not to the next one somebody reaches through the tabs.
         _scanTargetOnce = scanTarget;
 
-        if (ReferenceEquals(NavManager.Selected, _modsMenuItem) is false)
+        if (ReferenceEquals(NavManager.Current, _modsMenuItem) is false)
         {
             NavManager.Selected = _modsMenuItem;
         }
@@ -525,7 +525,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
             _scanTargetOnce = null;
         }
 
-        return ReferenceEquals(NavManager.Selected, _modsMenuItem);
+        return ReferenceEquals(NavManager.Current, _modsMenuItem);
     }
 
     /// <summary>
@@ -537,12 +537,12 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
     {
         _selectRevisionOnce = selectRevision;
 
-        if (ReferenceEquals(NavManager.Selected, _historyMenuItem) is false)
+        if (ReferenceEquals(NavManager.Current, _historyMenuItem) is false)
         {
             NavManager.Selected = _historyMenuItem;
         }
 
-        var selected = ReferenceEquals(NavManager.Selected, _historyMenuItem);
+        var selected = ReferenceEquals(NavManager.Current, _historyMenuItem);
 
         if (selected is false)
         {

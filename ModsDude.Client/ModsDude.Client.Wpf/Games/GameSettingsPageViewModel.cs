@@ -19,13 +19,12 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     private readonly INavigationLockService _navigationLockService;
     private readonly Game _subject;
     private readonly IModalService _modalService;
-    private readonly Action _onSaved;
 
 
     public GameSettingsPageViewModel(
         Repo repo,
         Game subject,
-        Action onSaved,
+        IAsyncRelayCommand back,
         IGameRepository gameRepository,
         IFilePickerService filePickerService,
         IModalService modalService,
@@ -33,7 +32,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     {
         _repo = repo;
         _subject = subject;
-        _onSaved = onSaved;
+        BackCommand = back;
         _gameRepository = gameRepository;
         _modalService = modalService;
         _navigationLockService = navigationLockService;
@@ -63,6 +62,8 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
 
     public DynamicFormViewModel LocalSettingsEditor { get; }
 
+    public IAsyncRelayCommand BackCommand { get; }
+
 
     [RelayCommand]
     public async Task SaveChanges()
@@ -79,7 +80,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
 
         _navigationLockService.ReleaseLock(this);
 
-        _onSaved();
+        await BackCommand.ExecuteAsync(null);
     }
 
     public void Dispose()
@@ -130,7 +131,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public GameSettingsPageViewModel Create(Repo repo, Game subject, Action onSaved)
-            => ActivatorUtilities.CreateInstance<GameSettingsPageViewModel>(serviceProvider, repo, subject, onSaved);
+        public GameSettingsPageViewModel Create(Repo repo, Game subject, IAsyncRelayCommand back)
+            => ActivatorUtilities.CreateInstance<GameSettingsPageViewModel>(serviceProvider, repo, subject, back);
     }
 }

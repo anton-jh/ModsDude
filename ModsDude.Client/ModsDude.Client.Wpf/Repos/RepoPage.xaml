@@ -6,6 +6,7 @@
       xmlns:converters="clr-namespace:ModsDude.Client.Wpf.Shared.Converters"
       xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos"
       xmlns:sidebar="clr-namespace:ModsDude.Client.Wpf.Shell.Sidebar"
+      xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=repos:RepoPageViewModel, IsDesignTimeCreatable=False}"
@@ -251,7 +252,8 @@
                     <ListView Grid.Row="0"
                               Style="{StaticResource SidebarList}"
                               ItemsSource="{Binding Path=MenuItems}"
-                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                              behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
 
                     <sidebar:SidebarHeader Grid.Row="1" Title="Profiles" Command="{Binding LoadProfilesCommand}" ActionIcon="&#xE72C;" ActionToolTip="{Binding RefreshProfilesToolTip}"
                                            HasPendingChanges="{Binding HasPendingProfileChanges}"
@@ -263,7 +265,8 @@
                     <ListView Grid.Row="2"
                               ItemsSource="{Binding Path=Profiles}"
                               Style="{StaticResource SidebarList}"
-                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}" />
+                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                              behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
 
                     <!-- At most one row, and only while a link into an archived profile is being followed.
                          Under its own heading so it reads as reached through the archive rather than as
@@ -275,6 +278,7 @@
                               Style="{StaticResource SidebarList}"
                               ItemsSource="{Binding Path=ArchivedProfiles}"
                               SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                              behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}"
                               Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </Grid>
             </Border>

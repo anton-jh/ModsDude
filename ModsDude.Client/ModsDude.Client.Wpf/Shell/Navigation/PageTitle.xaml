@@ -8,10 +8,33 @@
 
     <!-- What the page is, and nothing about where it is: the repo and the profile are named in the
          header above, and repeating them here is what this control exists to stop. The gap below is
-         part of it rather than something every page sets for itself, so no two pages disagree. -->
-    <TextBlock Text="{Binding Text, RelativeSource={RelativeSource AncestorType=UserControl}}"
-               Margin="0 0 0 24"
-               Style="{DynamicResource TitleTextBlockStyle}"
-               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-               TextTrimming="CharacterEllipsis" />
+         part of it rather than something every page sets for itself, so no two pages disagree. A
+         sub-page sets BackCommand, which puts a back button ahead of the title. -->
+    <Grid Margin="0 0 0 24" ColumnDefinitions="auto *">
+
+        <Button Grid.Column="0"
+                Margin="0 0 8 0"
+                VerticalAlignment="Center"
+                Content="&#xE72B;"
+                ToolTip="Back"
+                AutomationProperties.Name="Back"
+                Command="{Binding BackCommand, RelativeSource={RelativeSource AncestorType=UserControl}}">
+            <Button.Style>
+                <Style TargetType="Button" BasedOn="{StaticResource SubtleIconButton}">
+                    <Style.Triggers>
+                        <Trigger Property="Command" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Button.Style>
+        </Button>
+
+        <TextBlock Grid.Column="1"
+                   VerticalAlignment="Center"
+                   Text="{Binding Text, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                   Style="{DynamicResource TitleTextBlockStyle}"
+                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                   TextTrimming="CharacterEllipsis" />
+    </Grid>
 </UserControl>

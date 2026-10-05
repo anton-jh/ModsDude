@@ -4,6 +4,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:shell="clr-namespace:ModsDude.Client.Wpf.Shell"
+      xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
       mc:Ignorable="d"
       d:DataContext="{d:DesignInstance Type=shell:MainPageViewModel, IsDesignTimeCreatable=False}"
       d:DesignHeight="450" d:DesignWidth="800"
@@ -31,7 +32,8 @@
 
                         <ListView Style="{StaticResource RailList}"
                                   ItemsSource="{Binding ReposView}"
-                                  SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}">
+                                  SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}"
+                                  behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}">
                             <ListView.GroupStyle>
                                 <StaticResource ResourceKey="RailGroupStyle" />
                             </ListView.GroupStyle>
@@ -40,7 +42,8 @@
                         <ListView Margin="0 6 0 0"
                                   Style="{StaticResource RailList}"
                                   ItemsSource="{Binding PlaceItems}"
-                                  SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}" />
+                                  SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}"
+                                  behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
 
                         <!-- Only while the server has repo changes the list does not show: at any other
                              time there is nothing for it to bring in. -->
@@ -70,7 +73,8 @@
                           Margin="0 4 0 8"
                           Style="{StaticResource RailList}"
                           ItemsSource="{Binding AccountItems}"
-                          SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}" />
+                          SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}"
+                          behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
             </Grid>
         </Border>
 

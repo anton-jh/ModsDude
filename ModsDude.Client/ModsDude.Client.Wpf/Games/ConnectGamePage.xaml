@@ -15,7 +15,7 @@
         <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
             <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
-                <navigation:PageTitle Text="Connect game" />
+                <navigation:PageTitle Text="Connect game" BackCommand="{Binding BackCommand}" />
 
                 <TextBlock Margin="0 0 0 16"
                            TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"

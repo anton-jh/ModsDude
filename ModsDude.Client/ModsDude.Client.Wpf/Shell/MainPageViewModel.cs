@@ -192,7 +192,7 @@ public partial class MainPageViewModel
             return null;
         }
 
-        if (ReferenceEquals(NavManager.Selected, entry) is false)
+        if (ReferenceEquals(NavManager.Current, entry) is false)
         {
             NavManager.Selected = entry;
         }

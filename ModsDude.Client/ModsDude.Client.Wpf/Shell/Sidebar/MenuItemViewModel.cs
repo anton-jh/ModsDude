@@ -134,6 +134,12 @@ public partial class MenuItemViewModel
     /// </summary>
     public string ToolTip => UnavailableReason ?? $"{Title}{TagText}";
 
+    /// <summary>
+    /// The menu entry a sub-page is opened from. The menus keep it highlighted while the sub-page is
+    /// open, and going back opens it. Null on every entry that is in a menu itself.
+    /// </summary>
+    public MenuItemViewModel? Parent { get; private set; }
+
 
     public virtual PageViewModel GetPage()
     {
@@ -147,6 +153,14 @@ public partial class MenuItemViewModel
     public MenuItemViewModel WithIcon(string icon)
     {
         Icon = icon;
+
+        return this;
+    }
+
+    /// <summary>Makes the entry a sub-page of <paramref name="parent"/>, which must be in a menu itself.</summary>
+    public MenuItemViewModel Under(MenuItemViewModel parent)
+    {
+        Parent = parent;
 
         return this;
     }

@@ -59,9 +59,8 @@ public partial class RepoPageViewModel
     private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
 
     /// <summary>
-    /// Connect game and Configure game: pages reached from the Overview's "This machine" card rather
-    /// than from the menu, held here the way <see cref="_createProfileMenuItem"/> is. Only a game whose
-    /// adapter has local settings has either.
+    /// Connect game and Configure game: sub-pages of Overview, reached from its "This machine" card.
+    /// Only a game whose adapter has local settings has either.
     /// </summary>
     private readonly MenuItemViewModel _connectGameItem;
     private readonly MenuItemViewModel _configureGameItem;
@@ -108,16 +107,7 @@ public partial class RepoPageViewModel
         _connectGamePageViewModelFactory = connectGamePageViewModelFactory;
         _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
         _gameSettingsPageViewModelFactory = gameSettingsPageViewModelFactory;
-
-        _connectGameItem = new MenuItemViewModel("Connect game", () => _connectGamePageViewModelFactory.Create(repo))
-            .WithIcon(MenuIcons.Game);
-
-        // Falls back to Connect game rather than asserting: the game can be disconnected between the
-        // click and the page being built, and the shell must not fall over on that race.
-        _configureGameItem = new MenuItemViewModel("Configure game", () => ConnectedGame() is Game game
-            ? _gameSettingsPageViewModelFactory.Create(_repo, game, GoToOverview)
-            : _connectGamePageViewModelFactory.Create(_repo))
-            .WithIcon(MenuIcons.Game);
+        NavManager = new(navigationLockService, modalService);
 
         // Every entry whose page is gated end to end is closed here rather than left to fail at the
         // server. Mods is absent from this list on purpose: a guest can read the catalog, and only
@@ -129,6 +119,16 @@ public partial class RepoPageViewModel
 
         _overviewMenuItem = new MenuItemViewModel("Overview", () => repoOverviewPageViewModelFactory.Create(repo, overviewLinks))
             .WithIcon(MenuIcons.Overview);
+
+        _connectGameItem = new MenuItemViewModel("Connect game", () => _connectGamePageViewModelFactory.Create(repo, NavManager.GoBackCommand))
+            .Under(_overviewMenuItem);
+
+        // Falls back to Connect game rather than asserting: the game can be disconnected between the
+        // click and the page being built, and the shell must not fall over on that race.
+        _configureGameItem = new MenuItemViewModel("Configure game", () => ConnectedGame() is Game game
+            ? _gameSettingsPageViewModelFactory.Create(_repo, game, NavManager.GoBackCommand)
+            : _connectGamePageViewModelFactory.Create(_repo, NavManager.GoBackCommand))
+            .Under(_overviewMenuItem);
 
         MenuItems = [
             _overviewMenuItem,
@@ -191,10 +191,7 @@ public partial class RepoPageViewModel
         // that fixes that beats landing on an overview describing it - where there is anything to
         // do about it here. A game that connects by itself has no connect page, and the overview is
         // where it says it was not found.
-        NavManager = new(navigationLockService, modalService)
-        {
-            Selected = NeedsConnecting() ? _connectGameItem : _overviewMenuItem
-        };
+        NavManager.Selected = NeedsConnecting() ? _connectGameItem : _overviewMenuItem;
 
         _repo.Games.CollectionChanged += OnGamesChanged;
         _repo.PropertyChanged += OnRepoChanged;
@@ -239,7 +236,7 @@ public partial class RepoPageViewModel
     /// it.
     /// </summary>
     public bool ShowConnectGame => NeedsConnecting()
-        && ReferenceEquals(NavManager.Selected, _connectGameItem) is false;
+        && ReferenceEquals(NavManager.Current, _connectGameItem) is false;
 
     /// <summary>Whether the Create profile page is showing, for the "+" to draw as selected.</summary>
     public bool IsCreateProfileSelected => ReferenceEquals(NavManager.Selected, _createProfileMenuItem);
@@ -335,7 +332,7 @@ public partial class RepoPageViewModel
         // not to the next one somebody reaches through the sidebar.
         _selectSavegameOnce = select;
 
-        if (ReferenceEquals(NavManager.Selected, _savesMenuItem) is false)
+        if (ReferenceEquals(NavManager.Current, _savesMenuItem) is false)
         {
             NavManager.Selected = _savesMenuItem;
         }
@@ -351,7 +348,7 @@ public partial class RepoPageViewModel
             }
         }
 
-        var selected = ReferenceEquals(NavManager.Selected, _savesMenuItem);
+        var selected = ReferenceEquals(NavManager.Current, _savesMenuItem);
 
         if (selected is false)
         {
@@ -423,7 +420,7 @@ public partial class RepoPageViewModel
             return null;
         }
 
-        if (ReferenceEquals(NavManager.Selected, entry) is false)
+        if (ReferenceEquals(NavManager.Current, entry) is false)
         {
             NavManager.Selected = entry;
         }
@@ -439,12 +436,12 @@ public partial class RepoPageViewModel
     {
         _highlightInArchiveOnce = highlight;
 
-        if (ReferenceEquals(NavManager.Selected, _archiveMenuItem) is false)
+        if (ReferenceEquals(NavManager.Current, _archiveMenuItem) is false)
         {
             NavManager.Selected = _archiveMenuItem;
         }
 
-        var selected = ReferenceEquals(NavManager.Selected, _archiveMenuItem);
+        var selected = ReferenceEquals(NavManager.Current, _archiveMenuItem);
 
         if (selected is false)
         {
@@ -618,10 +615,10 @@ public partial class RepoPageViewModel
     {
         var connected = ConnectedGame() is not null;
 
-        if ((connected && ReferenceEquals(NavManager.Selected, _connectGameItem))
-            || (connected is false && ReferenceEquals(NavManager.Selected, _configureGameItem)))
+        if ((connected && ReferenceEquals(NavManager.Current, _connectGameItem))
+            || (connected is false && ReferenceEquals(NavManager.Current, _configureGameItem)))
         {
-            NavManager.Selected = _overviewMenuItem;
+            NavManager.GoBackCommand.Execute(null);
         }
 
         OnPropertyChanged(nameof(ShowConnectGame));

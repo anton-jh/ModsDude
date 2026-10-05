@@ -5,6 +5,7 @@
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:profiles="clr-namespace:ModsDude.Client.Wpf.Profiles"
       xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
+      xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       d:DataContext="{d:DesignInstance Type=profiles:ProfilePageViewModel, IsDesignTimeCreatable=False}"
@@ -25,7 +26,8 @@
 
                 <ListBox Style="{StaticResource PageTabs}"
                          ItemsSource="{Binding MenuItems}"
-                         SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}" />
+                         SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}"
+                         behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
 
                 <!-- Labelled for what it will do - Activate, or Re-apply where the game is already on this
                      profile - taking no target: a repo is about one game, so there is nothing to pick. Absent
