@@ -523,6 +523,15 @@ public partial class RepoPageViewModel
             OnPropertyChanged(nameof(OpenProfile));
             OnPropertyChanged(nameof(HasOpenProfile));
 
+            // The transient archived entry exists for one visit. Any other page opening - including
+            // the Archive itself, and including none at all - is the end of it. Asked once the page
+            // has changed rather than whenever Selected does, because Selected passes through null
+            // on every navigation, including one that is refused.
+            if (NavManager.Current is not MenuItemViewModel current || ArchivedProfiles.Contains(current) is false)
+            {
+                ClearArchivedProfile();
+            }
+
             return;
         }
 
@@ -537,13 +546,6 @@ public partial class RepoPageViewModel
         if (NavManager.Selected is ProfileItemViewModel profile)
         {
             _lastSelectionRepository.RecordProfile(profile.Id);
-        }
-
-        // The transient archived entry exists for one visit. Anything else being selected - including
-        // the Archive itself, and including nothing at all - is the end of it.
-        if (NavManager.Selected is not MenuItemViewModel selected || ArchivedProfiles.Contains(selected) is false)
-        {
-            ClearArchivedProfile();
         }
     }
 
