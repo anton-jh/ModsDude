@@ -392,8 +392,18 @@ The admin page is at `https://<SITE_ADDRESS>/admin` and the Hangfire dashboard a
    cd ~/modsdude
    docker compose stop api
    ```
-2. In the backup account's `db-backups` container, pick the backup and download it to `/home/modsdude/`
-   as `modsdude.dump`. Note its Last modified time: the dump was complete by then.
+2. Download the backup straight to the server:
+   1. In the portal, open the backup account's `db-backups` container and the backup's blob under
+      `hourly/` or `daily/`. Note its Last modified time on the Overview tab: the dump was complete by
+      then.
+   2. On its Generate SAS tab, choose only the Read permission and an expiry an hour from now, then
+      generate and copy the Blob SAS URL.
+   3. Download it on the server. Keep the single quotes, since the URL contains `&`. The leading space
+      keeps the URL out of the shell history:
+      ```bash
+       curl --fail --output ~/modsdude.dump '<Blob SAS URL>'
+      ```
+   4. Check that `ls -l ~/modsdude.dump` shows the same size as the portal.
 3. On the production storage account, under Data protection, restore all containers to that Last modified
    time with point-in-time restore. Not earlier: blobs uploaded while the dump ran would be missing. Later
    is safe, because the blob reclamation job removes what the database doesn't refer to. Wait for the
