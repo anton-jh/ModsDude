@@ -404,9 +404,8 @@ The admin page is at `https://<SITE_ADDRESS>/admin` and the Hangfire dashboard a
        curl --fail --output ~/modsdude.dump '<Blob SAS URL>'
       ```
    4. Check that `ls -l ~/modsdude.dump` shows the same size as the portal.
-3. Put the production storage account's blobs back to that Last modified time. Data protection only holds
-   the settings; the restore is on the Containers page. Choose Restore containers → Restore all
-   containers, enter the time and start it. The portal shows times in your local time zone, the same as
+3. Put the production storage account's blobs back to that Last modified time. On its Containers page,
+   choose Restore containers → Restore all containers, enter the time and start it. The portal shows times in your local time zone, the same as
    Last modified. Or, from a machine signed in to the Azure CLI, using the time in UTC:
    ```bash
    az storage blob restore --resource-group <resource group> --account-name <production account> --time-to-restore <yyyy-MM-ddTHH:mm:ssZ>
