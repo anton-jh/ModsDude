@@ -42,7 +42,6 @@ public class FakeBlobStorage : IModStorageService, ISavegameStorageService, IMod
     public Task<string?> GetRecordedContentHash(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<string> GetUploadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<string> GetDownloadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken) => throw new NotSupportedException();
-    public Task DeleteSavegame(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<IReadOnlyCollection<string>> CheckWhichExist(IReadOnlyCollection<string> hashes, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task Upload(string hash, string contentType, Stream content, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<StoredModImage?> Download(string hash, CancellationToken cancellationToken) => throw new NotSupportedException();

@@ -84,18 +84,6 @@ public interface ISavegameStorageService
     Task<string> GetDownloadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Deletes the bytes at one address.
-    /// </summary>
-    /// <remarks>
-    /// <b>Not the same thing as deleting a snapshot.</b> Several snapshots of a savegame can name one
-    /// content hash - a restore does exactly that, and so does checking in a save that was played
-    /// and reverted - so pruning one snapshot must only reach here once no remaining snapshot names
-    /// its hash. The reclamation sweep is the safety net for the case that is missed, not the
-    /// mechanism relied on.
-    /// </remarks>
-    Task DeleteSavegame(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
-
-    /// <summary>
     /// Every savegame blob there is, streamed rather than returned whole so that the reclamation
     /// sweep does not have to hold a container listing in memory before it can start. See
     /// <see cref="IModStorageService.ListStoredMods"/>.

@@ -118,11 +118,6 @@ internal class SavegameStorageService(
         return GetSasLink(repoId, savegameId, contentHash, BlobSasPermissions.Read, cancellationToken);
     }
 
-    public async Task DeleteSavegame(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
-    {
-        await GetBlobClient(repoId, savegameId, contentHash).DeleteIfExistsAsync(cancellationToken: cancellationToken);
-    }
-
     public async IAsyncEnumerable<StoredBlob> ListStoredSavegames([EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var container = blobServiceClient.GetBlobContainerClient(_savegamesContainerName);
