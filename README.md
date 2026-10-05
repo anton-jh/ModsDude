@@ -343,7 +343,8 @@ The repository must be public: installed clients read releases from it without a
 
 ### Day to day
 
-As `modsdude`, in `~/modsdude`:
+As `modsdude`, in `~/modsdude`. After `su - modsdude`, rather than signing in over SSH, `systemctl --user`
+and `journalctl --user` first need `export XDG_RUNTIME_DIR=/run/user/$(id -u)`.
 
 | What | Command |
 | --- | --- |
