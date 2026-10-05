@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
+using ModsDude.Server.Domain.Backups;
 using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.Statistics;
 using ModsDude.Server.Persistence.DbContexts;
@@ -10,6 +12,7 @@ namespace ModsDude.Server.Api.Admin;
 
 public class OverviewPageModel(
     ApplicationDbContext dbContext,
+    IBackupStorageService backupStorage,
     ITimeService timeService)
     : PageModel
 {
@@ -31,6 +34,10 @@ public class OverviewPageModel(
     public long ScheduledSavegameBytes { get; private set; }
     public StorageTrendChart? Trend { get; private set; }
 
+    public BackupListing BackupListing { get; private set; } = new BackupListing.NotConfigured();
+    public BackupOverview? Backups { get; private set; }
+    public DateTimeOffset BackupsCheckedAt { get; private set; }
+
     public IReadOnlyList<TrafficRow> Traffic { get; private set; } = [];
 
     public IReadOnlyList<LargestModVersionRow> LargestModVersions { get; private set; } = [];
@@ -43,6 +50,7 @@ public class OverviewPageModel(
 
         await LoadUsersAndReposAsync(now, cancellationToken);
         await LoadStorageAsync(cancellationToken);
+        await LoadBackupsAsync(now, cancellationToken);
         await LoadTrafficAsync(now, cancellationToken);
         await LoadLargestAsync(cancellationToken);
     }
@@ -91,6 +99,15 @@ public class OverviewPageModel(
 
         Trend = latest is DateOnly trendTo
             ? new StorageTrendChart(await dbContext.StorageUsageSamples.GetDailyTotalsFromAsync(trendTo.AddDays(-AdminWindows.StorageTrendDays), cancellationToken))
+            : null;
+    }
+
+    private async Task LoadBackupsAsync(DateTime now, CancellationToken cancellationToken)
+    {
+        BackupListing = await backupStorage.ListBackups(cancellationToken);
+        BackupsCheckedAt = new DateTimeOffset(now, TimeSpan.Zero);
+        Backups = BackupListing is BackupListing.Listed listed
+            ? BackupStatus.Summarise(listed.Blobs, BackupsCheckedAt)
             : null;
     }
 

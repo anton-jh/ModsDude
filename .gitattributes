@@ -6,3 +6,6 @@ openapi/*.json text eol=lf
 # Shell scripts run on the Linux VPS, where a CRLF shebang line fails to launch at all ("bad
 # interpreter"). Without this, core.autocrlf=true hands a Windows working tree CRLF.
 deploy/*.sh text eol=lf
+
+# systemd units, which systemd reads on the same server and would read a CR into every value of.
+deploy/systemd/* text eol=lf

@@ -42,6 +42,7 @@ services:
     environment:
       ConnectionStrings__Database: Host=db;Port=5432;Username=modsdude;Password=${POSTGRES_PASSWORD:?};Database=modsdude
       Storage__StorageAccountName: ${STORAGE_ACCOUNT_NAME:?}
+      Backups__StorageAccountName: ${BACKUP_STORAGE_ACCOUNT_NAME:?}
       AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:?}
       AZURE_TENANT_ID: ${AZURE_TENANT_ID:?}
       AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:?}

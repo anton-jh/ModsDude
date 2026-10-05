@@ -1,5 +1,6 @@
 @page "/admin"
 @model OverviewPageModel
+@using ModsDude.Server.Application.Dependencies
 @using ModsDude.Server.Domain.Statistics
 @using System.Text.Json
 @{
@@ -136,6 +137,66 @@
                 </table>
             </div>
         </details>
+    }
+</section>
+
+<section>
+    <h2>Backups</h2>
+    @switch (Model.BackupListing)
+    {
+        case BackupListing.NotConfigured:
+            <p class="muted">No backup storage account is configured.</p>
+            break;
+
+        case BackupListing.Unavailable:
+            <p><span class="status Unavailable">Unavailable</span></p>
+            break;
+    }
+
+    @if (Model.Backups is { } backups)
+    {
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tier</th>
+                        <th>Status</th>
+                        <th>Newest</th>
+                        <th class="number">Age</th>
+                        <th class="number">Size</th>
+                        <th class="number">Kept</th>
+                        <th>Oldest</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var tier in backups.Tiers)
+                    {
+                        <tr>
+                            <td>@tier.Tier</td>
+                            <td><span class="status @tier.Freshness">@AdminFormat.Freshness(tier.Freshness)</span></td>
+                            <td>@(tier.Newest is { } newest ? AdminFormat.Time(newest.TakenAt.UtcDateTime) : "")</td>
+                            <td class="number">@(tier.Newest is { } newestAge ? AdminFormat.Age(Model.BackupsCheckedAt - newestAge.TakenAt) : "")</td>
+                            <td class="number">@(tier.Newest is { } newestSize ? AdminFormat.Bytes(newestSize.Length) : "")</td>
+                            <td class="number">@AdminFormat.Count(tier.Count)</td>
+                            <td>@(tier.Oldest is { } oldest ? AdminFormat.Time(oldest.TakenAt.UtcDateTime) : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (backups.Unrecognised.Count > 0)
+        {
+            <details class="toggle">
+                <summary>Unrecognised blobs: @AdminFormat.Count(backups.Unrecognised.Count)</summary>
+                <ul>
+                    @foreach (var name in backups.Unrecognised)
+                    {
+                        <li>@name</li>
+                    }
+                </ul>
+            </details>
+        }
     }
 </section>
 

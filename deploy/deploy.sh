@@ -11,6 +11,19 @@ build="$1"
 
 cd "$(dirname "$0")"
 
+# Checked before anything changes. Without linger the backup timers stop whenever nobody is logged in.
+if [ "$(loginctl show-user "$USER" --property=Linger --value)" != "yes" ]; then
+  echo "Linger is off for $USER, so the backup timers would not run. See README.md." >&2
+  exit 1
+fi
+
+for setting in BACKUP_SAS_URL BACKUP_PING_HOURLY BACKUP_PING_DAILY; do
+  if ! grep --quiet "^$setting=." .env; then
+    echo "$setting is not set in .env. See README.md." >&2
+    exit 1
+  fi
+done
+
 docker load --input modsdude-api.tar
 rm modsdude-api.tar
 
@@ -24,3 +37,9 @@ docker compose exec -T db psql --username modsdude --dbname modsdude --set ON_ER
 # database it has not been migrated for.
 docker tag "modsdude-api:b$build" modsdude-api:current
 docker compose up --detach --force-recreate api
+
+# User units, so every deploy can update them without root.
+mkdir -p ~/.config/systemd/user
+cp systemd/* ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now modsdude-backup-hourly.timer modsdude-backup-daily.timer

@@ -1,0 +1,10 @@
+# Installed as a user unit of modsdude by deploy.sh. The instance is the tier: modsdude-backup@hourly or
+# modsdude-backup@daily.
+
+[Unit]
+Description=Back up the ModsDude database (%i)
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/modsdude/.env
+ExecStart=/bin/bash %h/modsdude/backup.sh %i

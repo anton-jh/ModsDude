@@ -187,7 +187,9 @@ builder.Services
 builder.Services
     .AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<ApplicationDbContext>());
 
-builder.Services.AddStorage(builder.Configuration.GetValue<string>("Storage:StorageAccountName")!);
+builder.Services.AddStorage(
+    builder.Configuration.GetValue<string>("Storage:StorageAccountName")!,
+    builder.Configuration.GetValue<string>("Backups:StorageAccountName"));
 
 
 var app = builder.Build();

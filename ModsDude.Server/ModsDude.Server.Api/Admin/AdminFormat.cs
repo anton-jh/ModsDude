@@ -1,3 +1,4 @@
+using ModsDude.Server.Domain.Backups;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
 using System.Globalization;
@@ -13,6 +14,29 @@ public static class AdminFormat
     {
         return time.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
     }
+
+    public static string Age(TimeSpan age)
+    {
+        if (age < TimeSpan.FromHours(1))
+        {
+            return $"{Math.Max(0, (int)age.TotalMinutes)} min";
+        }
+
+        if (age < TimeSpan.FromDays(2))
+        {
+            return $"{(int)age.TotalHours} h";
+        }
+
+        return $"{(int)age.TotalDays} days";
+    }
+
+    public static string Freshness(BackupFreshness freshness) => freshness switch
+    {
+        BackupFreshness.Ok => "OK",
+        BackupFreshness.Late => "Late",
+        BackupFreshness.Missing => "No backups",
+        _ => throw new ArgumentOutOfRangeException(nameof(freshness), freshness, null)
+    };
 
     public static string Date(DateOnly date)
     {

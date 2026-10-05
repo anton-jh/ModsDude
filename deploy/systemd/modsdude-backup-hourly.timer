@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up the ModsDude database every hour
+
+[Timer]
+OnCalendar=hourly
+# Runs once on boot if the server was down when a run was due.
+Persistent=true
+Unit=modsdude-backup@hourly.service
+
+[Install]
+WantedBy=timers.target
