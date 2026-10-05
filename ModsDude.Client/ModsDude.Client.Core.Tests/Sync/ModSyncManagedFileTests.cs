@@ -99,6 +99,30 @@ public class ModSyncManagedFileTests
     }
 
     [Fact]
+    public async Task A_managed_file_the_game_rewrote_without_changing_what_the_edit_manages_is_not_drift()
+    {
+        using var fixture = Fixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        File.WriteAllText(fixture.Folder.Combine(_listName), "added by the game\nmanaged:fs25_a\n");
+
+        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+    }
+
+    [Fact]
+    public async Task A_managed_file_the_edit_can_no_longer_read_is_drift()
+    {
+        using var fixture = Fixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        fixture.Adapter.ManagedFiles = _ => [new GameFileEdit(_listName, _ => throw new InvalidDataException("Simulated: unreadable."))];
+
+        Assert.Contains(_listName, fixture.CheckDrift().Changed);
+    }
+
+    [Fact]
     public async Task Deleting_a_managed_file_afterwards_is_drift()
     {
         using var fixture = Fixture();

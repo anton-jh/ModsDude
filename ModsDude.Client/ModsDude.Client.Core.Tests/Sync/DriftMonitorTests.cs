@@ -751,7 +751,7 @@ public class DriftMonitorTests
             Folder = new TempDirectory("monitor-mods");
             Candidates = new FakeCandidates { ModFolder = Folder.Path };
             Manifests = new SyncManifestStore(_manifests.Path);
-            Drift = new DriftService(Manifests, NullLogger<DriftService>.Instance);
+            Drift = new DriftService(Manifests, FakeManagedFileDriftCheck.None, NullLogger<DriftService>.Instance);
 
             if (withStore)
             {

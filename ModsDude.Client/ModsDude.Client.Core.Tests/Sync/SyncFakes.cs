@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -207,17 +208,22 @@ internal sealed class FakeModFileDownloader(FakeSyncServer server) : IModFileDow
 /// </summary>
 internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardlinks) : ILocalModAdapter
 {
-    public ModTarget Target { get; } = new(new TargetKey("mods"), "Mod folder", modFolder);
+    /// <summary>Settable, so a test can change what the target allows between two applies.</summary>
+    public ModTarget Target { get; set; } = new(new TargetKey("mods"), "Mod folder", modFolder) { SupportsHardlinks = supportsHardlinks };
 
     public ModTargets ModTargets => new(Target);
-
-    public bool SupportsHardlinks { get; } = supportsHardlinks;
 
     public SavegameCompatibilityPolicy SavegameCompatibility { get; } = new(1, 1, 5, 50);
 
 
     /// <summary>Every file the adapter has opened, by name - which is what a scan costs.</summary>
     public ConcurrentBag<string> Opened { get; } = [];
+
+    /// <summary>The mod a file stem names. The stem itself unless a test says otherwise.</summary>
+    public Func<string, string> ModNameOf { get; set; } = x => x;
+
+    /// <summary>The file a mod gets, where a test names it some other way than the usual.</summary>
+    public Func<ModLayoutMod, string>? PlaceAs { get; set; }
 
 
     public Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, Func<string, bool> skip, CancellationToken cancellationToken)
@@ -244,11 +250,12 @@ internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardli
             }
 
             var info = new FileInfo(file);
+            var name = ModNameOf(Path.GetFileNameWithoutExtension(file));
 
             mods.Add(new LocalMod(
-                ModKey.From(Path.GetFileNameWithoutExtension(file)),
+                ModKey.From(name),
                 ModVersionKey.From(version),
-                Path.GetFileNameWithoutExtension(file),
+                name,
                 "",
                 () => File.OpenRead(file))
             {
@@ -265,7 +272,7 @@ internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardli
 
     public ModLayout Layout(ModLayoutContext context)
         => new(
-            [.. context.Desired.Select(x => new ModPlacement(x.ModId, x.FileName?.Value ?? x.InstalledFileName ?? $"{x.ModId.Value}.zip"))],
+            [.. context.Desired.Select(x => new ModPlacement(x.ModId, PlaceAs?.Invoke(x) ?? x.FileName?.Value ?? x.InstalledFileName ?? $"{x.ModId.Value}.zip"))],
             ManagedFiles(context));
 
     public ILocalModAdapter WithLocalSettings(string serializedLocalSettings) => this;
@@ -432,4 +439,19 @@ internal static class SyncTestContent
     public static byte[] Bytes(string content) => Encoding.UTF8.GetBytes(content);
 
     public static string HashOf(string content) => ModContentHasher.Format(SHA256.HashData(Bytes(content)));
+}
+
+
+internal sealed class FakeModTargetAdapters(Func<ModTargetRef, ResolvedModTarget?> find) : IModTargetAdapters
+{
+    public ResolvedModTarget? Find(ModTargetRef target) => find(target);
+}
+
+
+/// <summary>A managed-file check with no adapter to ask, for drift tests about everything else.</summary>
+internal sealed class FakeManagedFileDriftCheck : IManagedFileDriftCheck
+{
+    public static FakeManagedFileDriftCheck None { get; } = new();
+
+    public IReadOnlyList<PlannedFileEdit>? FindOutOfLine(SyncManifest manifest) => null;
 }

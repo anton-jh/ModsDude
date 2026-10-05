@@ -105,20 +105,6 @@ public interface ILocalGameAdapter : IBaseGameAdapter
 public interface IBaseModAdapter
 {
     /// <summary>
-    /// Whether this game's mod files are safe to hardlink into the content store.
-    /// </summary>
-    /// <remarks>
-    /// False when the game or its updater may <b>rewrite a mod file in place</b>, which through a
-    /// hardlink would corrupt the store blob shared with every other repo and game on that
-    /// volume. False also means "nobody has checked yet", which is why it is the default: the
-    /// failure is silent, the blast radius is every repo on the disk, and a slow sync is visible and
-    /// recoverable where a corrupted store is neither. Setting it true is an opt-in that means
-    /// somebody tested this game's updater.
-    /// See docs/07-mod-sync-design.md#hardlink-support-is-an-adapter-property.
-    /// </remarks>
-    bool SupportsHardlinks => false;
-
-    /// <summary>
     /// Every attribute key this adapter can put on a <see cref="LocalMod"/>, for a search box to
     /// offer. On the base adapter rather than the local one, because a version only the repo holds
     /// carries attributes too and a reader with no game connected still searches them.

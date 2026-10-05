@@ -25,7 +25,32 @@ namespace ModsDude.Client.Core.GameAdapters;
 /// siblings still leave it out where there is one - see <see cref="TargetNames.Distinguishing"/>.
 /// </param>
 /// <param name="Path">The folder itself. It need not exist right now.</param>
-public sealed record ModTarget(TargetKey Key, string DisplayName, string Path);
+public sealed record ModTarget(TargetKey Key, string DisplayName, string Path)
+{
+    /// <summary>
+    /// Whether the files placed here are safe to hardlink into the content store.
+    /// </summary>
+    /// <remarks>
+    /// False when anything writing to this folder may <b>rewrite a mod file in place</b>, which
+    /// through a hardlink would corrupt the store blob shared with every other repo and game on that
+    /// volume. False also means "nobody has checked yet", which is why it is the default: the failure
+    /// is silent, the blast radius is every repo on the disk, and a slow sync is visible and
+    /// recoverable where a corrupted store is neither. Setting it true is an opt-in that means
+    /// somebody tested what writes here. Turning it off again replaces every linked file with a copy
+    /// on the next apply.
+    /// </remarks>
+    public bool SupportsHardlinks { get; init; }
+
+    /// <summary>
+    /// Whether other programs keep their own mods here too, so sync touches only what it installed.
+    /// </summary>
+    /// <remarks>
+    /// An ordinary target is the profile and nothing else: every mod in it that the profile does not
+    /// pin is taken out. A shared one - a launcher's download cache, say - holds files that belong to
+    /// somebody else, and those are left exactly where they are, as are additions to it afterwards.
+    /// </remarks>
+    public bool Shared { get; init; }
+}
 
 
 /// <summary>

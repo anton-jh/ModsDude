@@ -46,7 +46,7 @@ public class FarmingSimulatorModLayoutTests
     {
         var id = Keys.Mod(modId);
 
-        return new ModLayoutMod(id, Keys.V("1.0.0"), registered is null ? null : ModFileName.For(id, registered), installed, Locked: false);
+        return new ModLayoutMod(id, Keys.V("1.0.0"), new string('a', 64), registered is null ? null : ModFileName.For(id, registered), installed, Locked: false);
     }
 
     private static FarmingSimulatorLocalModAdapter Adapter()

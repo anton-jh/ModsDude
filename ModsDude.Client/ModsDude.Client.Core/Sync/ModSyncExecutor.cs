@@ -436,10 +436,10 @@ internal sealed class ModSyncExecutor(
         List<ModSyncFailure> failures,
         CancellationToken cancellationToken)
     {
-        // Renames ride along: they are the same question - "make the folder hold this file under
-        // this name" - answered with one directory operation instead of a copy.
+        // Renames and unlinks ride along: they are the same question - "make the folder hold this
+        // file under this name" - answered from the file already there instead of from the store.
         var installs = plan.Items
-            .Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace or ModSyncAction.Rename)
+            .Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace or ModSyncAction.Rename or ModSyncAction.Unlink)
             .Where(x => stillInPlace.Contains(x.ModId) is false)
             .ToList();
 
@@ -503,12 +503,14 @@ internal sealed class ModSyncExecutor(
 
     /// <summary>
     /// Makes the mod folder hold this item's file, under the name the adapter says it belongs under
-    /// - a second directory entry into the store where that is safe, a copy otherwise, and for a
-    /// rename just the name, since the right bytes are already there.
+    /// - a second directory entry into the store where that is safe, a copy otherwise, for a rename
+    /// just the name, since the right bytes are already there, and for an unlink the name and then a
+    /// copy of those bytes over the link.
     /// </summary>
     /// <remarks>
-    /// Never replaces a file. The removal phase is the only thing that takes files out of a mod folder,
-    /// so a file at the destination is one the plan did not know about, and the install fails instead.
+    /// Never replaces another file. The removal phase is the only thing that takes files out of a mod
+    /// folder, so a file at the destination is one the plan did not know about, and the install fails
+    /// instead.
     /// </remarks>
     private void Materialize(ModSyncPlan plan, ModSyncItem item)
     {
@@ -517,6 +519,14 @@ internal sealed class ModSyncExecutor(
         if (item.Action is ModSyncAction.Rename)
         {
             Rename(item.InstalledPath!, destination);
+
+            return;
+        }
+
+        if (item.Action is ModSyncAction.Unlink)
+        {
+            Rename(item.InstalledPath!, destination);
+            ReplaceWithCopy(destination);
 
             return;
         }
@@ -543,6 +553,30 @@ internal sealed class ModSyncExecutor(
         // the game sees an ordinary, writable file of its own.
         var info = new FileInfo(destination) { IsReadOnly = false };
         info.LastWriteTimeUtc = time.GetUtcNow().UtcDateTime;
+    }
+
+    /// <summary>
+    /// Gives a hardlinked file data of its own, so nothing written to it afterwards reaches the store.
+    /// </summary>
+    /// <remarks>
+    /// Copied beside it and moved over it, so the name holds the complete file throughout. The link
+    /// being replaced is the store blob's other name, so no bytes are lost with it.
+    /// </remarks>
+    private void ReplaceWithCopy(string path)
+    {
+        var staging = Path.Combine(Path.GetDirectoryName(path)!, $"{Guid.NewGuid():N}.unlinking");
+
+        try
+        {
+            File.Copy(path, staging);
+            File.Move(staging, path, overwrite: true);
+        }
+        catch
+        {
+            FileSystemHelper.TryDeleteFile(staging, logger);
+
+            throw;
+        }
     }
 
     /// <summary>
@@ -612,7 +646,7 @@ internal sealed class ModSyncExecutor(
 
         var entries = new List<SyncManifestEntry>();
 
-        foreach (var item in plan.Items.Where(x => x.Action is ModSyncAction.Keep or ModSyncAction.Rename or ModSyncAction.Install or ModSyncAction.Replace))
+        foreach (var item in plan.Items.Where(x => x.Action is ModSyncAction.Keep or ModSyncAction.Rename or ModSyncAction.Unlink or ModSyncAction.Install or ModSyncAction.Replace))
         {
             var path = item.Action is ModSyncAction.Keep
                 ? item.InstalledPath!
@@ -651,10 +685,8 @@ internal sealed class ModSyncExecutor(
             // Only the ones still there: a file that was blocking an install has just been
             // quarantined, and recording it would describe a folder that no longer exists.
             UnmanagedFileNames = [.. plan.UnmanagedFileNames.Where(x => File.Exists(Path.Combine(plan.ModFolder, x)))],
-            ManagedFiles = [.. plan.ManagedFiles
-                .Select(x => new FileInfo(x.FullPath))
-                .Where(x => x.Exists)
-                .Select(x => new SyncManifestManagedFile(Path.GetRelativePath(plan.ModFolder, x.FullName), x.Length, x.LastWriteTimeUtc))]
+            ManagedFiles = [.. plan.ManagedFiles.Select(x => Path.GetRelativePath(plan.ModFolder, x.FullPath))],
+            Shared = plan.Target.Shared
         });
     }
 

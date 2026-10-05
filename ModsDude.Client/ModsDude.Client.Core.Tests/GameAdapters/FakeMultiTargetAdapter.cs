@@ -119,8 +119,6 @@ internal sealed class FakeMultiTargetLocalGameAdapter(FakeMultiTargetSettings se
 
 internal class FakeMultiTargetBaseModAdapter : IBaseModAdapter
 {
-    public bool SupportsHardlinks => true;
-
     public SavegameCompatibilityPolicy SavegameCompatibility { get; } = new(1, 1, 5, 50);
 
 
@@ -172,7 +170,7 @@ internal sealed class FakeMultiTargetModAdapter(FakeMultiTargetSettings settings
     /// </summary>
     public ModTargets ModTargets => new(settings.Targets
         .Where(x => x.ModFolder is not null)
-        .Select(x => new ModTarget(x.Key, x.DisplayName, x.ModFolder!)));
+        .Select(x => new ModTarget(x.Key, x.DisplayName, x.ModFolder!) { SupportsHardlinks = true }));
 
 
     public async Task<IEnumerable<LocalMod>> GetInstalledMods(ModTarget target, Func<string, bool> skip, CancellationToken cancellationToken)

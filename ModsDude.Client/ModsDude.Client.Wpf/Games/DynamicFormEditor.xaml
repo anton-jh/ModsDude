@@ -12,17 +12,21 @@
         <ItemsControl.Resources>
 
             <DataTemplate DataType="{x:Type games:FolderPathDynamicFormFieldViewModel}">
-                <StackPanel Orientation="Vertical" IsEnabled="{Binding CanBeModified}">
+                <StackPanel Orientation="Vertical" IsEnabled="{Binding CanBeModified}" Margin="0 0 0 16">
                     <Label Content="{Binding Title}" Margin="0 0 0 12"/>
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Pick folder" Command="{Binding PickFolderCommand}" />
                         <TextBox Text="{Binding Value, Mode=TwoWay}" IsReadOnly="True" Width="250" Margin="8 0 0 0" />
+                        <Button Content="Clear"
+                                Margin="8 0 0 0"
+                                Command="{Binding ClearCommand}"
+                                Visibility="{Binding Required, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
                     </StackPanel>
                 </StackPanel>
             </DataTemplate>
 
             <DataTemplate DataType="{x:Type games:OptionsDynamicFormFieldViewModel}">
-                <StackPanel Orientation="Vertical" IsEnabled="{Binding CanBeModified}">
+                <StackPanel Orientation="Vertical" IsEnabled="{Binding CanBeModified}" Margin="0 0 0 16">
                     <Label Content="{Binding Title}" Margin="0 0 0 12"/>
                     <ComboBox Width="300" HorizontalAlignment="Left"
                               ItemsSource="{Binding Options}"

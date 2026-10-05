@@ -230,6 +230,7 @@ public sealed record DriftReport(
 /// </remarks>
 public sealed class DriftService(
     ISyncManifestStore manifestStore,
+    IManagedFileDriftCheck managedFiles,
     ILogger<DriftService> logger) : IDriftService
 {
     public DriftReport Check(
@@ -307,6 +308,13 @@ public sealed class DriftService(
         var (added, removed, changed) = CompareFolder(manifest, listing, modFolder);
         var (profileChanged, locked) = CompareProfile(manifest, profileDependencies);
 
+        foreach (var file in managedFiles.FindOutOfLine(manifest) ?? [])
+        {
+            var name = Path.GetRelativePath(modFolder, file.FullPath);
+
+            (File.Exists(file.FullPath) ? changed : removed).Add(name);
+        }
+
         // A profile that has moved on is drift even when the folder is exactly what was installed:
         // the folder matches a list nobody is using any more. It is the one kind of drift that
         // costs nothing to detect and that no directory listing could ever find.
@@ -375,7 +383,8 @@ public sealed class DriftService(
 
 
     /// <summary>
-    /// What a directory listing says about the manifest: what is new, what is gone, what moved.
+    /// What a directory listing says about the manifest's mods: what is new, what is gone, what moved.
+    /// Managed files are left to <see cref="IManagedFileDriftCheck"/>.
     /// </summary>
     /// <remarks>
     /// Internal rather than private so that a listing can be handed in. The interesting case - a name
@@ -390,7 +399,7 @@ public sealed class DriftService(
         var byName = manifest.Entries.ToDictionary(x => x.FileName, StringComparer.OrdinalIgnoreCase);
         var present = new HashSet<string>(listing, StringComparer.OrdinalIgnoreCase);
         var unmanaged = new HashSet<string>(manifest.UnmanagedFileNames, StringComparer.OrdinalIgnoreCase);
-        var managed = new HashSet<string>(manifest.ManagedFiles.Select(x => x.RelativePath), StringComparer.OrdinalIgnoreCase);
+        var managed = new HashSet<string>(manifest.ManagedFiles, StringComparer.OrdinalIgnoreCase);
 
         var added = new List<string>();
         var changed = new List<string>();
@@ -400,9 +409,9 @@ public sealed class DriftService(
             if (byName.TryGetValue(name, out var entry) is false)
             {
                 // A file sync never installed and was already ignoring is not an addition. One that
-                // was not there at the last sync is, whatever it turns out to be. Managed files are
-                // compared below, by their own record.
-                if (unmanaged.Contains(name) is false && managed.Contains(name) is false)
+                // was not there at the last sync is, whatever it turns out to be - except in a shared
+                // folder, where files come and go that were never sync's to notice.
+                if (manifest.Shared is false && unmanaged.Contains(name) is false && managed.Contains(name) is false)
                 {
                     added.Add(name);
                 }
@@ -417,20 +426,6 @@ public sealed class DriftService(
         }
 
         var removed = byName.Keys.Where(x => present.Contains(x) is false).ToList();
-
-        foreach (var file in manifest.ManagedFiles)
-        {
-            var path = Path.Combine(modFolder, file.RelativePath);
-
-            if (File.Exists(path) is false)
-            {
-                removed.Add(file.RelativePath);
-            }
-            else if (HasMoved(path, file.Size, file.ModifiedUtc))
-            {
-                changed.Add(file.RelativePath);
-            }
-        }
 
         return (added, removed, changed);
     }

@@ -38,6 +38,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRecycleBin, ShellRecycleBin>();
         services.AddSingleton<ISyncManifestStore, SyncManifestStore>();
         services.AddSingleton<IDriftService, DriftService>();
+        services.AddSingleton<IManagedFileDriftCheck, ManagedFileDriftCheck>();
         services.AddSingleton<IStoreIntegrityService, StoreIntegrityService>();
         services.AddSingleton<IModSyncService, ModSyncService>();
         services.AddSingleton<GameFiles.IGameFileEditor, GameFiles.GameFileEditor>();

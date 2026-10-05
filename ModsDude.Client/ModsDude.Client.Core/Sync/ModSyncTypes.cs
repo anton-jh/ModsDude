@@ -74,6 +74,17 @@ public enum ModSyncAction
     /// </remarks>
     Rename,
 
+    /// <summary>
+    /// Pinned, installed, the bytes match - and the file is a hardlink into the store on a target
+    /// that does not allow them. Replaced by a copy of itself, under the name the layout gives it.
+    /// </summary>
+    /// <remarks>
+    /// What makes switching a target's hardlinks off take effect: without it, every file linked
+    /// before the switch would stay linked, and the blob behind it exposed to whatever was found to
+    /// rewrite mod files in place.
+    /// </remarks>
+    Unlink,
+
     /// <summary>Pinned and absent.</summary>
     Install,
 
@@ -231,6 +242,7 @@ public sealed record ModSyncPlan
 
     public int KeepCount => Items.Count(x => x.Action is ModSyncAction.Keep);
     public int RenameCount => Items.Count(x => x.Action is ModSyncAction.Rename);
+    public int UnlinkCount => Items.Count(x => x.Action is ModSyncAction.Unlink);
     public int InstallCount => Items.Count(x => x.Action is ModSyncAction.Install);
     public int ReplaceCount => Items.Count(x => x.Action is ModSyncAction.Replace);
     public int UninstallCount => Items.Count(x => x.Action is ModSyncAction.UninstallRecoverable);

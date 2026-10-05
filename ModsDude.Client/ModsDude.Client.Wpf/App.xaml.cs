@@ -705,6 +705,7 @@ public partial class App : Application
         // Which processes are which game comes off the repos' adapters, for the same reason the
         // savegame adapters do: a game does not carry the base settings that hydrate one.
         services.AddSingleton<IGameProcessNames, RepoGameProcessNames>();
+        services.AddSingleton<IModTargetAdapters, RepoModTargetAdapters>();
         services.AddSingleton<IGameProcesses, SystemGameProcesses>();
         services.AddSingleton<IPlaySessionWatch, PlaySessionWatch>();
 

@@ -146,17 +146,19 @@ public sealed class SavegameCheckOutContextBuilder(
         var replaces = plans.Sum(x => x.ReplaceCount);
         var uninstalls = plans.Sum(x => x.UninstallCount);
         var renames = plans.Sum(x => x.RenameCount);
+        var unlinks = plans.Sum(x => x.UnlinkCount);
         var unrecognised = plans.Sum(x => x.Unrecognised.Count);
 
         if (installs > 0) parts.Add($"{installs} to install");
         if (replaces > 0) parts.Add($"{replaces} to replace");
         if (uninstalls > 0) parts.Add($"{uninstalls} to uninstall");
         if (renames > 0) parts.Add($"{renames} to rename");
+        if (unlinks > 0) parts.Add($"{unlinks} to copy instead of link");
 
-        // A rename leaves the bytes alone, so a locked mod being renamed is not worth warning about.
+        // A rename or an unlink leaves the bytes alone, so a locked mod going through one is not worth warning about.
         var locked = plans
             .SelectMany(x => x.Items)
-            .Where(x => x.Locked && x.Action is not (ModSyncAction.Keep or ModSyncAction.Rename))
+            .Where(x => x.Locked && x.Action is not (ModSyncAction.Keep or ModSyncAction.Rename or ModSyncAction.Unlink))
             .Select(x => $"'{x.DisplayName}'")
             .Distinct()
             .ToList();

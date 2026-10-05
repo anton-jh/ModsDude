@@ -344,7 +344,7 @@ public class DriftServiceTests
         public DriftFixture()
         {
             Manifests = new SyncManifestStore(_manifests.Path);
-            Service = new DriftService(Manifests, NullLogger<DriftService>.Instance);
+            Service = new DriftService(Manifests, FakeManagedFileDriftCheck.None, NullLogger<DriftService>.Instance);
         }
 
 

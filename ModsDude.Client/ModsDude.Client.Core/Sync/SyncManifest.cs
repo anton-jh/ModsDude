@@ -23,23 +23,11 @@ namespace ModsDude.Client.Core.Sync;
 public sealed record SyncManifest
 {
     /// <summary>
-    /// Bumped when the shape changes. There is no migration and none is needed: a manifest that
-    /// cannot be read is a manifest that is absent, which costs a full reconcile.
+    /// Bumped when the shape changes, or when older data would answer a question wrongly rather than
+    /// not at all. There is no migration and none is needed: a manifest that cannot be read is a
+    /// manifest that is absent, which costs a full reconcile.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Deliberately <b>not</b> bumped for <see cref="Target"/> replacing the bare game identity, even
-    /// though the shape changed: the key moved into the filename with it, so a manifest written before
-    /// slice 2b of Phase 10 sits under a name nothing will ever build again and cannot be read as this
-    /// shape by accident. It is collected by the stale sweep rather than by a version check.
-    /// </para>
-    /// <para>
-    /// Bumped to 2 for <see cref="SyncManifestEntry.Locked"/>. A version 1 manifest would deserialize
-    /// with every entry unlocked, which reads as "no locked mod drifted" - the one thing the drift
-    /// notice exists to say loudly. Discarding it costs a reconcile; believing it costs a savegame.
-    /// </para>
-    /// </remarks>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
 
     public int Version { get; init; } = CurrentVersion;
@@ -98,12 +86,15 @@ public sealed record SyncManifest
     /// </summary>
     public IReadOnlyList<string> UnmanagedFileNames { get; init; } = [];
 
-    /// <summary>The adapter's other files as the apply left them, so a change to one counts as drift.</summary>
-    public IReadOnlyList<SyncManifestManagedFile> ManagedFiles { get; init; } = [];
-}
+    /// <summary>
+    /// The adapter's other files, relative to the mod folder. Not compared by size or time: the game
+    /// rewrites them for its own reasons, and drift is only an edit that would change one again.
+    /// </summary>
+    public IReadOnlyList<string> ManagedFiles { get; init; } = [];
 
-/// <param name="RelativePath">Relative to the mod folder.</param>
-public sealed record SyncManifestManagedFile(string RelativePath, long Size, DateTimeOffset ModifiedUtc);
+    /// <summary>Whether other programs keep mods here too. See <see cref="ModTarget.Shared"/>.</summary>
+    public bool Shared { get; init; }
+}
 
 /// <param name="FileName">
 /// The file's name within the mod folder, which is what a directory listing produces - the cheap

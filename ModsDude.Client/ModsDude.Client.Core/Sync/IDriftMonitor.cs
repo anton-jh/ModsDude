@@ -23,8 +23,9 @@ public interface IDriftMonitor : IDisposable
     /// would be one nobody ever read.
     /// </para>
     /// <para>
-    /// It also means something bigger than the mod it names: the game's updater wrote through a
-    /// hardlink, which is the assumption <c>SupportsHardlinks</c> is set on. That is worth keeping on
+    /// It also means something bigger than the mod it names: something wrote through a
+    /// hardlink on a target whose <see cref="GameAdapters.ModTarget.SupportsHardlinks"/> said nothing
+    /// would. That is worth keeping on
     /// screen until somebody waves it away.
     /// </para>
     /// </remarks>

@@ -86,12 +86,26 @@ internal sealed class ModSyncPlanBuilder(
 
             await Task.WhenAll(desiredLoad ?? Task.CompletedTask, installedScan);
 
-            var installed = await installedScan;
+            var scanned = await installedScan;
 
             if (desiredLoad is not null)
             {
                 (desired, revision) = await desiredLoad;
             }
+
+            var recorded = (manifest?.Entries ?? [])
+                .Select(x => x.FileName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // In a shared folder only what sync installed is the layout's to place by, so a file some
+            // other program keeps there never lends a mod its name.
+            var layout = LayOut(request, desired, target.Shared
+                ? [.. scanned.Mods.Where(x => recorded.Contains(Path.GetFileName(x.Path)))]
+                : scanned.Mods);
+
+            var installed = target.Shared
+                ? LeaveOthersAlone(scanned, layout, recorded)
+                : scanned;
 
             // Needed only when something is actually going to be removed. It is the one input that
             // needs the repo's mod list, and a re-apply that changes nothing should not pay for it.
@@ -123,12 +137,10 @@ internal sealed class ModSyncPlanBuilder(
                 registered = RegisteredContent.None;
             }
 
-            var layout = LayOut(request, desired, installed.Mods);
-
             var items = await ModSyncPlanner.PlanAsync(
                 desired, layout, installed.Mods, registered, manifest, null, cancellationToken, progress);
 
-            return BuildPlan(request, revision, installed.UnmanagedFileNames, items, layout);
+            return BuildPlan(request, revision, installed.UnmanagedFileNames, UnlinkWhereNotAllowed(target, items), layout);
         }
         finally
         {
@@ -163,7 +175,7 @@ internal sealed class ModSyncPlanBuilder(
 
         var layout = request.Adapter.Layout(new ModLayoutContext(
             request.Target,
-            [.. desired.Select(x => new ModLayoutMod(x.ModId, x.VersionId, x.FileName, installedNames.GetValueOrDefault(x.ModId), x.Locked))]));
+            [.. desired.Select(x => new ModLayoutMod(x.ModId, x.VersionId, x.ContentHash, x.FileName, installedNames.GetValueOrDefault(x.ModId), x.Locked))]));
 
         foreach (var placement in layout.Placements)
         {
@@ -186,6 +198,69 @@ internal sealed class ModSyncPlanBuilder(
         }
 
         return layout;
+    }
+
+    /// <summary>
+    /// A shared folder narrowed to what sync may touch: the files it installed, and whatever sits at a
+    /// name the layout is about to use. Every other mod in it belongs to somebody else and joins the
+    /// files sync leaves alone - even one of a mod the profile pins, which then gets a file of its own
+    /// beside it.
+    /// </summary>
+    /// <remarks>
+    /// A file at a placement name is claimed because the install cannot happen around it: it is either
+    /// already the right bytes, which the planner keeps, or something in the way, which goes the way
+    /// any other replaced file does.
+    /// </remarks>
+    private static (IReadOnlyList<InstalledMod> Mods, IReadOnlyList<string> UnmanagedFileNames) LeaveOthersAlone(
+        (IReadOnlyList<InstalledMod> Mods, IReadOnlyList<string> UnmanagedFileNames) scanned,
+        ModLayout layout,
+        IReadOnlySet<string> recorded)
+    {
+        var placed = layout.Placements
+            .Select(x => x.FileName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var claimed = new List<InstalledMod>();
+        var others = new List<string>();
+
+        foreach (var mod in scanned.Mods)
+        {
+            var name = Path.GetFileName(mod.Path);
+
+            if (recorded.Contains(name) || placed.Contains(name))
+            {
+                claimed.Add(mod);
+            }
+            else
+            {
+                others.Add(name);
+            }
+        }
+
+        return (claimed, [.. scanned.UnmanagedFileNames, .. others]);
+    }
+
+    /// <summary>
+    /// Every kept file that is still a hardlink on a target that does not allow them, turned into a
+    /// copy of itself - which is what makes switching a target's hardlinks off take effect for the
+    /// files linked before it.
+    /// </summary>
+    /// <remarks>
+    /// A link count that cannot be read is taken as no link. That happens on the filesystems that
+    /// cannot link in the first place - a network path, exFAT - so there is nothing to undo there.
+    /// </remarks>
+    private static IReadOnlyList<ModSyncItem> UnlinkWhereNotAllowed(ModTarget target, IReadOnlyList<ModSyncItem> items)
+    {
+        if (target.SupportsHardlinks)
+        {
+            return items;
+        }
+
+        return [.. items.Select(x =>
+            x.Action is ModSyncAction.Keep or ModSyncAction.Rename &&
+            FileLinks.TryGetLinkCount(x.InstalledPath!) is > 1
+                ? x with { Action = ModSyncAction.Unlink }
+                : x)];
     }
 
     private ModSyncPlan BuildPlan(
@@ -223,7 +298,7 @@ internal sealed class ModSyncPlanBuilder(
             GameName = request.GameName,
             Target = target,
             Items = items,
-            Materialization = DecideMaterialization(modFolder, servingStore, request.Adapter),
+            Materialization = DecideMaterialization(target, servingStore),
             UnmanagedFileNames = unmanagedFileNames,
             ManagedFiles = managedFiles,
             HashesToFetch = [.. items
@@ -412,7 +487,7 @@ internal sealed class ModSyncPlanBuilder(
         var unmanaged = new HashSet<string>(unmanagedFileNames, StringComparer.OrdinalIgnoreCase);
         var blocking = new List<ModSyncItem>();
 
-        foreach (var item in items.Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace or ModSyncAction.Rename))
+        foreach (var item in items.Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace or ModSyncAction.Rename or ModSyncAction.Unlink))
         {
             var name = item.FileName!;
 
@@ -495,24 +570,24 @@ internal sealed class ModSyncPlanBuilder(
     }
 
     /// <summary>
-    /// Hardlink where the disk is served by its own store and the adapter says the game's updater
-    /// will not rewrite a mod file in place; a copy in every other case.
+    /// Hardlink where the disk is served by its own store and the target says nothing writing to it
+    /// rewrites a mod file in place; a copy in every other case.
     /// </summary>
     /// <remarks>
     /// The fallback is probed rather than assumed, in the store's own temporary folder - same volume,
     /// therefore same filesystem, and nothing is written into the folder the game owns. Only a
     /// same-disk assignment that falls back is worth warning about: a cross-disk store is a
-    /// deliberate trade of sync time for space, and an adapter without hardlink support is a stated
+    /// deliberate trade of sync time for space, and a target without hardlink support is a stated
     /// property of the game rather than a silent surprise.
     /// </remarks>
-    private ModMaterialization DecideMaterialization(string modFolder, ContentStore servingStore, ILocalModAdapter adapter)
+    private ModMaterialization DecideMaterialization(ModTarget target, ContentStore servingStore)
     {
         var sameVolume = string.Equals(
-            FileSystemHelper.NormalizeVolumeRoot(modFolder),
+            FileSystemHelper.NormalizeVolumeRoot(target.Path),
             FileSystemHelper.NormalizeVolumeRoot(servingStore.RootPath),
             StringComparison.OrdinalIgnoreCase);
 
-        if (sameVolume is false || adapter.SupportsHardlinks is false)
+        if (sameVolume is false || target.SupportsHardlinks is false)
         {
             return new ModMaterialization(MaterializationMethod.Copy, FellBackToCopy: false);
         }

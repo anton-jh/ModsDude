@@ -193,6 +193,13 @@ public partial class FolderPathDynamicFormFieldViewModel(
             Value = folder;
         }
     }
+
+    /// <summary>Empties an optional folder, which for most games takes away whatever it was for.</summary>
+    [RelayCommand]
+    public void Clear()
+    {
+        Value = null;
+    }
 }
 
 /// <summary>

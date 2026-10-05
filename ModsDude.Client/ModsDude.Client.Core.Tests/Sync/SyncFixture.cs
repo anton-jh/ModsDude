@@ -34,7 +34,15 @@ internal sealed class SyncFixture : IDisposable
         Downloader = new FakeModFileDownloader(Server);
         RecycleBin = new FakeRecycleBin(recycleBinAvailable);
         Manifests = new SyncManifestStore(_manifests.Path);
-        Drift = new DriftService(Manifests, NullLogger<DriftService>.Instance);
+        var fileEditor = new GameFileEditor(RecycleBin, NullLogger<GameFileEditor>.Instance);
+
+        Drift = new DriftService(
+            Manifests,
+            new ManagedFileDriftCheck(
+                new FakeModTargetAdapters(x => x == Target ? new ResolvedModTarget(Adapter, Adapter.Target) : null),
+                fileEditor,
+                NullLogger<ManagedFileDriftCheck>.Instance),
+            NullLogger<DriftService>.Instance);
         Held = new FakeHeldSavegames(Manifests);
 
         // Same game, same disk, another folder - which is what makes its manifest something the
@@ -55,7 +63,7 @@ internal sealed class SyncFixture : IDisposable
             Held,
             Held,
             Leases,
-            new GameFileEditor(RecycleBin, NullLogger<GameFileEditor>.Instance),
+            fileEditor,
             Guard,
             TimeProvider.System,
             NullLogger<ModSyncService>.Instance);

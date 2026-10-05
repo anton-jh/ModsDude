@@ -777,6 +777,7 @@ public sealed class ProfileApplyService(
         if (plan.UninstallCount > 0) lines.Add($"{plan.UninstallCount} to uninstall");
         if (plan.QuarantineCount > 0) lines.Add($"{plan.QuarantineCount} to move to the Recycle Bin or a folder you choose");
         if (plan.RenameCount > 0) lines.Add($"{plan.RenameCount} to rename");
+        if (plan.UnlinkCount > 0) lines.Add($"{plan.UnlinkCount} to copy instead of link");
 
         return $"{plan.ModFolder}\n\n{string.Join('\n', lines)}\n{plan.KeepCount} already correct.";
     }

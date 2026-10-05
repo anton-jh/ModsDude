@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using TargetRead = System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<ModsDude.Client.Core.Models.LocalMod>>>;
 
 namespace ModsDude.Client.Core.Services;
 
@@ -51,6 +52,12 @@ public sealed class ModCatalog : IDisposable
 
     private readonly Dictionary<ModSourceId, Task<SourceScan>> _scans = [];
     private readonly List<ModSource> _adHocSources = [];
+
+    /// <summary>
+    /// How each game folder is read, by its source: through its target, since a target can name its
+    /// files in a way only the adapter knows how to read back. Refreshed with the sources.
+    /// </summary>
+    private readonly Dictionary<ModSourceId, TargetRead> _targetReads = [];
     /// <summary>
     /// The sources this page is scanning. Starts empty and is never persisted: opening a page must
     /// not read a disk, and a folder somebody looked in last week is not a standing instruction to
@@ -94,6 +101,7 @@ public sealed class ModCatalog : IDisposable
     public IReadOnlyList<ModSource> GetSources()
     {
         var sources = new List<ModSource>();
+        var reads = new Dictionary<ModSourceId, TargetRead>();
 
         foreach (var game in _repo.Games)
         {
@@ -101,13 +109,16 @@ public sealed class ModCatalog : IDisposable
             // other two hold as missing from this machine.
             var targets = ReadTargets(game);
 
-            foreach (var (key, displayName, path) in targets)
+            foreach (var (key, displayName, path, read) in targets)
             {
-                sources.Add(new ModSource(
-                    ModSourceId.ForTarget(new ModTargetRef(game.Identity, key)),
-                    displayName,
-                    path,
-                    ModSourceKind.Game));
+                var id = ModSourceId.ForTarget(new ModTargetRef(game.Identity, key));
+
+                sources.Add(new ModSource(id, displayName, path, ModSourceKind.Game));
+
+                if (read is not null)
+                {
+                    reads[id] = read;
+                }
             }
         }
 
@@ -119,6 +130,13 @@ public sealed class ModCatalog : IDisposable
         lock (_lock)
         {
             sources.AddRange(_adHocSources);
+
+            _targetReads.Clear();
+
+            foreach (var (id, read) in reads)
+            {
+                _targetReads[id] = read;
+            }
         }
 
         return sources;
@@ -132,16 +150,23 @@ public sealed class ModCatalog : IDisposable
     /// the merged view never looks in, which reports what that folder holds as missing from this
     /// machine - so settings this repo's adapter version cannot read fall back to the persisted
     /// targets, which are paths and keys with no display name, labelled by their keys. That is the
-    /// same list with worse labels rather than a shorter one.
+    /// same list with worse labels rather than a shorter one. Those are read as any other folder is,
+    /// since there is no adapter to read them through their target.
     /// </remarks>
-    private IReadOnlyList<(TargetKey Key, string DisplayName, string Path)> ReadTargets(Game game)
+    private IReadOnlyList<(TargetKey Key, string DisplayName, string Path, TargetRead? Read)> ReadTargets(Game game)
     {
         try
         {
             if (game.GetAdapter(_repo.Adapter).GetLocalCapabilityAdapterFactory<ILocalModAdapter>() is
                 Func<ILocalModAdapter> factory)
             {
-                return [.. factory().ModTargets.Select(x => (x.Key, x.DisplayName, x.Path))];
+                var adapter = factory();
+
+                return [.. adapter.ModTargets.Select(x => (
+                    x.Key,
+                    x.DisplayName,
+                    x.Path,
+                    (TargetRead?)(cancellationToken => adapter.GetInstalledMods(x, _ => false, cancellationToken))))];
             }
         }
         catch (Exception exception)
@@ -152,7 +177,7 @@ public sealed class ModCatalog : IDisposable
                 game.Identity);
         }
 
-        return [.. game.Targets.Select(x => (x.Key, TargetNames.Of(x.Key, null), x.ModFolder))];
+        return [.. game.Targets.Select(x => (x.Key, TargetNames.Of(x.Key, null), x.ModFolder, (TargetRead?)null))];
     }
 
     public ModSourceState GetState(ModSourceId sourceId)
@@ -405,7 +430,16 @@ public sealed class ModCatalog : IDisposable
 
         try
         {
-            var mods = await _modAdapter.GetModsFromFolder(source.Path, _cancellation.Token);
+            TargetRead? targetRead;
+
+            lock (_lock)
+            {
+                targetRead = _targetReads.GetValueOrDefault(source.Id);
+            }
+
+            var mods = targetRead is not null
+                ? await targetRead(_cancellation.Token)
+                : await _modAdapter.GetModsFromFolder(source.Path, _cancellation.Token);
 
             return new SourceScan(source, [.. mods], null);
         }
