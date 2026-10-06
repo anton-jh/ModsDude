@@ -94,7 +94,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// one, and the sentence for the other case is <see cref="_notConnected"/> below.
     /// </remarks>
     private SavegameRowOffer? _offer;
-    private string? _blockingSavegameName;
+    private HeldSavegameName? _blockingSavegame;
 
     /// <summary>What both buttons say when this repo's game is not connected on this machine.</summary>
     private const string _notConnected = "This game is not connected here";
@@ -284,7 +284,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     public string CheckOutToolTip => CheckOutBlockedReason
         ?? (_offer is { ChecksInFirst: not null }
-            ? $"{(_blockingSavegameName is { Length: > 0 } name ? $"'{name}'" : "Another savegame")} is checked out here, so checking this one out checks it in first. You are asked before anything changes."
+            ? $"{(_blockingSavegame is { Name: not null } blocking ? blocking.Quoted : "Another savegame")} is checked out here, so checking this one out checks it in first. You are asked before anything changes."
             : null)
         ?? (_offer is { ActivatesFirst: true } offer
             ? $"The mod folder is not on what this savegame runs on, so checking it out activates {SavegameRowRules.DescribeActivation(ProfileName, offer.PinnedRevision)} first. You are asked before anything changes."
@@ -531,14 +531,14 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// What the game this repo offers can do with this savegame, or null where none is connected on
     /// this machine.
     /// </param>
-    /// <param name="blockingSavegameName">
-    /// What the savegame already claiming the mod folder is called, where the page could find it in
-    /// its own list. Named on the tooltip, since checking this one out checks that one in first.
+    /// <param name="blockingSavegame">
+    /// What the savegame already claiming the mod folder is called, in whichever repo it is. Named on
+    /// the tooltip, since checking this one out checks that one in first.
     /// </param>
-    public void SetOffer(SavegameRowOffer? offer, string? blockingSavegameName)
+    public void SetOffer(SavegameRowOffer? offer, HeldSavegameName? blockingSavegame)
     {
         _offer = offer;
-        _blockingSavegameName = blockingSavegameName;
+        _blockingSavegame = blockingSavegame;
 
         OnPropertyChanged(nameof(CanCheckOut));
         OnPropertyChanged(nameof(CheckOutBlockedReason));

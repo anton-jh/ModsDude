@@ -21,10 +21,10 @@ public interface ISavegameCheckOutFlow
     /// Who is asking, so a claim of their own is not taken from "somebody". Null where it could not be
     /// read, and then any holder is asked about.
     /// </param>
-    /// <param name="nameOf">What a savegame is called, read off the caller's own list. Null where it is not in it.</param>
+    /// <param name="heldNames">What the savegames the game holds are called.</param>
     /// <param name="changed">
     /// Called whenever the repo moved under the caller, including where a check-in or activation
-    /// before the check-out stopped it, so the caller's list is the one it names savegames from.
+    /// before the check-out stopped it.
     /// </param>
     Task CheckOutAsync(
         Repo repo,
@@ -34,7 +34,7 @@ public interface ISavegameCheckOutFlow
         SavegameCheckOutMode mode,
         SavegameRevisionMode? revisionMode,
         string? currentUserId,
-        Func<Guid, string?> nameOf,
+        IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
         Func<Task> changed,
         CancellationToken cancellationToken);
 }

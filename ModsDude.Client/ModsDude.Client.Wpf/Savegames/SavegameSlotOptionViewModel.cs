@@ -32,14 +32,14 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
         GameSavegameSlot slot,
         SavegameSlotAvailability availability,
         Guid? occupyingSavegameId = null,
-        string? occupyingSavegameName = null,
+        HeldSavegameName? occupyingSavegame = null,
         bool isFreedByCheckIn = false)
     {
         Ref = slot.Ref;
         TargetName = slot.TargetName;
         Availability = availability;
         OccupyingSavegameId = occupyingSavegameId;
-        OccupyingSavegameName = occupyingSavegameName;
+        OccupyingSavegame = occupyingSavegame;
         IsFreedByCheckIn = isFreedByCheckIn;
 
         SaveName = slot.DisplayName;
@@ -102,9 +102,9 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
     /// <summary>Which savegame this machine records as checked out here, if any.</summary>
     public Guid? OccupyingSavegameId { get; }
 
-    public string? OccupyingSavegameName { get; }
+    public HeldSavegameName? OccupyingSavegame { get; }
 
-    /// <inheritdoc cref="SavegameSlotOptionViewModel(GameSavegameSlot, SavegameSlotAvailability, Guid?, string?, bool)"/>
+    /// <inheritdoc cref="SavegameSlotOptionViewModel(GameSavegameSlot, SavegameSlotAvailability, Guid?, HeldSavegameName?, bool)"/>
     public bool IsFreedByCheckIn { get; }
 
     /// <summary>Writing here is refused outright - it holds play that exists nowhere else.</summary>
@@ -122,8 +122,8 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
     /// frees itself. Empty where the slot is refused but nothing here can name what holds it, which
     /// is the binding-without-a-server-record case.
     /// </summary>
-    public string BlockedAction => OccupyingSavegameName is { Length: > 0 } name
-        ? $"Check '{name}' in first"
+    public string BlockedAction => OccupyingSavegame is { Name: not null } occupying
+        ? $"Check {occupying.Quoted} in first"
         : "Check that savegame in first";
 
 
@@ -145,19 +145,19 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
     {
         if (IsFreedByCheckIn)
         {
-            return OccupyingSavegameName is { Length: > 0 } checkedIn
-                ? $"'{checkedIn}' is checked in first, which frees this slot"
+            return OccupyingSavegame is { Name: not null } checkedIn
+                ? $"{checkedIn.Quoted} is checked in first, which frees this slot"
                 : "The savegame here is checked in first, which frees this slot";
         }
 
         return Availability switch
         {
             SavegameSlotAvailability.Free => "Nothing here",
-            SavegameSlotAvailability.HeldClean => OccupyingSavegameName is { Length: > 0 } clean
-                ? $"'{clean}' is checked out here, exactly as it was downloaded"
+            SavegameSlotAvailability.HeldClean => OccupyingSavegame is { Name: not null } clean
+                ? $"{clean.Quoted} is checked out here, exactly as it was downloaded"
                 : "A checked-out savegame is here, exactly as it was downloaded",
-            SavegameSlotAvailability.HeldWithUnpublishedPlay => OccupyingSavegameName is { Length: > 0 } played
-                ? $"'{played}' has been played here and not checked in - this exists nowhere else"
+            SavegameSlotAvailability.HeldWithUnpublishedPlay => OccupyingSavegame is { Name: not null } played
+                ? $"{played.Quoted} has been played here and not checked in - this exists nowhere else"
                 : "This has been played and not checked in - it exists nowhere else",
             _ => "Not from this repo. ModsDude has no copy of it"
         };

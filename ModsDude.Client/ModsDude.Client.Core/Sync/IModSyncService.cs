@@ -23,6 +23,14 @@ public interface IModSyncService
     Task<ModSyncResult> ExecuteAsync(ModSyncPlan plan, IProgress<ModSyncProgress>? progress, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Puts what a profile pins into the stores serving these folders, touching no folder. For an
+    /// activation that has to wait for something else first, so a download that fails stops it before
+    /// anything has changed. The activation still plans and fetches as ever, and finds them there.
+    /// </summary>
+    /// <returns>Completed where every store holds every mod; the failures otherwise.</returns>
+    Task<ModSyncResult> FetchAsync(ModFetchRequest request, IProgress<ModSyncProgress>? progress, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Records a folder that already matches its profile, without touching a file in it - so a mod
     /// added by hand and then pinned stops being reported as drift. Only for a plan with no work.
     /// </summary>

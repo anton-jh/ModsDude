@@ -595,6 +595,7 @@ public partial class App : Application
 
         // The savegame verbs, shared by the Saves list and a profile's Overview.
         services.AddSingleton<ISavegameOffers, SavegameOffers>();
+        services.AddSingleton<IHeldSavegameNames, HeldSavegameNames>();
         services.AddSingleton<ISavegameCheckInFlow, SavegameCheckInFlow>();
         services.AddSingleton<ISavegameDisconnectFlow, SavegameDisconnectFlow>();
         services.AddSingleton<ISavegameProfileActivation, SavegameProfileActivation>();

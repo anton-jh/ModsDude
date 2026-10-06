@@ -74,7 +74,7 @@ internal sealed class ModSyncPlanBuilder(
         // nothing.
         using var prefetchCancel = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var prefetch = manifest?.ProfileId != request.ProfileId
-            ? GetRegisteredContentAsync(request.RepoId, prefetchCancel.Token)
+            ? GetRecoverableContentAsync(request.RepoId, manifest, prefetchCancel.Token)
             : null;
         var prefetchUsed = false;
 
@@ -114,7 +114,7 @@ internal sealed class ModSyncPlanBuilder(
             if (NeedsRegisteredContent(desired, installed.Mods, manifest))
             {
                 prefetchUsed = true;
-                registered = await (prefetch ?? GetRegisteredContentAsync(request.RepoId, cancellationToken));
+                registered = await (prefetch ?? GetRecoverableContentAsync(request.RepoId, manifest, cancellationToken));
             }
             else if (prefetch is not null)
             {
@@ -378,10 +378,19 @@ internal sealed class ModSyncPlanBuilder(
     /// The revision is answered back rather than assumed from what was asked, because null means head
     /// and only the server knows which number that is.
     /// </remarks>
-    private async Task<(IReadOnlyList<DesiredMod> Mods, int Revision)> GetDesiredAsync(
+    private Task<(IReadOnlyList<DesiredMod> Mods, int Revision)> GetDesiredAsync(
         ModSyncRequest request, int? revision, CancellationToken cancellationToken)
+        => GetDesiredAsync(modDependenciesClient, request.RepoId, request.ProfileId, revision, cancellationToken);
+
+    /// <inheritdoc cref="GetDesiredAsync(ModSyncRequest, int?, CancellationToken)"/>
+    internal static async Task<(IReadOnlyList<DesiredMod> Mods, int Revision)> GetDesiredAsync(
+        IModDependenciesClient modDependenciesClient,
+        Guid repoId,
+        Guid profileId,
+        int? revision,
+        CancellationToken cancellationToken)
     {
-        var response = await modDependenciesClient.GetModDependenciesV1Async(request.RepoId, request.ProfileId, revision, cancellationToken);
+        var response = await modDependenciesClient.GetModDependenciesV1Async(repoId, profileId, revision, cancellationToken);
 
         // Normalized where the ids enter the client, as everywhere else, and the file name checked
         // in the same breath: it came off somebody else's disk and is about to be interpolated into
@@ -544,6 +553,49 @@ internal sealed class ModSyncPlanBuilder(
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// What a file about to be removed can be fetched again from: the repo being applied, and the repo
+    /// the folder was last applied from. A game switching between two repos' profiles then moves the
+    /// outgoing repo's mods into the store, where switching back finds them, rather than treating them
+    /// as files nothing else has a copy of.
+    /// </summary>
+    private async Task<RegisteredContent> GetRecoverableContentAsync(
+        Guid repoId,
+        SyncManifest? manifest,
+        CancellationToken cancellationToken)
+    {
+        var applied = GetRegisteredContentAsync(repoId, cancellationToken);
+
+        if (manifest is null || manifest.RepoId == repoId)
+        {
+            return await applied;
+        }
+
+        var previous = TryGetRegisteredContentAsync(manifest.RepoId, cancellationToken);
+
+        await Task.WhenAll(applied, previous);
+
+        return (await applied).Including(await previous);
+    }
+
+    /// <summary>
+    /// A repo's content, or none where the server refuses it - access to the repo lost, or the repo
+    /// gone. Its files are then treated as nothing else has a copy of, which is the cautious answer.
+    /// </summary>
+    private async Task<RegisteredContent> TryGetRegisteredContentAsync(Guid repoId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await GetRegisteredContentAsync(repoId, cancellationToken);
+        }
+        catch (ApiException exception)
+        {
+            logger.LogWarning(exception, "Could not read the mod list of repo {RepoId}, which the folder was last applied from.", repoId);
+
+            return RegisteredContent.None;
+        }
     }
 
     private async Task<RegisteredContent> GetRegisteredContentAsync(Guid repoId, CancellationToken cancellationToken)

@@ -29,7 +29,7 @@ public sealed class SavegameOffers(
             manifest?.ProfileRevision);
     }
 
-    public void Offer(Repo repo, SavegameListItemViewModel row, SavegameHost? host, Func<Guid, string?> nameOf)
+    public void Offer(Repo repo, SavegameListItemViewModel row, SavegameHost? host, IReadOnlyDictionary<Guid, HeldSavegameName> heldNames)
     {
         if (host is null)
         {
@@ -51,7 +51,7 @@ public sealed class SavegameOffers(
             host.AppliedProfileId,
             host.AppliedRevision);
 
-        row.SetOffer(offer, offer.ChecksInFirst is Guid blocking ? nameOf(blocking) : null);
+        row.SetOffer(offer, offer.ChecksInFirst is Guid blocking ? heldNames.GetValueOrDefault(blocking) ?? HeldSavegameName.Unknown : null);
     }
 
     private SavegameHoldHere? FindHold(Guid savegameId, SavegameHost host)

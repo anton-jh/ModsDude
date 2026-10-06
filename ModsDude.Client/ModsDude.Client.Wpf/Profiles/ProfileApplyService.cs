@@ -10,6 +10,7 @@ using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.Mods.Import;
+using ModsDude.Client.Wpf.Savegames;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -100,12 +101,6 @@ public sealed record ProfileApplyOutcome(Game Game, ProfileApplyStatus Status, s
     /// </para>
     /// </remarks>
     public bool Activated { get; init; }
-
-    /// <summary>
-    /// The savegame whose hold refused this, so a caller that has the list can name it. Null for
-    /// every other status.
-    /// </summary>
-    public Guid? BlockedBySavegameId { get; init; }
 }
 
 
@@ -161,6 +156,7 @@ public sealed class ProfileApplyService(
     IModSyncService syncService,
     IGameRepository games,
     IHeldSavegames heldSavegames,
+    IHeldSavegameNames heldSavegameNames,
     Lazy<IModalService> modalService,
     IFilePickerService filePicker,
     IBackgroundTaskReporter backgroundTasks,
@@ -226,6 +222,60 @@ public sealed class ProfileApplyService(
         return new PlanAttempt(plans, refusals);
     }
 
+    public async Task<string?> FetchModsAsync(
+        Repo repo,
+        Game game,
+        Guid profileId,
+        string profileName,
+        int? revision,
+        CancellationToken cancellationToken)
+    {
+        if (GetAdapter(repo, game) is not ILocalModAdapter adapter)
+        {
+            return null;
+        }
+
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var task = backgroundTasks.Begin($"Downloading the mods '{profileName}' needs", cancel: stop.Cancel);
+
+        task.DeclareTransfers(TransferDirection.Download);
+
+        try
+        {
+            var result = await syncService.FetchAsync(
+                new ModFetchRequest(repo.Id, profileId, revision, [.. adapter.ModTargets.Select(x => x.Path)]),
+                Report(task, null),
+                stop.Token);
+
+            return result.Completed ? null : DescribeFailures(result.Failures, downloading: true);
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested && cancellationToken.IsCancellationRequested is false)
+        {
+            return "The download was stopped.";
+        }
+    }
+
+    /// <summary>
+    /// What went wrong, missing files first: those are the server's to fix, and trying again cannot help.
+    /// </summary>
+    private static string DescribeFailures(IReadOnlyList<ModSyncFailure> failures, bool downloading = false)
+    {
+        var missing = failures.Count(x => x.MissingOnServer);
+        var other = failures.Count - missing;
+
+        var missingText = missing == 1 ? "1 mod is missing from the server" : $"{missing} mods are missing from the server";
+        var otherText = downloading
+            ? other == 1 ? "1 mod could not be downloaded" : $"{other} mods could not be downloaded"
+            : other == 1 ? "1 change could not be applied" : $"{other} changes could not be applied";
+
+        return (missing, other) switch
+        {
+            (0, _) => $"{otherText}.",
+            (_, 0) => $"{missingText}.",
+            _ => $"{missingText}, and {otherText}."
+        };
+    }
+
     public Task<ProfileApplyOutcome> ActivateAsync(
         Repo repo,
         Game game,
@@ -271,13 +321,12 @@ public sealed class ProfileApplyService(
 
         if (heldSavegames.FindProfileHold(game.Identity) is SavegameCheckoutBinding held)
         {
+            var name = await NameHeldAsync(repo, game, held.SavegameId, cancellationToken);
+
             return new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Refused,
-                $"'{game.Name}' is holding a savegame that follows a mod list, so it was left as it is. Check that savegame in first.")
-            {
-                BlockedBySavegameId = held.SavegameId
-            };
+                $"'{game.Name}' is holding {name.Quoted}, which follows a mod list, so it was left as it is. Check it in first.");
         }
 
         if (clearMods is false)
@@ -410,14 +459,13 @@ public sealed class ProfileApplyService(
             // "another mod list" - it is following this very one and does not move off its revision -
             // and telling somebody to check it in over a revision mismatch would be advice that fixes
             // nothing.
-            var reason = refusal.Refusal is SavegameApplyRefusal.CompatibilityModeIsHeld
-                ? $"'{game.Name}' is holding a savegame in compatibility mode on rev {refusal.Revision}. It was left as it is."
-                : $"'{game.Name}' is holding a savegame that follows another mod list, so it was left as it is. Check that savegame in first.";
+            var name = await NameHeldAsync(repo, game, refusal.SavegameId, cancellationToken);
 
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Refused, reason)
-            {
-                BlockedBySavegameId = refusal.SavegameId
-            };
+            var reason = refusal.Refusal is SavegameApplyRefusal.CompatibilityModeIsHeld
+                ? $"'{game.Name}' is holding {name.Quoted} in compatibility mode on rev {refusal.Revision}. It was left as it is."
+                : $"'{game.Name}' is holding {name.Quoted}, which follows another mod list, so it was left as it is. Check it in first.";
+
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Refused, reason);
         }
 
         // Joined with whatever the caller passed, so the strip's Cancel and a page's own Cancel are the
@@ -685,10 +733,7 @@ public sealed class ProfileApplyService(
                     game,
                     ProfileApplyStatus.Applied,
                     clearing ? $"{where} has had its mods cleared." : $"{where} now matches{Pinned(game, profileId, revision)}.")
-                : new ProfileApplyOutcome(
-                    game,
-                    ProfileApplyStatus.Failed,
-                    $"{where}: {result.Failures.Count} changes could not be applied.");
+                : new ProfileApplyOutcome(game, ProfileApplyStatus.Failed, $"{where}: {DescribeFailures(result.Failures)}");
         }
         catch (OperationCanceledException)
         {
@@ -848,6 +893,10 @@ public sealed class ProfileApplyService(
             ? $" revision {held}, which is where this game is held"
             : $" revision {held}, which is what the savegame checked out there runs on";
     }
+
+    private async Task<HeldSavegameName> NameHeldAsync(Repo repo, Game game, Guid savegameId, CancellationToken cancellationToken)
+        => (await heldSavegameNames.ReadAsync(game, repo.Id, [], cancellationToken)).GetValueOrDefault(savegameId)
+            ?? HeldSavegameName.Unknown;
 
     public bool IsBusy(Repo repo, Game game)
     {

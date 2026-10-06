@@ -42,6 +42,21 @@ public interface IProfileApplyService
         bool clearAll = false);
 
     /// <summary>
+    /// Downloads what a profile pins for every folder this game reaches, without touching any of them,
+    /// on the strip and cancellable there. For a gesture that changes something else before it
+    /// activates, so a download that cannot succeed stops it first.
+    /// </summary>
+    /// <param name="revision">The revision to download, or null for the profile's head.</param>
+    /// <returns>A sentence saying why the mods are not all there, or null where they are.</returns>
+    Task<string?> FetchModsAsync(
+        Repo repo,
+        Game game,
+        Guid profileId,
+        string profileName,
+        int? revision,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Records that this game follows the profile, then applies it to every folder it reaches. One
     /// gesture.
     /// </summary>

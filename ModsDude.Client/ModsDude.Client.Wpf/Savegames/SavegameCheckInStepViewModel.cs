@@ -42,14 +42,12 @@ public partial class SavegameCheckInStepViewModel : WizardStepViewModel
     /// where keeping it is a choice.
     /// </param>
     public SavegameCheckInStepViewModel(
-        string savegameName,
-        string slotLabel,
+        HeldSavegameName savegame,
         string? playedOn = null,
         int? slotNumber = null,
         string? handBackReason = null)
     {
-        SavegameName = savegameName;
-        SlotLabel = slotLabel;
+        Savegame = savegame;
         SlotNumber = slotNumber;
         PlayedOn = playedOn;
         HandBackReason = handBackReason;
@@ -58,27 +56,30 @@ public partial class SavegameCheckInStepViewModel : WizardStepViewModel
     }
 
 
-    public string SavegameName { get; }
-    public string SlotLabel { get; }
+    public HeldSavegameName Savegame { get; }
     public int? SlotNumber { get; }
 
-    /// <inheritdoc cref="SavegameCheckInStepViewModel(string, string, string?, int?, string?)"/>
+    /// <inheritdoc cref="SavegameCheckInStepViewModel(HeldSavegameName, string?, int?, string?)"/>
     public string? PlayedOn { get; }
 
     public bool HasPlayedOn => PlayedOn is { Length: > 0 };
 
-    /// <inheritdoc cref="SavegameCheckInStepViewModel(string, string, string?, int?, string?)"/>
+    /// <inheritdoc cref="SavegameCheckInStepViewModel(HeldSavegameName, string?, int?, string?)"/>
     public string? HandBackReason { get; }
 
     public bool MustHandBack => HandBackReason is not null;
 
     public bool CanKeepPlaying => MustHandBack is false;
 
-    public override string Title => $"Check '{SavegameName}' in";
+    public override string Title => $"Check {Savegame.Quoted} in";
 
     public string Message =>
-        $"Everything in {SavegameSlotWording.Named(SlotNumber, SlotLabel)} is uploaded as a new snapshot, and the others can take it from there. " +
+        $"Everything in {Slot} is uploaded as a new snapshot, and the others can take it from there. " +
         "A save that changed nothing mints nothing.";
+
+    private string Slot => Savegame.Name is string name
+        ? SavegameSlotWording.Named(SlotNumber, name)
+        : SlotNumber is int number ? $"slot {number}" : "its slot";
 
     [ObservableProperty]
     private string _label = "";

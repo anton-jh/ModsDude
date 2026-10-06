@@ -57,3 +57,8 @@ public sealed record ModSyncRequest(
     /// </remarks>
     public bool ClearAll { get; init; }
 }
+
+
+/// <summary>A profile's mods to put into the stores serving some folders, ahead of applying it to them.</summary>
+/// <param name="Revision">The revision to fetch, or null for the profile's head.</param>
+public sealed record ModFetchRequest(Guid RepoId, Guid ProfileId, int? Revision, IReadOnlyList<string> ModFolders);

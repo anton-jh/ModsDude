@@ -10,6 +10,21 @@ namespace ModsDude.Client.Wpf.Savegames;
 public interface ISavegameProfileActivation
 {
     /// <summary>
+    /// Downloads what a profile pins before anything else in the gesture changes, and says why where
+    /// it could not, so a profile whose mods cannot all be had stops the gesture while nothing has.
+    /// </summary>
+    /// <param name="notDone">What did not happen, leading the sentence that says so.</param>
+    /// <returns>Whether every mod is on this machine, so the caller can go on.</returns>
+    Task<bool> FetchModsFirstAsync(
+        Repo repo,
+        Game game,
+        Guid profileId,
+        string profileName,
+        int? revision,
+        string notDone,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Activates a profile the user has already agreed to as a step of something else, and says why
     /// where it did not finish.
     /// </summary>

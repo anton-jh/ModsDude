@@ -21,6 +21,9 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     private readonly List<ModDependencyDto> _dependencies = [];
     private readonly List<ModDto> _registered = [];
     private readonly Dictionary<string, byte[]> _blobs = [];
+    private readonly Dictionary<Guid, List<ModDto>> _otherRepos = [];
+    private readonly HashSet<Guid> _refusedRepos = [];
+    private readonly HashSet<string> _lostFiles = [];
 
 
     public Guid RepoId { get; } = Guid.NewGuid();
@@ -78,10 +81,33 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
 
     /// <summary>Registers a version without pinning it - what the repo can reproduce but does not want here.</summary>
     public void Register(string modId, string version, string content, bool locked = false, string? fileName = null, string? title = null)
+        => _registered.Add(Describe(modId, version, content, locked, fileName, title));
+
+    /// <summary>A version registered in another repo than the one being applied.</summary>
+    public void RegisterIn(Guid repoId, string modId, string version, string content)
+    {
+        if (_otherRepos.TryGetValue(repoId, out var registered) is false)
+        {
+            registered = [];
+            _otherRepos[repoId] = registered;
+        }
+
+        registered.Add(Describe(modId, version, content, locked: false, fileName: null, title: null));
+    }
+
+    /// <summary>The server refuses this repo's mod list, as it does for a repo the user lost access to.</summary>
+    public void Refuse(Guid repoId) => _refusedRepos.Add(repoId);
+
+    /// <summary>The repo has this mod's version but the server has no file for it.</summary>
+    public void LoseFile(string modId) => _lostFiles.Add(modId);
+
+    private ModDto Describe(string modId, string version, string content, bool locked, string? fileName, string? title)
     {
         var hash = SyncTestContent.HashOf(content);
 
-        _registered.Add(new ModDto
+        _blobs[$"{modId}/{version}"] = SyncTestContent.Bytes(content);
+
+        return new ModDto
         {
             ModId = modId,
             VersionId = version,
@@ -96,9 +122,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
             Images = [],
             Created = DateTime.UtcNow,
             Updated = DateTime.UtcNow
-        });
-
-        _blobs[$"{modId}/{version}"] = SyncTestContent.Bytes(content);
+        };
     }
 
     public byte[] Blob(string link) => _blobs[link];
@@ -135,15 +159,30 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     {
         Interlocked.Increment(ref _modListFetches);
 
-        return Task.FromResult(new GetModsResponse { Mods = [.. _registered], NextCursor = null });
+        if (_refusedRepos.Contains(repoId))
+        {
+            throw Problem(403, ProblemType.InsufficientRepoAccess);
+        }
+
+        IEnumerable<ModDto> registered = repoId == RepoId ? _registered : _otherRepos.GetValueOrDefault(repoId) ?? [];
+
+        return Task.FromResult(new GetModsResponse { Mods = [.. registered], NextCursor = null });
     }
 
     public Task<CreateModDownloadLinkResponse> CreateModDownloadLinkV1Async(CreateModDownloadLinkRequest request, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _downloadLinksMinted);
 
+        if (_lostFiles.Contains(request.ModId))
+        {
+            throw Problem(400, ProblemType.FileNotFound);
+        }
+
         return Task.FromResult(new CreateModDownloadLinkResponse { Link = $"{request.ModId}/{request.VersionId}" });
     }
+
+    private static ApiException<CustomProblemDetails> Problem(int status, ProblemType type)
+        => new("Refused", status, null, new Dictionary<string, IEnumerable<string>>(), new CustomProblemDetails { Type = type }, null);
 
 
     public Task DeleteModV1Async(Guid repoId, string modId, CancellationToken cancellationToken = default)

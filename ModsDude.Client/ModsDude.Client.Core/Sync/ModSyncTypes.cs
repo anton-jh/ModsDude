@@ -51,6 +51,22 @@ public sealed record RegisteredContent(IReadOnlySet<string> Hashes)
 
     public bool Holds(string? hash) => hash is not null && Hashes.Contains(hash);
 
+    /// <summary>This content and another repo's together. Where both name the same content, this one's name wins.</summary>
+    public RegisteredContent Including(RegisteredContent other)
+    {
+        var names = new Dictionary<string, string>(Names, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (hash, name) in other.Names)
+        {
+            names.TryAdd(hash, name);
+        }
+
+        return new RegisteredContent(Hashes.Union(other.Hashes, StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase))
+        {
+            Names = names
+        };
+    }
+
     public string? NameOf(string? hash)
         => hash is not null && Names.TryGetValue(hash, out var name) && string.IsNullOrWhiteSpace(name) is false
             ? name
@@ -95,8 +111,8 @@ public enum ModSyncAction
     Replace,
 
     /// <summary>
-    /// Not pinned, and its bytes are registered in the repo, so they can be fetched again. Deleted
-    /// once some store on the machine holds them.
+    /// Not pinned, and its bytes are registered in the repo being applied or in the one the folder was
+    /// last applied from, so they can be fetched again. Deleted once some store on the machine holds them.
     /// </summary>
     UninstallRecoverable,
 
@@ -323,6 +339,9 @@ public sealed record QuarantinedFile(ModKey ModId, string OriginalPath, Quaranti
 public sealed record ModSyncFailure(string Subject, string Message)
 {
     public Exception? Exception { get; init; }
+
+    /// <summary>The repo has the version but the server has no file for it, so trying again cannot help.</summary>
+    public bool MissingOnServer { get; init; }
 }
 
 /// <param name="Completed">

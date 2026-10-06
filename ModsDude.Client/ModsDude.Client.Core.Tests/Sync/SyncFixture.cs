@@ -161,6 +161,29 @@ internal sealed class SyncFixture : IDisposable
     /// <summary>What the game's other folder is running, which no sweep may take back.</summary>
     public void WriteSecondTargetManifest(string hash) => WriteManifest(SecondTarget, _second.Path, hash);
 
+    /// <summary>Installs one mod as an apply of a profile in another repo would have, manifest and all.</summary>
+    public void InstallAppliedFrom(Guid repoId, string modId, string version, string content)
+    {
+        var fileName = $"{modId}.zip";
+
+        Install(fileName, content);
+
+        var info = new FileInfo(Folder.Combine(fileName));
+
+        Manifests.Write(new SyncManifest
+        {
+            Target = Target,
+            RepoId = repoId,
+            ProfileId = Guid.NewGuid(),
+            SyncedAt = DateTimeOffset.UtcNow,
+            ModFolder = Folder.Path,
+            Entries = [new SyncManifestEntry(modId, version, SyncTestContent.HashOf(content), fileName, info.Length, info.LastWriteTimeUtc)]
+        });
+    }
+
+    public Task<ModSyncResult> FetchAsync()
+        => Service.FetchAsync(new ModFetchRequest(Server.RepoId, Server.ProfileId, null, [Folder.Path]), null, CancellationToken.None);
+
     public void Dispose()
     {
         Folder.Dispose();

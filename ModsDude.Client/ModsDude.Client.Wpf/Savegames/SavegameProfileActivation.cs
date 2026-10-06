@@ -25,6 +25,25 @@ public sealed class SavegameProfileActivation(
     IBackgroundTaskReporter backgroundTasks,
     IToastService toasts) : ISavegameProfileActivation
 {
+    public async Task<bool> FetchModsFirstAsync(
+        Repo repo,
+        Game game,
+        Guid profileId,
+        string profileName,
+        int? revision,
+        string notDone,
+        CancellationToken cancellationToken)
+    {
+        if (await applyService.FetchModsAsync(repo, game, profileId, profileName, revision, cancellationToken) is not string problem)
+        {
+            return true;
+        }
+
+        toasts.Show($"{notDone} {problem}", ToastSeverity.Warning);
+
+        return false;
+    }
+
     public async Task<bool> ActivateFirstAsync(
         Repo repo,
         Game game,

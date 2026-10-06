@@ -42,9 +42,11 @@ public sealed class ModSyncService(
     private readonly ModSyncPlanBuilder _planBuilder = new(
         modDependenciesClient, modsClient, storeProvider, manifestStore, heldSavegames, fileEditor, runningGuard, logger);
 
+    private readonly ModFetcher _fetcher = new(filesClient, downloader, logger);
+
     private readonly ModSyncExecutor _executor = new(
-        filesClient, downloader, storeProvider, manifestStore, recycleBin, modFolders, playAttribution, leases, fileEditor, runningGuard,
-        timeProvider, logger);
+        new ModFetcher(filesClient, downloader, logger), storeProvider, manifestStore, recycleBin, modFolders, playAttribution, leases,
+        fileEditor, runningGuard, timeProvider, logger);
 
 
     public event Action<string>? ModFolderChanged
@@ -59,6 +61,50 @@ public sealed class ModSyncService(
 
     public Task<ModSyncResult> ExecuteAsync(ModSyncPlan plan, IProgress<ModSyncProgress>? progress, CancellationToken cancellationToken)
         => _executor.ExecuteAsync(plan, progress, cancellationToken);
+
+    public async Task<ModSyncResult> FetchAsync(ModFetchRequest request, IProgress<ModSyncProgress>? progress, CancellationToken cancellationToken)
+    {
+        var (desired, _) = await ModSyncPlanBuilder.GetDesiredAsync(
+            modDependenciesClient, request.RepoId, request.ProfileId, request.Revision, cancellationToken);
+
+        var servingStores = request.ModFolders
+            .Select(storeProvider.GetStoreServing)
+            .DistinctBy(x => x.RootPath, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x.RootPath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var allStores = storeProvider.GetAllStores()
+            .Concat(servingStores)
+            .DistinctBy(x => x.RootPath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var store in servingStores)
+        {
+            store.EnsureUsable();
+        }
+
+        using var lease = await leases.AcquireSharedAsync(
+            allStores.Select(ResourceKeys.Store), "Downloading a profile's mods", cancellationToken);
+
+        foreach (var store in servingStores)
+        {
+            var failures = await _fetcher.FetchAsync(
+                request.RepoId,
+                store,
+                allStores,
+                desired.Select(x => new ModFetch(x.ModId, x.VersionId, x.ContentHash, x.DisplayName ?? x.ModId.Value)),
+                progress,
+                cancellationToken);
+
+            // The next store would fail on the same mods.
+            if (failures.Count > 0)
+            {
+                return new ModSyncResult(false, failures);
+            }
+        }
+
+        return new ModSyncResult(true, []);
+    }
 
     public async Task RecordAlreadyMatchedAsync(ModSyncPlan plan)
     {

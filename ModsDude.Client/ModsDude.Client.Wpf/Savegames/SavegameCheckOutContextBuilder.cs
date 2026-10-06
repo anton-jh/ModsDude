@@ -22,7 +22,7 @@ public sealed class SavegameCheckOutContextBuilder(
         SavegameCheckOutMode mode,
         int? pinnedRevision,
         SavegameCompatibilityVerdict? verdict,
-        Func<Guid, string?> nameOf,
+        IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
         IReadOnlySet<Guid> checkedInFirst,
         CancellationToken cancellationToken)
     {
@@ -38,7 +38,7 @@ public sealed class SavegameCheckOutContextBuilder(
                 slot,
                 availability,
                 binding?.SavegameId,
-                binding is SavegameCheckoutBinding held ? nameOf(held.SavegameId) : null,
+                binding is SavegameCheckoutBinding held ? heldNames.GetValueOrDefault(held.SavegameId) ?? HeldSavegameName.Unknown : null,
                 binding is SavegameCheckoutBinding freed && checkedInFirst.Contains(freed.SavegameId)));
         }
 

@@ -12,7 +12,7 @@ public interface ISavegameCheckOutContextBuilder
     /// </summary>
     /// <param name="pinnedRevision">The revision the save goes onto in compatibility mode, null for latest.</param>
     /// <param name="verdict">How far latest has moved from the played revision, where it has.</param>
-    /// <param name="nameOf">What a savegame is called, read off the caller's own list. Null where it is not in it.</param>
+    /// <param name="heldNames">What the savegames this game holds are called.</param>
     /// <param name="checkedInFirst">The savegames checked in before the check-out, whose slots it may then write into.</param>
     Task<SavegameCheckOutContext> BuildAsync(
         Repo repo,
@@ -21,7 +21,7 @@ public interface ISavegameCheckOutContextBuilder
         SavegameCheckOutMode mode,
         int? pinnedRevision,
         SavegameCompatibilityVerdict? verdict,
-        Func<Guid, string?> nameOf,
+        IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
         IReadOnlySet<Guid> checkedInFirst,
         CancellationToken cancellationToken);
 }

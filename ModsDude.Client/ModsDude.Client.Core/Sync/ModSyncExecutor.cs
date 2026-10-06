@@ -4,15 +4,13 @@ using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 
 namespace ModsDude.Client.Core.Sync;
 
 /// <summary>Carries out a <see cref="ModSyncPlan"/>.</summary>
 internal sealed class ModSyncExecutor(
-    IFilesClient filesClient,
-    IModFileDownloader downloader,
+    ModFetcher fetcher,
     IContentStoreProvider storeProvider,
     ISyncManifestStore manifestStore,
     IRecycleBin recycleBin,
@@ -24,13 +22,6 @@ internal sealed class ModSyncExecutor(
     TimeProvider time,
     ILogger logger)
 {
-    /// <summary>
-    /// Mods fetched at once. Their range requests share one connection budget in the downloader,
-    /// so this buys overlap for small files rather than more connections for large ones.
-    /// </summary>
-    private const int _concurrentFetches = 4;
-
-
     public event Action<string>? ModFolderChanged;
 
 
@@ -67,7 +58,19 @@ internal sealed class ModSyncExecutor(
             $"Applying to {plan.ModFolder}",
             cancellationToken))
         {
-            await FetchAsync(plan, progress, failures, cancellationToken);
+            failures.AddRange(await fetcher.FetchAsync(
+                plan.RepoId,
+                plan.ServingStore,
+                plan.AllStores,
+                plan.Items
+                    .Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace)
+                    .Select(x => new ModFetch(
+                        x.ModId,
+                        x.DesiredVersion ?? throw new InvalidOperationException("An install has no version to fetch."),
+                        x.DesiredHash ?? throw new InvalidOperationException("An install has no content to fetch."),
+                        x.DisplayName)),
+                progress,
+                cancellationToken));
 
             if (failures.Count > 0)
             {
@@ -131,128 +134,6 @@ internal sealed class ModSyncExecutor(
             // that is reported as failing.
             logger.LogError(exception, "A handler of ModFolderChanged failed for {Folder}.", plan.ModFolder);
         }
-    }
-
-    /// <summary>
-    /// Fills the serving store: another disk's store first, the network second. A disk-to-disk copy
-    /// beats a download every time and leaves the blob local for the next install to this disk.
-    /// </summary>
-    /// <remarks>
-    /// <b>Several at once</b>, because a download's cost is mostly per file - a link to mint, a first
-    /// byte to wait for, one connection's ceiling - and most mods are small. Copies from another
-    /// store still go one at a time: several at once on one spinning disk is slower than one.
-    /// See docs/07-mod-sync-design.md#downloading.
-    /// </remarks>
-    private async Task FetchAsync(
-        ModSyncPlan plan,
-        IProgress<ModSyncProgress>? progress,
-        List<ModSyncFailure> failures,
-        CancellationToken cancellationToken)
-    {
-        // Asked of the store again rather than read off the plan: another apply may have fetched some
-        // of these while this one's plan was being confirmed.
-        var wanted = plan.Items
-            .Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace)
-            .Where(x => x.DesiredHash is not null && plan.ServingStore.Contains(x.DesiredHash) is false)
-            .GroupBy(x => x.DesiredHash!, StringComparer.OrdinalIgnoreCase)
-            .Select(x => (Hash: x.Key, Item: x.First()))
-            .ToList();
-
-        var run = new FetchRun(wanted.Count, progress);
-        using var copying = new SemaphoreSlim(1);
-
-        await Parallel.ForEachAsync(
-            wanted,
-            new ParallelOptions { MaxDegreeOfParallelism = _concurrentFetches, CancellationToken = cancellationToken },
-            async (fetch, ct) =>
-            {
-                run.Report(fetch.Item, 0, 0);
-
-                try
-                {
-                    await FetchOneAsync(plan, fetch.Item, fetch.Hash, run, copying, ct);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception exception)
-                {
-                    RecordFailure(failures, fetch.Item, exception);
-                }
-
-                run.Finish(fetch.Item);
-            });
-
-        progress?.Report(new ModSyncProgress(ModSyncPhase.Fetching, wanted.Count, wanted.Count));
-    }
-
-    private async Task FetchOneAsync(
-        ModSyncPlan plan,
-        ModSyncItem item,
-        string hash,
-        FetchRun run,
-        SemaphoreSlim copying,
-        CancellationToken cancellationToken)
-    {
-        var elsewhere = plan.AllStores.FirstOrDefault(x =>
-            FileSystemHelper.ArePathsEqual(x.RootPath, plan.ServingStore.RootPath) is false &&
-            x.Contains(hash));
-
-        // Known up front for a cross-store copy, and only once the response headers arrive for a
-        // download - so the row can show a proportion in both cases rather than only one.
-        var totalBytes = elsewhere?.GetSize(hash) ?? 0;
-
-        // Two sources on a download - bytes arriving and bytes stored - and the bar follows whichever
-        // is further on. Arriving leads while a ranged download is running; stored has the last word
-        // on a single stream, where the downloader leaves it to the store.
-        var gate = new Lock();
-        long shown = 0;
-
-        var report = new Forwarder<long>(x =>
-        {
-            lock (gate)
-            {
-                if (x > shown)
-                {
-                    shown = x;
-                    run.Report(item, x, totalBytes);
-                }
-            }
-        });
-
-        if (elsewhere is not null)
-        {
-            await copying.WaitAsync(cancellationToken);
-
-            try
-            {
-                await plan.ServingStore.CopyFromAsync(elsewhere, hash, report, cancellationToken);
-            }
-            finally
-            {
-                copying.Release();
-            }
-
-            return;
-        }
-
-        var link = await filesClient.CreateModDownloadLinkV1Async(
-            new CreateModDownloadLinkRequest
-            {
-                RepoId = plan.RepoId,
-                ModId = item.ModId.Value,
-                VersionId = item.DesiredVersion?.Value ?? throw new InvalidOperationException("An install has no version to download.")
-            },
-            cancellationToken);
-
-        using var download = await downloader.OpenAsync(link.Link, report, cancellationToken);
-
-        totalBytes = download.Length ?? 0;
-
-        // Verified against what the repo declared before it is stored, never after. This is the
-        // check that makes a store shared between repos safe; see ContentStore.IngestAsync.
-        await plan.ServingStore.IngestAsync(download.Content, hash, report, cancellationToken);
     }
 
     /// <summary>
@@ -767,61 +648,5 @@ internal sealed class ModSyncExecutor(
         }
 
         return pinned;
-    }
-
-
-
-    /// <summary>
-    /// Reports on the calling thread. <see cref="Progress{T}"/> posts to whatever context happened to
-    /// be current, which for byte counts arriving thousands of times per file is both slower and out
-    /// of order.
-    /// </summary>
-    private sealed class Forwarder<T>(Action<T> report) : IProgress<T>
-    {
-        public void Report(T value) => report(value);
-    }
-
-    /// <summary>The fetch phase's count and reports, shared by the items fetching at once.</summary>
-    /// <remarks>
-    /// Reported under a lock, so the count reaches the listener in the order it moved: a report read
-    /// just before another item finished would otherwise land just after it and tick the bar back.
-    /// </remarks>
-    private sealed class FetchRun(int total, IProgress<ModSyncProgress>? progress)
-    {
-        private readonly Lock _gate = new();
-
-        private int _completed;
-
-
-        public void Report(ModSyncItem item, long bytesTransferred, long totalBytes)
-        {
-            lock (_gate)
-            {
-                progress?.Report(new ModSyncProgress(ModSyncPhase.Fetching, _completed, total)
-                {
-                    ModId = item.ModId.Value,
-                    Detail = item.DisplayName,
-                    BytesTransferred = bytesTransferred,
-                    TotalBytes = totalBytes,
-                    Concurrent = true
-                });
-            }
-        }
-
-        public void Finish(ModSyncItem item)
-        {
-            lock (_gate)
-            {
-                _completed++;
-
-                progress?.Report(new ModSyncProgress(ModSyncPhase.Fetching, _completed, total)
-                {
-                    ModId = item.ModId.Value,
-                    Detail = item.DisplayName,
-                    Concurrent = true,
-                    ItemFinished = true
-                });
-            }
-        }
     }
 }

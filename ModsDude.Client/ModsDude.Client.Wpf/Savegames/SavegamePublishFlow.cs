@@ -23,7 +23,7 @@ public sealed class SavegamePublishFlow(
     ISyncManifestStore manifestStore,
     ISavegameCheckInFlow checkInFlow,
     ISavegameProfileActivation profileActivation,
-    ISavegamesClient savegamesClient,
+    IHeldSavegameNames heldSavegameNames,
     IGameRunningGuard runningGuard,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
@@ -59,7 +59,7 @@ public sealed class SavegamePublishFlow(
             }
 
             var wizard = new SavegamePublishWizard(
-                repo, game, preselectProfileId, slots, savegameSlots, heldSavegames, profileService, manifestStore, checkInFlow, savegamesClient);
+                repo, game, preselectProfileId, slots, savegameSlots, heldSavegames, profileService, manifestStore, checkInFlow, heldSavegameNames);
 
             var modal = new WizardModalViewModel(wizard.First, wizard.NextAsync, cancellationToken);
 
@@ -103,8 +103,9 @@ public sealed class SavegamePublishFlow(
     }
 
     /// <summary>
-    /// The work the wizard was answered with, in order: check in the savegame holding the mod folder,
-    /// activate the profile, publish. Each step stops the rest where it does not finish.
+    /// The work the wizard was answered with, in order: download the mods of the profile it activates,
+    /// check in the savegame holding the mod folder, activate the profile, publish. Each step stops the
+    /// rest where it does not finish.
     /// </summary>
     private async Task ExecuteAsync(
         Game game,
@@ -116,6 +117,14 @@ public sealed class SavegamePublishFlow(
         // Before the first step, since an activation into a running game would be recorded and then
         // left drifted.
         runningGuard.EnsureNotRunning(game.Identity, game.Name);
+
+        if (plan.ActivatesFirst
+            && plan.Profile.ProfileId is Guid activating
+            && await profileActivation.FetchModsFirstAsync(
+                repo, game, activating, plan.Profile.Name, revision: null, $"'{plan.Name}' was not published.", cancellationToken) is false)
+        {
+            return;
+        }
 
         if (plan.CheckInFirst is SavegamePublishCheckIn checkIn)
         {
@@ -165,20 +174,20 @@ public sealed class SavegamePublishFlow(
         CancellationToken cancellationToken)
     {
         var outcome = await checkInFlow.CheckInAsync(
-            game, checkIn.SavegameId, checkIn.Name, checkIn.Label, keepPlaying: false, cancellationToken, renameTo: checkIn.RenameTo);
+            game, checkIn.SavegameId, checkIn.Savegame, checkIn.Label, keepPlaying: false, cancellationToken);
 
         if (outcome.ReleasedTheSlot is false)
         {
             // A check-in that failed has already said so.
             if (outcome.WasDeferred || outcome.Succeeded)
             {
-                toasts.Show($"'{checkIn.Name}' is still checked out, so '{plan.Name}' was not published.", ToastSeverity.Warning);
+                toasts.Show($"{SavegameSlotWording.Capitalised(checkIn.Savegame.Quoted)} is still checked out, so '{plan.Name}' was not published.", ToastSeverity.Warning);
             }
 
             return false;
         }
 
-        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, $"'{checkIn.Name}'s slot") is string notRecycled)
+        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, $"the slot of {checkIn.Savegame.Quoted}") is string notRecycled)
         {
             toasts.Show(notRecycled, ToastSeverity.Warning);
         }

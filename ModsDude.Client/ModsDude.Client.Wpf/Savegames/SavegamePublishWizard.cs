@@ -23,10 +23,8 @@ public sealed record SavegamePublishPlan(
     bool ActivatesFirst);
 
 
-/// <param name="Name">What the step called it, which may be a placeholder.</param>
-/// <param name="RenameTo">Its real name, to write into the slot, or null where it could not be read.</param>
 /// <param name="Label">What the check-in step was answered with as the snapshot's description.</param>
-public sealed record SavegamePublishCheckIn(Guid SavegameId, string Name, string? RenameTo, string? Label);
+public sealed record SavegamePublishCheckIn(Guid SavegameId, HeldSavegameName Savegame, string? Label);
 
 
 /// <summary>
@@ -54,7 +52,7 @@ public sealed class SavegamePublishWizard
     private readonly IProfileService _profileService;
     private readonly ISyncManifestStore _manifestStore;
     private readonly ISavegameCheckInFlow _checkInFlow;
-    private readonly ISavegamesClient _savegamesClient;
+    private readonly IHeldSavegameNames _heldSavegameNames;
 
     private readonly SavegameSlotPickerStepViewModel _slotStep;
 
@@ -64,7 +62,7 @@ public sealed class SavegamePublishWizard
     private ReviewStepViewModel? _reviewStep;
     private string? _reviewKey;
 
-    private readonly Dictionary<Guid, string?> _heldNames = [];
+    private IReadOnlyDictionary<Guid, HeldSavegameName>? _heldNames;
 
     /// <summary>The plan a path enumerated to its end leaves behind.</summary>
     private SavegamePublishPlan? _reachedEnd;
@@ -80,7 +78,7 @@ public sealed class SavegamePublishWizard
         IProfileService profileService,
         ISyncManifestStore manifestStore,
         ISavegameCheckInFlow checkInFlow,
-        ISavegamesClient savegamesClient)
+        IHeldSavegameNames heldSavegameNames)
     {
         _repo = repo;
         _game = game;
@@ -90,7 +88,7 @@ public sealed class SavegamePublishWizard
         _profileService = profileService;
         _manifestStore = manifestStore;
         _checkInFlow = checkInFlow;
-        _savegamesClient = savegamesClient;
+        _heldSavegameNames = heldSavegameNames;
 
         _slotStep = new SavegameSlotPickerStepViewModel(repo.Name, slots);
     }
@@ -147,14 +145,13 @@ public sealed class SavegamePublishWizard
 
         if (keep.ChecksInFirst is Guid heldId)
         {
-            var heldName = await HeldNameAsync(heldId, cancellationToken);
-            var held = heldName ?? "the savegame checked out here";
+            var held = await HeldNameAsync(heldId, cancellationToken);
             var step = CheckInStep(heldId, held, keep.ActivatesFirst, profile.Name, publish.TrimmedName);
 
             yield return step;
 
-            checkIn = new SavegamePublishCheckIn(heldId, held, heldName, step.TrimmedLabel);
-            actions.Add(("check in", $"Check in '{held}'"));
+            checkIn = new SavegamePublishCheckIn(heldId, held, step.TrimmedLabel);
+            actions.Add(("check in", $"Check in {held.Quoted}"));
         }
 
         if (keep.ActivatesFirst)
@@ -256,7 +253,7 @@ public sealed class SavegamePublishWizard
         return step;
     }
 
-    private SavegameCheckInStepViewModel CheckInStep(Guid savegameId, string savegameName, bool activates, string profileName, string publishedName)
+    private SavegameCheckInStepViewModel CheckInStep(Guid savegameId, HeldSavegameName savegame, bool activates, string profileName, string publishedName)
     {
         if (_checkInStep is { } made && made.SavegameId == savegameId && made.Activates == activates)
         {
@@ -266,8 +263,7 @@ public sealed class SavegamePublishWizard
         var step = _checkInFlow.CreateStep(
             _game,
             savegameId,
-            savegameName,
-            savegameName,
+            savegame,
             activates
                 ? $"Checked in so '{profileName}' can be activated."
                 : $"Checked in so '{publishedName}' can stay checked out. '{_game.Name}' holds one savegame that follows a mod list.");
@@ -295,23 +291,11 @@ public sealed class SavegamePublishWizard
         return _reviewStep;
     }
 
-    /// <summary>
-    /// What the savegame holding the mod folder is called. It may be in another repo, so it is read
-    /// from the repo its binding names. Null where it could not be found there.
-    /// </summary>
-    private async Task<string?> HeldNameAsync(Guid savegameId, CancellationToken cancellationToken)
+    /// <summary>What the savegame holding the mod folder is called, read once per wizard.</summary>
+    private async Task<HeldSavegameName> HeldNameAsync(Guid savegameId, CancellationToken cancellationToken)
     {
-        if (_heldNames.TryGetValue(savegameId, out var known) is false)
-        {
-            var binding = _heldSavegames.FindProfileHold(_game.Identity);
+        _heldNames ??= await _heldSavegameNames.ReadAsync(_game, _repo.Id, [], cancellationToken);
 
-            known = binding is SavegameCheckoutBinding held && held.SavegameId == savegameId
-                ? (await _savegamesClient.GetSavegamesV1Async(held.RepoId, cancellationToken)).FirstOrDefault(x => x.Id == savegameId)?.Name
-                : null;
-
-            _heldNames[savegameId] = known;
-        }
-
-        return known;
+        return _heldNames.GetValueOrDefault(savegameId) ?? HeldSavegameName.Unknown;
     }
 }

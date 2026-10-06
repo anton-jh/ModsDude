@@ -53,6 +53,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private readonly ICurrentUserService _currentUserService;
     private readonly IDriftMonitor _driftMonitor;
     private readonly ISavegameOffers _offers;
+    private readonly IHeldSavegameNames _heldSavegameNames;
     private readonly ISavegameCompatibilityCheck _compatibilityCheck;
     private readonly ISavegameCheckInFlow _checkInFlow;
     private readonly ISavegameCheckOutFlow _checkOutFlow;
@@ -71,6 +72,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private readonly CancellationToken _lifetime;
 
     private IReadOnlyList<SavegameDto> _fetched = [];
+    private IReadOnlyDictionary<Guid, HeldSavegameName> _heldNames = new Dictionary<Guid, HeldSavegameName>();
     private string? _currentUserId;
     private Guid? _selectOnArrival;
 
@@ -86,6 +88,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         ICurrentUserService currentUserService,
         IDriftMonitor driftMonitor,
         ISavegameOffers offers,
+        IHeldSavegameNames heldSavegameNames,
         ISavegameCompatibilityCheck compatibilityCheck,
         ISavegameCheckInFlow checkInFlow,
         ISavegameCheckOutFlow checkOutFlow,
@@ -113,6 +116,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         _currentUserService = currentUserService;
         _driftMonitor = driftMonitor;
         _offers = offers;
+        _heldSavegameNames = heldSavegameNames;
         _compatibilityCheck = compatibilityCheck;
         _checkInFlow = checkInFlow;
         _checkOutFlow = checkOutFlow;
@@ -239,6 +243,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         _fetched = [.. await _savegamesClient.GetSavegamesV1Async(_repo.Id, _lifetime)];
 
         await ForgetDeletedHoldsAsync();
+
+        _heldNames = await ReadHeldNamesAsync(_fetched);
     }
 
     /// <summary>
@@ -664,7 +670,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         // this same list.
         foreach (var row in Savegames)
         {
-            _offers.Offer(_repo, row, host, NameOfHeld);
+            _offers.Offer(_repo, row, host, _heldNames);
             row.SetRevisionsBehind(RevisionsBehind(row.Savegame));
         }
 
@@ -716,9 +722,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         try
         {
-            var savegames = await _savegamesClient.GetSavegamesV1Async(_repo.Id, _lifetime);
+            IReadOnlyList<SavegameDto> savegames = [.. await _savegamesClient.GetSavegamesV1Async(_repo.Id, _lifetime)];
 
-            Publish([.. savegames], select);
+            _heldNames = await ReadHeldNamesAsync(savegames);
+
+            Publish(savegames, select);
         }
         catch (OperationCanceledException)
         {
@@ -730,16 +738,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         }
     }
 
-    /// <summary>
-    /// What a savegame in the way is called. Read off this list, which is where the refusal has to
-    /// point anyway - and null for one the repo will not show, where the refusal stands without the
-    /// name.
-    /// </summary>
-    private string? NameOfHeld(Guid savegameId)
-        => savegameId == Guid.Empty
-            ? null
-            : Savegames.FirstOrDefault(x => x.Id == savegameId)?.Name
-                ?? _fetched.FirstOrDefault(x => x.Id == savegameId)?.Name;
+    /// <summary>What the savegames this repo's game holds are called, whichever repo each is in.</summary>
+    private async Task<IReadOnlyDictionary<Guid, HeldSavegameName>> ReadHeldNamesAsync(IReadOnlyList<SavegameDto> savegames)
+        => _repo.Games.FirstOrDefault() is Game game
+            ? await _heldSavegameNames.ReadAsync(game, _repo.Id, savegames, _lifetime)
+            : new Dictionary<Guid, HeldSavegameName>();
 
     /// <summary>
     /// The two chips that are not facts about the savegame: whether a slot on <em>this</em> machine has
@@ -995,7 +998,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         SavegameCheckOutMode mode,
         SavegameRevisionMode? revisionMode)
         => RunAsync("checking a savegame out", () => _checkOutFlow.CheckOutAsync(
-            _repo, row.Savegame, snapshotNumber, playedRevision, mode, revisionMode, _currentUserId, NameOfHeld, () => ReloadAsync(row.Id), _lifetime));
+            _repo, row.Savegame, snapshotNumber, playedRevision, mode, revisionMode, _currentUserId, _heldNames, () => ReloadAsync(row.Id), _lifetime));
 
 
     public class Factory(IServiceProvider serviceProvider)

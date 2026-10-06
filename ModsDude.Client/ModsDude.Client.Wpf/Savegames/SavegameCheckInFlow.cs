@@ -31,20 +31,18 @@ public sealed class SavegameCheckInFlow(
     public SavegameCheckInStepViewModel CreateStep(
         Game game,
         Guid savegameId,
-        string savegameName,
-        string slotLabel,
+        HeldSavegameName savegame,
         string? handBackReason = null)
-        => new(savegameName, slotLabel, DescribePlayedOn(game, savegameId), HeldSlotNumber(game, savegameId), handBackReason);
+        => new(savegame, DescribePlayedOn(game, savegameId), HeldSlotNumber(game, savegameId), handBackReason);
 
     public Task<SavegameCheckInOutcome> CheckInAsync(
         Game game,
         Guid savegameId,
-        string savegameName,
+        HeldSavegameName savegame,
         string? label,
         bool keepPlaying,
-        CancellationToken cancellationToken,
-        string? renameTo = null)
-        => SendAsync(game, savegameId, savegameName, label, keepPlaying, force: false, cancellationToken, renameTo);
+        CancellationToken cancellationToken)
+        => SendAsync(game, savegameId, savegame, label, keepPlaying, force: false, cancellationToken);
 
     public async Task CheckInHeldAsync(
         Game game,
@@ -60,15 +58,15 @@ public sealed class SavegameCheckInFlow(
             // the slot. The slot is named now, while the binding that knows it is still there.
             var slot = SavegameSlotWording.Named(HeldSlotNumber(game, savegameId), savegameName);
 
-            var step = CreateStep(game, savegameId, savegameName, savegameName);
+            var savegame = new HeldSavegameName(savegameName, null);
+            var step = CreateStep(game, savegameId, savegame);
 
             if (await WizardModalViewModel.Single(step, cancellationToken).ShowAsync(modalService.Value) is false)
             {
                 return;
             }
 
-            var outcome = await CheckInAsync(
-                game, savegameId, savegameName, step.TrimmedLabel, step.KeepPlaying, cancellationToken, renameTo: savegameName);
+            var outcome = await CheckInAsync(game, savegameId, savegame, step.TrimmedLabel, step.KeepPlaying, cancellationToken);
 
             if (outcome.WasDeferred)
             {
@@ -165,21 +163,20 @@ public sealed class SavegameCheckInFlow(
     private async Task<SavegameCheckInOutcome> SendAsync(
         Game game,
         Guid savegameId,
-        string savegameName,
+        HeldSavegameName savegame,
         string? label,
         bool keepPlaying,
         bool force,
         CancellationToken cancellationToken,
-        string? renameTo = null,
         bool takeOver = false)
     {
         try
         {
-            using var task = backgroundTasks.Begin($"Checking '{savegameName}' in", "Packing and uploading what is in the slot");
+            using var task = backgroundTasks.Begin($"Checking {savegame.Quoted} in", "Packing and uploading what is in the slot");
             task.DeclareTransfers(TransferDirection.Upload);
 
             var result = await savegameCheckIn.CheckInAsync(
-                game, savegameId, label, keepPlaying, force, takeOver, cancellationToken, new SavegameStripProgress(task), renameTo);
+                game, savegameId, label, keepPlaying, force, takeOver, cancellationToken, new SavegameStripProgress(task), savegame.Name);
 
             return SavegameCheckInOutcome.CheckedIn(result);
         }
@@ -189,7 +186,7 @@ public sealed class SavegameCheckInFlow(
             var name = holder.User.DisplayName;
 
             var choice = new ConfirmationModalViewModel(
-                $"{name} has '{savegameName}' checked out",
+                $"{name} has {savegame.Quoted} checked out",
                 $"They have had it since {SavegameWording.Exactly(holder.TakenAt)}. Keeping playing takes it from them, " +
                 "and their ModsDude will tell them. Leaving it with them checks nothing in and keeps your copy where it is.",
                 IconKind.Warning,
@@ -203,12 +200,12 @@ public sealed class SavegameCheckInFlow(
                 return SavegameCheckInOutcome.Deferred;
             }
 
-            return await SendAsync(game, savegameId, savegameName, label, keepPlaying, force, cancellationToken, renameTo, takeOver: true);
+            return await SendAsync(game, savegameId, savegame, label, keepPlaying, force, cancellationToken, takeOver: true);
         }
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.SavegameSnapshotStale)
         {
             var choice = new ConfirmationModalViewModel(
-                $"Somebody else checked '{savegameName}' in",
+                $"Somebody else checked {savegame.Quoted} in",
                 "Your save was built on an older snapshot. Checking yours in anyway records it as the newest one, with " +
                 "theirs named beside it and still in the history - nothing is deleted either way. Leaving it alone keeps " +
                 "your copy exactly where it is, so you can look at theirs first and decide.",
@@ -223,7 +220,7 @@ public sealed class SavegameCheckInFlow(
                 return SavegameCheckInOutcome.Deferred;
             }
 
-            return await SendAsync(game, savegameId, savegameName, label, keepPlaying, force: true, cancellationToken, renameTo, takeOver);
+            return await SendAsync(game, savegameId, savegame, label, keepPlaying, force: true, cancellationToken, takeOver);
         }
         catch (UserFriendlyException exception)
         {

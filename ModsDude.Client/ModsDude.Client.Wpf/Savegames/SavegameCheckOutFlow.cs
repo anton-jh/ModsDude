@@ -39,14 +39,14 @@ public sealed class SavegameCheckOutFlow(
         SavegameCheckOutMode mode,
         SavegameRevisionMode? revisionMode,
         string? currentUserId,
-        Func<Guid, string?> nameOf,
+        IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
         Func<Task> changed,
         CancellationToken cancellationToken)
     {
         try
         {
             await StartAsync(
-                repo, savegame, snapshotNumber, playedRevision, mode, revisionMode, currentUserId, nameOf, changed, cancellationToken);
+                repo, savegame, snapshotNumber, playedRevision, mode, revisionMode, currentUserId, heldNames, changed, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -66,7 +66,7 @@ public sealed class SavegameCheckOutFlow(
         SavegameCheckOutMode mode,
         SavegameRevisionMode? revisionMode,
         string? currentUserId,
-        Func<Guid, string?> nameOf,
+        IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
         Func<Task> changed,
         CancellationToken cancellationToken)
     {
@@ -106,7 +106,7 @@ public sealed class SavegameCheckOutFlow(
             HeldMode(game, savegame) ?? revisionMode,
             takingFrom,
             await AssessAsync(repo, savegame, playedRevision, cancellationToken),
-            nameOf,
+            heldNames,
             offers,
             profileService,
             contextBuilder,
@@ -148,9 +148,9 @@ public sealed class SavegameCheckOutFlow(
     }
 
     /// <summary>
-    /// The work the wizard was answered with, in order: check in what holds the mod folder or the
-    /// slot, activate the profile, then write the save. Each step stops the rest where it does not
-    /// finish.
+    /// The work the wizard was answered with, in order: download the mods the save runs on, check in
+    /// what holds the mod folder or the slot, activate the profile, then write the save. Each step
+    /// stops the rest where it does not finish.
     /// </summary>
     /// <param name="agreedToTakeFrom">Whose claim the user agreed to take, so a later toast can tell it from a surprise.</param>
     private async Task ExecuteAsync(
@@ -167,6 +167,24 @@ public sealed class SavegameCheckOutFlow(
         // Before the first step, since an activation into a running game would be recorded and then
         // left drifted.
         runningGuard.EnsureNotRunning(game.Identity, game.Name);
+
+        // A check-out activates the profile once the save is written, and a copy where it was asked to.
+        var runsOn = mode is SavegameCheckOutMode.CheckOut && repo.Adapter.CanSupportMods
+            ? profileService.FindLive(repo.Id, savegame.ProfileId)
+            : plan.Activates;
+
+        if (runsOn is not null
+            && await profileActivation.FetchModsFirstAsync(
+                repo,
+                game,
+                runsOn.Id,
+                runsOn.Name,
+                plan.PinnedRevision ?? runsOn.HeadRevision,
+                mode is SavegameCheckOutMode.TakeCopy ? $"'{savegame.Name}' was not copied." : $"'{savegame.Name}' was not checked out.",
+                cancellationToken) is false)
+        {
+            return;
+        }
 
         if (plan.CheckIns.Count > 0)
         {
@@ -209,20 +227,20 @@ public sealed class SavegameCheckOutFlow(
         CancellationToken cancellationToken)
     {
         var outcome = await checkInFlow.CheckInAsync(
-            game, checkIn.SavegameId, checkIn.Name, checkIn.Label, keepPlaying: false, cancellationToken, renameTo: checkIn.RenameTo);
+            game, checkIn.SavegameId, checkIn.Savegame, checkIn.Label, keepPlaying: false, cancellationToken);
 
         if (outcome.ReleasedTheSlot is false)
         {
             // A check-in that failed has already said so.
             if (outcome.WasDeferred || outcome.Succeeded)
             {
-                toasts.Show($"'{checkIn.Name}' is still checked out, so '{savegame.Name}' was not checked out.", ToastSeverity.Warning);
+                toasts.Show($"{SavegameSlotWording.Capitalised(checkIn.Savegame.Quoted)} is still checked out, so '{savegame.Name}' was not checked out.", ToastSeverity.Warning);
             }
 
             return false;
         }
 
-        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, $"'{checkIn.Name}'s slot") is string notRecycled)
+        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, $"the slot of {checkIn.Savegame.Quoted}") is string notRecycled)
         {
             toasts.Show(notRecycled, ToastSeverity.Warning);
         }

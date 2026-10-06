@@ -13,8 +13,6 @@ public interface ISavegameOffers
     /// <summary>
     /// Tells a row what its buttons can do, and where the local copy of the save is.
     /// </summary>
-    /// <param name="nameOf">
-    /// What a savegame in the way is called, read off the caller's own list. Null where it is not in it.
-    /// </param>
-    void Offer(Repo repo, SavegameListItemViewModel row, SavegameHost? host, Func<Guid, string?> nameOf);
+    /// <param name="heldNames">What the savegames the game holds are called.</param>
+    void Offer(Repo repo, SavegameListItemViewModel row, SavegameHost? host, IReadOnlyDictionary<Guid, HeldSavegameName> heldNames);
 }

@@ -285,8 +285,8 @@ public partial class SavegameCheckOutStepViewModel : WizardStepViewModel
         { Availability: Core.Savegames.SavegameSlotAvailability.Unrecognised } slot => slot.SaveName is { Length: > 0 } name
             ? $"'{name}' is in this slot and is not from this repo. It goes to the Recycle Bin, where you can put it back."
             : "The save in this slot is not from this repo. It goes to the Recycle Bin, where you can put it back.",
-        { Availability: Core.Savegames.SavegameSlotAvailability.HeldClean } slot => slot.OccupyingSavegameName is { Length: > 0 } name
-            ? $"'{name}' is checked out here and has not been played. It is on the server already, so nothing is lost."
+        { Availability: Core.Savegames.SavegameSlotAvailability.HeldClean } slot => slot.OccupyingSavegame is { Name: not null } occupying
+            ? $"{occupying.Quoted} is checked out here and has not been played. It is on the server already, so nothing is lost."
             : "A checked-out savegame is here and has not been played. It is on the server already, so nothing is lost.",
         _ => null
     };

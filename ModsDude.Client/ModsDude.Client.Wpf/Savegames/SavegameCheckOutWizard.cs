@@ -18,10 +18,8 @@ public sealed record SavegameCheckOutPlan(
     SavegameSlotOptionViewModel Slot);
 
 
-/// <param name="Name">What the step called it, which may be a placeholder.</param>
-/// <param name="RenameTo">Its real name, to write into the slot, or null where it is not known.</param>
 /// <param name="Label">What the check-in step was answered with as the snapshot's description.</param>
-public sealed record SavegameCheckOutCheckIn(Guid SavegameId, string Name, string? RenameTo, string? Label);
+public sealed record SavegameCheckOutCheckIn(Guid SavegameId, HeldSavegameName Savegame, string? Label);
 
 
 /// <summary>
@@ -55,7 +53,7 @@ public sealed class SavegameCheckOutWizard
     private readonly SavegameRevisionMode? _fixedRevisionMode;
     private readonly SavegameCheckoutDto? _takingFrom;
     private readonly SavegameCompatibilityVerdict? _verdict;
-    private readonly Func<Guid, string?> _nameOf;
+    private readonly IReadOnlyDictionary<Guid, HeldSavegameName> _heldNames;
     private readonly ISavegameOffers _offers;
     private readonly IProfileService _profileService;
     private readonly ISavegameCheckOutContextBuilder _contextBuilder;
@@ -88,7 +86,7 @@ public sealed class SavegameCheckOutWizard
         SavegameRevisionMode? fixedRevisionMode,
         SavegameCheckoutDto? takingFrom,
         SavegameCompatibilityVerdict? verdict,
-        Func<Guid, string?> nameOf,
+        IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
         ISavegameOffers offers,
         IProfileService profileService,
         ISavegameCheckOutContextBuilder contextBuilder,
@@ -103,7 +101,7 @@ public sealed class SavegameCheckOutWizard
         _fixedRevisionMode = fixedRevisionMode;
         _takingFrom = takingFrom;
         _verdict = verdict;
-        _nameOf = nameOf;
+        _heldNames = heldNames;
         _offers = offers;
         _profileService = profileService;
         _contextBuilder = contextBuilder;
@@ -219,7 +217,7 @@ public sealed class SavegameCheckOutWizard
             && slot is { IsRefused: true, OccupyingSavegameId: Guid occupying }
             && checkIns.All(x => x.SavegameId != occupying))
         {
-            var checkIn = Name(occupying, slot.OccupyingSavegameName);
+            var checkIn = Name(occupying);
             var step = CheckInStep(checkIn, "Checked in so its slot is free.");
 
             yield return step;
@@ -227,7 +225,7 @@ public sealed class SavegameCheckOutWizard
             checkIns.Add(checkIn with { Label = step.TrimmedLabel });
         }
 
-        actions.InsertRange(0, checkIns.Select(x => ("check in", $"Check in '{x.Name}'")));
+        actions.InsertRange(0, checkIns.Select(x => ("check in", $"Check in {x.Savegame.Quoted}")));
         actions.Add(DescribeWrite(slot));
 
         if (actions.Count > 1)
@@ -302,19 +300,14 @@ public sealed class SavegameCheckOutWizard
     }
 
     /// <summary>A savegame to check in first, as the plan records it before its step is answered.</summary>
-    /// <param name="fallbackName">What else the savegame is known by, where the caller's list does not have it.</param>
-    private SavegameCheckOutCheckIn Name(Guid savegameId, string? fallbackName = null)
-    {
-        var renameTo = _nameOf(savegameId) ?? fallbackName;
-
-        return new SavegameCheckOutCheckIn(savegameId, renameTo ?? "the savegame checked out here", renameTo, null);
-    }
+    private SavegameCheckOutCheckIn Name(Guid savegameId)
+        => new(savegameId, _heldNames.GetValueOrDefault(savegameId) ?? HeldSavegameName.Unknown, null);
 
     private SavegameCheckInStepViewModel CheckInStep(SavegameCheckOutCheckIn checkIn, string reason)
     {
         if (_checkInSteps.TryGetValue((checkIn.SavegameId, reason), out var step) is false)
         {
-            step = _checkInFlow.CreateStep(_game, checkIn.SavegameId, checkIn.Name, checkIn.Name, reason);
+            step = _checkInFlow.CreateStep(_game, checkIn.SavegameId, checkIn.Savegame, reason);
             _checkInSteps[(checkIn.SavegameId, reason)] = step;
         }
 
@@ -334,7 +327,7 @@ public sealed class SavegameCheckOutWizard
         }
 
         var context = await _contextBuilder.BuildAsync(
-            _repo, _savegame, _game, _mode, pinned, _verdict, _nameOf, checkedInFirst, cancellationToken);
+            _repo, _savegame, _game, _mode, pinned, _verdict, _heldNames, checkedInFirst, cancellationToken);
 
         var step = new SavegameCheckOutStepViewModel(
             _mode,
