@@ -1,0 +1,90 @@
+<UserControl x:Class="ModsDude.Client.Wpf.Shell.Modals.WizardModal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:modals="clr-namespace:ModsDude.Client.Wpf.Shell.Modals"
+             mc:Ignorable="d"
+             Width="560"
+             d:DataContext="{d:DesignInstance Type=modals:WizardModalViewModel, IsDesignTimeCreatable=False}"
+             Focusable="True">
+
+    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="1">
+
+        <Border.Effect>
+            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
+        </Border.Effect>
+
+        <Grid RowDefinitions="auto auto">
+
+            <StackPanel Grid.Row="0" Margin="24 24 24 16">
+
+                <TextBlock Text="{Binding Current.Title}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Style="{StaticResource TitleTextBlockStyle}" />
+
+                <!-- The step itself, drawn by its own template in its feature's templates file. -->
+                <ContentControl Margin="0 8 0 0"
+                                Focusable="False"
+                                Content="{Binding Current}" />
+            </StackPanel>
+
+            <Border Grid.Row="1"
+                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+                <!-- 12 at the bottom rather than 20: every button below carries 8 of its own, so a stack
+                     of answers is spaced evenly and Back and Cancel sit level with the last one. -->
+                <Grid Margin="24 16 24 12" ColumnDefinitions="auto * auto">
+
+                    <!-- Absent on the first step, which is also the only step of a single question. -->
+                    <Button Grid.Column="0"
+                            Margin="0 0 8 8"
+                            VerticalAlignment="Bottom"
+                            Content="Back"
+                            Command="{Binding BackCommand}"
+                            Visibility="{Binding HasEarlier, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                    <!-- The step's answers, stacked: each is a phrase saying what it does, and two of
+                         those side by side do not fit. -->
+                    <ItemsControl Grid.Column="1"
+                                  Focusable="False"
+                                  ItemsSource="{Binding Current.Choices}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type modals:WizardChoice}">
+                                <Grid Margin="0 0 0 8"
+                                      Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                                    <Button HorizontalAlignment="Stretch"
+                                            Style="{DynamicResource AccentButtonStyle}"
+                                            Content="{Binding Label}"
+                                            CommandParameter="{Binding}"
+                                            Command="{Binding DataContext.ChooseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            Visibility="{Binding IsAccent, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                    <Button HorizontalAlignment="Stretch"
+                                            Content="{Binding Label}"
+                                            CommandParameter="{Binding}"
+                                            Command="{Binding DataContext.ChooseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            Visibility="{Binding IsAccent, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Button Grid.Column="2"
+                            Margin="8 0 0 8"
+                            VerticalAlignment="Bottom"
+                            Content="Cancel"
+                            Command="{Binding CancelCommand}" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+
+    <!-- Escape and Enter are the shell's, handled once for whatever modal is up. See
+         MainWindow.OnPreviewKeyDown. -->
+
+</UserControl>

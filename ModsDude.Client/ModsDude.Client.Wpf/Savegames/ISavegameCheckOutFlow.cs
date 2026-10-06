@@ -7,9 +7,10 @@ namespace ModsDude.Client.Wpf.Savegames;
 public interface ISavegameCheckOutFlow
 {
     /// <summary>
-    /// Checks a savegame out, or takes a copy of it: the take-over question, which mod list, the mod
-    /// folder, the slot modal, the claim, then the mods. Where the snapshot is not the head it is restored as a new
-    /// head first. Failures are reported here.
+    /// Checks a savegame out, or takes a copy of it: the questions first - taking it from somebody,
+    /// which mod list, the mod folder, what holds it, the slot - then the check-ins, the activation,
+    /// the claim and the mods. Where the snapshot is not the head it is restored as a new head first.
+    /// Failures are reported here.
     /// </summary>
     /// <param name="playedRevision">The revision the snapshot was played on. Null where it follows no profile.</param>
     /// <param name="revisionMode">
@@ -22,8 +23,8 @@ public interface ISavegameCheckOutFlow
     /// </param>
     /// <param name="nameOf">What a savegame is called, read off the caller's own list. Null where it is not in it.</param>
     /// <param name="changed">
-    /// Called whenever the repo moved under the caller, including before the slot modal is offered
-    /// again, so the caller's list is the one it names savegames from.
+    /// Called whenever the repo moved under the caller, including where a check-in or activation
+    /// before the check-out stopped it, so the caller's list is the one it names savegames from.
     /// </param>
     Task CheckOutAsync(
         Repo repo,

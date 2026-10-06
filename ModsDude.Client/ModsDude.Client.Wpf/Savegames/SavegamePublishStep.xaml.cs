@@ -2,9 +2,9 @@ using System.Windows.Controls;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
-public partial class SavegamePublishModal : UserControl
+public partial class SavegamePublishStep : UserControl
 {
-    public SavegamePublishModal()
+    public SavegamePublishStep()
     {
         InitializeComponent();
     }

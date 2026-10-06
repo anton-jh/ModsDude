@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
@@ -6,7 +7,6 @@ using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
-using ModsDude.Client.Wpf.Shell.Sidebar;
 using ModsDude.Client.Wpf.Shell.Toasts;
 
 namespace ModsDude.Client.Wpf.Savegames;
@@ -21,9 +21,11 @@ public sealed class SavegameCheckOutFlow(
     ISavegameCheckInFlow checkInFlow,
     ISavegameProfileActivation profileActivation,
     ISavegameCheckOutContextBuilder contextBuilder,
+    ISavegameOffers offers,
     ISavegameBindingStore bindings,
     ISavegameCompatibilityCheck compatibilityCheck,
     IProfileService profileService,
+    IGameRunningGuard runningGuard,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
     IBackgroundTaskReporter backgroundTasks,
@@ -44,12 +46,11 @@ public sealed class SavegameCheckOutFlow(
         try
         {
             await StartAsync(
-                repo, savegame, snapshotNumber, playedRevision, mode, revisionMode,
-                currentUserId, nameOf, changed, agreedToTakeFrom: null, cancellationToken);
+                repo, savegame, snapshotNumber, playedRevision, mode, revisionMode, currentUserId, nameOf, changed, cancellationToken);
         }
         catch (OperationCanceledException)
         {
-            // Navigated away. Nothing was written, and there is no page left to say so on.
+            // Navigated away. There is no page left to say anything on.
         }
         catch (Exception exception)
         {
@@ -57,10 +58,6 @@ public sealed class SavegameCheckOutFlow(
         }
     }
 
-    /// <param name="agreedToTakeFrom">
-    /// Whose claim the user has already agreed to take, so coming back here after checking in a
-    /// blocking savegame does not ask twice.
-    /// </param>
     private async Task StartAsync(
         Repo repo,
         SavegameDto savegame,
@@ -71,7 +68,6 @@ public sealed class SavegameCheckOutFlow(
         string? currentUserId,
         Func<Guid, string?> nameOf,
         Func<Task> changed,
-        string? agreedToTakeFrom,
         CancellationToken cancellationToken)
     {
         if (savegame.Head is null || snapshotNumber <= 0)
@@ -91,94 +87,39 @@ public sealed class SavegameCheckOutFlow(
             return;
         }
 
-        // Taking a save from somebody is decided first, because it decides whether there is a
-        // check-out at all. A copy takes nothing, and a claim of your own is not somebody else's.
+        // A copy takes nothing, and a claim of your own is not somebody else's.
         var holder = savegame.Checkout is SavegameCheckoutDto checkout && checkout.Status is not SavegameCheckoutStatus.Ended
             ? checkout
             : null;
         var heldByMe = holder is not null && currentUserId is not null && holder.User.Id == currentUserId;
         var takingFrom = mode is SavegameCheckOutMode.CheckOut && heldByMe is false ? holder : null;
 
-        if (takingFrom is not null && takingFrom.User.Id != agreedToTakeFrom)
-        {
-            var confirmation = ConfirmTakeOver(savegame.Name, takingFrom);
-
-            await modalService.Value.Show(confirmation);
-
-            if (confirmation.Result is false)
-            {
-                return;
-            }
-        }
-
-        // Decided before the folder is touched, because it decides which revision the folder goes onto.
-        // A save already held here keeps the mode it is held in: its own pin refuses any other revision,
-        // so switching is checking it in and out again.
-        var verdict = await AssessAsync(repo, savegame, playedRevision, cancellationToken);
-
-        var chosenMode = HeldMode(game, savegame)
-            ?? revisionMode
-            ?? await ChooseRevisionModeAsync(savegame, playedRevision, verdict);
-
-        if (chosenMode is not SavegameRevisionMode chosen)
-        {
-            return;
-        }
-
-        var pinned = SavegameRevisionRules.PinnedRevision(chosen, playedRevision);
-
-        // Before the slot modal, so its mod summary describes the folder as it will be.
-        if (await profileActivation.ConfirmActivateFirstAsync(repo, game, savegame, mode, pinned, changed, cancellationToken) is false)
-        {
-            return;
-        }
-
-        var context = await contextBuilder.BuildAsync(repo, savegame, game, mode, pinned, verdict, nameOf, cancellationToken);
-
-        var modal = new SavegameCheckOutModalViewModel(
-            mode,
-            savegame.Name,
-            SavegameWording.ProfileOf(savegame),
+        var wizard = new SavegameCheckOutWizard(
+            repo,
+            game,
+            savegame,
             snapshotNumber,
-            savegame.Head.Number,
-            context);
+            playedRevision,
+            mode,
+            // A save already held here keeps the mode it is held in: its own pin refuses any other
+            // revision, so switching is checking it in and out again.
+            HeldMode(game, savegame) ?? revisionMode,
+            takingFrom,
+            await AssessAsync(repo, savegame, playedRevision, cancellationToken),
+            nameOf,
+            offers,
+            profileService,
+            contextBuilder,
+            checkInFlow);
 
-        await modalService.Value.Show(modal);
+        var modal = new WizardModalViewModel(await wizard.FirstAsync(cancellationToken), wizard.NextAsync, cancellationToken);
 
-        if (modal.CheckInFirstSavegameId is Guid blocking)
+        if (await modal.ShowAsync(modalService.Value) is false || wizard.Plan is not SavegameCheckOutPlan plan)
         {
-            await CheckInBlockingAsync(
-                repo, game, blocking, savegame, snapshotNumber, playedRevision, mode, chosen, currentUserId, nameOf, changed,
-                takingFrom?.User.Id, cancellationToken);
-
             return;
         }
 
-        if (modal.Result is not SavegameSlotOptionViewModel slot)
-        {
-            return;
-        }
-
-        await ExecuteAsync(repo, savegame, snapshotNumber, mode, chosen, game, slot, changed, takingFrom?.User.Id, cancellationToken);
-    }
-
-    /// <summary>
-    /// The question asked before taking a save somebody else has checked out. Taking it is always
-    /// allowed, but leaves two copies of one save, and whoever checks in second overwrites the other.
-    /// </summary>
-    private static ConfirmationModalViewModel ConfirmTakeOver(string savegameName, SavegameCheckoutDto holder)
-    {
-        var name = holder.User.DisplayName;
-
-        return new ConfirmationModalViewModel(
-            $"{name} has '{savegameName}' checked out",
-            $"They have had it since {SavegameWording.Exactly(holder.TakenAt)}. Checking it out takes it from them, "
-                + "and their ModsDude will tell them.\n\n"
-                + "If they are playing it, you will each have a copy of the same save: whoever checks in second has "
-                + "to force it, and that overwrites the other's play.",
-            IconKind.Warning,
-            $"Take it from {name}",
-            "Leave it with them");
+        await ExecuteAsync(repo, game, savegame, snapshotNumber, mode, plan, changed, takingFrom?.User.Id, cancellationToken);
     }
 
     private SavegameRevisionMode? HeldMode(Game game, SavegameDto savegame)
@@ -207,94 +148,89 @@ public sealed class SavegameCheckOutFlow(
     }
 
     /// <summary>
-    /// Latest, unless the mod list has moved far enough to ask. Null where the user backed out.
+    /// The work the wizard was answered with, in order: check in what holds the mod folder or the
+    /// slot, activate the profile, then write the save. Each step stops the rest where it does not
+    /// finish.
     /// </summary>
-    private async Task<SavegameRevisionMode?> ChooseRevisionModeAsync(
-        SavegameDto savegame,
-        int? playedRevision,
-        SavegameCompatibilityVerdict? verdict)
-    {
-        if (verdict is not { ShouldPrompt: true } || playedRevision is not int played)
-        {
-            return SavegameRevisionMode.Latest;
-        }
-
-        var modal = new SavegameCompatibilityModalViewModel(
-            savegame.Name,
-            SavegameWording.ProfileOf(savegame),
-            played,
-            verdict.Comparison.To,
-            verdict);
-
-        await modalService.Value.Show(modal);
-
-        return modal.Result;
-    }
-
-    /// <summary>
-    /// The way out of a refused slot: check the savegame occupying it in, then offer the modal again
-    /// with the slot free.
-    /// </summary>
-    private async Task CheckInBlockingAsync(
+    /// <param name="agreedToTakeFrom">Whose claim the user agreed to take, so a later toast can tell it from a surprise.</param>
+    private async Task ExecuteAsync(
         Repo repo,
         Game game,
-        Guid blockingSavegameId,
         SavegameDto savegame,
         int snapshotNumber,
-        int? playedRevision,
         SavegameCheckOutMode mode,
-        SavegameRevisionMode revisionMode,
-        string? currentUserId,
-        Func<Guid, string?> nameOf,
+        SavegameCheckOutPlan plan,
         Func<Task> changed,
         string? agreedToTakeFrom,
         CancellationToken cancellationToken)
     {
-        var blockingName = nameOf(blockingSavegameId);
+        // Before the first step, since an activation into a running game would be recorded and then
+        // left drifted.
+        runningGuard.EnsureNotRunning(game.Identity, game.Name);
 
-        var outcome = await checkInFlow.CheckInAsync(
-            game,
-            blockingSavegameId,
-            blockingName ?? "that savegame",
-            blockingName ?? "the slot",
-            cancellationToken,
-            // Null rather than the placeholder above: a name only worth showing in a sentence is not one
-            // worth writing into the save.
-            renameTo: blockingName);
-
-        if (outcome.ReleasedTheSlot is false)
+        if (plan.CheckIns.Count > 0)
         {
-            toasts.Show(
-                outcome.WasDeferred
-                    ? "That savegame was left checked out, so its slot is still taken."
-                    : "That savegame is still checked out, so its slot is still taken.",
-                ToastSeverity.Warning);
+            foreach (var checkIn in plan.CheckIns)
+            {
+                if (await CheckInFirstAsync(game, savegame, checkIn, cancellationToken) is false)
+                {
+                    await changed();
+
+                    return;
+                }
+            }
+
+            await changed();
+
+            // Read again: a check-in a moment ago is exactly the kind of thing that moves the savegame's state.
+            savegame = (await savegamesClient.GetSavegamesV1Async(repo.Id, cancellationToken))
+                .FirstOrDefault(x => x.Id == savegame.Id) ?? savegame;
+        }
+
+        // Named, not left to the game: nothing is holding this savegame yet, so the game would resolve
+        // head - wrong in compatibility mode, whose check-out would then leave the folder drifted.
+        if (plan.Activates is ProfileDto profile
+            && await profileActivation.ActivateFirstAsync(
+                repo, game, profile.Id, profile.Name, plan.PinnedRevision ?? profile.HeadRevision, cancellationToken) is false)
+        {
+            await changed();
 
             return;
         }
 
-        // The slot is no longer claimed but not empty either, so the modal about to open again offers
-        // it as an unrecognised save - which needs saying, or it reads as the check-in having done nothing.
-        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, blockingName is null ? "its slot" : $"'{blockingName}'s slot") is string notRecycled)
+        await WriteAsync(repo, savegame, snapshotNumber, mode, plan.RevisionMode, game, plan.Slot, changed, agreedToTakeFrom, cancellationToken);
+    }
+
+    /// <returns>Whether the savegame was handed back, which is what frees the folder or slot it held.</returns>
+    private async Task<bool> CheckInFirstAsync(
+        Game game,
+        SavegameDto savegame,
+        SavegameCheckOutCheckIn checkIn,
+        CancellationToken cancellationToken)
+    {
+        var outcome = await checkInFlow.CheckInAsync(
+            game, checkIn.SavegameId, checkIn.Name, checkIn.Label, keepPlaying: false, cancellationToken, renameTo: checkIn.RenameTo);
+
+        if (outcome.ReleasedTheSlot is false)
+        {
+            // A check-in that failed has already said so.
+            if (outcome.WasDeferred || outcome.Succeeded)
+            {
+                toasts.Show($"'{checkIn.Name}' is still checked out, so '{savegame.Name}' was not checked out.", ToastSeverity.Warning);
+            }
+
+            return false;
+        }
+
+        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, $"'{checkIn.Name}'s slot") is string notRecycled)
         {
             toasts.Show(notRecycled, ToastSeverity.Warning);
         }
 
-        await changed();
-
-        // Read again: a check-in a moment ago is exactly the kind of thing that moves the savegame's state.
-        var refreshed = (await savegamesClient.GetSavegamesV1Async(repo.Id, cancellationToken))
-            .FirstOrDefault(x => x.Id == savegame.Id);
-
-        if (refreshed is not null)
-        {
-            await StartAsync(
-                repo, refreshed, snapshotNumber, playedRevision, mode, revisionMode, currentUserId, nameOf, changed,
-                agreedToTakeFrom, cancellationToken);
-        }
+        return true;
     }
 
-    private async Task ExecuteAsync(
+    private async Task WriteAsync(
         Repo repo,
         SavegameDto savegame,
         int snapshotNumber,
@@ -325,6 +261,9 @@ public sealed class SavegameCheckOutFlow(
                         "and this machine holds no claim on it - the slot is an ordinary save of your own now.");
 
             ReportDisplaced(displacedByCopy);
+
+            // The copy may have activated the profile first, which moves every row's answer about the folder.
+            await changed();
 
             return;
         }

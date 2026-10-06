@@ -4,10 +4,24 @@ namespace ModsDude.Client.Wpf.Savegames;
 
 public interface ISavegameCheckInFlow
 {
+    /// <summary>The check-in step for a savegame this game holds.</summary>
+    /// <param name="savegameName">What the step calls the save. Display text only.</param>
+    /// <param name="handBackReason">
+    /// Why the save has to be handed back, where the check-in is a step towards something else. Null
+    /// where keeping it is a choice.
+    /// </param>
+    SavegameCheckInStepViewModel CreateStep(
+        Game game,
+        Guid savegameId,
+        string savegameName,
+        string slotLabel,
+        string? handBackReason = null);
+
     /// <summary>
-    /// Asks, uploads, and turns a stale base into a choice rather than an error.
+    /// Uploads what the slot holds, and turns a stale base or somebody else's claim into a choice
+    /// rather than an error. A refusal is reported here and comes back as cancelled.
     /// </summary>
-    /// <param name="savegameName">What the modal calls the save. Display text only.</param>
+    /// <param name="savegameName">What any question about it calls the save. Display text only.</param>
     /// <param name="renameTo">
     /// What to write into the slot as the save's name before packing it, or null to leave it alone.
     /// Separate from <paramref name="savegameName"/>, which may be a placeholder that must not land in
@@ -17,7 +31,8 @@ public interface ISavegameCheckInFlow
         Game game,
         Guid savegameId,
         string savegameName,
-        string slotLabel,
+        string? label,
+        bool keepPlaying,
         CancellationToken cancellationToken,
         string? renameTo = null);
 

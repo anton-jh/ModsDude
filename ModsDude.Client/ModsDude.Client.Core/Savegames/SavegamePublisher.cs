@@ -123,17 +123,20 @@ public sealed class SavegamePublisher(
 
     private void EnsureCanKeep(Game game, Guid repoId, Guid? profileId, string savegameName)
     {
-        switch (heldSavegames.DecideKeepPublished(game, repoId, profileId))
-        {
-            case SavegameKeepRefusal.NotOnProfile:
-                throw new UserFriendlyException(
-                    $"'{savegameName}' cannot stay checked out",
-                    $"Game '{game.Identity}' is not on profile '{profileId}', so a savegame following it cannot be held there.");
+        var plan = heldSavegames.DecideKeepPublished(game, repoId, profileId);
 
-            case SavegameKeepRefusal.AnotherSavegameHeld:
-                throw new UserFriendlyException(
-                    $"'{savegameName}' cannot stay checked out",
-                    $"Game '{game.Identity}' already holds a savegame following a profile, so its mod folder is spoken for.");
+        if (plan.ChecksInFirst is Guid blocking)
+        {
+            throw new UserFriendlyException(
+                $"'{savegameName}' cannot stay checked out",
+                $"Game '{game.Identity}' already holds savegame '{blocking}', which follows a profile, so its mod folder is spoken for.");
+        }
+
+        if (plan.ActivatesFirst)
+        {
+            throw new UserFriendlyException(
+                $"'{savegameName}' cannot stay checked out",
+                $"Game '{game.Identity}' is not on profile '{profileId}', so a savegame following it cannot be held there.");
         }
     }
 }

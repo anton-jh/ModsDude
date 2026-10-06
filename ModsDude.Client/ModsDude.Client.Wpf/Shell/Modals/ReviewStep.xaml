@@ -1,0 +1,28 @@
+<UserControl x:Class="ModsDude.Client.Wpf.Shell.Modals.ReviewStep"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:modals="clr-namespace:ModsDude.Client.Wpf.Shell.Modals"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=modals:ReviewStepViewModel, IsDesignTimeCreatable=False}">
+
+    <StackPanel>
+
+        <TextBlock Text="In this order"
+                   Style="{DynamicResource CaptionTextBlockStyle}"
+                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+        <ItemsControl Focusable="False" ItemsSource="{Binding Actions}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type modals:ReviewAction}">
+                    <Grid ColumnDefinitions="auto *">
+                        <TextBlock Grid.Column="0" Style="{StaticResource FieldLabel}" Text="{Binding Number}" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource FieldValue}" Text="{Binding Text}" />
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+
+</UserControl>

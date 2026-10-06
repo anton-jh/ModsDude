@@ -22,5 +22,5 @@ public interface IHeldSavegames
     SavegameCheckoutBinding? FindProfileHold(GameIdentity game);
 
     /// <inheritdoc cref="SavegameHoldRules.DecideKeepPublished"/>
-    SavegameKeepRefusal DecideKeepPublished(Game game, Guid repoId, Guid? profileId);
+    SavegameKeepPlan DecideKeepPublished(Game game, Guid repoId, Guid? profileId);
 }

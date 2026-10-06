@@ -24,17 +24,23 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// </remarks>
 public sealed class SavegameSlotOptionViewModel : IGroupedSlot
 {
+    /// <param name="isFreedByCheckIn">
+    /// Whether the savegame occupying this slot is checked in before anything is written here, which
+    /// leaves the slot free for whatever follows.
+    /// </param>
     public SavegameSlotOptionViewModel(
         GameSavegameSlot slot,
         SavegameSlotAvailability availability,
         Guid? occupyingSavegameId = null,
-        string? occupyingSavegameName = null)
+        string? occupyingSavegameName = null,
+        bool isFreedByCheckIn = false)
     {
         Ref = slot.Ref;
         TargetName = slot.TargetName;
         Availability = availability;
         OccupyingSavegameId = occupyingSavegameId;
         OccupyingSavegameName = occupyingSavegameName;
+        IsFreedByCheckIn = isFreedByCheckIn;
 
         SaveName = slot.DisplayName;
         Details = slot.Details;
@@ -47,8 +53,8 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
         Detail = BuildDetail();
         ToolTip = SavegameSlotWording.DescribeFully(Label, Ref, TargetName, Details, Number);
 
-        IsRefused = SavegameSlotStates.IsRefused(availability);
-        NeedsConfirmation = SavegameSlotStates.RequiresConfirmation(availability);
+        IsRefused = isFreedByCheckIn is false && SavegameSlotStates.IsRefused(availability);
+        NeedsConfirmation = isFreedByCheckIn is false && SavegameSlotStates.RequiresConfirmation(availability);
         IsFree = availability is SavegameSlotAvailability.Free;
     }
 
@@ -98,6 +104,9 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
 
     public string? OccupyingSavegameName { get; }
 
+    /// <inheritdoc cref="SavegameSlotOptionViewModel(GameSavegameSlot, SavegameSlotAvailability, Guid?, string?, bool)"/>
+    public bool IsFreedByCheckIn { get; }
+
     /// <summary>Writing here is refused outright - it holds play that exists nowhere else.</summary>
     public bool IsRefused { get; }
 
@@ -127,7 +136,21 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
         // is the whole reason it is preserved; the rest are on the tooltip.
         parts.AddRange(Details.Take(SavegameSlotWording.DetailsOnTheRow).Select(x => x.Value));
 
-        parts.Add(Availability switch
+        parts.Add(DescribeState());
+
+        return string.Join(" · ", parts);
+    }
+
+    private string DescribeState()
+    {
+        if (IsFreedByCheckIn)
+        {
+            return OccupyingSavegameName is { Length: > 0 } checkedIn
+                ? $"'{checkedIn}' is checked in first, which frees this slot"
+                : "The savegame here is checked in first, which frees this slot";
+        }
+
+        return Availability switch
         {
             SavegameSlotAvailability.Free => "Nothing here",
             SavegameSlotAvailability.HeldClean => OccupyingSavegameName is { Length: > 0 } clean
@@ -136,10 +159,7 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
             SavegameSlotAvailability.HeldWithUnpublishedPlay => OccupyingSavegameName is { Length: > 0 } played
                 ? $"'{played}' has been played here and not checked in - this exists nowhere else"
                 : "This has been played and not checked in - it exists nowhere else",
-            SavegameSlotAvailability.Unrecognised => "Not from this repo. ModsDude has no copy of it",
             _ => "Not from this repo. ModsDude has no copy of it"
-        });
-
-        return string.Join(" · ", parts);
+        };
     }
 }

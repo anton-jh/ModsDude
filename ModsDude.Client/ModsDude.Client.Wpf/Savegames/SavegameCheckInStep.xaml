@@ -1,0 +1,54 @@
+<UserControl x:Class="ModsDude.Client.Wpf.Savegames.SavegameCheckInStep"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:savegames="clr-namespace:ModsDude.Client.Wpf.Savegames"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=savegames:SavegameCheckInStepViewModel, IsDesignTimeCreatable=False}">
+
+    <StackPanel>
+
+        <TextBlock Text="{Binding Message}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+        <!-- The mod list this snapshot is being attributed to. Observed rather than declared,
+             so this is the one moment it is visible to the person who would know it was
+             wrong - and the moment before it is recorded for good. -->
+        <TextBlock Text="{Binding PlayedOn}"
+                   Margin="0 12 0 0"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                   Visibility="{Binding HasPlayedOn, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+        <TextBlock Text="What this snapshot was, for the history (optional)"
+                   Margin="0 16 0 4"
+                   Style="{DynamicResource CaptionTextBlockStyle}"
+                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+        <TextBox Text="{Binding Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 FontSize="14" />
+
+        <!-- The mid-session backup. Without it, saving progress for the others to see is an
+             upload followed immediately by downloading what was just sent. Disabled rather
+             than hidden where the save has to be handed back, with the reason beneath. -->
+        <CheckBox Margin="0 16 0 0"
+                  Content="Keep playing - keep the save and the claim"
+                  IsEnabled="{Binding CanKeepPlaying}"
+                  IsChecked="{Binding KeepPlaying, Mode=TwoWay}" />
+
+        <TextBlock Text="{Binding HandBackReason}"
+                   Margin="0 8 0 0"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                   Visibility="{Binding MustHandBack, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+        <TextBlock Text="{Binding Consequence}"
+                   Margin="0 8 0 0"
+                   TextWrapping="Wrap"
+                   Style="{DynamicResource CaptionTextBlockStyle}"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+    </StackPanel>
+
+</UserControl>

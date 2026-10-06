@@ -51,9 +51,7 @@ public sealed class SavegameOffers(
             host.AppliedProfileId,
             host.AppliedRevision);
 
-        row.SetOffer(
-            offer,
-            offer.CanCheckOut || offer.BlockingSavegameId == Guid.Empty ? null : nameOf(offer.BlockingSavegameId));
+        row.SetOffer(offer, offer.ChecksInFirst is Guid blocking ? nameOf(blocking) : null);
     }
 
     private SavegameHoldHere? FindHold(Guid savegameId, SavegameHost host)

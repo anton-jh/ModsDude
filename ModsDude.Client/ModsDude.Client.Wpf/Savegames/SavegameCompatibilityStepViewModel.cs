@@ -1,4 +1,3 @@
-using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -9,16 +8,15 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// Asked before a savegame goes onto a mod list that has moved far from the one it was last played
 /// on: keep it on that revision, or take it to the latest.
 /// </summary>
-public partial class SavegameCompatibilityModalViewModel : ModalViewModel
+public sealed class SavegameCompatibilityStepViewModel : WizardStepViewModel
 {
-    public SavegameCompatibilityModalViewModel(
+    public SavegameCompatibilityStepViewModel(
         string savegameName,
         string profileName,
         int playedRevision,
         int latestRevision,
         SavegameCompatibilityVerdict verdict)
     {
-        Title = "Use compatibility mode?";
         Intro = $"The mod list has changed since '{savegameName}' was last played.";
         PlayedText = $"{profileName} rev {playedRevision}";
         LatestText = $"{profileName} rev {latestRevision}";
@@ -26,10 +24,17 @@ public partial class SavegameCompatibilityModalViewModel : ModalViewModel
         RemovedCount = verdict.RemovedCount;
         ChangedCount = verdict.VersionChangedCount;
         LockedChanges = [.. verdict.LockedChanges.Select(Describe)];
+
+        Choices =
+        [
+            new WizardChoice("Compatibility mode", () => Result = SavegameRevisionMode.Compatibility) { IsDefault = true },
+            new WizardChoice("Latest", () => Result = SavegameRevisionMode.Latest) { IsAccent = false }
+        ];
     }
 
 
-    public string Title { get; }
+    public override string Title => "Use compatibility mode?";
+
     public string Intro { get; }
     public string PlayedText { get; }
     public string LatestText { get; }
@@ -42,30 +47,9 @@ public partial class SavegameCompatibilityModalViewModel : ModalViewModel
 
     public bool HasLockedChanges => LockedChanges.Count > 0;
 
-    /// <summary>The choice made, or null where the user backed out.</summary>
-    public SavegameRevisionMode? Result { get; private set; }
+    /// <summary>The choice made. Read only once the step has been answered.</summary>
+    public SavegameRevisionMode Result { get; private set; }
 
-
-    [RelayCommand]
-    private void UseCompatibilityMode() => Finish(SavegameRevisionMode.Compatibility);
-
-    [RelayCommand]
-    private void UseLatest() => Finish(SavegameRevisionMode.Latest);
-
-    [RelayCommand]
-    private void Cancel() => Finish(null);
-
-
-    public override bool TryCancel() => Press(CancelCommand);
-
-    public override bool TryAccept() => Press(UseCompatibilityModeCommand);
-
-
-    private void Finish(SavegameRevisionMode? result)
-    {
-        Result = result;
-        Done = true;
-    }
 
     private static string Describe(ProfileModChange change)
         => change.Kind is ProfileModChangeKind.Removed

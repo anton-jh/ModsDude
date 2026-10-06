@@ -1,6 +1,6 @@
-using ModsDude.Client.Core.GameAdapters;
-using ModsDude.Client.Core.Helpers;
+using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -21,6 +21,10 @@ public sealed class SavegamePublishFlow(
     IHeldSavegames heldSavegames,
     IProfileService profileService,
     ISyncManifestStore manifestStore,
+    ISavegameCheckInFlow checkInFlow,
+    ISavegameProfileActivation profileActivation,
+    ISavegamesClient savegamesClient,
+    IGameRunningGuard runningGuard,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
     IBackgroundTaskReporter backgroundTasks,
@@ -29,7 +33,7 @@ public sealed class SavegamePublishFlow(
     public async Task PublishAsync(
         Repo repo,
         Guid? preselectProfileId,
-        Func<Guid, Task> published,
+        Func<Guid?, Task> changed,
         CancellationToken cancellationToken)
     {
         if (repo.Games.FirstOrDefault() is not Game game)
@@ -54,37 +58,17 @@ public sealed class SavegamePublishFlow(
                 return;
             }
 
-            var picker = new SavegameSlotPickerModalViewModel(repo.Name, slots);
+            var wizard = new SavegamePublishWizard(
+                repo, game, preselectProfileId, slots, savegameSlots, heldSavegames, profileService, manifestStore, checkInFlow, savegamesClient);
 
-            await modalService.Value.Show(picker);
+            var modal = new WizardModalViewModel(wizard.First, wizard.NextAsync, cancellationToken);
 
-            if (picker.Result is not SavegameSlotOptionViewModel chosen)
+            if (await modal.ShowAsync(modalService.Value) is false || wizard.Plan is not SavegamePublishPlan plan)
             {
                 return;
             }
 
-            var outcome = await PublishSlotAsync(game, repo, chosen.Ref, chosen.Label, preselectProfileId, cancellationToken);
-
-            if (outcome is null)
-            {
-                return;
-            }
-
-            // The slot is in a different state in each ending, and the sentence is the only thing that
-            // says which.
-            if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, SavegameSlotWording.Named(savegameSlots.DescribeSlotNumber(game, chosen.Ref), outcome.Savegame.Name))
-                is string notRecycled)
-            {
-                toasts.Show($"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. {notRecycled}", ToastSeverity.Warning);
-            }
-            else
-            {
-                toasts.Show(outcome.LocalCopy is SavegameLocalCopy.Kept
-                    ? $"'{outcome.Savegame.Name}' is in {repo.Name}, and checked out to you."
-                    : $"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. The local copy went to the Recycle Bin.");
-            }
-
-            await published(outcome.Savegame.Id);
+            await ExecuteAsync(game, repo, plan, changed, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -118,83 +102,106 @@ public sealed class SavegamePublishFlow(
         return options;
     }
 
-    /// <returns>What was created and where the local copy is, or null where the modal was dismissed.</returns>
-    private async Task<SavegamePublishResult?> PublishSlotAsync(
+    /// <summary>
+    /// The work the wizard was answered with, in order: check in the savegame holding the mod folder,
+    /// activate the profile, publish. Each step stops the rest where it does not finish.
+    /// </summary>
+    private async Task ExecuteAsync(
         Game game,
         Repo repo,
-        SavegameSlotRef slot,
-        string slotLabel,
-        Guid? preselectProfileId,
+        SavegamePublishPlan plan,
+        Func<Guid?, Task> changed,
         CancellationToken cancellationToken)
     {
-        // This slot's own folder: the first snapshot's revision is a declaration about the mods that
-        // were beside these bytes.
-        var manifest = manifestStore.TryRead(new ModTargetRef(game.Identity, slot.Target));
-        var options = await BuildOptionsAsync(repo, manifest?.ProfileId, manifest?.ProfileRevision, cancellationToken);
+        // Before the first step, since an activation into a running game would be recorded and then
+        // left drifted.
+        runningGuard.EnsureNotRunning(game.Identity, game.Name);
 
-        var preselected = preselectProfileId
-            ?? (game.ActiveProfile is ActiveProfile profile && profile.RepoId == repo.Id ? profile.ProfileId : null);
-
-        var modal = new SavegamePublishModalViewModel(
-            slotLabel,
-            repo.Name,
-            slotLabel,
-            options,
-            options.FirstOrDefault(x => x.ProfileId == preselected && x.ProfileId is not null),
-            profileId => heldSavegames.DecideKeepPublished(game, repo.Id, profileId),
-            options.FirstOrDefault(x => x.ProfileId is not null && x.ProfileId == manifest?.ProfileId)?.Name,
-            savegameSlots.DescribeSlotNumber(game, slot));
-
-        await modalService.Value.Show(modal);
-
-        if (modal.Result is not string name)
+        if (plan.CheckInFirst is SavegamePublishCheckIn checkIn)
         {
-            return null;
+            var released = await CheckInFirstAsync(game, plan, checkIn, cancellationToken);
+
+            await changed(null);
+
+            if (released is false)
+            {
+                return;
+            }
         }
 
-        var keepPlaying = modal.KeepPlaying;
+        if (plan.ActivatesFirst
+            && plan.Profile.ProfileId is Guid profileId
+            && await profileActivation.ActivateFirstAsync(repo, game, profileId, plan.Profile.Name, revision: null, cancellationToken) is false)
+        {
+            await changed(null);
 
+            return;
+        }
+
+        var outcome = await PublishSlotAsync(game, repo, plan, cancellationToken);
+
+        // The slot is in a different state in each ending, and the sentence is the only thing that
+        // says which.
+        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, SavegameSlotWording.Named(savegameSlots.DescribeSlotNumber(game, plan.Slot.Ref), outcome.Savegame.Name))
+            is string notRecycled)
+        {
+            toasts.Show($"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. {notRecycled}", ToastSeverity.Warning);
+        }
+        else
+        {
+            toasts.Show(outcome.LocalCopy is SavegameLocalCopy.Kept
+                ? $"'{outcome.Savegame.Name}' is in {repo.Name}, and checked out to you."
+                : $"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. The local copy went to the Recycle Bin.");
+        }
+
+        await changed(outcome.Savegame.Id);
+    }
+
+    /// <returns>Whether the savegame was handed back, which is what frees the mod folder.</returns>
+    private async Task<bool> CheckInFirstAsync(
+        Game game,
+        SavegamePublishPlan plan,
+        SavegamePublishCheckIn checkIn,
+        CancellationToken cancellationToken)
+    {
+        var outcome = await checkInFlow.CheckInAsync(
+            game, checkIn.SavegameId, checkIn.Name, checkIn.Label, keepPlaying: false, cancellationToken, renameTo: checkIn.RenameTo);
+
+        if (outcome.ReleasedTheSlot is false)
+        {
+            // A check-in that failed has already said so.
+            if (outcome.WasDeferred || outcome.Succeeded)
+            {
+                toasts.Show($"'{checkIn.Name}' is still checked out, so '{plan.Name}' was not published.", ToastSeverity.Warning);
+            }
+
+            return false;
+        }
+
+        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, $"'{checkIn.Name}'s slot") is string notRecycled)
+        {
+            toasts.Show(notRecycled, ToastSeverity.Warning);
+        }
+
+        return true;
+    }
+
+    private async Task<SavegamePublishResult> PublishSlotAsync(
+        Game game,
+        Repo repo,
+        SavegamePublishPlan plan,
+        CancellationToken cancellationToken)
+    {
         using var task = backgroundTasks.Begin(
-            $"Publishing '{name}' to {repo.Name}",
-            keepPlaying
-                ? $"Packing and uploading '{slotLabel}'"
-                : $"Packing and uploading '{slotLabel}', then handing it back");
+            $"Publishing '{plan.Name}' to {repo.Name}",
+            plan.KeepPlaying
+                ? $"Packing and uploading '{plan.Slot.Label}'"
+                : $"Packing and uploading '{plan.Slot.Label}', then handing it back");
 
         task.DeclareTransfers(TransferDirection.Upload);
 
         return await savegamePublisher.PublishAsync(
-            game, repo.Id, slot, name, modal.TrimmedLabel, modal.SelectedProfile?.ToTarget(), keepPlaying, cancellationToken,
+            game, repo.Id, plan.Slot.Ref, plan.Name, plan.Label, plan.Profile.ToTarget(), plan.KeepPlaying, cancellationToken,
             new SavegameStripProgress(task));
-    }
-
-    /// <summary>
-    /// Every profile in the repo as something the modal can offer, plus the no-mod-list answer last.
-    /// </summary>
-    private async Task<IReadOnlyList<SavegamePublishOption>> BuildOptionsAsync(
-        Repo repo,
-        Guid? appliedProfileId,
-        int? appliedRevision,
-        CancellationToken cancellationToken)
-    {
-        // The repo's Saves page is reachable without ever having opened a profile.
-        if (profileService.Profiles.Any(x => x.RepoId == repo.Id) is false)
-        {
-            await profileService.RefreshProfiles(repo.Id, cancellationToken);
-        }
-
-        var options = new List<SavegamePublishOption>();
-
-        foreach (var profile in profileService.Profiles.Where(x => x.RepoId == repo.Id).OrderBy(x => x.Name, NaturalOrder.Comparer))
-        {
-            options.Add(new SavegamePublishOption(
-                profile.Id,
-                profile.Name,
-                SavegameRevisionRules.DeclaredRevisionFor(profile.Id, profile.HeadRevision, appliedProfileId, appliedRevision),
-                profile.Id == appliedProfileId));
-        }
-
-        options.Add(SavegamePublishOption.NoModList);
-
-        return options;
     }
 }

@@ -89,10 +89,9 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// game to do it on.
     /// </summary>
     /// <remarks>
-    /// <b>Null rather than a value on the rule's enum.</b> Whether a game is connected here is not a
-    /// fact about this savegame - it is the absence of the thing the rule is about - so
-    /// <see cref="SavegameRowRules"/> is only ever asked where there is one, and the sentence for the
-    /// other case is <see cref="_notConnected"/> below.
+    /// Whether a game is connected here is not a fact about this savegame - it is the absence of the
+    /// thing the rule is about - so <see cref="SavegameRowRules"/> is only ever asked where there is
+    /// one, and the sentence for the other case is <see cref="_notConnected"/> below.
     /// </remarks>
     private SavegameRowOffer? _offer;
     private string? _blockingSavegameName;
@@ -151,10 +150,10 @@ public partial class SavegameListItemViewModel : ObservableObject
     public bool HasProfile => Savegame.ProfileId is not null;
 
     /// <summary>
-    /// Whether taking the claim is on offer here and now: Member, and nothing about this machine in
-    /// the way. <see cref="CheckOutBlockedReason"/> is the half that says why not.
+    /// Whether taking the claim is on offer here and now: Member, with the game connected here.
+    /// <see cref="CheckOutBlockedReason"/> is the half that says why not.
     /// </summary>
-    public bool CanCheckOut => IsMember && _offer?.CanCheckOut is true;
+    public bool CanCheckOut => IsMember && _offer is not null;
 
     /// <summary>
     /// Whether staying on the revision the save was last played on is a choice to offer: only where the
@@ -266,9 +265,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     public string CheckOutLabel => IsHeldByMe ? "Check out again" : "Check out";
 
-    public string? CheckOutBlockedReason => _offer is SavegameRowOffer offer
-        ? SavegameRowRules.Explain(offer.CheckOut, _blockingSavegameName)
-        : _notConnected;
+    public string? CheckOutBlockedReason => _offer is null ? _notConnected : null;
 
     /// <summary>
     /// What the row says under its buttons: why Check out is greyed out, where it is.
@@ -286,6 +283,9 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// there is not. A disabled button whose only explanation is its greyness is what this replaces.
     /// </summary>
     public string CheckOutToolTip => CheckOutBlockedReason
+        ?? (_offer is { ChecksInFirst: not null }
+            ? $"{(_blockingSavegameName is { Length: > 0 } name ? $"'{name}'" : "Another savegame")} is checked out here, so checking this one out checks it in first. You are asked before anything changes."
+            : null)
         ?? (_offer is { ActivatesFirst: true } offer
             ? $"The mod folder is not on what this savegame runs on, so checking it out activates {SavegameRowRules.DescribeActivation(ProfileName, offer.PinnedRevision)} first. You are asked before anything changes."
             : null)
@@ -298,8 +298,9 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// <summary>
     /// What Take a copy does, and - where the mod folder is elsewhere - that it will ask whether to
     /// activate the profile, since the copy claims nothing and the mods are the only thing it can change.
+    /// A copy never checks anything in, so where another savegame holds the folder it is not asked.
     /// </summary>
-    public string TakeCopyToolTip => _offer is { ActivatesFirst: true } offer
+    public string TakeCopyToolTip => _offer is { ActivatesFirst: true, ChecksInFirst: null } offer
         ? $"Writes it into a slot and claims nothing. The mod folder is not on {SavegameRowRules.DescribeActivation(ProfileName, offer.PinnedRevision)}, so you are asked whether to activate it first."
         : "Writes it into a slot and claims nothing. Whoever holds it keeps holding it.";
 
@@ -532,7 +533,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </param>
     /// <param name="blockingSavegameName">
     /// What the savegame already claiming the mod folder is called, where the page could find it in
-    /// its own list.
+    /// its own list. Named on the tooltip, since checking this one out checks that one in first.
     /// </param>
     public void SetOffer(SavegameRowOffer? offer, string? blockingSavegameName)
     {

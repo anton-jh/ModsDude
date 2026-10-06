@@ -397,7 +397,7 @@ internal sealed class FakeHeldSavegames(SyncManifestStore manifests)
     public SavegameCheckoutBinding? FindProfileHold(GameIdentity game)
         => SavegameHoldRules.FindProfileHold(_held);
 
-    public SavegameKeepRefusal DecideKeepPublished(Game game, Guid repoId, Guid? profileId)
+    public SavegameKeepPlan DecideKeepPublished(Game game, Guid repoId, Guid? profileId)
         => SavegameHoldRules.DecideKeepPublished(_held, game.ActiveProfile, repoId, profileId);
 
     /// <summary>

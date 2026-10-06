@@ -1,0 +1,73 @@
+<UserControl x:Class="ModsDude.Client.Wpf.Savegames.SavegamePublishStep"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:savegames="clr-namespace:ModsDude.Client.Wpf.Savegames"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=savegames:SavegamePublishStepViewModel, IsDesignTimeCreatable=False}">
+
+    <StackPanel>
+
+        <TextBlock Text="{Binding Message}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+        <TextBlock Text="What everybody else will see it called"
+                   Margin="0 16 0 4"
+                   Style="{DynamicResource CaptionTextBlockStyle}"
+                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+        <TextBox Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 FontSize="14" />
+
+        <!-- Every profile in the repo, and no mod list as an explicit choice. It is asked
+             rather than derived because nothing moves a savegame between profiles afterwards,
+             and because the game's active one is only the likeliest answer. -->
+        <TextBlock Text="Which mod list this savegame follows"
+                   Margin="0 16 0 4"
+                   Style="{DynamicResource CaptionTextBlockStyle}"
+                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+        <ComboBox HorizontalAlignment="Stretch"
+                  ItemsSource="{Binding Profiles}"
+                  DisplayMemberPath="Name"
+                  SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" />
+
+        <!-- The number this declares. Shown rather than implied: the bytes predate ModsDude,
+             so nothing observed which mods were in the folder while this savegame was played. -->
+        <TextBlock Text="{Binding RevisionText}"
+                   Margin="0 8 0 0"
+                   TextWrapping="Wrap"
+                   Style="{DynamicResource CaptionTextBlockStyle}"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                   Visibility="{Binding HasRevisionText, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+        <TextBlock Text="{Binding MismatchNotice}"
+                   Margin="0 8 0 0"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                   Visibility="{Binding HasMismatchNotice, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+        <TextBlock Text="What this first snapshot was, for the history (optional)"
+                   Margin="0 16 0 4"
+                   Style="{DynamicResource CaptionTextBlockStyle}"
+                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+        <TextBox Text="{Binding Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 FontSize="14" />
+
+        <!-- The same choice check-in offers. Whatever keeping it needs first is asked in the
+             steps after this one. -->
+        <CheckBox Margin="0 16 0 0"
+                  Content="Keep playing - keep the save and the claim"
+                  IsChecked="{Binding KeepPlaying, Mode=TwoWay}" />
+
+        <TextBlock Text="{Binding Consequence}"
+                   Margin="0 8 0 0"
+                   TextWrapping="Wrap"
+                   Style="{DynamicResource CaptionTextBlockStyle}"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+    </StackPanel>
+
+</UserControl>

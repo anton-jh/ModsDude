@@ -1,5 +1,4 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Wpf.Shell.Modals;
 
 namespace ModsDude.Client.Wpf.Savegames;
@@ -17,7 +16,8 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// <para>
 /// <b>Keep playing is the mid-session backup.</b> The same snapshot is minted, but the local copy and
 /// the claim both stay - so saving your progress for the others to see does not become an upload
-/// followed immediately by downloading what was just sent.
+/// followed immediately by downloading what was just sent. It is not offered where the check-in is
+/// a step towards something that needs the save handed back.
 /// </para>
 /// <para>
 /// The description is never required. A field the button refuses to work without is answered with
@@ -30,19 +30,31 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// recorded for good.
 /// </para>
 /// </remarks>
-public partial class SavegameCheckInModalViewModel : ModalViewModel
+public partial class SavegameCheckInStepViewModel : WizardStepViewModel
 {
     /// <param name="playedOn">
     /// Which mod list and revision the snapshot being minted will record, or null where it records
     /// none - a savegame following no mod list, and one whose revision nothing on this machine knows.
     /// </param>
     /// <param name="slotNumber">The number the player knows the slot by, for a game that numbers them.</param>
-    public SavegameCheckInModalViewModel(string savegameName, string slotLabel, string? playedOn = null, int? slotNumber = null)
+    /// <param name="handBackReason">
+    /// Why the save has to be handed back, where this check-in is a step towards something else. Null
+    /// where keeping it is a choice.
+    /// </param>
+    public SavegameCheckInStepViewModel(
+        string savegameName,
+        string slotLabel,
+        string? playedOn = null,
+        int? slotNumber = null,
+        string? handBackReason = null)
     {
         SavegameName = savegameName;
         SlotLabel = slotLabel;
         SlotNumber = slotNumber;
         PlayedOn = playedOn;
+        HandBackReason = handBackReason;
+
+        Choices = [new WizardChoice(() => ConfirmLabel) { IsDefault = true }];
     }
 
 
@@ -50,12 +62,19 @@ public partial class SavegameCheckInModalViewModel : ModalViewModel
     public string SlotLabel { get; }
     public int? SlotNumber { get; }
 
-    /// <inheritdoc cref="SavegameCheckInModalViewModel(string, string, string?, int?)"/>
+    /// <inheritdoc cref="SavegameCheckInStepViewModel(string, string, string?, int?, string?)"/>
     public string? PlayedOn { get; }
 
     public bool HasPlayedOn => PlayedOn is { Length: > 0 };
 
-    public string Title => $"Check '{SavegameName}' in";
+    /// <inheritdoc cref="SavegameCheckInStepViewModel(string, string, string?, int?, string?)"/>
+    public string? HandBackReason { get; }
+
+    public bool MustHandBack => HandBackReason is not null;
+
+    public bool CanKeepPlaying => MustHandBack is false;
+
+    public override string Title => $"Check '{SavegameName}' in";
 
     public string Message =>
         $"Everything in {SavegameSlotWording.Named(SlotNumber, SlotLabel)} is uploaded as a new snapshot, and the others can take it from there. " +
@@ -72,9 +91,6 @@ public partial class SavegameCheckInModalViewModel : ModalViewModel
     [NotifyPropertyChangedFor(nameof(Consequence))]
     private bool _keepPlaying;
 
-    /// <summary>True where the user confirmed. The page reads the two fields off this.</summary>
-    public bool Result { get; private set; }
-
     /// <summary>Blank means no description, which is the ordinary answer.</summary>
     public string? TrimmedLabel => string.IsNullOrWhiteSpace(Label) ? null : Label.Trim();
 
@@ -86,24 +102,4 @@ public partial class SavegameCheckInModalViewModel : ModalViewModel
     public string Consequence => KeepPlaying
         ? "The save stays in its slot and stays yours. Nobody else can take it until you check in without this ticked."
         : "The slot is freed once the upload is verified, and the save is anybody's to take.";
-
-
-    [RelayCommand]
-    private void Confirm()
-    {
-        Result = true;
-        Done = true;
-    }
-
-    [RelayCommand]
-    private void Cancel()
-    {
-        Result = false;
-        Done = true;
-    }
-
-
-    public override bool TryCancel() => Press(CancelCommand);
-
-    public override bool TryAccept() => Press(ConfirmCommand);
 }

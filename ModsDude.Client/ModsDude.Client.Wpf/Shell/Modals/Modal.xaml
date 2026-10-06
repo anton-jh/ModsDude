@@ -52,21 +52,8 @@
                     Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
 
                 <!-- A uniform grid because it leaves collapsed buttons out of the count: one answer
-                     takes the whole width, two share it. Three are stacked instead - each is a
-                     phrase rather than a word, and a third of this modal does not fit one. -->
-                <UniformGrid Margin="20 24">
-                    <UniformGrid.Style>
-                        <Style TargetType="UniformGrid">
-                            <Setter Property="Rows" Value="1" />
-                            <Setter Property="Columns" Value="0" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding HasAlternative}" Value="True">
-                                    <Setter Property="Rows" Value="0" />
-                                    <Setter Property="Columns" Value="1" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </UniformGrid.Style>
+                     takes the whole width, two share it. -->
+                <UniformGrid Margin="20 24" Rows="1">
 
                     <!-- The affirmative, alone where there is nothing to choose between: a modal
                          that says "Ok" on both buttons is reporting rather than asking, and the second
@@ -76,12 +63,6 @@
                             HorizontalAlignment="Stretch"
                             Style="{StaticResource AccentButtonStyle}"
                             Command="{Binding SetYesCommand}" />
-
-                    <Button Margin="4"
-                            Content="{Binding AlternativeText}"
-                            HorizontalAlignment="Stretch"
-                            Command="{Binding SetAlternativeCommand}"
-                            Visibility="{Binding HasAlternative, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                     <Button Margin="4"
                             Content="{Binding NoText}"

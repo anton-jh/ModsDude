@@ -2,9 +2,9 @@ using System.Windows.Controls;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
-public partial class SavegameCheckOutModal : UserControl
+public partial class SavegameCompatibilityStep : UserControl
 {
-    public SavegameCheckOutModal()
+    public SavegameCompatibilityStep()
     {
         InitializeComponent();
     }

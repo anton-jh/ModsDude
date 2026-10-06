@@ -145,31 +145,47 @@ public class SavegameHoldRulesTests
     [Fact]
     public void A_published_savegame_on_the_profile_the_game_is_on_may_be_kept_beside_nothing()
     {
-        Assert.Equal(SavegameKeepRefusal.None, SavegameHoldRules.DecideKeepPublished([], new(_repoId, _profileId), _repoId, _profileId));
+        Assert.True(SavegameHoldRules.DecideKeepPublished([], new(_repoId, _profileId), _repoId, _profileId).IsReady);
     }
 
     [Fact]
     public void A_published_savegame_with_no_profile_may_always_be_kept()
     {
-        Assert.Equal(SavegameKeepRefusal.None, SavegameHoldRules.DecideKeepPublished([Hold()], null, _repoId, null));
+        Assert.True(SavegameHoldRules.DecideKeepPublished([Hold()], null, _repoId, null).IsReady);
     }
 
     [Fact]
-    public void A_published_savegame_on_a_profile_the_game_is_not_on_may_not_be_kept()
+    public void A_published_savegame_on_a_profile_the_game_is_not_on_activates_it_first()
     {
-        Assert.Equal(SavegameKeepRefusal.NotOnProfile, SavegameHoldRules.DecideKeepPublished([], new(_repoId, _otherProfileId), _repoId, _profileId));
-        Assert.Equal(SavegameKeepRefusal.NotOnProfile, SavegameHoldRules.DecideKeepPublished([], null, _repoId, _profileId));
+        Assert.Equal(new SavegameKeepPlan(null, true), SavegameHoldRules.DecideKeepPublished([], new(_repoId, _otherProfileId), _repoId, _profileId));
+        Assert.Equal(new SavegameKeepPlan(null, true), SavegameHoldRules.DecideKeepPublished([], null, _repoId, _profileId));
 
         // The same profile id in another repo's active profile is not this profile.
-        Assert.Equal(SavegameKeepRefusal.NotOnProfile, SavegameHoldRules.DecideKeepPublished([], new(Guid.NewGuid(), _profileId), _repoId, _profileId));
+        Assert.Equal(new SavegameKeepPlan(null, true), SavegameHoldRules.DecideKeepPublished([], new(Guid.NewGuid(), _profileId), _repoId, _profileId));
     }
 
     /// <summary>On the game's own profile too: one mod folder holds one savegame that follows a profile.</summary>
     [Fact]
-    public void A_published_savegame_may_not_be_kept_beside_another_that_follows_a_profile()
+    public void A_published_savegame_kept_beside_another_that_follows_a_profile_checks_that_one_in_first()
     {
-        Assert.Equal(SavegameKeepRefusal.AnotherSavegameHeld, SavegameHoldRules.DecideKeepPublished([Hold()], new(_repoId, _profileId), _repoId, _profileId));
-        Assert.Equal(SavegameKeepRefusal.None, SavegameHoldRules.DecideKeepPublished([Hold(noProfile: true)], new(_repoId, _profileId), _repoId, _profileId));
+        var held = Hold();
+
+        Assert.Equal(new SavegameKeepPlan(held.SavegameId, false), SavegameHoldRules.DecideKeepPublished([held], new(_repoId, _profileId), _repoId, _profileId));
+        Assert.True(SavegameHoldRules.DecideKeepPublished([Hold(noProfile: true)], new(_repoId, _profileId), _repoId, _profileId).IsReady);
+    }
+
+    /// <summary>
+    /// The savegame held here follows the profile the game is on, and the new one follows another:
+    /// the held one is checked in to free the folder, and the other profile is activated.
+    /// </summary>
+    [Fact]
+    public void A_published_savegame_on_another_profile_than_a_held_one_needs_both_steps()
+    {
+        var held = Hold();
+
+        Assert.Equal(
+            new SavegameKeepPlan(held.SavegameId, true),
+            SavegameHoldRules.DecideKeepPublished([held], new(_repoId, _profileId), _repoId, _otherProfileId));
     }
 
 

@@ -1,19 +1,18 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Wpf.Shell.Modals;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
 /// <summary>
-/// Which save already on this disk is about to be published, chosen before the publish modal asks
+/// Which save already on this disk is about to be published, chosen before the publish step asks
 /// anything about it.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Publishing is inherently about a slot</b>, and this is the step that used to be a button on a
 /// row of the game's own slot list. Reaching it from the repo's Saves list means the slot has to be
-/// named rather than clicked, so it is asked first and on its own: the publish modal's every other
+/// named rather than clicked, so it is asked first and on its own: the publish step's every other
 /// question - the name, the mod list, the revision it declares - is about the bytes this one picks.
 /// </para>
 /// <para>
@@ -22,9 +21,9 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// in the list at all - a picker whose rows mostly refuse is worse than a short one.
 /// </para>
 /// </remarks>
-public partial class SavegameSlotPickerModalViewModel : ModalViewModel
+public partial class SavegameSlotPickerStepViewModel : WizardStepViewModel
 {
-    public SavegameSlotPickerModalViewModel(string repoName, IReadOnlyList<SavegameSlotOptionViewModel> slots)
+    public SavegameSlotPickerStepViewModel(string repoName, IReadOnlyList<SavegameSlotOptionViewModel> slots)
     {
         RepoName = repoName;
         Slots = [.. slots];
@@ -35,6 +34,8 @@ public partial class SavegameSlotPickerModalViewModel : ModalViewModel
         SlotGrouping.Apply(Slots, slots.Any(x => x.TargetName is not null));
 
         _selectedSlot = Slots.FirstOrDefault();
+
+        Choices = [new WizardChoice("Publish this one") { IsDefault = true, EnabledWhen = () => SelectedSlot is not null }];
     }
 
 
@@ -42,39 +43,13 @@ public partial class SavegameSlotPickerModalViewModel : ModalViewModel
 
     public ObservableCollection<SavegameSlotOptionViewModel> Slots { get; }
 
-    public string Title => "Publish a save";
+    public override string Title => "Publish a save";
 
     public string Message =>
         $"A save that is already on this disk becomes a savegame of its own in {RepoName}. Only saves " +
         "ModsDude has no copy of are listed - a checked-out one is checked in rather than published again.";
 
-    /// <summary>The slot to publish, or null where the modal was dismissed.</summary>
-    public SavegameSlotOptionViewModel? Result { get; private set; }
-
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     private SavegameSlotOptionViewModel? _selectedSlot;
-
-
-    [RelayCommand(CanExecute = nameof(CanConfirm))]
-    private void Confirm()
-    {
-        Result = SelectedSlot;
-        Done = true;
-    }
-
-    private bool CanConfirm() => SelectedSlot is not null;
-
-    [RelayCommand]
-    private void Cancel()
-    {
-        Result = null;
-        Done = true;
-    }
-
-
-    public override bool TryCancel() => Press(CancelCommand);
-
-    public override bool TryAccept() => Press(ConfirmCommand);
 }

@@ -15,6 +15,6 @@ public sealed class HeldSavegames(ISavegameBindingStore bindings) : IHeldSavegam
     public SavegameCheckoutBinding? FindProfileHold(GameIdentity game)
         => SavegameHoldRules.FindProfileHold(bindings.GetBindings(game));
 
-    public SavegameKeepRefusal DecideKeepPublished(Game game, Guid repoId, Guid? profileId)
+    public SavegameKeepPlan DecideKeepPublished(Game game, Guid repoId, Guid? profileId)
         => SavegameHoldRules.DecideKeepPublished(bindings.GetBindings(game.Identity), game.ActiveProfile, repoId, profileId);
 }

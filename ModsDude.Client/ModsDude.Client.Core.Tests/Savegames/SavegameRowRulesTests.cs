@@ -4,13 +4,12 @@ using ModsDude.Client.Core.Savegames;
 namespace ModsDude.Client.Core.Tests.Savegames;
 
 /// <summary>
-/// Whether a savegame row's check-out is offered, whether it activates the profile first, and the sentence it carries where it is not.
+/// What a savegame row's check-out has to do first: check in the savegame holding the mod folder, and
+/// activate the profile.
 /// </summary>
 /// <remarks>
-/// The point of every case here is that the refusal arrives <em>before</em> the click. The engine
-/// refuses all of it anyway - that is the backstop - so what is being asserted is that the button was
-/// never offered, and that what it says instead names the thing that would clear it. A mod folder on
-/// the wrong list is the exception: check-out stays offered and asks to activate the profile first.
+/// The engine refuses a check-out that skips either step - that is the backstop - so what is being
+/// asserted is that the check-out knows to ask about them before it writes anything.
 /// </remarks>
 public class SavegameRowRulesTests
 {
@@ -29,9 +28,8 @@ public class SavegameRowRulesTests
     {
         var offer = Describe(head: 1004, appliedRevision: 1004);
 
-        Assert.True(offer.CanCheckOut);
+        Assert.Null(offer.ChecksInFirst);
         Assert.False(offer.ActivatesFirst);
-        Assert.Null(SavegameRowRules.Explain(offer.CheckOut, null));
     }
 
     /// <summary>
@@ -44,21 +42,15 @@ public class SavegameRowRulesTests
     {
         var offer = Describe(head: 1004, appliedRevision: 1000);
 
-        // Offered, not refused: the check-out asks, then activates, then carries on.
-        Assert.True(offer.CanCheckOut);
         Assert.True(offer.ActivatesFirst);
-        Assert.Equal(SavegameRowBlock.ModFolderElsewhere, offer.CheckOut);
-        Assert.Null(SavegameRowRules.Explain(offer.CheckOut, null));
+        Assert.Null(offer.ChecksInFirst);
         Assert.Equal("'Old-school'", SavegameRowRules.DescribeActivation("Old-school", offer.PinnedRevision));
     }
 
     [Fact]
     public void On_latest_a_game_following_another_profile_activates_it_first()
     {
-        var offer = Describe(1004, null, _otherProfileId, 1004);
-
-        Assert.True(offer.CanCheckOut);
-        Assert.True(offer.ActivatesFirst);
+        Assert.True(Describe(1004, null, _otherProfileId, 1004).ActivatesFirst);
     }
 
     /// <summary>
@@ -79,63 +71,57 @@ public class SavegameRowRulesTests
     [Fact]
     public void Compatibility_mode_on_a_folder_already_at_its_revision_is_one_click()
     {
-        var offer = Describe(head: 1004, pinned: 4, appliedRevision: 4);
+        Assert.False(Describe(head: 1004, pinned: 4, appliedRevision: 4).ActivatesFirst);
+    }
 
-        Assert.True(offer.CanCheckOut);
+    /// <summary>
+    /// Asked for even where the folder is already exactly right, since the limit is one savegame
+    /// claiming a mod folder rather than one revision.
+    /// </summary>
+    [Fact]
+    public void Another_savegame_holding_the_mod_folder_is_checked_in_first()
+    {
+        var offer = Describe(head: 1004, appliedRevision: 1004, held: [Hold(_otherSavegameId, _profileId)]);
+
+        Assert.Equal(_otherSavegameId, offer.ChecksInFirst);
         Assert.False(offer.ActivatesFirst);
     }
 
     /// <summary>
-    /// Checked before anything about the folder, because no activation clears it - and it holds even where
-    /// the folder is already exactly right, since the limit is one savegame claiming a mod folder
-    /// rather than one revision.
+    /// The savegame holding the folder follows another profile, so the folder is on that one: checking
+    /// it in frees the folder, and the activation then moves it.
     /// </summary>
     [Fact]
-    public void Another_savegame_holding_the_mod_folder_blocks_check_out()
+    public void A_savegame_on_another_profile_is_checked_in_and_the_profile_activated()
     {
-        var offer = Describe(head: 1004, appliedRevision: 1004, held: [Hold(_otherSavegameId)]);
+        var offer = Describe(1004, null, _otherProfileId, 7, held: [Hold(_otherSavegameId, _otherProfileId)]);
 
-        Assert.False(offer.CanCheckOut);
-        Assert.False(offer.ActivatesFirst);
-        Assert.Equal(_otherSavegameId, offer.BlockingSavegameId);
-
-        Assert.Equal(
-            "'Riverbend' is checked out here",
-            SavegameRowRules.Explain(offer.CheckOut, "Riverbend"));
-    }
-
-    /// <summary>The refusal stands without the name, for a savegame the list is not showing.</summary>
-    [Fact]
-    public void A_blocking_savegame_nobody_can_name_still_refuses()
-    {
-        var offer = Describe(head: 1004, appliedRevision: 1004, held: [Hold(_otherSavegameId)]);
-
-        Assert.Equal(
-            "Another savegame is checked out here",
-            SavegameRowRules.Explain(offer.CheckOut, null));
+        Assert.Equal(_otherSavegameId, offer.ChecksInFirst);
+        Assert.True(offer.ActivatesFirst);
     }
 
     /// <summary>
     /// Checking out something this game already holds moves it between slots rather than making it
-    /// two, so its own binding is not what stops it.
+    /// two, so its own binding is not checked in first.
     /// </summary>
     [Fact]
-    public void A_savegame_already_held_here_does_not_block_itself()
+    public void A_savegame_already_held_here_is_not_checked_in_first()
     {
-        Assert.True(Describe(head: 1004, appliedRevision: 1004, held: [Hold(_savegameId)]).CanCheckOut);
+        Assert.Null(Describe(head: 1004, appliedRevision: 1004, held: [Hold(_savegameId, _profileId)]).ChecksInFirst);
     }
 
     /// <summary>
-    /// A savegame following no mod list claims no folder, so nothing about the folder can be wrong for it.
+    /// A savegame following no mod list claims no folder, so nothing about the folder can be wrong for it -
+    /// and nothing held there is in its way.
     /// </summary>
     [Fact]
-    public void A_savegame_with_no_mod_list_can_always_be_checked_out_and_activates_nothing()
+    public void A_savegame_with_no_mod_list_checks_in_and_activates_nothing()
     {
         var offer = SavegameRowRules.Describe(
             _savegameId, profileId: null, headRevision: null, pinnedRevision: null,
-            held: [], appliedProfileId: null, appliedRevision: null);
+            held: [Hold(_otherSavegameId, _otherProfileId)], appliedProfileId: null, appliedRevision: null);
 
-        Assert.True(offer.CanCheckOut);
+        Assert.Null(offer.ChecksInFirst);
         Assert.False(offer.ActivatesFirst);
     }
 
@@ -144,12 +130,16 @@ public class SavegameRowRulesTests
     /// the row claims nothing about it and lets the engine have the last word.
     /// </summary>
     [Fact]
-    public void A_profile_that_cannot_be_seen_constrains_nothing()
+    public void A_profile_that_cannot_be_seen_activates_nothing()
     {
-        var offer = Describe(null, null, _otherProfileId, 9);
+        Assert.False(Describe(null, null, _otherProfileId, 9).ActivatesFirst);
+    }
 
-        Assert.True(offer.CanCheckOut);
-        Assert.False(offer.ActivatesFirst);
+    /// <summary>The folder is still claimed by the savegame held there, whatever this member can see.</summary>
+    [Fact]
+    public void A_profile_that_cannot_be_seen_still_checks_in_what_holds_the_folder()
+    {
+        Assert.Equal(_otherSavegameId, Describe(null, null, _otherProfileId, 9, held: [Hold(_otherSavegameId, _otherProfileId)]).ChecksInFirst);
     }
 
     /// <summary>
@@ -170,7 +160,7 @@ public class SavegameRowRulesTests
         IReadOnlyList<SavegameCheckoutBinding>? held = null)
         => Describe(head, pinned, _profileId, appliedRevision, held);
 
-    /// <summary>The same, for the two cases where the folder is somewhere else entirely.</summary>
+    /// <summary>The same, for the cases where the folder is somewhere else entirely.</summary>
     private static SavegameRowOffer Describe(
         int? head,
         int? pinned,
@@ -186,10 +176,10 @@ public class SavegameRowRulesTests
             appliedProfileId,
             appliedRevision);
 
-    private static SavegameCheckoutBinding Hold(Guid savegameId)
+    private static SavegameCheckoutBinding Hold(Guid savegameId, Guid profileId)
         => new(Guid.NewGuid(), savegameId, Keys.Slot("savegame1"), 1, "aaaa", DateTime.UtcNow)
         {
-            ProfileId = _profileId,
+            ProfileId = profileId,
             ProfileRevision = 1
         };
 }

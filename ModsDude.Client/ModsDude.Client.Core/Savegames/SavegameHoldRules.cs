@@ -32,16 +32,14 @@ public enum SavegameApplyRefusal
 }
 
 
-/// <summary>Why a savegame being published cannot stay checked out in this game.</summary>
-public enum SavegameKeepRefusal
+/// <summary>What has to happen before a savegame being published can stay checked out in this game.</summary>
+/// <param name="ChecksInFirst">The savegame following a profile that already claims the game's mod folder, or null where none does.</param>
+/// <param name="ActivatesFirst">Whether the game is not on the profile the savegame follows.</param>
+public sealed record SavegameKeepPlan(Guid? ChecksInFirst, bool ActivatesFirst)
 {
-    None,
+    public static SavegameKeepPlan Ready { get; } = new(null, false);
 
-    /// <summary>The game's mod folder is not on the profile the savegame follows.</summary>
-    NotOnProfile,
-
-    /// <summary>Another savegame following a profile already claims the game's mod folder.</summary>
-    AnotherSavegameHeld
+    public bool IsReady => ChecksInFirst is null && ActivatesFirst is false;
 }
 
 
@@ -147,15 +145,15 @@ public static class SavegameHoldRules
     }
 
     /// <summary>
-    /// Whether a savegame being published may stay checked out in this game.
+    /// What has to happen before a savegame being published may stay checked out in this game.
     /// </summary>
     /// <remarks>
     /// A savegame with no profile claims no mod folder, so it may always be kept. One with a profile
-    /// may be kept only where the folder is already on that profile and no other savegame claims it.
+    /// needs the game on that profile and no other savegame with a profile held here.
     /// </remarks>
     /// <param name="active">The profile this game follows, in any repo.</param>
     /// <param name="profileId">The profile the new savegame follows, in <paramref name="repoId"/>.</param>
-    public static SavegameKeepRefusal DecideKeepPublished(
+    public static SavegameKeepPlan DecideKeepPublished(
         IReadOnlyList<SavegameCheckoutBinding> held,
         ActiveProfile? active,
         Guid repoId,
@@ -163,17 +161,12 @@ public static class SavegameHoldRules
     {
         if (profileId is not Guid chosen)
         {
-            return SavegameKeepRefusal.None;
+            return SavegameKeepPlan.Ready;
         }
 
-        if (active != new ActiveProfile(repoId, chosen))
-        {
-            return SavegameKeepRefusal.NotOnProfile;
-        }
-
-        return FindProfileHold(held) is null
-            ? SavegameKeepRefusal.None
-            : SavegameKeepRefusal.AnotherSavegameHeld;
+        return new SavegameKeepPlan(
+            FindProfileHold(held)?.SavegameId,
+            active != new ActiveProfile(repoId, chosen));
     }
 
     /// <summary>

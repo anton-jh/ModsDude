@@ -27,4 +27,14 @@
         <modals:ErrorModal />
     </DataTemplate>
 
+    <DataTemplate DataType="{x:Type modals:WizardModalViewModel}">
+        <modals:WizardModal />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type modals:QuestionStepViewModel}">
+        <modals:QuestionStep />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type modals:ReviewStepViewModel}">
+        <modals:ReviewStep />
+    </DataTemplate>
+
 </ResourceDictionary>

@@ -1,5 +1,4 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Wpf.Shell.Modals;
 using System.Collections.ObjectModel;
@@ -21,7 +20,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// </param>
 /// <param name="FolderIsOnIt">
 /// Whether the mod folder is actually on this profile. Where it is not, the revision below is a
-/// declaration about a list this folder has never run - which the modal says out loud.
+/// declaration about a list this folder has never run - which the step says out loud.
 /// </param>
 public sealed record SavegamePublishOption(
     Guid? ProfileId,
@@ -42,7 +41,7 @@ public sealed record SavegamePublishOption(
 
 /// <summary>
 /// Publishing a save that is already on this machine: what the repo should call it, which mod list it
-/// follows, and optionally what this first snapshot was.
+/// follows, optionally what this first snapshot was, and whether to keep playing it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -57,44 +56,30 @@ public sealed record SavegamePublishOption(
 /// is asked here rather than derived from whatever the folder happens to be on.
 /// </para>
 /// <para>
-/// <b>Three consequences, stated inline rather than as a second modal.</b> The revision this declares,
-/// the savegame it supersedes, and the folder being on a different list are all things somebody would want
-/// to have seen before pressing the button, and a confirmation that appears afterwards is one that
-/// gets clicked through.
-/// </para>
-/// <para>
-/// <b>Whether you keep playing is the fourth, and it is not always a question.</b> Publishing always
-/// works, but keeping the save is offered only where <see cref="SavegameHoldRules.DecideKeepPublished"/>
-/// allows it. Elsewhere the answer is taken away rather than warned about, and the notice says why.
+/// <b>Keeping it is always an answer.</b> Where the game is not on the chosen profile, or another
+/// savegame holds its mod folder, the wizard asks about that in a step of its own after this one.
 /// </para>
 /// </remarks>
-public partial class SavegamePublishModalViewModel : ModalViewModel
+public partial class SavegamePublishStepViewModel : WizardStepViewModel
 {
-    private readonly Func<Guid?, SavegameKeepRefusal> _decideKeep;
-
-
     /// <param name="preselected">
     /// The profile to arrive on, or null to arrive on nothing. Null where the game follows no
     /// profile in this repo: the two defaults available there - the first profile in the list, and no
-    /// mod list - are both permanent decisions made on the user's behalf, so the modal asks instead.
+    /// mod list - are both permanent decisions made on the user's behalf, so the step asks instead.
     /// </param>
-    /// <param name="decideKeep">Whether a savegame following a given profile, or none, may stay checked out.</param>
     /// <param name="folderProfileName">
     /// Which mod list the folder is actually on, for the sentence that says so where the chosen
     /// profile is a different one. Null where it is on none.
     /// </param>
-    public SavegamePublishModalViewModel(
+    public SavegamePublishStepViewModel(
         string slotLabel,
         string repoName,
         string suggestedName,
         IReadOnlyList<SavegamePublishOption> profiles,
         SavegamePublishOption? preselected,
-        Func<Guid?, SavegameKeepRefusal> decideKeep,
         string? folderProfileName,
         int? slotNumber = null)
     {
-        _decideKeep = decideKeep;
-
         SlotLabel = slotLabel;
         SlotNumber = slotNumber;
         RepoName = repoName;
@@ -104,6 +89,8 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
         _selectedProfile = preselected;
 
         Profiles = [.. profiles];
+
+        Choices = [new WizardChoice(() => ConfirmLabel) { IsDefault = true, EnabledWhen = () => IsValid }];
     }
 
 
@@ -111,55 +98,38 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     public int? SlotNumber { get; }
     public string RepoName { get; }
 
-    /// <inheritdoc cref="SavegamePublishModalViewModel(string, string, string, IReadOnlyList{SavegamePublishOption}, SavegamePublishOption?, Func{Guid?, SavegameKeepRefusal}, string?, int?)"/>
+    /// <inheritdoc cref="SavegamePublishStepViewModel(string, string, string, IReadOnlyList{SavegamePublishOption}, SavegamePublishOption?, string?, int?)"/>
     public string? FolderProfileName { get; }
 
     /// <summary>Every profile in the repo, plus <see cref="SavegamePublishOption.NoModList"/> last.</summary>
     public ObservableCollection<SavegamePublishOption> Profiles { get; }
 
-    public string Title => "Publish this save";
+    public override string Title => "Publish this save";
 
     public string Message =>
         $"{SavegameSlotWording.Capitalised(SavegameSlotWording.Named(SlotNumber, SlotLabel))} is uploaded to {RepoName} as a savegame of its own.";
 
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     private string _name;
 
     [ObservableProperty]
     private string _label = "";
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     [NotifyPropertyChangedFor(nameof(RevisionText))]
     [NotifyPropertyChangedFor(nameof(HasRevisionText))]
     [NotifyPropertyChangedFor(nameof(MismatchNotice))]
     [NotifyPropertyChangedFor(nameof(HasMismatchNotice))]
-    [NotifyPropertyChangedFor(nameof(KeepRefusal))]
-    [NotifyPropertyChangedFor(nameof(CanKeepPlaying))]
-    [NotifyPropertyChangedFor(nameof(KeepPlaying))]
-    [NotifyPropertyChangedFor(nameof(HandOverNotice))]
-    [NotifyPropertyChangedFor(nameof(HasHandOverNotice))]
-    [NotifyPropertyChangedFor(nameof(Consequence))]
-    [NotifyPropertyChangedFor(nameof(ConfirmLabel))]
     private SavegamePublishOption? _selectedProfile;
 
-    /// <summary>
-    /// What the user asked for, which is not always what happens - see <see cref="KeepPlaying"/>.
-    /// </summary>
-    /// <remarks>
-    /// Kept separately from the answer so that picking another profile and picking this one back does
-    /// not silently drop a tick the user had put there. Unticked by default, as on check-in.
-    /// </remarks>
+    /// <summary>Unticked by default, as on check-in.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(KeepPlaying))]
     [NotifyPropertyChangedFor(nameof(Consequence))]
     [NotifyPropertyChangedFor(nameof(ConfirmLabel))]
-    private bool _wantsToKeepPlaying;
+    private bool _keepPlaying;
 
-    /// <summary>The name to publish under, or null where the modal was dismissed.</summary>
-    public string? Result { get; private set; }
+    public string TrimmedName => Name.Trim();
 
     /// <summary>Blank means no description of the first snapshot, which is the ordinary answer.</summary>
     public string? TrimmedLabel => string.IsNullOrWhiteSpace(Label) ? null : Label.Trim();
@@ -170,7 +140,7 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     /// <remarks>
     /// <b>A declaration, which is why it is shown rather than implied.</b> The bytes predate ModsDude,
     /// so nothing knows which mods were in the folder while this savegame was played, and no arrangement of
-    /// this modal recovers it. Every snapshot after this one is observed.
+    /// this step recovers it. Every snapshot after this one is observed.
     /// </remarks>
     public string? RevisionText => SelectedProfile switch
     {
@@ -191,38 +161,6 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
 
     public bool HasMismatchNotice => MismatchNotice is not null;
 
-    /// <summary>Why staying checked out is not an answer the chosen profile allows. None until one is chosen.</summary>
-    public SavegameKeepRefusal KeepRefusal => SelectedProfile is null
-        ? SavegameKeepRefusal.None
-        : _decideKeep(SelectedProfile.ProfileId);
-
-    public bool CanKeepPlaying => KeepRefusal is SavegameKeepRefusal.None;
-
-    /// <summary>
-    /// What actually happens to the local copy: what was asked for, where the profile allows it.
-    /// </summary>
-    /// <remarks>
-    /// <b>The clamp is in the getter, so the box unticks itself when the answer stops being available
-    /// and remembers the tick when it comes back.</b> The alternative - writing false into
-    /// <see cref="WantsToKeepPlaying"/> on every profile change - would make picking the wrong profile
-    /// and picking back silently lose a decision the user made.
-    /// </remarks>
-    public bool KeepPlaying
-    {
-        get => CanKeepPlaying && WantsToKeepPlaying;
-        set => WantsToKeepPlaying = value;
-    }
-
-    /// <summary>Why there is no choice about handing the save back.</summary>
-    public string? HandOverNotice => KeepRefusal switch
-    {
-        SavegameKeepRefusal.NotOnProfile => $"This game is not on {SelectedProfile?.Name}, so the save cannot stay checked out.",
-        SavegameKeepRefusal.AnotherSavegameHeld => "Another savegame is checked out in this game, so this one cannot stay checked out.",
-        _ => null
-    };
-
-    public bool HasHandOverNotice => HandOverNotice is not null;
-
     /// <summary>The verb carries what happens to the copy on this machine, the same way check-in's does.</summary>
     public string ConfirmLabel => KeepPlaying
         ? "Publish and keep playing"
@@ -237,29 +175,4 @@ public partial class SavegamePublishModalViewModel : ModalViewModel
     /// this savegame follows for the rest of its life.
     /// </summary>
     public bool IsValid => string.IsNullOrWhiteSpace(Name) is false && SelectedProfile is not null;
-
-
-    [RelayCommand(CanExecute = nameof(IsValid))]
-    private void Confirm()
-    {
-        Result = Name.Trim();
-        Done = true;
-    }
-
-    [RelayCommand]
-    private void Cancel()
-    {
-        Result = null;
-        Done = true;
-    }
-
-
-    public override bool TryCancel() => Press(CancelCommand);
-
-    /// <summary>
-    /// Enter publishes only where the button would - a blank name and an unanswered profile both
-    /// refuse it - and it publishes whatever the tick currently says, which is what the button does
-    /// too.
-    /// </summary>
-    public override bool TryAccept() => Press(ConfirmCommand);
 }

@@ -1,34 +1,29 @@
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Savegames;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
 /// <summary>
-/// The mod-list steps of a check-out: before it, where the mod folder is not on the savegame's
-/// revision, and after it.
+/// The mod-list steps around a savegame being taken: before it, where the mod folder is not on what
+/// the savegame runs on, and after a check-out.
 /// </summary>
 public interface ISavegameProfileActivation
 {
     /// <summary>
-    /// Where the mod folder is not on the revision this savegame runs on, asks to activate its profile
-    /// and does. A copy may decline and go ahead; a check-out may not.
+    /// Activates a profile the user has already agreed to as a step of something else, and says why
+    /// where it did not finish.
     /// </summary>
-    /// <param name="pinnedRevision">
-    /// The revision the folder has to be on: the played one in compatibility mode, null for latest.
+    /// <param name="revision">
+    /// The revision to install, or null for head. Named where nothing is holding the savegame yet,
+    /// since the game would otherwise resolve head - wrong in compatibility mode.
     /// </param>
-    /// <param name="changed">Called after an activation, whether or not it succeeded.</param>
-    /// <returns>
-    /// Whether to carry on: nothing needed doing, the activation finished, or a copy was told to leave
-    /// the folder alone.
-    /// </returns>
-    Task<bool> ConfirmActivateFirstAsync(
+    /// <returns>Whether the folder is now on the profile, so the caller can go on.</returns>
+    Task<bool> ActivateFirstAsync(
         Repo repo,
         Game game,
-        SavegameDto savegame,
-        SavegameCheckOutMode mode,
-        int? pinnedRevision,
-        Func<Task> changed,
+        Guid profileId,
+        string profileName,
+        int? revision,
         CancellationToken cancellationToken);
 
     /// <summary>

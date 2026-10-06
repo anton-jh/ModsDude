@@ -364,7 +364,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         try
         {
-            await _publishFlow.PublishAsync(_repo, preselectProfileId: null, id => ReloadAsync(id), _lifetime);
+            await _publishFlow.PublishAsync(_repo, preselectProfileId: null, id => ReloadAsync(id ?? Selected?.Id), _lifetime);
         }
         finally
         {

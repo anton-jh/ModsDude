@@ -1,0 +1,54 @@
+<UserControl x:Class="ModsDude.Client.Wpf.Savegames.SavegameCompatibilityStep"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:savegames="clr-namespace:ModsDude.Client.Wpf.Savegames"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=savegames:SavegameCompatibilityStepViewModel, IsDesignTimeCreatable=False}">
+
+    <StackPanel>
+
+        <TextBlock Text="{Binding Intro}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+        <Grid Margin="0 16 0 0" ColumnDefinitions="auto *" RowDefinitions="auto auto auto auto auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="Last played on" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource FieldValue}" Text="{Binding PlayedText}" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="Latest" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource FieldValue}" Text="{Binding LatestText}" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="Added" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource FieldValue}" Text="{Binding AddedCount}" />
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="Removed" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource FieldValue}" Text="{Binding RemovedCount}" />
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="Changed" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource FieldValue}" Text="{Binding ChangedCount}" />
+        </Grid>
+
+        <!-- Named rather than counted: a locked mod moving is what damages a save. -->
+        <StackPanel Margin="0 16 0 0"
+                    Visibility="{Binding HasLockedChanges, Converter={StaticResource BoolToVisibilityConverter}}">
+
+            <TextBlock Text="Locked mods"
+                       Style="{DynamicResource CaptionTextBlockStyle}"
+                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+            <ItemsControl Margin="0 4 0 0" ItemsSource="{Binding LockedChanges}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Margin="0 2 0 0"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                   Text="{Binding}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </StackPanel>
+
+</UserControl>

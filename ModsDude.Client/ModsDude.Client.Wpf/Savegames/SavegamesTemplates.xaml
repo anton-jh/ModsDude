@@ -10,20 +10,20 @@
         <savegames:RepoSavegamesPage />
     </DataTemplate>
 
-    <DataTemplate DataType="{x:Type savegames:SavegameCheckOutModalViewModel}">
-        <savegames:SavegameCheckOutModal />
+    <DataTemplate DataType="{x:Type savegames:SavegameCheckOutStepViewModel}">
+        <savegames:SavegameCheckOutStep />
     </DataTemplate>
-    <DataTemplate DataType="{x:Type savegames:SavegameCheckInModalViewModel}">
-        <savegames:SavegameCheckInModal />
+    <DataTemplate DataType="{x:Type savegames:SavegameCheckInStepViewModel}">
+        <savegames:SavegameCheckInStep />
     </DataTemplate>
-    <DataTemplate DataType="{x:Type savegames:SavegamePublishModalViewModel}">
-        <savegames:SavegamePublishModal />
+    <DataTemplate DataType="{x:Type savegames:SavegamePublishStepViewModel}">
+        <savegames:SavegamePublishStep />
     </DataTemplate>
-    <DataTemplate DataType="{x:Type savegames:SavegameSlotPickerModalViewModel}">
-        <savegames:SavegameSlotPickerModal />
+    <DataTemplate DataType="{x:Type savegames:SavegameSlotPickerStepViewModel}">
+        <savegames:SavegameSlotPickerStep />
     </DataTemplate>
-    <DataTemplate DataType="{x:Type savegames:SavegameCompatibilityModalViewModel}">
-        <savegames:SavegameCompatibilityModal />
+    <DataTemplate DataType="{x:Type savegames:SavegameCompatibilityStepViewModel}">
+        <savegames:SavegameCompatibilityStep />
     </DataTemplate>
 
     <!-- One chip, three tones. Which of them a fact deserves is decided in the view model, so

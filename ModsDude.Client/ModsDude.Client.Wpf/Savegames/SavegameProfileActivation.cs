@@ -17,7 +17,6 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// that may want this one.
 /// </remarks>
 public sealed class SavegameProfileActivation(
-    ISavegameOffers offers,
     IProfileService profileService,
     IProfileApplyService applyService,
     IDriftMonitor driftMonitor,
@@ -26,85 +25,27 @@ public sealed class SavegameProfileActivation(
     IBackgroundTaskReporter backgroundTasks,
     IToastService toasts) : ISavegameProfileActivation
 {
-    public async Task<bool> ConfirmActivateFirstAsync(
+    public async Task<bool> ActivateFirstAsync(
         Repo repo,
         Game game,
-        SavegameDto savegame,
-        SavegameCheckOutMode mode,
-        int? pinnedRevision,
-        Func<Task> changed,
+        Guid profileId,
+        string profileName,
+        int? revision,
         CancellationToken cancellationToken)
     {
-        // The same rule the row drew its button from, read again: the folder may have moved since.
-        if (repo.Adapter.CanSupportMods is false
-            || profileService.FindLive(repo.Id, savegame.ProfileId) is not ProfileDto profile
-            || offers.ReadHost(repo) is not SavegameHost host)
-        {
-            return true;
-        }
-
-        var offer = SavegameRowRules.Describe(
-            savegame.Id, profile.Id, profile.HeadRevision, pinnedRevision, host.Held, host.AppliedProfileId, host.AppliedRevision);
-
-        if (offer.ActivatesFirst is false)
-        {
-            return true;
-        }
-
-        var list = SavegameRowRules.DescribeActivation(profile.Name, pinnedRevision);
-
-        // A check-out holds the save against this folder, so the folder has to be right. A copy claims
-        // nothing, so writing it next to whatever the folder has now is the user's choice.
-        var confirmation = mode is SavegameCheckOutMode.TakeCopy
-            ? new ConfirmationModalViewModel(
-                $"Activate {list} first?",
-                $"'{savegame.Name}' runs on {list}, and the mod folder in '{game.Name}' is not on it. "
-                    + $"Activating it first puts the mods the copy was saved with in place. Leaving it writes the copy "
-                    + "next to whatever mods the folder has now, which the game may not load it with.",
-                IconKind.Question,
-                "Activate it, then take the copy",
-                "Cancel",
-                "Leave the mods as they are")
-            : new ConfirmationModalViewModel(
-                $"Activate {list} first?",
-                $"'{savegame.Name}' runs on {list}, and the mod folder in '{game.Name}' is not on it. "
-                    + $"Checking it out activates {list} first, then asks which slot to write the save into.",
-                IconKind.Question,
-                "Activate it, then check out",
-                "Cancel");
-
-        await modalService.Value.Show(confirmation);
-
-        if (confirmation.ChoseAlternative)
-        {
-            return true;
-        }
-
-        if (confirmation.Result is false)
-        {
-            return false;
-        }
-
-        // Named, not left to the game: nothing is holding this savegame yet, so the game would resolve
-        // head - wrong in compatibility mode, whose check-out would then leave the folder drifted.
+        // The user already agreed to this activation as a step of what they are doing, so the plan is
+        // not put to them again. Files the repo does not have are still asked about.
         var outcome = await applyService.ActivateAsync(
-            repo, game, profile.Id, profile.Name, confirmPlan: false, progress: null, cancellationToken,
-            revision: pinnedRevision ?? profile.HeadRevision);
+            repo, game, profileId, profileName, confirmPlan: false, progress: null, cancellationToken, revision: revision);
 
         await driftMonitor.CheckAsync();
-
-        // The folder moved, so every row's answer about it has too - including where the check-out
-        // is abandoned at the slot modal that follows.
-        await changed();
 
         if (outcome.Succeeded is false)
         {
             toasts.Show(outcome.Message, outcome.ToastSeverity);
-
-            return false;
         }
 
-        return true;
+        return outcome.Succeeded;
     }
 
     public async Task ActivateCheckedOutAsync(Repo repo, Game game, SavegameDto savegame, CancellationToken cancellationToken)

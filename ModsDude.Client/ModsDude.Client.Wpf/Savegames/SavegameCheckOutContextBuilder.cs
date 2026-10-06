@@ -23,6 +23,7 @@ public sealed class SavegameCheckOutContextBuilder(
         int? pinnedRevision,
         SavegameCompatibilityVerdict? verdict,
         Func<Guid, string?> nameOf,
+        IReadOnlySet<Guid> checkedInFirst,
         CancellationToken cancellationToken)
     {
         var slots = await savegameSlots.GetSlotsAsync(game, cancellationToken);
@@ -37,7 +38,8 @@ public sealed class SavegameCheckOutContextBuilder(
                 slot,
                 availability,
                 binding?.SavegameId,
-                binding is SavegameCheckoutBinding held ? nameOf(held.SavegameId) : null));
+                binding is SavegameCheckoutBinding held ? nameOf(held.SavegameId) : null,
+                binding is SavegameCheckoutBinding freed && checkedInFirst.Contains(freed.SavegameId)));
         }
 
         var suggested = await savegameSlots.SuggestSlotAsync(game, savegame.Id, cancellationToken);

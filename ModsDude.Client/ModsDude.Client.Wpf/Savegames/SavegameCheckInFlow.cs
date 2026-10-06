@@ -28,26 +28,23 @@ public sealed class SavegameCheckInFlow(
     IBackgroundTaskReporter backgroundTasks,
     IToastService toasts) : ISavegameCheckInFlow
 {
-    public async Task<SavegameCheckInOutcome> CheckInAsync(
+    public SavegameCheckInStepViewModel CreateStep(
         Game game,
         Guid savegameId,
         string savegameName,
         string slotLabel,
+        string? handBackReason = null)
+        => new(savegameName, slotLabel, DescribePlayedOn(game, savegameId), HeldSlotNumber(game, savegameId), handBackReason);
+
+    public Task<SavegameCheckInOutcome> CheckInAsync(
+        Game game,
+        Guid savegameId,
+        string savegameName,
+        string? label,
+        bool keepPlaying,
         CancellationToken cancellationToken,
         string? renameTo = null)
-    {
-        var modal = new SavegameCheckInModalViewModel(
-            savegameName, slotLabel, DescribePlayedOn(game, savegameId), HeldSlotNumber(game, savegameId));
-
-        await modalService.Value.Show(modal);
-
-        if (modal.Result is false)
-        {
-            return SavegameCheckInOutcome.Cancelled;
-        }
-
-        return await SendAsync(game, savegameId, savegameName, modal.TrimmedLabel, modal.KeepPlaying, force: false, cancellationToken, renameTo);
-    }
+        => SendAsync(game, savegameId, savegameName, label, keepPlaying, force: false, cancellationToken, renameTo);
 
     public async Task CheckInHeldAsync(
         Game game,
@@ -63,7 +60,15 @@ public sealed class SavegameCheckInFlow(
             // the slot. The slot is named now, while the binding that knows it is still there.
             var slot = SavegameSlotWording.Named(HeldSlotNumber(game, savegameId), savegameName);
 
-            var outcome = await CheckInAsync(game, savegameId, savegameName, savegameName, cancellationToken, renameTo: savegameName);
+            var step = CreateStep(game, savegameId, savegameName, savegameName);
+
+            if (await WizardModalViewModel.Single(step, cancellationToken).ShowAsync(modalService.Value) is false)
+            {
+                return;
+            }
+
+            var outcome = await CheckInAsync(
+                game, savegameId, savegameName, step.TrimmedLabel, step.KeepPlaying, cancellationToken, renameTo: savegameName);
 
             if (outcome.WasDeferred)
             {

@@ -1,9 +1,10 @@
 using System.Windows.Controls;
 
 namespace ModsDude.Client.Wpf.Savegames;
-public partial class SavegameCompatibilityModal : UserControl
+
+public partial class SavegameSlotPickerStep : UserControl
 {
-    public SavegameCompatibilityModal()
+    public SavegameSlotPickerStep()
     {
         InitializeComponent();
     }

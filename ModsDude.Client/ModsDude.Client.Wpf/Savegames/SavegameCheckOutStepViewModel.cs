@@ -6,7 +6,7 @@ using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
-/// <summary>Which of the two download modes this modal is confirming.</summary>
+/// <summary>Which of the two download modes a check-out is.</summary>
 public enum SavegameCheckOutMode
 {
     /// <summary>Takes the claim, writes the slot, binds it, and puts the mods right.</summary>
@@ -49,12 +49,11 @@ public sealed record SavegameRevisionNote(string Text, bool IsCaution);
 
 
 /// <summary>
-/// Everything the modal needs about the game this save is going into.
+/// Everything the slot step needs about the game this save is going into.
 /// </summary>
 /// <remarks>
-/// <b>Built once.</b> It used to be recomputed whenever the game selection changed, because the
-/// slots, the mod plan and the revision note are all facts about a particular game - and
-/// there is one of those now, so there is no selection to change and nothing to recompute.
+/// <b>Built once per step.</b> The slots, the mod plan and the revision note are all facts about the
+/// one game a repo is about, so nothing on the step changes them.
 /// </remarks>
 /// <param name="RunsOn">
 /// Which mod list the folder will be on once this check-out and the apply beside it have run - one
@@ -71,8 +70,8 @@ public sealed record SavegameCheckOutContext(
 
 
 /// <summary>
-/// The one confirmation a check-out gets, carrying three sections - mods, slot, revision - each of
-/// which disappears when it has nothing to say.
+/// The slot step of a check-out, carrying three sections - mods, slot, revision - each of which
+/// disappears when it has nothing to say.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -91,25 +90,25 @@ public sealed record SavegameCheckOutContext(
 /// <para>
 /// <b>The picker is shown on every check-out.</b> The remembered slot pre-selects it; it never decides
 /// it. What varies is only whether the full list is open on arrival - it is when the suggestion is
-/// missing, so that "no free slot" is a state somebody can see and act on rather than a modal that
+/// missing, so that "no free slot" is a state somebody can see and act on rather than a step that
 /// looks broken.
 /// </para>
 /// <para>
 /// <b>A slot holding unchecked-in play is refused, not warned about.</b> Confirming a write there
 /// would be a button whose consequence is somebody's evening, and no wording makes that safe - so the
-/// modal offers checking that savegame in instead, as a single action.
+/// step offers checking that savegame in first instead, as a single answer.
 /// </para>
 /// </remarks>
-public partial class SavegameCheckOutModalViewModel : ModalViewModel
+public partial class SavegameCheckOutStepViewModel : WizardStepViewModel
 {
     private readonly int _headSnapshot;
 
 
     /// <param name="snapshotNumber">
-    /// The snapshot being taken. Where it is not the head, this modal is also confirming the restore
+    /// The snapshot being taken. Where it is not the head, this step is also confirming the restore
     /// that copies it forward - said out loud rather than hidden, because it mints a snapshot.
     /// </param>
-    public SavegameCheckOutModalViewModel(
+    public SavegameCheckOutStepViewModel(
         SavegameCheckOutMode mode,
         string savegameName,
         string profileName,
@@ -145,8 +144,25 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
             : null;
 
         // Nothing pre-selected means the remembered slot is gone and none is free, which is a state
-        // the user has to see rather than a modal that looks empty.
+        // the user has to see rather than a step that looks empty.
         ShowAllSlots = SelectedSlot is null;
+
+        Choices =
+        [
+            new WizardChoice(() => BlockedActionLabel, () => ChecksInOccupantFirst = true)
+            {
+                VisibleWhen = () => IsSlotRefused,
+                EnabledWhen = () => SelectedSlot is { IsRefused: true, OccupyingSavegameId: not null }
+            },
+
+            // Enter takes the selected slot, and does nothing at all on a refused one - the way out
+            // of that is checking its savegame in, which nobody should arrive at by pressing Enter.
+            new WizardChoice(() => ConfirmLabel, () => ChecksInOccupantFirst = false)
+            {
+                IsDefault = true,
+                EnabledWhen = () => SelectedSlot is { IsRefused: false }
+            }
+        ];
     }
 
 
@@ -156,7 +172,7 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     public string ProfileName { get; }
     public int SnapshotNumber { get; }
 
-    public string Title => Mode is SavegameCheckOutMode.TakeCopy
+    public override string Title => Mode is SavegameCheckOutMode.TakeCopy
         ? $"Take a copy of '{SavegameName}'"
         : $"Check out '{SavegameName}'";
 
@@ -187,14 +203,11 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     /// </summary>
     public ObservableCollection<SavegameSlotOptionViewModel> Slots { get; }
 
-    /// <summary>The chosen slot, or null where the modal was dismissed.</summary>
-    public SavegameSlotOptionViewModel? Result { get; private set; }
-
     /// <summary>
-    /// Set instead of <see cref="Result"/> when the user took the way out of a refused slot. The page
-    /// checks that savegame in and offers this modal again.
+    /// Whether the answer was the way out of a refused slot: check the savegame occupying it in first,
+    /// then write into the slot it frees.
     /// </summary>
-    public Guid? CheckInFirstSavegameId { get; private set; }
+    public bool ChecksInOccupantFirst { get; private set; }
 
 
     [ObservableProperty]
@@ -202,8 +215,7 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     [NotifyPropertyChangedFor(nameof(SlotWarning))]
     [NotifyPropertyChangedFor(nameof(HasSlotWarning))]
     [NotifyPropertyChangedFor(nameof(BlockedActionLabel))]
-    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
-    [NotifyCanExecuteChangedFor(nameof(CheckInBlockingSavegameCommand))]
+    [NotifyPropertyChangedFor(nameof(ConfirmLabel))]
     private SavegameSlotOptionViewModel? _selectedSlot;
 
     /// <summary>
@@ -261,12 +273,12 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     public string BlockedActionLabel => SelectedSlot?.BlockedAction ?? "Check that savegame in first";
 
     /// <summary>
-    /// The consequence of writing into the chosen slot, where there is one. Shown on the modal rather
+    /// The consequence of writing into the chosen slot, where there is one. Shown on the step rather
     /// than saved for a second confirmation, so that the button underneath can carry it too.
     /// </summary>
     public string? SlotWarning => SelectedSlot switch
     {
-        null => null,
+        null or { IsFreedByCheckIn: true } => null,
         { IsRefused: true } slot => slot.SaveName is { Length: > 0 } name
             ? $"'{name}' has been played here and never checked in. It exists nowhere else, so nothing may be written over it."
             : "This slot holds play that has never been checked in. It exists nowhere else, so nothing may be written over it.",
@@ -288,6 +300,11 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
         {
             var write = Mode is SavegameCheckOutMode.TakeCopy ? "Write the copy" : "Check it out";
 
+            if (SelectedSlot is { IsFreedByCheckIn: true })
+            {
+                return write;
+            }
+
             return SelectedSlot?.Availability switch
             {
                 Core.Savegames.SavegameSlotAvailability.Unrecognised => SelectedSlot.SaveName is { Length: > 0 } name
@@ -300,57 +317,7 @@ public partial class SavegameCheckOutModalViewModel : ModalViewModel
     }
 
 
-    [RelayCommand(CanExecute = nameof(CanConfirm))]
-    private void Confirm()
-    {
-        if (SelectedSlot is not SavegameSlotOptionViewModel slot)
-        {
-            return;
-        }
-
-        Result = slot;
-        Done = true;
-    }
-
-    private bool CanConfirm() => SelectedSlot is { IsRefused: false };
-
-    /// <summary>
-    /// The one action a refused slot offers. It closes this modal rather than checking in behind it:
-    /// the page owns that flow, and the answer changes what every section here says.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanCheckInBlockingSavegame))]
-    private void CheckInBlockingSavegame()
-    {
-        CheckInFirstSavegameId = SelectedSlot?.OccupyingSavegameId;
-        Done = true;
-    }
-
-    private bool CanCheckInBlockingSavegame() => SelectedSlot is { IsRefused: true, OccupyingSavegameId: not null };
-
     /// <summary>Opens the full list. There is no way back to the collapsed form, and no need for one.</summary>
     [RelayCommand]
     private void ChangeSlot() => ShowAllSlots = true;
-
-    [RelayCommand]
-    private void Cancel()
-    {
-        Result = null;
-        Done = true;
-    }
-
-
-    public override bool TryCancel() => Press(CancelCommand);
-
-    /// <summary>
-    /// Enter takes the selected slot, and does nothing at all on a refused one - which is the point:
-    /// the way out of a refused slot is <see cref="CheckInBlockingSavegame"/>, a decision nobody
-    /// should arrive at by pressing Enter.
-    /// </summary>
-    public override bool TryAccept() => Press(ConfirmCommand);
-
-
-    partial void OnSelectedSlotChanged(SavegameSlotOptionViewModel? value)
-    {
-        OnPropertyChanged(nameof(ConfirmLabel));
-    }
 }

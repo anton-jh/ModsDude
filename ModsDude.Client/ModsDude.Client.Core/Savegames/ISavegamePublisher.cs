@@ -12,8 +12,7 @@ public interface ISavegamePublisher
     /// </param>
     /// <param name="keepPlaying">
     /// Whether to stay holding the save afterwards. False opens no claim and sends the slot to the
-    /// Recycle Bin, which is the only answer <see cref="SavegameHoldRules.DecideKeepPublished"/>
-    /// leaves where it refuses keeping.
+    /// Recycle Bin. True needs <see cref="SavegameHoldRules.DecideKeepPublished"/> to be ready.
     /// </param>
     /// <param name="progress">Which stage the bytes are in and how far through it they are.</param>
     /// <exception cref="Exceptions.UserFriendlyException">
