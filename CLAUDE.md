@@ -26,6 +26,14 @@ These rules override default behaviour.
 - Never add a NuGet package without asking first. Propose it in the plan.
 - When unsure mid-task (an ambiguous requirement, or a design choice the plan doesn't cover), stop and ask. Never guess.
 
+## Subagents and task chips
+
+- Use subagents for big, self-contained, read-heavy work where only the conclusion matters: broad codebase searches, tracing a system across many files, reviewing a large diff, independent parts that can run in parallel.
+  - Why: only the subagent's final report enters the main context, so the context window fills more slowly.
+- Keep work in the main session when it needs back-and-forth with the user, builds on context already gathered, or is a quick lookup. A subagent starts cold and re-reads what it needs.
+- Tell a subagent exactly what to return (terse findings with `file:line` references), not raw file contents.
+- Never copy rules from this file into task chip prompts. The new session loads this file itself. Give only task-specific context.
+
 ## Definition of done
 
 A change is done only when all of these hold:
