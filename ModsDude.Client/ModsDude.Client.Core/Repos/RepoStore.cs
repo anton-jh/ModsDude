@@ -27,10 +27,6 @@ public class RepoStore(
 
     public bool HasLoaded { get; private set; }
 
-    public RemoteChanges? PendingChanges { get; private set; }
-
-    public event EventHandler? PendingChangesChanged;
-
     /// <summary>
     /// The ids in <see cref="Repos"/>, or null before the list has been read. A snapshot replaced
     /// whole, because <see cref="IsGone"/> is asked off the UI thread while the collection is not
@@ -41,25 +37,6 @@ public class RepoStore(
 
     public bool IsGone(Guid repoId)
         => _knownIds is FrozenSet<Guid> known && known.Contains(repoId) is false;
-
-    public async Task CheckForChanges(CancellationToken cancellationToken)
-    {
-        // Nothing to compare against yet, and before sign-in there is nobody to ask for.
-        if (HasLoaded is false)
-        {
-            return;
-        }
-
-        var before = Snapshot();
-        var reposFromApi = await repoClient.GetMyReposV1Async(cancellationToken);
-
-        if (HasLoaded is false || before.SequenceEqual(Snapshot()) is false)
-        {
-            return;
-        }
-
-        SetPendingChanges(RepoListChanges.Between(before, reposFromApi));
-    }
 
     public Task RefreshRepos(CancellationToken cancellationToken)
         => _loads.ReadAsync(default, repoClient.GetMyReposV1Async, ApplyList, cancellationToken);
@@ -100,8 +77,6 @@ public class RepoStore(
         // sees the flag saying the list is complete.
         HasLoaded = true;
         PublishKnownIds();
-
-        SetPendingChanges(null);
     }
 
     /// <summary>
@@ -223,8 +198,6 @@ public class RepoStore(
         // account that just left.
         HasLoaded = false;
         PublishKnownIds();
-
-        SetPendingChanges(null);
     }
 
     public Task DeleteRepo(Guid id, CancellationToken cancellationToken)
@@ -260,22 +233,6 @@ public class RepoStore(
         {
             Remove(held);
         }
-    }
-
-    private List<RepoListEntry> Snapshot()
-    {
-        return [.. Repos.Select(x => x.ToListEntry())];
-    }
-
-    private void SetPendingChanges(RemoteChanges? changes)
-    {
-        if (PendingChanges is null && changes is null)
-        {
-            return;
-        }
-
-        PendingChanges = changes;
-        PendingChangesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void Add(Repo repo)

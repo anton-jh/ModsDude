@@ -4,6 +4,7 @@ using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Games;
 using ModsDude.Client.Wpf.Mods;
@@ -26,6 +27,7 @@ public partial class RepoPageViewModel
     private readonly RepoAdminPageViewModel.Factory _repoAdminPageViewModelFactory;
     private readonly CreateProfilePageViewModel.Factory _createProfilePageViewModelFactory;
     private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
+    private readonly IProfileStore _profileStore;
     private readonly IProfileService _profileService;
     private readonly ILastSelectionRepository _lastSelectionRepository;
     private readonly ConnectGamePageViewModel.Factory _connectGamePageViewModelFactory;
@@ -56,7 +58,7 @@ public partial class RepoPageViewModel
     /// <summary>Which savegame the Saves list should arrive with selected. One-shot, like the others.</summary>
     private Guid? _selectSavegameOnce;
 
-    private readonly ObservableCollectionSynchronizer<ProfileDto, MenuItemViewModel, string> _profilesSynchronizer;
+    private readonly ObservableCollectionSynchronizer<Profile, MenuItemViewModel, string> _profilesSynchronizer;
 
     /// <summary>
     /// Connect game and Configure game: sub-pages of Overview, reached from its "This machine" card.
@@ -80,6 +82,7 @@ public partial class RepoPageViewModel
         RepoArchivePageViewModel.Factory repoArchivePageViewModelFactory,
         ISavegamesClient savegamesClient,
         IProfileSyncStatusService syncStatus,
+        IProfileStore profileStore,
         IProfileService profileService,
         ILastSelectionRepository lastSelectionRepository,
         IGameRepository gameRepository,
@@ -102,6 +105,7 @@ public partial class RepoPageViewModel
         _repoAdminPageViewModelFactory = repoAdminPageViewModelFactory;
         _createProfilePageViewModelFactory = createProfilePageViewModelFactory;
         _profilePageViewModelFactory = profilePageViewModelFactory;
+        _profileStore = profileStore;
         _profileService = profileService;
         _lastSelectionRepository = lastSelectionRepository;
         _connectGamePageViewModelFactory = connectGamePageViewModelFactory;
@@ -182,10 +186,8 @@ public partial class RepoPageViewModel
             .RestrictIf(isGuest, "Guests cannot create profiles. Ask an admin for a higher membership level.");
 
         Profiles = [];
-        _profileService.ProfileCreated += OnProfileCreated;
-        _profileService.ProfileUpdated += OnProfileUpdated;
-        _profileService.PendingChangesChanged += OnPendingProfileChangesChanged;
-        _profilesSynchronizer = new(_profileService.Profiles, Profiles, MapProfileToVm, x => x.Title, NaturalOrder.Comparer);
+        _profileStore.ProfileCreated += OnProfileCreated;
+        _profilesSynchronizer = new(_profileStore.Live(repo.Id), Profiles, MapProfileToVm, x => x.Title, NaturalOrder.Comparer);
 
         // A repo with nothing connected is a repo nothing works in, so being pushed at the one thing
         // that fixes that beats landing on an overview describing it - where there is anything to
@@ -246,17 +248,6 @@ public partial class RepoPageViewModel
     /// </summary>
     public MenuItemViewModel CreateProfileItem => _createProfileMenuItem;
 
-    /// <summary>
-    /// Whether the server has profile changes the list does not show yet. Brought in by the refresh
-    /// button and nothing else - see <see cref="Shared.RemoteChangeWatcher"/>.
-    /// </summary>
-    public bool HasPendingProfileChanges => PendingProfileChanges() is not null;
-
-    /// <summary>The refresh button's tooltip, which says what pressing it would bring in when it knows.</summary>
-    public string RefreshProfilesToolTip => PendingProfileChanges() is { } changes
-        ? $"{changes.Describe()}{Environment.NewLine}{Environment.NewLine}Refresh to bring the changes in."
-        : "Refresh profiles";
-
 
     protected override void Init()
     {
@@ -265,9 +256,7 @@ public partial class RepoPageViewModel
 
     public void Dispose()
     {
-        _profileService.ProfileCreated -= OnProfileCreated;
-        _profileService.ProfileUpdated -= OnProfileUpdated;
-        _profileService.PendingChangesChanged -= OnPendingProfileChangesChanged;
+        _profileStore.ProfileCreated -= OnProfileCreated;
         _repo.Games.CollectionChanged -= OnGamesChanged;
         _repo.PropertyChanged -= OnRepoChanged;
         _syncStatus.Changed -= OnSyncStatusChanged;
@@ -281,7 +270,7 @@ public partial class RepoPageViewModel
     [RelayCommand]
     private async Task LoadProfiles(CancellationToken cancellationToken)
     {
-        await _profileService.RefreshProfiles(_repo.Id, cancellationToken);
+        await _profileStore.RefreshAsync(_repo.Id, cancellationToken);
     }
 
     [RelayCommand]
@@ -493,7 +482,7 @@ public partial class RepoPageViewModel
 
         ClearArchivedProfile();
 
-        var entry = new ProfileItemViewModel(_repo, archived, _profilePageViewModelFactory);
+        var entry = new ProfileItemViewModel(_repo, new Profile(archived), _profilePageViewModelFactory);
         entry.SyncState = _syncStatus.StateOf(_repo, entry.Id);
 
         ArchivedProfiles.Add(entry);
@@ -510,6 +499,11 @@ public partial class RepoPageViewModel
         if (ArchivedProfiles.Count == 0)
         {
             return;
+        }
+
+        foreach (var entry in ArchivedProfiles)
+        {
+            entry.Dispose();
         }
 
         ArchivedProfiles.Clear();
@@ -549,39 +543,18 @@ public partial class RepoPageViewModel
         }
     }
 
-    private void OnProfileCreated(Guid profileId)
+    private void OnProfileCreated(Profile created)
     {
-        if (Profiles.OfType<ProfileItemViewModel>().FirstOrDefault(x => x.Id == profileId) is ProfileItemViewModel profile)
+        if (created.RepoId == _repo.Id && FindProfile(created.Id) is ProfileItemViewModel profile)
         {
             NavManager.Selected = profile;
         }
     }
 
-    private void OnProfileUpdated(Guid profileId)
-    {
-        foreach (var profile in Profiles.OfType<ProfileItemViewModel>().Where(x => x.Id == profileId))
-        {
-            profile.RefreshTitle();
-        }
-    }
-
-    private void OnPendingProfileChangesChanged(object? sender, EventArgs e)
-    {
-        OnPropertyChanged(nameof(HasPendingProfileChanges));
-        OnPropertyChanged(nameof(RefreshProfilesToolTip));
-    }
-
-    /// <summary>
-    /// The pending changes if they are this repo's. The service's list is handed from repo to repo, so
-    /// for the moment between opening this one and its profiles arriving, they are the last repo's.
-    /// </summary>
-    private RemoteChanges? PendingProfileChanges()
-        => _profileService.HeldRepoId == _repo.Id ? _profileService.PendingChanges : null;
-
     private ProfileItemViewModel? FindProfile(Guid profileId)
         => Profiles.OfType<ProfileItemViewModel>().FirstOrDefault(x => x.Id == profileId);
 
-    private ProfileItemViewModel MapProfileToVm(ProfileDto profile)
+    private ProfileItemViewModel MapProfileToVm(Profile profile)
     {
         var entry = new ProfileItemViewModel(_repo, profile, _profilePageViewModelFactory);
         entry.SyncState = _syncStatus.StateOf(_repo, entry.Id);

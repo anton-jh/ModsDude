@@ -59,11 +59,9 @@ public class Repo
 
     /// <summary>
     /// The base settings as the server last sent them. <see cref="Adapter"/> holds them parsed; this
-    /// is kept beside it only so a background check can tell whether they have changed since.
+    /// is kept beside it so a read that changed nothing does not rebuild the adapter.
     /// </summary>
-    internal string AdapterConfiguration { get; private set; }
-
-    // TODO: Profiles
+    private string AdapterConfiguration { get; set; }
 
 
     public Task Update(string name, DynamicForm baseSettings, CancellationToken cancellationToken)
@@ -96,6 +94,11 @@ public class Repo
             PropertyChanged?.Invoke(this, new(nameof(Name)));
         }
 
+        if (AdapterConfiguration == dto.AdapterConfiguration)
+        {
+            return;
+        }
+
         Adapter = Adapter.WithBaseSettings(dto.AdapterConfiguration);
         AdapterConfiguration = dto.AdapterConfiguration;
         PropertyChanged?.Invoke(this, new(nameof(Adapter)));
@@ -115,11 +118,6 @@ public class Repo
     public void Dispose()
     {
         _gamesSynchronizer.Dispose();
-    }
-
-    internal RepoListEntry ToListEntry()
-    {
-        return new(Id, Name, MembershipLevel, AdapterConfiguration);
     }
 
 

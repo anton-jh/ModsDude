@@ -2,6 +2,7 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Transfers;
@@ -24,7 +25,7 @@ public sealed class SavegameCheckOutFlow(
     ISavegameOffers offers,
     ISavegameBindingStore bindings,
     ISavegameCompatibilityCheck compatibilityCheck,
-    IProfileService profileService,
+    IProfileStore profileStore,
     IGameRunningGuard runningGuard,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
@@ -108,7 +109,7 @@ public sealed class SavegameCheckOutFlow(
             await AssessAsync(repo, savegame, playedRevision, cancellationToken),
             heldNames,
             offers,
-            profileService,
+            profileStore,
             contextBuilder,
             checkInFlow);
 
@@ -139,7 +140,7 @@ public sealed class SavegameCheckOutFlow(
     {
         if (playedRevision is not int played
             || repo.Adapter.FindSavegameCompatibility() is not SavegameCompatibilityPolicy policy
-            || profileService.FindLive(repo.Id, savegame.ProfileId) is not ProfileDto profile)
+            || profileStore.Find(repo.Id, savegame.ProfileId) is not Profile profile)
         {
             return null;
         }
@@ -170,7 +171,7 @@ public sealed class SavegameCheckOutFlow(
 
         // A check-out activates the profile once the save is written, and a copy where it was asked to.
         var runsOn = mode is SavegameCheckOutMode.CheckOut && repo.Adapter.CanSupportMods
-            ? profileService.FindLive(repo.Id, savegame.ProfileId)
+            ? profileStore.Find(repo.Id, savegame.ProfileId)
             : plan.Activates;
 
         if (runsOn is not null
@@ -207,7 +208,7 @@ public sealed class SavegameCheckOutFlow(
 
         // Named, not left to the game: nothing is holding this savegame yet, so the game would resolve
         // head - wrong in compatibility mode, whose check-out would then leave the folder drifted.
-        if (plan.Activates is ProfileDto profile
+        if (plan.Activates is Profile profile
             && await profileActivation.ActivateFirstAsync(
                 repo, game, profile.Id, profile.Name, plan.PinnedRevision ?? profile.HeadRevision, cancellationToken) is false)
         {

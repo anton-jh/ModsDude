@@ -43,7 +43,7 @@ namespace ModsDude.Client.Wpf.Profiles.Editor;
 public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly ProfileDto _profile;
+    private readonly Profile _profile;
     private readonly ModCatalog _catalog;
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly IProfileSaveService _saveService;
@@ -84,12 +84,13 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     public ProfileModsEditorPageViewModel(
         Repo repo,
-        ProfileDto profile,
+        Profile profile,
         ModCatalog.Factory catalogFactory,
         ModListItemViewModel.Factory itemFactory,
         IProfileSaveService saveService,
         IModDependenciesClient dependenciesClient,
         IProfilesClient profilesClient,
+        IProfileStore profileStore,
         IModalService modalService,
         IErrorReporter errorReporter,
         IFilePickerService filePickerService,
@@ -122,7 +123,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         _catalog = catalogFactory.Create(repo);
         _catalogView = ProfileEditorCatalog.Empty(repo.Adapter.VersionComparer);
-        _otherProfiles = new OtherProfilesReader(profilesClient, dependenciesClient, repo.Id, profile.Id);
+        _otherProfiles = new OtherProfilesReader(profileStore, dependenciesClient, repo.Id, profile.Id);
 
         Sources = new EditorSourcesViewModel(
             _catalog, _otherProfiles, filePickerService, modalService, errorReporter,
@@ -895,8 +896,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            _profile.HeadRevision = outcome.Revision;
-
             if (outcome.RevisionWritten)
             {
                 VersionDescription = "";
@@ -1022,7 +1021,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
             await _modalService.Show(modal);
 
-            if (modal.Result is not ProfileDto source)
+            if (modal.Result is not Profile source)
             {
                 return;
             }
@@ -1332,7 +1331,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     public class Factory(IServiceProvider serviceProvider)
     {
         /// <param name="scanTarget">A folder to load from the start. Null reads no disk until a source is switched on.</param>
-        public ProfileModsEditorPageViewModel Create(Repo repo, ProfileDto profile, ModTargetRef? scanTarget = null)
+        public ProfileModsEditorPageViewModel Create(Repo repo, Profile profile, ModTargetRef? scanTarget = null)
         {
             var page = ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, repo, profile);
 

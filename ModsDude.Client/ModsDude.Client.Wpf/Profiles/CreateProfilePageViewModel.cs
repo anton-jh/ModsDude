@@ -2,14 +2,14 @@
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
-using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Wpf.Shell.Navigation;
 
 namespace ModsDude.Client.Wpf.Profiles;
 
 public partial class CreateProfilePageViewModel(
     Repo repo,
-    IProfileService profileService,
+    IProfileStore profileStore,
     INavigationLockService navigationLockService)
     : PageViewModel, IDisposable
 {
@@ -34,7 +34,7 @@ public partial class CreateProfilePageViewModel(
 
         navigationLockService.ReleaseLock(this);
 
-        await profileService.CreateProfile(_repo.Id, Name, cancellationToken: cancellationToken);
+        await profileStore.CreateAsync(_repo.Id, Name, copyFrom: null, cancellationToken);
     }
 
     public void Dispose()

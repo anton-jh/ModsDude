@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -11,7 +12,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 public sealed class SavegameCheckOutContextBuilder(
     ISavegameSlots savegameSlots,
     ISavegameBindingStore bindingStore,
-    IProfileService profileService,
+    IProfileStore profileStore,
     IProfileApplyService applyService,
     IBackgroundTaskReporter backgroundTasks) : ISavegameCheckOutContextBuilder
 {
@@ -68,7 +69,7 @@ public sealed class SavegameCheckOutContextBuilder(
             return $"Compatibility mode: stays on rev {pinned} while checked out.";
         }
 
-        return profileService.FindLive(repo.Id, savegame.ProfileId) is ProfileDto profile
+        return profileStore.Find(repo.Id, savegame.ProfileId) is Profile profile
             ? $"Will run on {profile.Name} rev {profile.HeadRevision}."
             : null;
     }
@@ -113,7 +114,7 @@ public sealed class SavegameCheckOutContextBuilder(
         int? pinnedRevision,
         CancellationToken cancellationToken)
     {
-        if (repo.Adapter.CanSupportMods is false || profileService.FindLive(repo.Id, savegame.ProfileId) is not ProfileDto profile)
+        if (repo.Adapter.CanSupportMods is false || profileStore.Find(repo.Id, savegame.ProfileId) is not Profile profile)
         {
             return null;
         }

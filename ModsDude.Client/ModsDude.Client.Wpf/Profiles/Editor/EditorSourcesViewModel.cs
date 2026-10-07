@@ -175,7 +175,7 @@ public sealed partial class EditorSourcesViewModel(
 
             await modalService.Show(modal);
 
-            if (modal.Result is not ProfileDto picked)
+            if (modal.Result is not Profile picked)
             {
                 return;
             }

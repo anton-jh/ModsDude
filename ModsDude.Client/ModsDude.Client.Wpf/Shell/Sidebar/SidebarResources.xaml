@@ -413,32 +413,6 @@
         </Setter>
     </Style>
 
-    <!-- A rail item that acts rather than goes somewhere, drawn the way a rail row is. -->
-    <Style x:Key="RailButton" TargetType="Button">
-        <Setter Property="ToolTipService.Placement" Value="Right" />
-        <Setter Property="ToolTipService.InitialShowDelay" Value="0" />
-        <Setter Property="ToolTipService.BetweenShowDelay" Value="0" />
-        <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{StaticResource RailFocusVisual}" />
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Grid Background="Transparent">
-                        <Border x:Name="Band" Style="{StaticResource RailBand}" />
-                        <ContentPresenter Margin="0 6"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center" />
-                    </Grid>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Band" Property="Visibility" Value="Visible" />
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
     <!-- A heading over one game's repos in the rail: the game's short name over a rule, and its full name
          in the hover label. -->
     <GroupStyle x:Key="RailGroupStyle">

@@ -255,8 +255,7 @@
                               SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
                               behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
 
-                    <sidebar:SidebarHeader Grid.Row="1" Title="Profiles" Command="{Binding LoadProfilesCommand}" ActionIcon="&#xE72C;" ActionToolTip="{Binding RefreshProfilesToolTip}"
-                                           HasPendingChanges="{Binding HasPendingProfileChanges}"
+                    <sidebar:SidebarHeader Grid.Row="1" Title="Profiles"
                                            AddCommand="{Binding CreateProfileCommand}"
                                            IsAddSelected="{Binding IsCreateProfileSelected}"
                                            IsAddEnabled="{Binding CreateProfileItem.IsAvailable}"

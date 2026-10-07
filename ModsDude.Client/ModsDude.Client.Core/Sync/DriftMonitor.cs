@@ -37,10 +37,9 @@ public sealed record DriftCandidate(
 /// </summary>
 /// <remarks>
 /// <para>
-/// Deliberately partial. The client holds the profile list of the repo it has loaded, so the answer
-/// is there for the repo the user is standing in and absent for the rest - and absent is the honest
-/// answer, because the alternative is a network round trip per game on every window activation,
-/// in a check whose entire point is that it works offline and costs a directory listing.
+/// Answered from the profiles the client holds, which include those of every repo a game here
+/// follows. A repo not read yet answers null rather than a network round trip per game on every
+/// window activation, in a check that costs a directory listing.
 /// </para>
 /// <para>
 /// An interface for the same reason <see cref="IDriftCandidateSource"/> is one: the monitor depends

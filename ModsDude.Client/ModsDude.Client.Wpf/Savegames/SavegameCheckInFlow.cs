@@ -1,6 +1,7 @@
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -21,7 +22,7 @@ public sealed class SavegameCheckInFlow(
     ISavegameCheckIn savegameCheckIn,
     ISavegamePlayAttribution playAttribution,
     ISavegameBindingStore bindingStore,
-    IProfileService profileService,
+    IProfileStore profileStore,
     IDriftMonitor driftMonitor,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
@@ -243,7 +244,7 @@ public sealed class SavegameCheckInFlow(
             return null;
         }
 
-        var profile = profileService.Profiles.FirstOrDefault(x => x.Id == profileId);
+        var profile = profileStore.Find(binding.RepoId, profileId);
 
         return profile is null
             ? $"Played on revision {revision} of its mod list."

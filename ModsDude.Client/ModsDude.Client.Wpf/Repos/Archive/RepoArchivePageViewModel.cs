@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -37,6 +38,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
 {
     private readonly Repo _repo;
     private readonly IProfileService _profileService;
+    private readonly IProfileStore _profileStore;
     private readonly IGameRepository _games;
     private readonly ISavegamesClient _savegamesClient;
     private readonly IModalService _modalService;
@@ -54,6 +56,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
     public RepoArchivePageViewModel(
         Repo repo,
         IProfileService profileService,
+        IProfileStore profileStore,
         IGameRepository games,
         ISavegamesClient savegamesClient,
         IModalService modalService,
@@ -62,6 +65,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
     {
         _repo = repo;
         _profileService = profileService;
+        _profileStore = profileStore;
         _games = games;
         _savegamesClient = savegamesClient;
         _modalService = modalService;
@@ -226,7 +230,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
     {
         await RunAsync(async name =>
         {
-            await _profileService.RestoreProfile(_repo.Id, item.Id, name, _lifetime.Token);
+            await _profileStore.RestoreAsync(_repo.Id, item.Id, name, _lifetime.Token);
 
             _toasts.Show($"'{name ?? item.Name}' is back in the sidebar.");
         }, item, "profile");
@@ -316,7 +320,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
 
         try
         {
-            await _profileService.DeleteProfile(_repo.Id, item.Id, _lifetime.Token);
+            await _profileStore.DeleteAsync(_repo.Id, item.Id, _lifetime.Token);
 
             // The profile is gone, so no game can still be pointed at it. Local state, which the
             // server has no idea about: a game whose active profile is a dangling id reports

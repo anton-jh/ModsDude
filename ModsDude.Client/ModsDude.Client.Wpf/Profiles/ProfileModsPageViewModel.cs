@@ -23,7 +23,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 public partial class ProfileModsPageViewModel : PageViewModel
 {
     private readonly Repo _repo;
-    private readonly ProfileDto _profile;
+    private readonly Profile _profile;
     private readonly IProfileService _profileService;
     private readonly ModListItemViewModel.Factory _itemFactory;
 
@@ -32,7 +32,7 @@ public partial class ProfileModsPageViewModel : PageViewModel
 
     public ProfileModsPageViewModel(
         Repo repo,
-        ProfileDto profile,
+        Profile profile,
         IProfileService profileService,
         ModListItemViewModel.Factory itemFactory)
     {
@@ -82,7 +82,7 @@ public partial class ProfileModsPageViewModel : PageViewModel
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ProfileModsPageViewModel Create(Repo repo, ProfileDto profile)
+        public ProfileModsPageViewModel Create(Repo repo, Profile profile)
             => ActivatorUtilities.CreateInstance<ProfileModsPageViewModel>(serviceProvider, repo, profile);
     }
 }

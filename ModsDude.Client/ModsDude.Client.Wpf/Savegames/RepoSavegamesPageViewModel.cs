@@ -5,6 +5,7 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -49,7 +50,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private readonly ISavegameSlots _slots;
     private readonly ISavegameHolds _holds;
     private readonly ISavegameBindingStore _bindingStore;
-    private readonly IProfileService _profileService;
+    private readonly IProfileStore _profileStore;
     private readonly ICurrentUserStore _currentUser;
     private readonly IDriftMonitor _driftMonitor;
     private readonly ISavegameOffers _offers;
@@ -84,7 +85,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         ISavegameHolds holds,
         ISavegameSightingCache sightings,
         ISavegameBindingStore bindingStore,
-        IProfileService profileService,
+        IProfileStore profileStore,
         ICurrentUserStore currentUser,
         IDriftMonitor driftMonitor,
         ISavegameOffers offers,
@@ -112,7 +113,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         _holds = holds;
         _sightings = sightings;
         _bindingStore = bindingStore;
-        _profileService = profileService;
+        _profileStore = profileStore;
         _currentUser = currentUser;
         _driftMonitor = driftMonitor;
         _offers = offers;
@@ -224,10 +225,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     {
         // The sidebar loads the repo's profiles, but this page can be the first thing opened after a
         // deep link, and every row needs a profile name and a head revision.
-        if (_profileService.Profiles.Any(x => x.RepoId == _repo.Id) is false)
-        {
-            await _profileService.RefreshProfiles(_repo.Id, _lifetime);
-        }
+        await _profileStore.EnsureLoadedAsync(_repo.Id, _lifetime);
 
         // Which chip says "You have it" rather than naming somebody. Absorbed: a list that cannot tell
         // whose is whose is still a list, and everything else on the page works.
@@ -698,7 +696,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// <summary>How many revisions the profile has moved on since the save was last played. Zero where it has not, or cannot be told.</summary>
     private int RevisionsBehind(SavegameDto savegame)
         => savegame.Head?.ProfileRevision is int played
-            && _profileService.FindLive(_repo.Id, savegame.ProfileId) is ProfileDto profile
+            && _profileStore.Find(_repo.Id, savegame.ProfileId) is Profile profile
             && profile.HeadRevision > played
                 ? profile.HeadRevision - played
                 : 0;
@@ -780,7 +778,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             _lifetime.ThrowIfCancellationRequested();
 
             if (row.Savegame.Head?.ProfileRevision is not int played ||
-                _profileService.FindLive(_repo.Id, row.Savegame.ProfileId) is not ProfileDto profile)
+                _profileStore.Find(_repo.Id, row.Savegame.ProfileId) is not Profile profile)
             {
                 continue;
             }

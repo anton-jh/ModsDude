@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -10,7 +11,7 @@ public sealed class SavegameOffers(
     ISavegameBindingStore bindingStore,
     ISavegameHolds savegameHolds,
     ISyncManifestStore manifestStore,
-    IProfileService profileService) : ISavegameOffers
+    IProfileStore profileStore) : ISavegameOffers
 {
     public SavegameHost? ReadHost(Repo repo)
     {
@@ -45,7 +46,7 @@ public sealed class SavegameOffers(
         var offer = SavegameRowRules.Describe(
             row.Id,
             row.Savegame.ProfileId,
-            profileService.FindLive(repo.Id, row.Savegame.ProfileId)?.HeadRevision,
+            profileStore.Find(repo.Id, row.Savegame.ProfileId)?.HeadRevision,
             row.Hold?.PinnedRevision,
             host.Held,
             host.AppliedProfileId,

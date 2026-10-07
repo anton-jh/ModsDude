@@ -1,4 +1,3 @@
-using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
@@ -106,7 +105,6 @@ public partial class MainPageViewModel
         ReposView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(RepoItemViewModel.Game)));
 
         repoStore.RepoCreated += OnRepoCreated;
-        repoStore.PendingChangesChanged += OnPendingRepoChangesChanged;
         NavManager.PropertyChanged += OnNavigationChanged;
         _syncStatus.Changed += OnSyncStatusChanged;
 
@@ -136,17 +134,6 @@ public partial class MainPageViewModel
     /// <summary>Settings and the account page.</summary>
     public IReadOnlyList<MenuItemViewModel> AccountItems { get; }
 
-    /// <summary>
-    /// Whether the server has repo changes the list does not show yet, which is the only time the
-    /// rail offers Refresh - see <see cref="Shared.RemoteChangeWatcher"/>.
-    /// </summary>
-    public bool HasPendingRepoChanges => _repoStore.PendingChanges is not null;
-
-    /// <summary>Refresh's label, which says what it would bring in.</summary>
-    public string RefreshToolTip => _repoStore.PendingChanges is { } changes
-        ? $"Refresh{Environment.NewLine}{changes.Describe()}"
-        : "Refresh";
-
 
     protected override void Init()
     {
@@ -161,7 +148,6 @@ public partial class MainPageViewModel
         _shellNavigationService.Unregister(this);
 
         _repoStore.RepoCreated -= OnRepoCreated;
-        _repoStore.PendingChangesChanged -= OnPendingRepoChangesChanged;
         NavManager.PropertyChanged -= OnNavigationChanged;
         _syncStatus.Changed -= OnSyncStatusChanged;
         Repos.CollectionChanged -= OnReposChanged;
@@ -186,7 +172,7 @@ public partial class MainPageViewModel
     {
         if (FindRepo(repoId) is null)
         {
-            await LoadReposCommand.ExecuteAsync(null);
+            await _repoStore.RefreshRepos(_disposed.Token);
         }
 
         if (FindRepo(repoId) is not RepoItemViewModel entry)
@@ -208,44 +194,32 @@ public partial class MainPageViewModel
     /// <see cref="ConnectionRetry"/>.
     /// </summary>
     /// <remarks>
-    /// Async void for the same reason the command's own Execute rethrows: a failure that waiting will
-    /// not fix still reaches the error modal on the UI thread.
+    /// Async void so that a failure waiting will not fix still reaches the error modal on the UI thread.
     /// </remarks>
     private async void LoadAtStart()
     {
-        // Each part skipped where it is already in: Refresh may have got the list while this was waiting.
+        // Each part skipped where it is already in: a deep link may have got the list while this was waiting.
         var attempt = async (CancellationToken cancellationToken) =>
         {
             await _currentUser.GetAsync(cancellationToken);
 
             if (_repoStore.HasLoaded is false)
             {
-                await LoadReposCommand.ExecuteAsync(null);
+                await _repoStore.RefreshRepos(cancellationToken);
             }
+
+            SelectLandingPage();
         };
 
         await _connection.RunAsync(ConnectionTarget.Server, attempt, _disposed.Token);
-    }
-
-    [RelayCommand]
-    private async Task LoadRepos(CancellationToken cancellationToken)
-    {
-        await _repoStore.RefreshRepos(cancellationToken);
-
-        SelectLandingPage();
-
-        // Refresh got through while the first load was waiting out its interval, so that
-        // wait is only keeping a notice up about a list that is already here.
-        _connection.RetryNow();
     }
 
     /// <summary>
     /// Where the app opens: the repo last open, else the first one the rail lists, else Join or create.
     /// </summary>
     /// <remarks>
-    /// Only on the first load. Refresh runs the same command, and jumping the user back to
-    /// where they were an hour ago because they asked for fresh data would be its own bug. Nor where
-    /// something was chosen while the list was still on its way.
+    /// Only once. Jumping the user back to where they were an hour ago because the list was read again
+    /// would be its own bug. Nor where something was chosen while the list was still on its way.
     /// </remarks>
     private void SelectLandingPage()
     {
@@ -328,11 +302,6 @@ public partial class MainPageViewModel
         }
     }
 
-    private void OnPendingRepoChangesChanged(object? sender, EventArgs e)
-    {
-        OnPropertyChanged(nameof(HasPendingRepoChanges));
-        OnPropertyChanged(nameof(RefreshToolTip));
-    }
 
     private void OnReposChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {

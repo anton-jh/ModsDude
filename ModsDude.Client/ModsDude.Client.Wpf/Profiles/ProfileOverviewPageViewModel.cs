@@ -15,6 +15,7 @@ using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows;
 
 namespace ModsDude.Client.Wpf.Profiles;
@@ -31,8 +32,9 @@ namespace ModsDude.Client.Wpf.Profiles;
 public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly ProfileDto _profile;
+    private readonly Profile _profile;
     private readonly IProfileService _profileService;
+    private readonly LatestLoad _statisticsLoad;
     private readonly ISavegamesClient _savegamesClient;
     private readonly ISavegamePublishFlow _publishFlow;
     private readonly IShellNavigationService _navigation;
@@ -51,7 +53,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     public ProfileOverviewPageViewModel(
         Repo repo,
-        ProfileDto profile,
+        Profile profile,
         IProfileService profileService,
         ISavegamesClient savegamesClient,
         ISavegamePublishFlow publishFlow,
@@ -74,6 +76,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         // Captured once, so that work still in flight after Dispose reads a cancelled token rather
         // than an ObjectDisposedException off the source it came from.
         _lifetime = _pageLifetime.Token;
+        _statisticsLoad = new LatestLoad(_ => { }, _lifetime);
 
         // Member, like the Saves list: publishing writes to the repo, and a guest is not offered a
         // button that leads to a refusal.
@@ -85,7 +88,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         Games = [];
         Savegames = [];
 
-        _profileService.ProfileUpdated += OnProfileUpdated;
+        _profile.PropertyChanged += OnProfileChanged;
         _repo.Games.CollectionChanged += OnGamesChanged;
         _driftMonitor.Changed += OnDriftChanged;
 
@@ -138,7 +141,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     {
         _pageLifetime.Cancel();
 
-        _profileService.ProfileUpdated -= OnProfileUpdated;
+        _profile.PropertyChanged -= OnProfileChanged;
         _repo.Games.CollectionChanged -= OnGamesChanged;
         _driftMonitor.Changed -= OnDriftChanged;
 
@@ -172,13 +175,14 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     protected override async Task InitAsync()
     {
-        _fetchedModStatistics = await _profileService.GetModStatistics(_repo.Id, _profile.Id, CancellationToken.None);
-        _fetchedSavegames = await LoadSavegamesAsync(CancellationToken.None);
+        _fetchedModStatistics = await _profileService.GetModStatistics(_repo.Id, _profile.Id, _lifetime);
+        _fetchedSavegames = await LoadSavegamesAsync(_lifetime);
     }
 
     protected override void OnInitCompleted()
     {
         ModSummary = Describe(_fetchedModStatistics);
+        _fetchedModStatistics = null;
 
         DescribeSavegames();
 
@@ -293,23 +297,42 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
             parts.Add(ByteSize.Describe(statistics.Bytes));
         }
 
-        parts.Add($"revision {_profile.HeadRevision}");
+        if (statistics is not null)
+        {
+            parts.Add($"revision {statistics.Revision}");
+        }
 
         return string.Join(" · ", parts) + ".";
     }
 
 
-    private void OnProfileUpdated(Guid profileId)
+    private void OnProfileChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (profileId == _profile.Id)
+        switch (e.PropertyName)
         {
-            OnPropertyChanged(nameof(ProfileName));
+            case nameof(Profile.Name):
+                OnPropertyChanged(nameof(ProfileName));
+                OnPropertyChanged(nameof(PublishToolTip));
+                break;
 
-            // The head moves when somebody saves or restores, and this page can be standing open
-            // while that happens - from the History page next door, most obviously.
-            ModSummary = Describe(_fetchedModStatistics);
+            // Counted again rather than relabelled: the count belongs to the revision it was read from.
+            case nameof(Profile.HeadRevision):
+                _ = ReloadModStatisticsAsync();
+                break;
         }
     }
+
+    private Task ReloadModStatisticsAsync()
+        => _statisticsLoad.RunAsync(
+            token => _profileService.GetModStatistics(_repo.Id, _profile.Id, token),
+            statistics => ModSummary = Describe(statistics),
+            exception =>
+            {
+                _logger.LogWarning(exception, "Could not count the mods of profile {ProfileId} again.", _profile.Id);
+                ModSummary = "Mods could not be counted just now.";
+
+                return Task.CompletedTask;
+            });
 
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
@@ -358,7 +381,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ProfileOverviewPageViewModel Create(Repo repo, ProfileDto profile)
+        public ProfileOverviewPageViewModel Create(Repo repo, Profile profile)
             => ActivatorUtilities.CreateInstance<ProfileOverviewPageViewModel>(serviceProvider, repo, profile);
     }
 }

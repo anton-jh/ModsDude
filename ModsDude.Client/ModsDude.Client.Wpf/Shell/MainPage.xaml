@@ -45,27 +45,6 @@
                                   SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}"
                                   behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
 
-                        <!-- Only while the server has repo changes the list does not show: at any other
-                             time there is nothing for it to bring in. -->
-                        <Button Style="{StaticResource RailButton}"
-                                Command="{Binding LoadReposCommand}"
-                                ToolTip="{Binding RefreshToolTip}"
-                                AutomationProperties.Name="Refresh"
-                                Visibility="{Binding HasPendingRepoChanges, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <Border Style="{StaticResource RailTile}">
-                                <Grid>
-                                    <TextBlock Style="{StaticResource RailGlyph}"
-                                               Text="&#xE72C;"
-                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-                                    <Ellipse Width="6" Height="6"
-                                             Margin="0 5 5 0"
-                                             HorizontalAlignment="Right"
-                                             VerticalAlignment="Top"
-                                             Fill="{DynamicResource AccentFillColorDefaultBrush}" />
-                                </Grid>
-                            </Border>
-                        </Button>
-
                     </StackPanel>
                 </ScrollViewer>
 

@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Notices;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
@@ -60,7 +61,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     private readonly IDriftMonitor _monitor;
     private readonly IRepoStore _repoStore;
     private readonly IGameRepository _gameRepository;
-    private readonly IProfileService _profileService;
+    private readonly IProfileStore _profileStore;
     private readonly ISavegameBindingStore _bindingStore;
     private readonly IProfileApplyService _applyService;
     private readonly IShellNavigationService _navigation;
@@ -95,7 +96,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         IDriftMonitor monitor,
         IRepoStore repoStore,
         IGameRepository gameRepository,
-        IProfileService profileService,
+        IProfileStore profileStore,
         ISavegameBindingStore bindingStore,
         IProfileApplyService applyService,
         IShellNavigationService navigation,
@@ -112,7 +113,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _monitor = monitor;
         _repoStore = repoStore;
         _gameRepository = gameRepository;
-        _profileService = profileService;
+        _profileStore = profileStore;
         _bindingStore = bindingStore;
         _applyService = applyService;
         _navigation = navigation;
@@ -140,7 +141,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         // to the game must not be the first to find out that they are out of sync - so the check is
         // driven by the facts changing, not by anybody remembering to ask.
         _gameRepository.GameChanged += OnFactsChanged;
-        _profileService.ProfileUpdated += OnProfileUpdated;
+        _profileStore.Changed += OnProfilesChanged;
         _bindingStore.BindingsChanged += OnFactsChanged;
 
         _dismissals.Changed += OnRedrawNeeded;
@@ -301,7 +302,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _gameRepository.Games.CollectionChanged -= OnGamesChanged;
         _repoStore.Repos.CollectionChanged -= OnReposChanged;
         _gameRepository.GameChanged -= OnFactsChanged;
-        _profileService.ProfileUpdated -= OnProfileUpdated;
+        _profileStore.Changed -= OnProfilesChanged;
         _bindingStore.BindingsChanged -= OnFactsChanged;
         _dismissals.Changed -= OnRedrawNeeded;
         _problems.Changed -= OnRedrawNeeded;
@@ -566,10 +567,10 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _ = _monitor.CheckAsync();
     }
 
-    private void OnProfileUpdated(Guid profileId)
+    private void OnProfilesChanged(Guid repoId)
     {
         // A profile's head revision moving is drift for every folder built against the old one,
-        // whether this client saved it or a teammate did and a refresh brought it back.
+        // whether this client saved it or a teammate did and a read brought it in.
         _ = _monitor.CheckAsync();
     }
 

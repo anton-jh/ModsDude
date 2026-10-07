@@ -216,7 +216,7 @@ public sealed class ProfileSaveService(
     IProfilesClient profilesClient,
     IModDependenciesClient dependenciesClient,
     IGameRepository games,
-    IProfileService profileService,
+    IProfileStore profileStore,
     IDriftMonitor driftMonitor,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
@@ -364,14 +364,9 @@ public sealed class ProfileSaveService(
                 "Loaded the newer list. Nothing of yours was saved.");
         }
 
-        // Before the apply and the drift check below, which both compare a folder against the head this
-        // client has cached. On the UI thread because the event it raises is heard by pages.
-        await OnUiThreadAsync(() =>
-        {
-            profileService.NoteRevisionSaved(request.ProfileId, revision);
-
-            return Task.CompletedTask;
-        });
+        // Before the apply and the drift check below, which both compare a folder against the head the
+        // store holds.
+        await profileStore.ApplyRevisionSavedAsync(request.Repo.Id, request.ProfileId, revision);
 
         // The revision is written, so the import that fed it is finally paid for and the copies the
         // user chose against can go. Not one line earlier: everything above this can still return

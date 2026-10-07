@@ -1,8 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
 
@@ -10,8 +10,8 @@ namespace ModsDude.Client.Wpf.Profiles;
 
 /// <summary>Renaming and archiving a profile, as a card on its Overview.</summary>
 public partial class ManageProfileViewModel(
-    ProfileDto profile,
-    IProfileService profileService,
+    Profile profile,
+    IProfileStore profileStore,
     INavigationLockService navigationLockService,
     IModalService modalService)
     : ObservableObject, IDisposable
@@ -27,7 +27,7 @@ public partial class ManageProfileViewModel(
     private async Task SaveChanges(CancellationToken cancellationToken)
     {
         navigationLockService.ReleaseLock(this);
-        await profileService.UpdateProfile(profile.RepoId, profile.Id, Name, cancellationToken);
+        await profileStore.RenameAsync(profile, Name, cancellationToken);
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public partial class ManageProfileViewModel(
         if (modal.Result)
         {
             navigationLockService.ReleaseLock(this);
-            await profileService.ArchiveProfile(profile.RepoId, profile.Id, cancellationToken);
+            await profileStore.ArchiveAsync(profile, cancellationToken);
         }
     }
 
@@ -63,7 +63,7 @@ public partial class ManageProfileViewModel(
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ManageProfileViewModel Create(ProfileDto profile)
+        public ManageProfileViewModel Create(Profile profile)
             => ActivatorUtilities.CreateInstance<ManageProfileViewModel>(serviceProvider, profile);
     }
 }

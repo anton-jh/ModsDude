@@ -8,17 +8,24 @@ public class ProfileModStatisticsTests
     [Fact]
     public void A_profile_adds_up_its_mods_and_their_sizes()
     {
-        var statistics = ProfileModStatistics.From([Dependency("a", 100), Dependency("b", 250)]);
+        var statistics = ProfileModStatistics.From(Revision(4, Dependency("a", 100), Dependency("b", 250)));
 
-        Assert.Equal(new ProfileModStatistics(2, 350), statistics);
+        Assert.Equal(new ProfileModStatistics(4, 2, 350), statistics);
     }
 
     [Fact]
     public void An_empty_profile_has_nothing_to_add_up()
     {
-        Assert.Equal(new ProfileModStatistics(0, 0), ProfileModStatistics.From([]));
+        Assert.Equal(new ProfileModStatistics(1, 0, 0), ProfileModStatistics.From(Revision(1)));
     }
 
+
+    private static GetModDependenciesResponse Revision(int number, params ModDependencyDto[] dependencies) => new()
+    {
+        Revision = number,
+        IsHead = true,
+        Dependencies = [.. dependencies]
+    };
 
     private static ModDependencyDto Dependency(string modId, long sizeBytes) => new()
     {

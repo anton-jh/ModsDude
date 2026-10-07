@@ -12,6 +12,7 @@ using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.Notices;
 using ModsDude.Client.Core.Persistence;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
@@ -669,6 +670,7 @@ public partial class App : Application
         services.AddSingleton<IStoreDispatcher>(_ => new WpfStoreDispatcher(Current.Dispatcher));
 
         services.AddSingleton<IRepoStore, RepoStore>();
+        services.AddSingleton<IProfileStore, ProfileStore>();
         services.AddSingleton<IProfileService, ProfileService>();
         services.AddSingleton<IMembershipService, MembershipService>();
         services.AddSingleton<IInviteService, InviteService>();
@@ -692,13 +694,12 @@ public partial class App : Application
         // What the shell drops when the signed-in user changes. Everything else the client holds
         // describes this machine's game installations and survives the switch - see IUserScopedState.
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IRepoStore>());
-        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IProfileService>());
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IProfileStore>());
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<ICurrentUserStore>());
 
         // The same object again, for the one fact the drift check needs of it: which revision each
-        // profile it has loaded is on. It answers null for every other repo, which is why the check
-        // still works before anything has been loaded at all.
-        services.AddSingleton<IProfileRevisions>(sp => sp.GetRequiredService<IProfileService>());
+        // profile it has read is on. It answers null for every repo not read yet.
+        services.AddSingleton<IProfileRevisions>(sp => sp.GetRequiredService<IProfileStore>());
         services.AddSingleton<IProfileRevisionComparer>(sp => sp.GetRequiredService<IProfileService>());
         services.AddSingleton<IKnownRepos>(sp => sp.GetRequiredService<IRepoStore>());
 

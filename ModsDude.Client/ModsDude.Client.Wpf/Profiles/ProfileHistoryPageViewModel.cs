@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Mods;
 using ModsDude.Client.Wpf.Shared.Behaviors;
@@ -38,8 +39,9 @@ namespace ModsDude.Client.Wpf.Profiles;
 public partial class ProfileHistoryPageViewModel : PageViewModel
 {
     private readonly Repo _repo;
-    private readonly ProfileDto _profile;
+    private readonly Profile _profile;
     private readonly IProfileService _profileService;
+    private readonly IProfileStore _profileStore;
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
@@ -71,8 +73,9 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
 
     public ProfileHistoryPageViewModel(
         Repo repo,
-        ProfileDto profile,
+        Profile profile,
         IProfileService profileService,
+        IProfileStore profileStore,
         ModListItemViewModel.Factory itemFactory,
         IModalService modalService,
         IErrorReporter errorReporter,
@@ -87,6 +90,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         _repo = repo;
         _profile = profile;
         _profileService = profileService;
+        _profileStore = profileStore;
         _itemFactory = itemFactory;
         _modalService = modalService;
 
@@ -512,7 +516,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
 
         try
         {
-            var restored = await _profileService.RestoreRevision(_repo.Id, _profile.Id, revision.Number, cancellationToken);
+            var restored = await _profileStore.RestoreRevisionAsync(_profile, revision.Number, cancellationToken);
 
             _toasts.Show($"Restored revision {revision.Number} as revision {restored.Number}. Apply the profile to put it in your mod folder.");
 
@@ -552,7 +556,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
 
         try
         {
-            await _profileService.CreateProfile(
+            await _profileStore.CreateAsync(
                 _repo.Id,
                 name,
                 new CopyProfileRevisionRequest { ProfileId = _profile.Id, Revision = revision.Number },
@@ -752,7 +756,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ProfileHistoryPageViewModel Create(Repo repo, ProfileDto profile, int? selectRevision = null)
+        public ProfileHistoryPageViewModel Create(Repo repo, Profile profile, int? selectRevision = null)
         {
             var page = ActivatorUtilities.CreateInstance<ProfileHistoryPageViewModel>(serviceProvider, repo, profile);
 

@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Wpf.Shell.Modals;
 
 namespace ModsDude.Client.Wpf.Profiles;
@@ -22,14 +22,14 @@ namespace ModsDude.Client.Wpf.Profiles;
 /// </remarks>
 public partial class PickProfileSourceModalViewModel : ModalViewModel
 {
-    public PickProfileSourceModalViewModel(IReadOnlyList<ProfileDto> profiles)
+    public PickProfileSourceModalViewModel(IReadOnlyList<Profile> profiles)
     {
         Profiles = profiles;
         _selected = profiles.FirstOrDefault();
     }
 
 
-    public IReadOnlyList<ProfileDto> Profiles { get; }
+    public IReadOnlyList<Profile> Profiles { get; }
 
     public string Title => "Read another profile";
 
@@ -46,10 +46,10 @@ public partial class PickProfileSourceModalViewModel : ModalViewModel
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
-    private ProfileDto? _selected;
+    private Profile? _selected;
 
     /// <summary>Null until something is confirmed, so a dismissed modal adds no source.</summary>
-    public ProfileDto? Result { get; private set; }
+    public Profile? Result { get; private set; }
 
 
     [RelayCommand(CanExecute = nameof(CanConfirm))]

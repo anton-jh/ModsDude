@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
@@ -42,6 +43,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private readonly Repo _repo;
     private readonly RepoOverviewLinks _links;
     private readonly IProfileService _profileService;
+    private readonly IProfileStore _profileStore;
     private readonly IRepoStore _repoStore;
     private readonly IMembershipService _membershipService;
     private readonly IDriftMonitor _driftMonitor;
@@ -68,6 +70,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         Repo repo,
         RepoOverviewLinks links,
         IProfileService profileService,
+        IProfileStore profileStore,
         IRepoStore repoStore,
         IMembershipService membershipService,
         IDriftMonitor driftMonitor,
@@ -82,6 +85,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _repo = repo;
         _links = links;
         _profileService = profileService;
+        _profileStore = profileStore;
         _repoStore = repoStore;
         _membershipService = membershipService;
         _driftMonitor = driftMonitor;
@@ -96,7 +100,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
         _repo.PropertyChanged += OnRepoPropertyChanged;
         _repo.Games.CollectionChanged += OnSourceCollectionChanged;
-        _profileService.Profiles.CollectionChanged += OnSourceCollectionChanged;
+        _profileStore.Live(repo.Id).CollectionChanged += OnSourceCollectionChanged;
         _driftMonitor.Changed += OnDriftChanged;
 
         // Which profile a game follows changes without the collection, the profiles or the drift
@@ -138,7 +142,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _ => "You are a guest in this repo."
     };
 
-    public string ProfileSummary => _profileService.Profiles.Count switch
+    public string ProfileSummary => _profileStore.Live(_repo.Id).Count switch
     {
         0 => "No profiles yet.",
         1 => "1 profile.",
@@ -182,7 +186,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     {
         _repo.PropertyChanged -= OnRepoPropertyChanged;
         _repo.Games.CollectionChanged -= OnSourceCollectionChanged;
-        _profileService.Profiles.CollectionChanged -= OnSourceCollectionChanged;
+        _profileStore.Live(_repo.Id).CollectionChanged -= OnSourceCollectionChanged;
         _driftMonitor.Changed -= OnDriftChanged;
         _bindingStore.BindingsChanged -= OnBindingsChanged;
         _gameRepository.GameChanged -= OnGameChanged;
@@ -409,19 +413,22 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
             return gone;
         }
 
-        var profile = _profileService.FindLive(active.RepoId, active.ProfileId);
+        var live = _profileStore.Find(active.RepoId, active.ProfileId);
+        var name = live?.Name;
+        var archived = false;
 
-        if (profile is null && _lookedUp is ProfileLookup answer && answer.For == active)
+        if (live is null && _lookedUp is ProfileLookup answer && answer.For == active)
         {
             if (answer.Profile is null)
             {
                 return gone;
             }
 
-            profile = answer.Profile;
+            name = answer.Profile.Name;
+            archived = answer.Profile.ArchivedAt is not null;
         }
 
-        var name = profile?.Name ?? "A profile";
+        name ??= "A profile";
 
         // The repo's name only where it is another one. Not found is only possible before the repo
         // list has been read, and then there is nothing to name.
@@ -432,7 +439,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         string?[] parts =
         [
             owner is null ? name : $"{name} in {owner.Name}",
-            profile?.ArchivedAt is null ? null : "archived",
+            archived ? "archived" : null,
             game.PinnedRevision is int pinned ? $"rev {pinned}" : null
         ];
 
@@ -449,7 +456,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         if (activeProfile is not ActiveProfile active
             || _lookupFor == active
             || _repoStore.IsGone(active.RepoId)
-            || _profileService.FindLive(active.RepoId, active.ProfileId) is not null)
+            || _profileStore.Find(active.RepoId, active.ProfileId) is not null)
         {
             return;
         }
@@ -501,7 +508,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
             return null;
         }
 
-        var profile = _profileService.Profiles.FirstOrDefault(x => x.Id == profileId)?.Name ?? "a mod list";
+        var profile = _profileStore.Find(claiming.RepoId, profileId)?.Name ?? "a mod list";
 
         return SavegameHoldRules.RequiredRevision(held, profileId) is int pinned
             ? $"Holding a savegame that runs on '{profile}' rev {pinned}. Check it in from Saves to move this game forward."

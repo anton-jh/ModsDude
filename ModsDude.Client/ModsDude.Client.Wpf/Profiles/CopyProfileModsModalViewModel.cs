@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Wpf.Shell.Modals;
 
 namespace ModsDude.Client.Wpf.Profiles;
@@ -33,7 +33,7 @@ public enum CopyProfileModsMode
 /// </remarks>
 public partial class CopyProfileModsModalViewModel : ModalViewModel
 {
-    public CopyProfileModsModalViewModel(IReadOnlyList<ProfileDto> profiles, string targetName)
+    public CopyProfileModsModalViewModel(IReadOnlyList<Profile> profiles, string targetName)
     {
         Profiles = profiles;
         TargetName = targetName;
@@ -41,7 +41,7 @@ public partial class CopyProfileModsModalViewModel : ModalViewModel
     }
 
 
-    public IReadOnlyList<ProfileDto> Profiles { get; }
+    public IReadOnlyList<Profile> Profiles { get; }
 
     /// <summary>The profile being edited, named so the modal says which way the mods travel.</summary>
     public string TargetName { get; }
@@ -57,13 +57,13 @@ public partial class CopyProfileModsModalViewModel : ModalViewModel
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
-    private ProfileDto? _selected;
+    private Profile? _selected;
 
     [ObservableProperty]
     private CopyProfileModsMode _mode = CopyProfileModsMode.Add;
 
     /// <summary>Null until something is confirmed, so a dismissed modal copies nothing.</summary>
-    public ProfileDto? Result { get; private set; }
+    public Profile? Result { get; private set; }
 
     public CopyProfileModsMode ResultMode { get; private set; }
 

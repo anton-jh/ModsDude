@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -14,7 +15,7 @@ public sealed record SavegameCheckOutPlan(
     SavegameRevisionMode RevisionMode,
     int? PinnedRevision,
     IReadOnlyList<SavegameCheckOutCheckIn> CheckIns,
-    ProfileDto? Activates,
+    Profile? Activates,
     SavegameSlotOptionViewModel Slot);
 
 
@@ -55,7 +56,7 @@ public sealed class SavegameCheckOutWizard
     private readonly SavegameCompatibilityVerdict? _verdict;
     private readonly IReadOnlyDictionary<Guid, HeldSavegameName> _heldNames;
     private readonly ISavegameOffers _offers;
-    private readonly IProfileService _profileService;
+    private readonly IProfileStore _profileStore;
     private readonly ISavegameCheckOutContextBuilder _contextBuilder;
     private readonly ISavegameCheckInFlow _checkInFlow;
 
@@ -88,7 +89,7 @@ public sealed class SavegameCheckOutWizard
         SavegameCompatibilityVerdict? verdict,
         IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
         ISavegameOffers offers,
-        IProfileService profileService,
+        IProfileStore profileStore,
         ISavegameCheckOutContextBuilder contextBuilder,
         ISavegameCheckInFlow checkInFlow)
     {
@@ -103,7 +104,7 @@ public sealed class SavegameCheckOutWizard
         _verdict = verdict;
         _heldNames = heldNames;
         _offers = offers;
-        _profileService = profileService;
+        _profileStore = profileStore;
         _contextBuilder = contextBuilder;
         _checkInFlow = checkInFlow;
     }
@@ -156,7 +157,7 @@ public sealed class SavegameCheckOutWizard
         var pinned = SavegameRevisionRules.PinnedRevision(mode, _playedRevision);
 
         var profile = _repo.Adapter.CanSupportMods
-            ? _profileService.FindLive(_repo.Id, _savegame.ProfileId)
+            ? _profileStore.Find(_repo.Id, _savegame.ProfileId)
             : null;
 
         // The same rule the row drew its button from, read again: the folder may have moved since.
@@ -169,7 +170,7 @@ public sealed class SavegameCheckOutWizard
 
         var checkIns = new List<SavegameCheckOutCheckIn>();
         var actions = new List<(string Verb, string Line)>();
-        ProfileDto? activates = null;
+        Profile? activates = null;
 
         // A profile that cannot be seen activates nothing, and the rule says so: an activation needs
         // the profile's head.

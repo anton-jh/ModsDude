@@ -7,16 +7,16 @@ namespace ModsDude.Client.Wpf.Profiles.Editor;
 
 /// <summary>The repo's other profiles, and what each pins now.</summary>
 public sealed class OtherProfilesReader(
-    IProfilesClient profilesClient,
+    IProfileStore profileStore,
     IModDependenciesClient dependenciesClient,
     Guid repoId,
     Guid profileId)
 {
-    public async Task<List<ProfileDto>> ListAsync(CancellationToken cancellationToken)
+    public async Task<List<Profile>> ListAsync(CancellationToken cancellationToken)
     {
-        var profiles = await profilesClient.GetProfilesV1Async(repoId, cancellationToken);
+        await profileStore.EnsureLoadedAsync(repoId, cancellationToken);
 
-        return [.. profiles.Where(x => x.Id != profileId).OrderBy(x => x.Name, NaturalOrder.Comparer)];
+        return [.. profileStore.Live(repoId).Where(x => x.Id != profileId).OrderBy(x => x.Name, NaturalOrder.Comparer)];
     }
 
     public async Task<IReadOnlyList<ProfileModPin>> ReadPinsAsync(Guid otherProfileId, CancellationToken cancellationToken)

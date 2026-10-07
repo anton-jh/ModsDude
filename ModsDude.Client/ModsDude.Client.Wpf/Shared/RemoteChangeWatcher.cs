@@ -1,51 +1,51 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
+using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Threading;
 
 namespace ModsDude.Client.Wpf.Shared;
 
 /// <summary>
-/// Asks the server now and then whether the repo list, or the open repo's profile list, has changed
-/// since it was read - and only asks. The answer lands on the services as pending changes, the
-/// sidebar puts a dot on its refresh control, and the lists change when somebody uses it.
+/// Reads the repo list, and the profiles of every repo the client holds, again now and then, so what
+/// other people changed shows up without anybody asking for it.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Only while somebody can see the answer.</b> Hidden to the tray or minimised, nothing is drawing
-/// the dot, so a tick then is a request for nobody. Coming back is the moment the answer matters, so
-/// that asks straight away rather than waiting out the interval.
+/// it, so a tick then is a request for nobody. Coming back is the moment the answer matters, so that
+/// reads straight away rather than waiting out the interval.
 /// </para>
 /// <para>
-/// <b>Failures are logged and nothing else.</b> Nobody asked for this check, so a network blip is
-/// not worth an error modal; the next tick asks again, and the refresh control still says what it
-/// always said.
+/// <b>Failures are logged and nothing else.</b> Nobody asked for this read, so a network blip is not
+/// worth an error modal; the next tick reads again.
 /// </para>
 /// <para>
-/// <b>The open repo's profiles only.</b> <see cref="ProfileService.Profiles"/> holds one repo at a
-/// time, and a dot on a list nobody has open would have nowhere to be drawn.
+/// <b>The profiles of the repos a game here follows are read too</b>, held or not, because the drift
+/// check compares those games against their profile's newest revision.
 /// </para>
 /// </remarks>
 public sealed class RemoteChangeWatcher(
     IRepoStore repoStore,
-    IProfileService profileService,
+    IProfileStore profileStore,
+    IGameRepository games,
     ILogger<RemoteChangeWatcher> logger)
     : IRemoteChangeWatcher
 {
-    /// <summary>Two small list reads a time, so this can be frequent without costing anything.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(3);
 
     /// <summary>
-    /// Restoring the window more often than this asks nothing new. Alt-tabbing through a minimised
+    /// Restoring the window more often than this reads nothing new. Alt-tabbing through a minimised
     /// window is a lot of restores, and the answer from a moment ago is still the answer.
     /// </summary>
     private static readonly TimeSpan _minimumGap = TimeSpan.FromMinutes(1);
 
     private Window? _window;
     private DispatcherTimer? _timer;
-    private DateTime _lastCheck = DateTime.MinValue;
-    private bool _checking;
+    private DateTime _lastRead = DateTime.MinValue;
+    private bool _reading;
 
 
     public void Start(Window window)
@@ -62,11 +62,15 @@ public sealed class RemoteChangeWatcher(
 
         window.IsVisibleChanged += OnWindowVisibilityChanged;
         window.StateChanged += OnWindowStateChanged;
+
+        // The first list arriving is the first moment there is anything to read profiles for.
+        repoStore.Repos.CollectionChanged += OnReposChanged;
     }
 
     public void Dispose()
     {
         _timer?.Stop();
+        repoStore.Repos.CollectionChanged -= OnReposChanged;
 
         if (_window is not null)
         {
@@ -82,62 +86,80 @@ public sealed class RemoteChangeWatcher(
     {
         if (IsSeen)
         {
-            _ = CheckAsync();
+            _ = ReadAsync();
         }
     }
 
     private void OnWindowVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        CheckIfDue();
+        ReadIfDue();
     }
 
     private void OnWindowStateChanged(object? sender, EventArgs e)
     {
-        CheckIfDue();
+        ReadIfDue();
     }
 
-    private void CheckIfDue()
+    private void OnReposChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (IsSeen && DateTime.UtcNow - _lastCheck >= _minimumGap)
+        ReadIfDue();
+    }
+
+    private void ReadIfDue()
+    {
+        if (IsSeen && DateTime.UtcNow - _lastRead >= _minimumGap)
         {
-            _ = CheckAsync();
+            _ = ReadAsync();
         }
     }
 
-    private async Task CheckAsync()
+    /// <summary>Observes its own failures, so the callers above have nothing to await.</summary>
+    private async Task ReadAsync()
     {
-        if (_checking)
+        // Before sign-in, and until the shell's first load is in, there is nothing to read again:
+        // that load owns the list until then.
+        if (_reading || repoStore.HasLoaded is false)
         {
             return;
         }
 
-        _checking = true;
-        _lastCheck = DateTime.UtcNow;
+        _reading = true;
+        _lastRead = DateTime.UtcNow;
 
         try
         {
-            // Separately, so that one list being unreadable does not keep the other one's dot away.
             try
             {
-                await repoStore.CheckForChanges(CancellationToken.None);
+                await repoStore.RefreshRepos(CancellationToken.None);
             }
             catch (Exception exception)
             {
-                logger.LogInformation(exception, "Could not check the server for changes to the repo list.");
+                logger.LogInformation(exception, "Could not read the repo list again.");
             }
 
-            try
+            // Separately, so that one repo being unreadable does not keep the others' changes away.
+            foreach (var repoId in ProfileReposToRead())
             {
-                await profileService.CheckForChanges(CancellationToken.None);
-            }
-            catch (Exception exception)
-            {
-                logger.LogInformation(exception, "Could not check the server for changes to the profile list.");
+                try
+                {
+                    await profileStore.RefreshAsync(repoId, CancellationToken.None);
+                }
+                catch (Exception exception)
+                {
+                    logger.LogInformation(exception, "Could not read the profiles of repo {RepoId} again.", repoId);
+                }
             }
         }
         finally
         {
-            _checking = false;
+            _reading = false;
         }
     }
+
+    private IReadOnlyList<Guid> ProfileReposToRead()
+        => [.. profileStore.LoadedRepos
+            .Concat(games.Games.Select(x => x.ActiveProfile?.RepoId).OfType<Guid>())
+            .Where(x => repoStore.Repos.Any(repo => repo.Id == x))
+            .Distinct()
+            .Order()];
 }

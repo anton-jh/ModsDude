@@ -1,5 +1,4 @@
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
-using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
@@ -28,27 +27,6 @@ public interface IRepoStore : IUserScopedState, IKnownRepos
     /// opposite sentences. Set on success only - a failed read has established nothing.
     /// </remarks>
     bool HasLoaded { get; }
-
-    /// <summary>
-    /// What the last background check found on the server that <see cref="Repos"/> does not show
-    /// yet, or null where it found nothing. Cleared by any refresh, which is what brings it in.
-    /// </summary>
-    RemoteChanges? PendingChanges { get; }
-
-    /// <summary>Raised when <see cref="PendingChanges"/> is set or cleared.</summary>
-    event EventHandler? PendingChangesChanged;
-
-    /// <summary>
-    /// Asks the server whether the list has changed, and records the answer in
-    /// <see cref="PendingChanges"/> without touching <see cref="Repos"/>.
-    /// </summary>
-    /// <remarks>
-    /// <b>Discarded where the list moved while the question was out.</b> Creating, joining or
-    /// renaming a repo on this machine changes the list between the request and the answer, and
-    /// comparing an answer from before that with a list from after it would report this client's
-    /// own change as somebody else's.
-    /// </remarks>
-    Task CheckForChanges(CancellationToken cancellationToken);
 
     Task RefreshRepos(CancellationToken cancellationToken);
 

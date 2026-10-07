@@ -8,7 +8,7 @@
              d:DesignHeight="450" d:DesignWidth="800"
              d:DataContext="{d:DesignInstance Type=sidebar:SidebarHeader, IsDesignTimeCreatable=True}">
 
-    <Grid ColumnDefinitions="* auto auto" Margin="0 32 0 0">
+    <Grid ColumnDefinitions="* auto" Margin="0 32 0 0">
         <Grid.RowDefinitions>
             <!-- As tall as the buttons make it, whether or not they are drawn, so every header is the same height. -->
             <RowDefinition Height="Auto" MinHeight="30" />
@@ -31,7 +31,7 @@
              is the reason where the membership level does not allow it - and it shows on the disabled
              button for the same reason the rows' tooltips do. -->
         <Border Grid.Column="1" Grid.Row="0"
-                Margin="8 0 0 4"
+                Margin="8 0 16 4"
                 CornerRadius="4"
                 VerticalAlignment="Center">
             <Border.Style>
@@ -71,58 +71,7 @@
             </Button>
         </Border>
 
-        <!-- Null draws no button at all, which is every header with nothing to refresh. -->
-        <Button Grid.Column="2" Grid.Row="0"
-                Margin="4 0 16 4"
-                VerticalAlignment="Center"
-                Command="{Binding Command, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                ToolTip="{Binding ActionToolTip, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                ToolTipService.InitialShowDelay="200"
-                Cursor="Hand"
-                Background="Transparent"
-                BorderThickness="0"
-                Padding="4"
-                MinWidth="0"
-                MinHeight="0">
-            <Button.Style>
-                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding Command, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="{x:Null}">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Button.Style>
-            <!-- With changes waiting on the server the glyph takes the accent and a dot sits on its corner, so
-                 the button reads as something to press rather than something that is always there. -->
-            <Grid>
-                <TextBlock Text="{Binding ActionIcon, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                           FontFamily="Segoe Fluent Icons"
-                           FontSize="12"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding HasPendingChanges, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
-                                    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
-                <Ellipse Width="6" Height="6"
-                         Margin="0 -3 -3 0"
-                         HorizontalAlignment="Right"
-                         VerticalAlignment="Top"
-                         Fill="{DynamicResource AccentFillColorDefaultBrush}"
-                         IsHitTestVisible="False"
-                         Visibility="{Binding HasPendingChanges, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}" />
-            </Grid>
-        </Button>
-
-        <Separator Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="3"
+        <Separator Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="2"
                    Foreground="{DynamicResource DividerStrokeColorDefaultBrush}"
                    Margin="4 4" />
 

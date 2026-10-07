@@ -1,13 +1,14 @@
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
-using ModsDude.Client.Wpf.Shell.Sidebar;
 using ModsDude.Client.Wpf.Shell.Navigation;
+using ModsDude.Client.Wpf.Shell.Sidebar;
 using ModsDude.Client.Wpf.Shell.Toasts;
 
 namespace ModsDude.Client.Wpf.Savegames;
@@ -17,7 +18,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// that may want this one.
 /// </remarks>
 public sealed class SavegameProfileActivation(
-    IProfileService profileService,
+    IProfileStore profileStore,
     IProfileApplyService applyService,
     IDriftMonitor driftMonitor,
     IShellNavigationService shellNavigation,
@@ -74,7 +75,7 @@ public sealed class SavegameProfileActivation(
             return;
         }
 
-        if (profileService.FindLive(repo.Id, savegame.ProfileId) is not ProfileDto profile)
+        if (profileStore.Find(repo.Id, savegame.ProfileId) is not Profile profile)
         {
             return;
         }
@@ -103,7 +104,7 @@ public sealed class SavegameProfileActivation(
     /// already scanned, where unrecognised mods can be imported instead of recycled. Asks nothing
     /// where the folder has none.
     /// </summary>
-    private async Task OfferModListReviewAsync(Repo repo, Game game, ProfileDto profile, CancellationToken cancellationToken)
+    private async Task OfferModListReviewAsync(Repo repo, Game game, Profile profile, CancellationToken cancellationToken)
     {
         // On the strip because planning reads and hashes the mod folder, between two modals.
         using var task = backgroundTasks.Begin($"Checking what '{profile.Name}' would change");

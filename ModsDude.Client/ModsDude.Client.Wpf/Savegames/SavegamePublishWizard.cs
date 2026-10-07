@@ -2,6 +2,7 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -49,7 +50,7 @@ public sealed class SavegamePublishWizard
     private readonly Guid? _preselectProfileId;
     private readonly ISavegameSlots _savegameSlots;
     private readonly IHeldSavegames _heldSavegames;
-    private readonly IProfileService _profileService;
+    private readonly IProfileStore _profileStore;
     private readonly ISyncManifestStore _manifestStore;
     private readonly ISavegameCheckInFlow _checkInFlow;
     private readonly IHeldSavegameNames _heldSavegameNames;
@@ -75,7 +76,7 @@ public sealed class SavegamePublishWizard
         IReadOnlyList<SavegameSlotOptionViewModel> slots,
         ISavegameSlots savegameSlots,
         IHeldSavegames heldSavegames,
-        IProfileService profileService,
+        IProfileStore profileStore,
         ISyncManifestStore manifestStore,
         ISavegameCheckInFlow checkInFlow,
         IHeldSavegameNames heldSavegameNames)
@@ -85,7 +86,7 @@ public sealed class SavegamePublishWizard
         _preselectProfileId = preselectProfileId;
         _savegameSlots = savegameSlots;
         _heldSavegames = heldSavegames;
-        _profileService = profileService;
+        _profileStore = profileStore;
         _manifestStore = manifestStore;
         _checkInFlow = checkInFlow;
         _heldSavegameNames = heldSavegameNames;
@@ -209,15 +210,11 @@ public sealed class SavegamePublishWizard
         int? appliedRevision,
         CancellationToken cancellationToken)
     {
-        // The repo's Saves page is reachable without ever having opened a profile.
-        if (_profileService.Profiles.Any(x => x.RepoId == _repo.Id) is false)
-        {
-            await _profileService.RefreshProfiles(_repo.Id, cancellationToken);
-        }
+        await _profileStore.EnsureLoadedAsync(_repo.Id, cancellationToken);
 
         var options = new List<SavegamePublishOption>();
 
-        foreach (var profile in _profileService.Profiles.Where(x => x.RepoId == _repo.Id).OrderBy(x => x.Name, NaturalOrder.Comparer))
+        foreach (var profile in _profileStore.Live(_repo.Id).OrderBy(x => x.Name, NaturalOrder.Comparer).ThenBy(x => x.Id))
         {
             options.Add(new SavegamePublishOption(
                 profile.Id,
@@ -239,7 +236,7 @@ public sealed class SavegamePublishWizard
         }
 
         var current = _game.ActiveProfile is ActiveProfile active
-            && _profileService.Profiles.FirstOrDefault(x => x.Id == active.ProfileId) is ProfileDto activeProfile
+            && _profileStore.Find(active.RepoId, active.ProfileId) is Profile activeProfile
                 ? $"'{_game.Name}' is on '{activeProfile.Name}'."
                 : $"'{_game.Name}' follows no profile.";
 

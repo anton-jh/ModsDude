@@ -41,7 +41,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 public partial class ProfilePageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly ProfileDto _profile;
+    private readonly Profile _profile;
     private readonly IProfileApplyService _applyService;
     private readonly IHeldSavegames _heldSavegames;
     private readonly IDriftMonitor _driftMonitor;
@@ -66,7 +66,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
     public ProfilePageViewModel(
         Repo repo,
-        ProfileDto profile,
+        Profile profile,
         NavigationManager navigationManager,
         IProfileApplyService applyService,
         IHeldSavegames heldSavegames,
@@ -642,7 +642,7 @@ public partial class ProfilePageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ProfilePageViewModel Create(Repo repo, ProfileDto profile)
+        public ProfilePageViewModel Create(Repo repo, Profile profile)
             => ActivatorUtilities.CreateInstance<ProfilePageViewModel>(serviceProvider, repo, profile);
     }
 }
