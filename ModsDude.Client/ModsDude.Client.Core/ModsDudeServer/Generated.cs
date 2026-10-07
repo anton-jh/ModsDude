@@ -4253,7 +4253,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<GetModsResponse> GetModsV1Async(System.Guid repoId, System.DateTime? updatedAfter = null, string? cursor = null, int? limit = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<GetModsResponse> GetModsV1Async(System.Guid repoId, long? after = null, int? limit = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -4343,7 +4343,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<GetModsResponse> GetModsV1Async(System.Guid repoId, System.DateTime? updatedAfter = null, string? cursor = null, int? limit = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<GetModsResponse> GetModsV1Async(System.Guid repoId, long? after = null, int? limit = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (repoId == null)
                 throw new System.ArgumentNullException("repoId");
@@ -4364,13 +4364,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(repoId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/mods");
                     urlBuilder_.Append('?');
-                    if (updatedAfter != null)
+                    if (after != null)
                     {
-                        urlBuilder_.Append(System.Uri.EscapeDataString("updatedAfter")).Append('=').Append(System.Uri.EscapeDataString(updatedAfter.Value.ToString("s", System.Globalization.CultureInfo.InvariantCulture))).Append('&');
-                    }
-                    if (cursor != null)
-                    {
-                        urlBuilder_.Append(System.Uri.EscapeDataString("cursor")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(cursor, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+                        urlBuilder_.Append(System.Uri.EscapeDataString("after")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(after, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
                     }
                     if (limit != null)
                     {
@@ -4409,16 +4405,6 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
                             return objectResponse_.Object;
-                        }
-                        else
-                        if (status_ == 400)
-                        {
-                            var objectResponse_ = await ReadObjectResponseAsync<CustomProblemDetails>(response_, headers_, cancellationToken).ConfigureAwait(false);
-                            if (objectResponse_.Object == null)
-                            {
-                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
-                            }
-                            throw new ApiException<CustomProblemDetails>("A server side error occurred.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 401)
@@ -11389,11 +11375,17 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     public partial record GetModsResponse
     {
 
+        [Newtonsoft.Json.JsonProperty("deleted", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Collections.Generic.ICollection<ModVersionRefDto> Deleted { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("hasMore", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public bool HasMore { get; set; } = default!;
+
         [Newtonsoft.Json.JsonProperty("mods", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Collections.Generic.ICollection<ModDto> Mods { get; set; } = default!;
 
-        [Newtonsoft.Json.JsonProperty("nextCursor", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public string? NextCursor { get; set; } = default!;
+        [Newtonsoft.Json.JsonProperty("sequence", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public long Sequence { get; set; } = default!;
 
     }
 
@@ -11682,6 +11674,18 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [Newtonsoft.Json.JsonProperty("before", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public string? Before { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial record ModVersionRefDto
+    {
+
+        [Newtonsoft.Json.JsonProperty("modId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string ModId { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("versionId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string VersionId { get; set; } = default!;
 
     }
 

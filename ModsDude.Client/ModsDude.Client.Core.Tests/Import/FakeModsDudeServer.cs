@@ -173,7 +173,8 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
         return Apply(identity, request.ContentHash, after, before, assertPlacement: true);
     }
 
-    public Task<GetModsResponse> GetModsV1Async(Guid repoId, DateTime? updatedAfter = null, string? cursor = null, int? limit = null, CancellationToken cancellationToken = default)
+    /// <summary>Everything, every time: nothing here is ever deleted, so the whole list is a correct answer to any read.</summary>
+    public Task<GetModsResponse> GetModsV1Async(Guid repoId, long? after = null, int? limit = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -184,7 +185,9 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
             return Task.FromResult(new GetModsResponse()
             {
                 Mods = [.. _registered.Values.SelectMany(x => x)],
-                NextCursor = null
+                Deleted = [],
+                Sequence = _journal.Count,
+                HasMore = false
             });
         }
     }

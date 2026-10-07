@@ -18,10 +18,10 @@ namespace ModsDude.Server.Api.Endpoints.Mods;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A resource of its own rather than a field on <see cref="ModDto"/>. The mod list is paginated and
-/// has a delta form keyed on <c>ModVersion.Updated</c>, and usage changes when a *profile* is
+/// A resource of its own rather than a field on <see cref="ModDto"/>. The mod list is a feed of
+/// changes to versions, and usage changes when a *profile* is
 /// edited, not when a version is. Putting it on the version would leave every incremental sync
-/// showing usage from whenever the row last moved — or force a restamp of every version a profile
+/// showing usage from whenever the row last changed — or force a change to every version a profile
 /// save touches, which for a profile of two thousand mods writes two thousand rows and turns the
 /// delta into a full listing. Two facts with different lifetimes, so two resources.
 /// </para>

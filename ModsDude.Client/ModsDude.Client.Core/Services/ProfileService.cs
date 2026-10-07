@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 
@@ -7,13 +8,9 @@ namespace ModsDude.Client.Core.Services;
 public class ProfileService(
     IProfilesClient profileClient,
     IModDependenciesClient modDependencyClient,
-    IModsClient modsClient)
+    IModStore modStore)
     : IProfileService
 {
-    /// <summary>Only ever walked to the end, so the page size is a round-trip count, not a UI concern.</summary>
-    private const int _modPageSize = 200;
-
-
     public async Task<ProfileDto?> FindProfile(Guid repoId, Guid profileId, CancellationToken cancellationToken)
     {
         try
@@ -121,20 +118,11 @@ public class ProfileService(
         Guid repoId, CancellationToken cancellationToken)
     {
         var byKey = new Dictionary<(ModKey, ModVersionKey), ModDto>();
-        string? cursor = null;
 
-        do
+        foreach (var mod in await modStore.GetAsync(repoId, cancellationToken))
         {
-            var page = await modsClient.GetModsV1Async(repoId, null, cursor, _modPageSize, cancellationToken);
-
-            foreach (var mod in page.Mods)
-            {
-                byKey[(ModKey.From(mod.ModId), ModVersionKey.From(mod.VersionId))] = mod;
-            }
-
-            cursor = page.NextCursor;
+            byKey[(ModKey.From(mod.ModId), ModVersionKey.From(mod.VersionId))] = mod;
         }
-        while (string.IsNullOrEmpty(cursor) is false);
 
         return byKey;
     }

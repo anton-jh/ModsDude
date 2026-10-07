@@ -6,6 +6,7 @@ using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 
@@ -14,7 +15,7 @@ namespace ModsDude.Client.Core.Sync;
 /// <summary>Works out what an apply would do to one mod folder, without changing anything.</summary>
 internal sealed class ModSyncPlanBuilder(
     IModDependenciesClient modDependenciesClient,
-    IModsClient modsClient,
+    IModStore modStore,
     IContentStoreProvider storeProvider,
     ISyncManifestStore manifestStore,
     IHeldSavegames heldSavegames,
@@ -22,9 +23,6 @@ internal sealed class ModSyncPlanBuilder(
     IGameRunningGuard runningGuard,
     ILogger logger)
 {
-    /// <summary>Matches the import's, since the repo is expected to hold thousands of versions.</summary>
-    private const int _registeredPageSize = 500;
-
 
     /// <param name="progress">
     /// Where to report which mod is being examined. Optional, and worth passing: on a folder whose
@@ -602,21 +600,12 @@ internal sealed class ModSyncPlanBuilder(
     {
         var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        string? cursor = null;
 
-        do
+        foreach (var mod in await modStore.GetAsync(repoId, cancellationToken))
         {
-            var page = await modsClient.GetModsV1Async(repoId, null, cursor, _registeredPageSize, cancellationToken);
-
-            foreach (var mod in page.Mods)
-            {
-                hashes.Add(mod.ContentHash);
-                names.TryAdd(mod.ContentHash, mod.DisplayName);
-            }
-
-            cursor = page.NextCursor;
+            hashes.Add(mod.ContentHash);
+            names.TryAdd(mod.ContentHash, mod.DisplayName);
         }
-        while (string.IsNullOrEmpty(cursor) is false);
 
         return new RegisteredContent(hashes) { Names = names };
     }

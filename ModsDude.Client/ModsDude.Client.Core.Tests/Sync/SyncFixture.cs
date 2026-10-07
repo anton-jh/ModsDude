@@ -3,8 +3,10 @@ using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Tests.GameProcesses;
+using ModsDude.Client.Core.Tests.Stores;
 
 namespace ModsDude.Client.Core.Tests.Sync;
 
@@ -53,7 +55,7 @@ internal sealed class SyncFixture : IDisposable
 
         Service = new ModSyncService(
             Server,
-            Server,
+            new ModStore(Server, InlineStoreDispatcher.Instance, NullLogger<ModStore>.Instance),
             Server,
             Downloader,
             new FakeStoreProvider(ServingStore, OtherStore),

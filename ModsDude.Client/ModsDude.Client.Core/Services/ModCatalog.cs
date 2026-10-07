@@ -4,6 +4,7 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using TargetRead = System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<ModsDude.Client.Core.Models.LocalMod>>>;
 
@@ -36,15 +37,10 @@ public sealed class ModCatalog : IDisposable
     /// </summary>
     private static readonly TimeSpan _scanDelay = TimeSpan.FromMilliseconds(150);
 
-    /// <summary>
-    /// The stated target is thousands of registered versions per repo, so the mod list is walked a
-    /// page at a time rather than assumed to arrive whole.
-    /// </summary>
-    private const int _pageSize = 500;
-
     private readonly Repo _repo;
     private readonly IBaseModAdapter _modAdapter;
     private readonly IModsClient _modsClient;
+    private readonly IModStore _modStore;
     private readonly ILogger<ModCatalog> _logger;
 
     private readonly CancellationTokenSource _cancellation = new();
@@ -69,21 +65,19 @@ public sealed class ModCatalog : IDisposable
     /// <summary>Every loaded source, enabled or on standby. See <see cref="ModSourceState"/>.</summary>
     private readonly HashSet<ModSourceId> _loadedSources = [];
 
-    /// <summary>Registered versions accumulated across delta fetches, keyed by their join key.</summary>
-    private readonly Dictionary<ModVersionIdentity, ModDto> _registered = [];
-
     private Task<IReadOnlyList<ModDto>>? _registeredLoad;
-    private DateTime? _registeredThrough;
     private Task<IReadOnlyDictionary<ModVersionIdentity, ModUsage>>? _usageLoad;
 
 
     public ModCatalog(
         Repo repo,
         IModsClient modsClient,
+        IModStore modStore,
         ILogger<ModCatalog> logger)
     {
         _repo = repo;
         _modsClient = modsClient;
+        _modStore = modStore;
         _logger = logger;
         _modAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()?.Invoke()
             ?? throw UserFriendlyException.RepoNoModSupport();
@@ -295,27 +289,12 @@ public sealed class ModCatalog : IDisposable
         return dropped;
     }
 
-    /// <summary>
-    /// Fetches whatever the repo has registered since the last read. Correct after an import, which
-    /// only ever adds - a version deleted on the server is invisible to a delta and needs
-    /// <see cref="ReloadRegisteredMods"/>.
-    /// </summary>
+    /// <summary>Reads what the repo has registered again on the next <see cref="GetAsync"/>.</summary>
     public void RefreshRegisteredMods()
     {
         lock (_lock)
         {
             _registeredLoad = null;
-        }
-    }
-
-    public void ReloadRegisteredMods()
-    {
-        lock (_lock)
-        {
-            _registeredLoad = null;
-            _registeredThrough = null;
-            _registered.Clear();
-            _usageLoad = null;
         }
     }
 
@@ -466,51 +445,8 @@ public sealed class ModCatalog : IDisposable
         }
     }
 
-    private async Task<IReadOnlyList<ModDto>> LoadRegisteredModsAsync()
-    {
-        DateTime? since;
-
-        lock (_lock)
-        {
-            since = _registeredThrough;
-        }
-
-        var fetched = new List<ModDto>();
-        var latest = since;
-        string? cursor = null;
-
-        do
-        {
-            var page = await _modsClient.GetModsV1Async(_repo.Id, since, cursor, _pageSize, _cancellation.Token);
-
-            foreach (var dto in page.Mods)
-            {
-                fetched.Add(dto);
-
-                if (latest is null || dto.Updated > latest)
-                {
-                    latest = dto.Updated;
-                }
-            }
-
-            cursor = page.NextCursor;
-        }
-        while (string.IsNullOrEmpty(cursor) is false);
-
-        // Folded in at the end rather than as the pages arrive, so a reload requested mid-fetch
-        // clears a set this task is not still writing to.
-        lock (_lock)
-        {
-            foreach (var dto in fetched)
-            {
-                _registered[GetIdentity(dto)] = dto;
-            }
-
-            _registeredThrough = latest;
-
-            return [.. _registered.Values];
-        }
-    }
+    private Task<IReadOnlyList<ModDto>> LoadRegisteredModsAsync()
+        => _modStore.GetAsync(_repo.Id, _cancellation.Token);
 
     private Task<IReadOnlyDictionary<ModVersionIdentity, ModUsage>> GetOrStartUsageLoad()
     {
@@ -669,9 +605,10 @@ public sealed class ModCatalog : IDisposable
 
     public class Factory(
         IModsClient modsClient,
+        IModStore modStore,
         ILogger<ModCatalog> logger)
     {
-        public ModCatalog Create(Repo repo) => new(repo, modsClient, logger);
+        public ModCatalog Create(Repo repo) => new(repo, modsClient, modStore, logger);
     }
 }
 

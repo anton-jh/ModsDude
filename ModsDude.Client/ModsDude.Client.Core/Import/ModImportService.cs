@@ -1,11 +1,12 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Imagery;
-using ModsDude.Client.Core.Models;
-using ModsDude.Client.Core.Sync;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.ModVersions;
+using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Mods;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Sync;
 using PlannedPlacement = ModsDude.Client.Core.ModVersions.ModVersionPlacement;
 using ServerPlacement = ModsDude.Client.Core.ModsDudeServer.Generated.ModVersionPlacement;
 
@@ -38,6 +39,7 @@ namespace ModsDude.Client.Core.Import;
 public sealed class ModImportService(
     IFilesClient filesClient,
     IModsClient modsClient,
+    IModStore modStore,
     IModFileUploader uploader,
     IModImagePublisher imagePublisher,
     IRecycleBin recycleBin,
@@ -46,7 +48,7 @@ public sealed class ModImportService(
 {
     public Task<ModImportResult> ImportAsync(ModImportRequest request, CancellationToken cancellationToken)
     {
-        return new ImportRun(filesClient, modsClient, uploader, imagePublisher, storeProvider, request, logger).RunAsync(cancellationToken);
+        return new ImportRun(filesClient, modsClient, modStore, uploader, imagePublisher, storeProvider, request, logger).RunAsync(cancellationToken);
     }
 
     public int RecycleSuperseded(IReadOnlyList<ModSupersededFile> superseded)
@@ -97,15 +99,13 @@ public sealed class ModImportService(
     private sealed class ImportRun(
         IFilesClient filesClient,
         IModsClient modsClient,
+        IModStore modStore,
         IModFileUploader uploader,
         IModImagePublisher imagePublisher,
         IContentStoreProvider storeProvider,
         ModImportRequest request,
         ILogger logger)
     {
-        /// <summary>Matches the catalog's: the repo is expected to hold thousands of versions.</summary>
-        private const int _pageSize = 500;
-
         private readonly SemaphoreSlim _mods = new(Math.Max(1, request.MaxConcurrentMods));
         private readonly SemaphoreSlim _refetch = new(1, 1);
         private readonly Lock _results = new();
@@ -830,9 +830,8 @@ public sealed class ModImportService(
 
             try
             {
-                // Several mods can lose the race at once, and one walk of the mod list answers all
-                // of them - so a caller arriving behind somebody else's refetch takes that result
-                // rather than paging the whole repo again.
+                // Several mods can lose the race at once, and one read answers all of them - so a
+                // caller arriving behind somebody else's refetch takes that result.
                 if (ReferenceEquals(_registered, stale) is false)
                 {
                     return _registered;
@@ -846,26 +845,8 @@ public sealed class ModImportService(
             }
         }
 
-        /// <remarks>
-        /// The whole list, because there is no endpoint that answers "the versions of this one mod"
-        /// - and the first fetch is needed in full anyway to plan the batch.
-        /// </remarks>
         private async Task<RegisteredVersions> FetchRegisteredAsync(CancellationToken cancellationToken)
-        {
-            var mods = new List<ModDto>();
-            string? cursor = null;
-
-            do
-            {
-                var page = await modsClient.GetModsV1Async(request.RepoId, null, cursor, _pageSize, cancellationToken);
-
-                mods.AddRange(page.Mods);
-                cursor = page.NextCursor;
-            }
-            while (string.IsNullOrEmpty(cursor) is false);
-
-            return RegisteredVersions.From(mods);
-        }
+            => RegisteredVersions.From(await modStore.GetAsync(request.RepoId, cancellationToken));
 
 
         /// <summary>

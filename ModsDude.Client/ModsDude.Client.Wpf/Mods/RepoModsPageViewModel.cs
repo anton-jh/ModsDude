@@ -509,13 +509,10 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     private Task<bool> GoToRevisionAsync(Guid profileId, int revision)
         => _shellNavigation.GoToProfileHistoryAsync(_repo.Id, profileId, revision);
 
-    /// <summary>
-    /// A delta fetch only ever adds, so a version that has just been deleted is invisible to one -
-    /// which is exactly the change that was made.
-    /// </summary>
     private async Task ReloadAfterServerChangeAsync()
     {
-        _catalog.ReloadRegisteredMods();
+        _catalog.RefreshRegisteredMods();
+        _catalog.RefreshUsage();
 
         await ReloadAsync();
     }

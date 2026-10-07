@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Persistence.Changes;
 
 namespace ModsDude.Server.Persistence.EntityTypeConfigurations;
 internal class ModVersionEntityTypeConfiguration : IEntityTypeConfiguration<ModVersion>
@@ -28,9 +29,9 @@ internal class ModVersionEntityTypeConfiguration : IEntityTypeConfiguration<ModV
 
         builder.ConfigureDeletionSchedule(x => x.DeletionScheduledFor, x => x.DeletionReason);
 
-        // Backs the delta form of the mod list, which orders by Updated inside a repo and resumes
-        // from a timestamp. Without it the endpoint that exists to make repeated syncs cheap sorts
-        // every version in the repo on every page.
-        builder.HasIndex(x => new { x.RepoId, x.Updated, x.ModId, x.Id });
+        // Stamped by the database on every insert and update - see RepoChangeCounter. Unique within a
+        // repo, which is what lets the change feed page on it alone.
+        builder.Property<long>(ModChanges.SequenceColumn).ValueGeneratedOnAddOrUpdate();
+        builder.HasIndex(nameof(ModVersion.RepoId), ModChanges.SequenceColumn).IsUnique();
     }
 }

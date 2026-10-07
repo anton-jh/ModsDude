@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Import;
-using ModsDude.Client.Core.Models;
-using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.ModVersions;
+using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Mods;
+using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Tests.Stores;
 using ModsDude.Client.Core.Tests.Sync;
 using System.Text;
 using static ModsDude.Client.Core.Tests.Keys;
@@ -31,7 +33,12 @@ public class ModImportServiceTests : IDisposable
         _uploader = new FakeModFileUploader(_server);
         _store = new ContentStore(@"C:\", _temp.CreateSubdirectory("store"), long.MaxValue);
         _service = new ModImportService(
-            _server, _server, _uploader, _imagery, _recycleBin,
+            _server,
+            _server,
+            new ModStore(_server, InlineStoreDispatcher.Instance, NullLogger<ModStore>.Instance),
+            _uploader,
+            _imagery,
+            _recycleBin,
             new FakeStoreProvider(_store),
             NullLogger<ModImportService>.Instance);
     }

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.GameProcesses;
+using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 
@@ -23,7 +24,7 @@ namespace ModsDude.Client.Core.Sync;
 /// </remarks>
 public sealed class ModSyncService(
     IModDependenciesClient modDependenciesClient,
-    IModsClient modsClient,
+    IModStore modStore,
     IFilesClient filesClient,
     IModFileDownloader downloader,
     IContentStoreProvider storeProvider,
@@ -40,7 +41,7 @@ public sealed class ModSyncService(
     : IModSyncService
 {
     private readonly ModSyncPlanBuilder _planBuilder = new(
-        modDependenciesClient, modsClient, storeProvider, manifestStore, heldSavegames, fileEditor, runningGuard, logger);
+        modDependenciesClient, modStore, storeProvider, manifestStore, heldSavegames, fileEditor, runningGuard, logger);
 
     private readonly ModFetcher _fetcher = new(filesClient, downloader, logger);
 

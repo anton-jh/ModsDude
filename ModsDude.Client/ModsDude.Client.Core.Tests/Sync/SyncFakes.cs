@@ -155,9 +155,10 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     /// <summary>How many times the repo's mod list was asked for - the fetch a re-apply should never pay for.</summary>
     public int ModListFetches => Volatile.Read(ref _modListFetches);
 
-    public Task<GetModsResponse> GetModsV1Async(Guid repoId, DateTime? updatedAfter = null, string? cursor = null, int? limit = null, CancellationToken cancellationToken = default)
+    /// <summary>Everything, every time: nothing here is ever deleted, so the whole list is a correct answer to any read.</summary>
+    public Task<GetModsResponse> GetModsV1Async(Guid repoId, long? after = null, int? limit = null, CancellationToken cancellationToken = default)
     {
-        Interlocked.Increment(ref _modListFetches);
+        var fetches = Interlocked.Increment(ref _modListFetches);
 
         if (_refusedRepos.Contains(repoId))
         {
@@ -166,7 +167,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
 
         IEnumerable<ModDto> registered = repoId == RepoId ? _registered : _otherRepos.GetValueOrDefault(repoId) ?? [];
 
-        return Task.FromResult(new GetModsResponse { Mods = [.. registered], NextCursor = null });
+        return Task.FromResult(new GetModsResponse { Mods = [.. registered], Deleted = [], Sequence = fetches, HasMore = false });
     }
 
     public Task<CreateModDownloadLinkResponse> CreateModDownloadLinkV1Async(CreateModDownloadLinkRequest request, CancellationToken cancellationToken = default)

@@ -547,15 +547,24 @@
       "GetModsResponse": {
         "additionalProperties": false,
         "properties": {
+          "deleted": {
+            "items": {
+              "$ref": "#/components/schemas/ModVersionRefDto"
+            },
+            "type": "array"
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
           "mods": {
             "items": {
               "$ref": "#/components/schemas/ModDto"
             },
             "type": "array"
           },
-          "nextCursor": {
-            "nullable": true,
-            "type": "string"
+          "sequence": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -887,6 +896,18 @@
           },
           "before": {
             "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModVersionRefDto": {
+        "additionalProperties": false,
+        "properties": {
+          "modId": {
+            "type": "string"
+          },
+          "versionId": {
             "type": "string"
           }
         },
@@ -3750,22 +3771,13 @@
           },
           {
             "in": "query",
-            "name": "updatedAfter",
+            "name": "after",
             "schema": {
-              "format": "date-time",
+              "format": "int64",
               "nullable": true,
-              "type": "string"
+              "type": "integer"
             },
             "x-position": 2
-          },
-          {
-            "in": "query",
-            "name": "cursor",
-            "schema": {
-              "nullable": true,
-              "type": "string"
-            },
-            "x-position": 3
           },
           {
             "in": "query",
@@ -3775,7 +3787,7 @@
               "nullable": true,
               "type": "integer"
             },
-            "x-position": 4
+            "x-position": 3
           }
         ],
         "responses": {
@@ -3784,16 +3796,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GetModsResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomProblemDetails"
                 }
               }
             },

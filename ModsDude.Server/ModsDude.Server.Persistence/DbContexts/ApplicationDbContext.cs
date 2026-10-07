@@ -11,6 +11,7 @@ using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Statistics;
 using ModsDude.Server.Domain.Users;
+using ModsDude.Server.Persistence.Changes;
 using ModsDude.Server.Persistence.Extensions;
 
 namespace ModsDude.Server.Persistence.DbContexts;
@@ -25,6 +26,8 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<ProfileRevision> ProfileRevisions { get; init; }
     public required DbSet<ProfileIgnoredMod> ProfileIgnoredMods { get; init; }
     public required DbSet<ModVersion> ModVersions { get; init; }
+    public required DbSet<ModVersionDeletion> ModVersionDeletions { get; init; }
+    public required DbSet<RepoChangeCounter> RepoChangeCounters { get; init; }
     public required DbSet<Savegame> Savegames { get; init; }
     public required DbSet<SavegameSnapshot> SavegameSnapshots { get; init; }
     public required DbSet<SavegameCheckout> SavegameCheckouts { get; init; }

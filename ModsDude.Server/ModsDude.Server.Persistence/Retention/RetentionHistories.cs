@@ -206,11 +206,7 @@ internal static class RetentionHistories
         }
     }
 
-    /// <param name="timestamp">
-    /// What <see cref="ModVersion.Updated"/> moves to. A version is the one row here a client caches
-    /// through a delta feed ordered by that column, so a schedule that did not move it would never
-    /// reach a client that already holds the version.
-    /// </param>
+    /// <param name="timestamp">What <see cref="ModVersion.Updated"/> moves to.</param>
     public static async Task ApplyModAsync(
         ApplicationDbContext dbContext,
         RepoId repoId, ModId modId,

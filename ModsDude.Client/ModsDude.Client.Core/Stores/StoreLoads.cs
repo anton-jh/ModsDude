@@ -139,34 +139,41 @@ public sealed class StoreLoads<TKey>(IStoreDispatcher dispatcher, ILogger logger
         long epoch,
         CancellationToken lifetime)
     {
+        Exception? failure = null;
+
         try
         {
             await RunReadAsync(key, read, apply, epoch, lifetime);
         }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
-        {
-            slot.TrySetCanceled(lifetime);
-
-            return;
-        }
         catch (Exception exception)
         {
-            slot.TrySetException(exception);
-
-            return;
+            failure = exception;
         }
-        finally
+
+        // Out of the running set before anybody learns how it ended, so a caller reacting to the
+        // outcome starts a new read rather than joining this finished one.
+        lock (_lock)
         {
-            lock (_lock)
+            if (_running.TryGetValue(key, out var current) && current == slot.Task)
             {
-                if (_running.TryGetValue(key, out var current) && current == slot.Task)
-                {
-                    _running.Remove(key);
-                }
+                _running.Remove(key);
             }
         }
 
-        slot.TrySetResult();
+        switch (failure)
+        {
+            case null:
+                slot.TrySetResult();
+                break;
+
+            case OperationCanceledException when lifetime.IsCancellationRequested:
+                slot.TrySetCanceled(lifetime);
+                break;
+
+            default:
+                slot.TrySetException(failure);
+                break;
+        }
     }
 
     private async Task RunReadAsync<T>(

@@ -9,6 +9,7 @@ using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Extensions;
 using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Imagery;
+using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.Notices;
 using ModsDude.Client.Core.Persistence;
@@ -24,18 +25,19 @@ using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Account;
 using ModsDude.Client.Wpf.Friends;
 using ModsDude.Client.Wpf.Games;
+using ModsDude.Client.Wpf.Mods;
 using ModsDude.Client.Wpf.Mods.Imaging;
 using ModsDude.Client.Wpf.Mods.Import;
-using ModsDude.Client.Wpf.Mods;
-using ModsDude.Client.Wpf.Profiles.Editor;
 using ModsDude.Client.Wpf.Profiles;
+using ModsDude.Client.Wpf.Profiles.Editor;
+using ModsDude.Client.Wpf.Repos;
 using ModsDude.Client.Wpf.Repos.Archive;
 using ModsDude.Client.Wpf.Repos.Members;
-using ModsDude.Client.Wpf.Repos;
 using ModsDude.Client.Wpf.Savegames;
 using ModsDude.Client.Wpf.Settings;
-using ModsDude.Client.Wpf.Shared.Behaviors;
 using ModsDude.Client.Wpf.Shared;
+using ModsDude.Client.Wpf.Shared.Behaviors;
+using ModsDude.Client.Wpf.Shell;
 using ModsDude.Client.Wpf.Shell.AccountBlock;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Diagnostics;
@@ -45,7 +47,6 @@ using ModsDude.Client.Wpf.Shell.Notices;
 using ModsDude.Client.Wpf.Shell.Toasts;
 using ModsDude.Client.Wpf.Shell.Tray;
 using ModsDude.Client.Wpf.Shell.Updates;
-using ModsDude.Client.Wpf.Shell;
 using System.IO;
 using System.Windows;
 
@@ -671,6 +672,7 @@ public partial class App : Application
 
         services.AddSingleton<IRepoStore, RepoStore>();
         services.AddSingleton<IProfileStore, ProfileStore>();
+        services.AddSingleton<IModStore, ModStore>();
         services.AddSingleton<IProfileService, ProfileService>();
         services.AddSingleton<IMembershipService, MembershipService>();
         services.AddSingleton<IInviteService, InviteService>();
@@ -695,6 +697,7 @@ public partial class App : Application
         // describes this machine's game installations and survives the switch - see IUserScopedState.
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IRepoStore>());
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IProfileStore>());
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IModStore>());
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<ICurrentUserStore>());
 
         // The same object again, for the one fact the drift check needs of it: which revision each
