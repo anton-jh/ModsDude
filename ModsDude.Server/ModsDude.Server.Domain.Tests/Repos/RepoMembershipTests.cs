@@ -165,16 +165,16 @@ public class RepoMembershipTests
     public void Every_membership_change_moves_the_revision_on()
     {
         var repo = CreateRepo();
-        var revisions = new List<int> { repo.MembershipRevision };
+        var revisions = new List<int> { repo.MembersVersion };
 
         repo.AddMember(_other, RepoMembershipLevel.Guest);
-        revisions.Add(repo.MembershipRevision);
+        revisions.Add(repo.MembersVersion);
 
         repo.UpdateMembershipLevel(_other.Id, RepoMembershipLevel.Member);
-        revisions.Add(repo.MembershipRevision);
+        revisions.Add(repo.MembersVersion);
 
         repo.KickMember(_other.Id);
-        revisions.Add(repo.MembershipRevision);
+        revisions.Add(repo.MembersVersion);
 
         Assert.Equal(revisions.Distinct().Count(), revisions.Count);
     }
@@ -184,23 +184,23 @@ public class RepoMembershipTests
     {
         var repo = CreateRepo();
         repo.AddMember(_other, RepoMembershipLevel.Member);
-        var before = repo.MembershipRevision;
+        var before = repo.MembersVersion;
 
         repo.UpdateMembershipLevel(_other.Id, RepoMembershipLevel.Member);
 
-        Assert.Equal(before, repo.MembershipRevision);
+        Assert.Equal(before, repo.MembersVersion);
     }
 
     [Fact]
     public void A_refused_change_leaves_the_revision_alone()
     {
         var repo = CreateRepo();
-        var before = repo.MembershipRevision;
+        var before = repo.MembersVersion;
 
         Assert.Throws<DomainValidationException>(() => repo.KickMember(_creator.Id));
         Assert.Throws<DomainValidationException>(() => repo.UpdateMembershipLevel(_creator.Id, RepoMembershipLevel.Member));
 
-        Assert.Equal(before, repo.MembershipRevision);
+        Assert.Equal(before, repo.MembersVersion);
     }
 
 

@@ -18,7 +18,7 @@ internal class TrustCodeEntityTypeConfiguration : IEntityTypeConfiguration<Trust
 
         // Two users redeeming one code at the same moment: the second write loses instead of both
         // becoming trusted.
-        builder.Property<uint>("xmin").IsRowVersion();
+        builder.Property(x => x.Version).IsConcurrencyToken();
 
         builder.HasOne<User>().WithMany().HasForeignKey(x => x.RedeemedBy).OnDelete(DeleteBehavior.Restrict);
 

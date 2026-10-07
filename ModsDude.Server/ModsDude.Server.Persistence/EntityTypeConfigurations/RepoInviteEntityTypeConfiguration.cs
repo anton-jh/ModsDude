@@ -22,7 +22,7 @@ internal class RepoInviteEntityTypeConfiguration : IEntityTypeConfiguration<Repo
 
         // Two people redeeming the last use of a capped invite at the same moment would otherwise
         // both read Uses, both write Uses + 1, and both get in. The second write loses instead.
-        builder.Property<uint>("xmin").IsRowVersion();
+        builder.Property(x => x.Version).IsConcurrencyToken();
 
         builder.HasOne<Repo>().WithMany().HasForeignKey(x => x.RepoId).OnDelete(DeleteBehavior.Cascade);
     }

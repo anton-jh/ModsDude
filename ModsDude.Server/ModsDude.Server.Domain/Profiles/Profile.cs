@@ -22,7 +22,19 @@ public class Profile(
     public ProfileId Id { get; init; } = new(Guid.NewGuid());
     public RepoId RepoId { get; } = repoId;
 
-    public ProfileName Name { get; set; } = name;
+    public ProfileName Name { get; private set; } = name;
+
+    /// <summary>
+    /// Counts changes to its name and to whether it is archived. A concurrency token, and what a client
+    /// sends back to say which version its change was made against.
+    /// </summary>
+    public int Version { get; private set; }
+
+    /// <summary>
+    /// Counts changes to the mods it ignores, which are their own list with their own editor - so a rename
+    /// does not make an ignored-mods change look stale, nor the other way round.
+    /// </summary>
+    public int IgnoredModsVersion { get; private set; }
     public DateTime Created { get; } = created;
 
     /// <summary>
@@ -43,9 +55,32 @@ public class Profile(
     /// following it - an instance, a savegame - goes on following it; it is only out of the lists.
     /// Idempotent, and it does not restamp.
     /// </summary>
+    public void Rename(ProfileName name)
+    {
+        if (Name == name)
+        {
+            return;
+        }
+
+        Name = name;
+        Version++;
+    }
+
+    /// <summary>Records that the list of mods it ignores was replaced.</summary>
+    public void NoteIgnoredModsReplaced()
+    {
+        IgnoredModsVersion++;
+    }
+
     public void Archive(DateTime now)
     {
-        ArchivedAt ??= now;
+        if (ArchivedAt is not null)
+        {
+            return;
+        }
+
+        ArchivedAt = now;
+        Version++;
     }
 
     /// <summary>
@@ -60,6 +95,7 @@ public class Profile(
         }
 
         ArchivedAt = null;
+        Version++;
     }
 
 

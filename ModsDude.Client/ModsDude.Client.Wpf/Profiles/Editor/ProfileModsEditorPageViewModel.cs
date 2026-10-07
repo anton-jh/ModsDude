@@ -76,6 +76,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private IReadOnlyDictionary<ModKey, SavedPinDate> _savedDates = new Dictionary<ModKey, SavedPinDate>();
     private ModSearchQuery _searchQuery = ModSearchQuery.Empty;
     private int _basedOn;
+    private int _ignoredVersion;
     private int _recomposeGeneration;
     private bool _skipApplyOnce;
     private ProfileSaveRun? _markedRun;
@@ -840,6 +841,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             [.. _state.Pinned.Where(x => x.Pin is not null).Select(x => x.Pin!)],
             [.. draft.SavedIgnored],
             [.. draft.IgnoredToWrite],
+            _ignoredVersion,
             [.. pending.Select(x => x.Version)],
             pending.ToDictionary(x => x.Version.Identity, x => x.Version.Name),
             _catalog,
@@ -1242,6 +1244,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             await OnUiThreadAsync(() =>
             {
                 _basedOn = modList.Revision;
+                _ignoredVersion = ignored.Version;
                 _markedRun = null;
                 _savedDates = modList.Dependencies.ToDictionary(
                     x => ModKey.From(x.ModId),

@@ -39,11 +39,11 @@ public class GetArchivedProfilesV1Endpoint : IEndpoint
             // several archived profiles may share a name, and it is the only thing telling them apart.
             .OrderByDescending(x => x.ArchivedAt)
             .ThenBy(x => x.Name)
-            .Select(x => new { x.Id, x.RepoId, x.Name, x.HeadRevision, x.ArchivedAt })
+            .Select(x => new { x.Id, x.RepoId, x.Name, x.HeadRevision, x.ArchivedAt, x.Version })
             .ToListAsync(cancellationToken);
 
         var dtos = profiles.Select(x => new ProfileDto(
-            x.Id.Value, x.RepoId.Value, x.Name.Value, x.HeadRevision.Value, x.ArchivedAt));
+            x.Id.Value, x.RepoId.Value, x.Name.Value, x.HeadRevision.Value, x.ArchivedAt, x.Version));
 
         return TypedResults.Ok(dtos);
     }

@@ -71,7 +71,7 @@ public class RepoMembershipConcurrencyTests(DatabaseFixture fixture)
         using (var dbContext = fixture.CreateDbContext())
         {
             var repo = (await dbContext.Repos.GetAsync(repoId, CancellationToken.None))!;
-            before = repo.MembershipRevision;
+            before = repo.MembersVersion;
 
             repo.UpdateMembershipLevel(first, RepoMembershipLevel.Guest);
             await dbContext.SaveChangesAsync(CancellationToken.None);
@@ -79,7 +79,7 @@ public class RepoMembershipConcurrencyTests(DatabaseFixture fixture)
 
         using var verification = fixture.CreateDbContext();
 
-        Assert.NotEqual(before, (await verification.Repos.GetAsync(repoId, CancellationToken.None))!.MembershipRevision);
+        Assert.NotEqual(before, (await verification.Repos.GetAsync(repoId, CancellationToken.None))!.MembersVersion);
     }
 
 

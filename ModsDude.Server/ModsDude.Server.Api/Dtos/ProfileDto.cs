@@ -12,8 +12,9 @@ namespace ModsDude.Server.Api.Dtos;
 /// which list it arrived in, because several archived profiles may share a name and this is the only
 /// thing telling them apart.
 /// </param>
-public record ProfileDto(Guid Id, Guid RepoId, string Name, int HeadRevision, DateTime? ArchivedAt)
+/// <param name="Version">What a rename sends back, to say which profile it was made against.</param>
+public record ProfileDto(Guid Id, Guid RepoId, string Name, int HeadRevision, DateTime? ArchivedAt, int Version)
 {
     public static ProfileDto FromModel(Profile profile)
-        => new(profile.Id.Value, profile.RepoId.Value, profile.Name.Value, profile.HeadRevision.Value, profile.ArchivedAt);
+        => new(profile.Id.Value, profile.RepoId.Value, profile.Name.Value, profile.HeadRevision.Value, profile.ArchivedAt, profile.Version);
 }

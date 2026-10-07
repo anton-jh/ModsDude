@@ -31,6 +31,9 @@ public class TrustCode
     public DateTime? RedeemedAt { get; private set; }
     public DateTime? RevokedAt { get; private set; }
 
+    /// <summary>Counts changes. A concurrency token, so two redemptions cannot both be saved.</summary>
+    public int Version { get; private set; }
+
     public DateTime ExpiresAt => Created + Lifetime;
 
 
@@ -68,6 +71,7 @@ public class TrustCode
 
         RedeemedBy = user.Id;
         RedeemedAt = now;
+        Version++;
         user.GrantTrust();
     }
 
@@ -79,7 +83,13 @@ public class TrustCode
             throw new DomainValidationException($"Trust code '{Id.Value}' has been redeemed and cannot be revoked.");
         }
 
-        RevokedAt ??= now;
+        if (RevokedAt is not null)
+        {
+            return;
+        }
+
+        RevokedAt = now;
+        Version++;
     }
 }
 

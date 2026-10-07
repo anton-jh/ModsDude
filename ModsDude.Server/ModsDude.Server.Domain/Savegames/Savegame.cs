@@ -55,7 +55,13 @@ public class Savegame : IArchivable
     public SavegameId Id { get; init; } = new(Guid.NewGuid());
     public RepoId RepoId { get; private set; }
 
-    public SavegameName Name { get; set; }
+    public SavegameName Name { get; private set; }
+
+    /// <summary>
+    /// Counts changes to its name and to whether it is archived. A concurrency token, and what a client
+    /// sends back to say which version its change was made against.
+    /// </summary>
+    public int Version { get; private set; }
 
     /// <summary>
     /// The profile this save follows, or <c>null</c> where it follows none. Decided when the save is
@@ -83,9 +89,26 @@ public class Savegame : IArchivable
     /// a shared save must not quietly release somebody's hold on it. Idempotent, and it does not
     /// restamp.
     /// </summary>
+    public void Rename(SavegameName name)
+    {
+        if (Name == name)
+        {
+            return;
+        }
+
+        Name = name;
+        Version++;
+    }
+
     public void Archive(DateTime now)
     {
-        ArchivedAt ??= now;
+        if (ArchivedAt is not null)
+        {
+            return;
+        }
+
+        ArchivedAt = now;
+        Version++;
     }
 
     /// <summary>
@@ -100,6 +123,7 @@ public class Savegame : IArchivable
         }
 
         ArchivedAt = null;
+        Version++;
     }
 
 

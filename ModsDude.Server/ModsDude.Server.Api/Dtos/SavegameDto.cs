@@ -28,6 +28,7 @@ namespace ModsDude.Server.Api.Dtos;
 /// needs to read.
 /// </param>
 /// <param name="SnapshotCount">How many snapshots the savegame has now - pruning is what takes it down.</param>
+/// <param name="Version">What a rename sends back, to say which savegame it was made against.</param>
 /// <param name="TotalSizeBytes">
 /// What storage holds for them, counted per blob: snapshots with the same content hash are one blob - a
 /// restore copies an old snapshot forward under the hash it already had - and are counted once.
@@ -43,7 +44,8 @@ public record SavegameDto(
     SavegameCheckoutDto? Checkout,
     DateTime? ArchivedAt,
     int SnapshotCount,
-    long TotalSizeBytes);
+    long TotalSizeBytes,
+    int Version);
 
 
 /// <summary>

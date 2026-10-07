@@ -132,7 +132,7 @@
                                                 <form method="post" asp-page-handler="SetLevel" class="toolbar">
                                                     <input type="hidden" name="repoId" value="@repo.Id">
                                                     <input type="hidden" name="userId" value="@member.UserId">
-                                                    <input type="hidden" name="revision" value="@repo.MembershipRevision">
+                                                    <input type="hidden" name="revision" value="@repo.MembersVersion">
                                                     <select name="level" aria-label="Level">
                                                         @foreach (var level in Enum.GetValues<RepoMembershipLevel>())
                                                         {
@@ -146,7 +146,7 @@
                                                 <form method="post" asp-page-handler="RemoveMember" data-confirm="Remove @member.User from @repo.Name?">
                                                     <input type="hidden" name="repoId" value="@repo.Id">
                                                     <input type="hidden" name="userId" value="@member.UserId">
-                                                    <input type="hidden" name="revision" value="@repo.MembershipRevision">
+                                                    <input type="hidden" name="revision" value="@repo.MembersVersion">
                                                     <button type="submit" class="danger">Remove</button>
                                                 </form>
                                             </td>

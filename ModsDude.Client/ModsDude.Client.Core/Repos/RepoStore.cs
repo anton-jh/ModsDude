@@ -174,10 +174,29 @@ public class RepoStore(
         var request = new UpdateRepoRequest()
         {
             Name = name,
-            AdapterConfiguration = baseSettings.Serialize()
+            AdapterConfiguration = baseSettings.Serialize(),
+            ExpectedVersion = repo.Version
         };
 
-        await _loads.WriteAsync(default, ct => repoClient.UpdateRepoV1Async(repo.Id, request, ct), repo.Apply, cancellationToken);
+        try
+        {
+            await _loads.WriteAsync(default, ct => repoClient.UpdateRepoV1Async(repo.Id, request, ct), repo.Apply, cancellationToken);
+        }
+        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.RepoChanged)
+        {
+            // So that looking again shows what somebody else changed. Not reading it is no reason to
+            // hide why the change was refused.
+            try
+            {
+                await RefreshRepos(cancellationToken);
+            }
+            catch (Exception refresh) when (refresh is not OperationCanceledException)
+            {
+                logger.LogWarning(refresh, "Could not read the repos again after a change to repo {Repo} was refused.", repo.Id);
+            }
+
+            throw new UserFriendlyException("Somebody else changed this repo", "Look at it again and make your change again.", exception);
+        }
     }
 
     /// <summary>

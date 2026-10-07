@@ -11,8 +11,9 @@ public record RepoDetailsDto(
     string AdapterId,
     string AdapterConfiguration,
     List<RepoMemberDto> Members,
-    DateTime? ArchivedAt)
-    : RepoDto(Id, Name, Tag, AdapterId, AdapterConfiguration, ArchivedAt)
+    DateTime? ArchivedAt,
+    int Version)
+    : RepoDto(Id, Name, Tag, AdapterId, AdapterConfiguration, ArchivedAt, Version)
 {
     public static RepoDetailsDto FromModel(Repo repo, IEnumerable<(User User, RepoMembership Membership)> members)
     {
@@ -23,6 +24,7 @@ public record RepoDetailsDto(
             repo.AdapterData.Id.Value,
             repo.AdapterData.Configuration.Value,
             members.Select(x => RepoMemberDto.FromModel(x.User, x.Membership)).ToList(),
-            repo.ArchivedAt);
+            repo.ArchivedAt,
+            repo.Version);
     }
 }

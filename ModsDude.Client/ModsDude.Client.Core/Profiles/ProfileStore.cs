@@ -99,12 +99,34 @@ public sealed class ProfileStore(
         return Held(created);
     }
 
-    public Task RenameAsync(Profile profile, string name, CancellationToken cancellationToken)
-        => _loads.WriteAsync(
-            profile.RepoId,
-            ct => NameTaken(() => profilesClient.UpdateProfileV1Async(profile.RepoId, profile.Id, new UpdateProfileRequest { Name = name }, ct)),
-            dto => Upsert(dto),
-            cancellationToken);
+    public async Task RenameAsync(Profile profile, string name, CancellationToken cancellationToken)
+    {
+        var request = new UpdateProfileRequest { Name = name, ExpectedVersion = profile.Version };
+
+        try
+        {
+            await _loads.WriteAsync(
+                profile.RepoId,
+                ct => NameTaken(() => profilesClient.UpdateProfileV1Async(profile.RepoId, profile.Id, request, ct)),
+                dto => Upsert(dto),
+                cancellationToken);
+        }
+        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ProfileChanged)
+        {
+            // So that looking again shows what somebody else changed. Not reading it is no reason to
+            // hide why the rename was refused.
+            try
+            {
+                await RefreshAsync(profile.RepoId, cancellationToken);
+            }
+            catch (Exception refresh) when (refresh is not OperationCanceledException)
+            {
+                logger.LogWarning(refresh, "Could not read the profiles of repo {Repo} again after a rename was refused.", profile.RepoId);
+            }
+
+            throw new UserFriendlyException("Somebody else changed this profile", "Look at it again and rename it again.", exception);
+        }
+    }
 
     public Task ArchiveAsync(Profile profile, CancellationToken cancellationToken)
         => _loads.WriteAsync(

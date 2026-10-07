@@ -468,13 +468,26 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
                 {
                     await _store.WriteAsync(
                         _repo.Id,
-                        token => _savegamesClient.UpdateSavegameV1Async(_repo.Id, row.Id, new UpdateSavegameRequest { Name = name }, token),
+                        token => _savegamesClient.UpdateSavegameV1Async(
+                            _repo.Id, row.Id, new UpdateSavegameRequest { Name = name, ExpectedVersion = row.Savegame.Version }, token),
                         _lifetime);
                 }
                 catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NameTaken)
                 {
                     title = "That name is taken";
                     message = $"Something else in this repo is already called '{name}'. Pick another.";
+                    suggested = name;
+
+                    continue;
+                }
+                catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.SavegameChanged)
+                {
+                    // The store has read it again on the refusal, so the next attempt is made against what
+                    // somebody else just did.
+                    _errorReporter.Record(exception, "renaming a savegame");
+
+                    title = "Somebody else changed it";
+                    message = $"It is called '{row.Name}' now. Rename it again, or leave it.";
                     suggested = name;
 
                     continue;

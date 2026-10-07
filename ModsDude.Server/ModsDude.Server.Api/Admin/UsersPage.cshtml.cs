@@ -68,7 +68,7 @@ public class UsersPageModel(
                         x.RepoId.Value,
                         AdminFormat.Repo(x.RepoId, repos[x.RepoId].Name),
                         x.Level,
-                        repos[x.RepoId].MembershipRevision,
+                        repos[x.RepoId].MembersVersion,
                         TrafficRow.DownloadedBytesOf(trafficPerRepo[(user.Id, x.RepoId)]),
                         TrafficRow.UploadedBytesOf(trafficPerRepo[(user.Id, x.RepoId)])))
                     .ToList();

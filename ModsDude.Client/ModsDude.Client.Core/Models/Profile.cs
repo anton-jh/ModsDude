@@ -16,6 +16,7 @@ public sealed class Profile : INotifyPropertyChanged
         Name = dto.Name;
         HeadRevision = dto.HeadRevision;
         ArchivedAt = dto.ArchivedAt;
+        Version = dto.Version;
     }
 
 
@@ -32,11 +33,20 @@ public sealed class Profile : INotifyPropertyChanged
     /// <summary>When it was archived, or null for a live profile.</summary>
     public DateTime? ArchivedAt { get; private set; }
 
+    /// <summary>Which version of the profile this is, sent back with a rename to say what it was made against.</summary>
+    public int Version { get; private set; }
+
 
     /// <returns>Whether anything changed.</returns>
     internal bool Apply(ProfileDto dto)
     {
         var changed = false;
+
+        if (Version != dto.Version)
+        {
+            Version = dto.Version;
+            changed = true;
+        }
 
         if (Name != dto.Name)
         {

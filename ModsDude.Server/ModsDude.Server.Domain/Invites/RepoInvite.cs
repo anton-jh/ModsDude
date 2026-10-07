@@ -83,6 +83,9 @@ public class RepoInvite
 
     public bool IsRevoked { get; private set; }
 
+    /// <summary>Counts changes. A concurrency token, so two redemptions of its last use cannot both be saved.</summary>
+    public int Version { get; private set; }
+
     /// <summary>
     /// When somebody took this off the repo's invite list, or null while it is still on it.
     /// </summary>
@@ -139,6 +142,7 @@ public class RepoInvite
         }
 
         Uses++;
+        Version++;
     }
 
     /// <summary>
@@ -153,6 +157,7 @@ public class RepoInvite
         // Revoking is one gesture, not two. Somebody switching a code off is done with it, and
         // leaving it on the list afterwards means every retired code accumulates there forever.
         DismissedAt = now;
+        Version++;
     }
 
     /// <summary>
@@ -172,6 +177,7 @@ public class RepoInvite
         }
 
         DismissedAt = now;
+        Version++;
     }
 }
 

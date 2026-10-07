@@ -91,7 +91,8 @@ internal static class SavegameReads
                 checkoutsBySavegame.TryGetValue(row.Id, out var checkout) ? ToDto(checkout, names) : null,
                 row.ArchivedAt,
                 totals.GetValueOrDefault(row.Id).Count,
-                totals.GetValueOrDefault(row.Id).Bytes))
+                totals.GetValueOrDefault(row.Id).Bytes,
+                row.Version))
         ];
     }
 
@@ -138,7 +139,8 @@ internal static class SavegameReads
             checkout is null ? null : ToDto(checkout, names),
             savegame.ArchivedAt,
             totals.Count,
-            totals.Bytes);
+            totals.Bytes,
+            savegame.Version);
     }
 
     public static async Task<List<SavegameSnapshotDto>> ToDtosAsync(

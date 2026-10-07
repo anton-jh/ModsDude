@@ -102,6 +102,7 @@ public sealed record ProfileSaveRequest(
     IReadOnlyList<ProfileModPin> Desired,
     IReadOnlyList<ModKey> IgnoredOriginal,
     IReadOnlyList<ModKey> IgnoredDesired,
+    int IgnoredVersion,
     IReadOnlyList<CatalogModVersion> Pending,
     IReadOnlyDictionary<ModVersionIdentity, string> Names,
     ModCatalog Catalog,
@@ -452,7 +453,11 @@ public sealed class ProfileSaveService(
             await profilesClient.SetProfileIgnoredModsV1Async(
                 request.Repo.Id,
                 request.ProfileId,
-                new SetProfileIgnoredModsRequest { ModIds = [.. request.IgnoredDesired.Select(x => x.Value)] },
+                new SetProfileIgnoredModsRequest
+                {
+                    ModIds = [.. request.IgnoredDesired.Select(x => x.Value)],
+                    ExpectedVersion = request.IgnoredVersion
+                },
                 cancellationToken);
 
             return null;
@@ -460,6 +465,13 @@ public sealed class ProfileSaveService(
         catch (OperationCanceledException)
         {
             throw;
+        }
+        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ProfileChanged)
+        {
+            // Expected rather than broken, so it is said with the save's outcome rather than as an error.
+            errorReporter.Record(exception, $"saving the ignored mods of '{request.ProfileName}'");
+
+            return "Somebody else changed the ignored mods meanwhile, so yours were not saved.";
         }
         catch (Exception exception)
         {

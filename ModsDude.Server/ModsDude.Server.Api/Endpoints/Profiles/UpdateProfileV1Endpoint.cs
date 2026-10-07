@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
@@ -34,17 +36,39 @@ public class UpdateProfileV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        if (await dbContext.Profiles.CheckNameIsTaken(new RepoId(repoId), new ProfileId(profileId), new ProfileName(request.Name), cancellationToken))
+        var name = new ProfileName(request.Name);
+
+        // Already so: a repeat of this request - a retry, a second click - is answered as the first was.
+        if (profile.Name == name)
+        {
+            return TypedResults.Ok(ProfileDto.FromModel(profile));
+        }
+
+        if (profile.Version != request.ExpectedVersion)
+        {
+            return TypedResults.BadRequest(Problems.ProfileChanged);
+        }
+
+        if (await dbContext.Profiles.CheckNameIsTaken(new RepoId(repoId), new ProfileId(profileId), name, cancellationToken))
         {
             return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
 
-        profile.Name = new ProfileName(request.Name);
-        await unitOfWork.CommitAsync(cancellationToken);
+        profile.Rename(name);
+
+        try
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return TypedResults.BadRequest(Problems.ProfileChanged);
+        }
 
         return TypedResults.Ok(ProfileDto.FromModel(profile));
     }
 
 
-    public record UpdateProfileRequest(string Name);
+    /// <param name="ExpectedVersion">The version the rename was made against. Another one is refused.</param>
+    public record UpdateProfileRequest(string Name, int ExpectedVersion);
 }

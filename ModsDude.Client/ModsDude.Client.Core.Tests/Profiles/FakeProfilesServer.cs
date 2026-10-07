@@ -43,8 +43,23 @@ internal sealed class FakeProfilesServer : IProfilesClient
         return Task.FromResult(created with { });
     }
 
+    /// <summary>Refuses a rename made against another version, as the server does.</summary>
     public Task<ProfileDto> UpdateProfileV1Async(Guid repoId, Guid profileId, UpdateProfileRequest request, CancellationToken cancellationToken = default)
-        => Task.FromResult(Change(repoId, profileId, x => x.Name = request.Name));
+    {
+        var profile = Profiles.Single(x => x.RepoId == repoId && x.Id == profileId);
+
+        if (profile.Name != request.Name && profile.Version != request.ExpectedVersion)
+        {
+            throw new ApiException<CustomProblemDetails>(
+                "Changed", 400, null, new Dictionary<string, IEnumerable<string>>(), new CustomProblemDetails { Type = ProblemType.ProfileChanged }, null);
+        }
+
+        return Task.FromResult(Change(repoId, profileId, x =>
+        {
+            x.Name = request.Name;
+            x.Version++;
+        }));
+    }
 
     public Task<ProfileDto> ArchiveProfileV1Async(Guid repoId, Guid profileId, CancellationToken cancellationToken = default)
         => Task.FromResult(Change(repoId, profileId, x => x.ArchivedAt = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc)));

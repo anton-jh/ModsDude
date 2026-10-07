@@ -31,10 +31,10 @@ public class GetProfilesV1Endpoint : IEndpoint
         // pointing at it; it is simply not in this list - see the repo's Archive page.
         var profiles = await dbContext.Profiles
             .Where(x => x.RepoId == new RepoId(repoId) && x.ArchivedAt == null)
-            .Select(x => new { x.Id, x.RepoId, x.Name, x.HeadRevision, x.ArchivedAt })
+            .Select(x => new { x.Id, x.RepoId, x.Name, x.HeadRevision, x.ArchivedAt, x.Version })
             .ToListAsync(cancellationToken);
 
-        var dtos = profiles.Select(x => new ProfileDto(x.Id.Value, x.RepoId.Value, x.Name.Value, x.HeadRevision.Value, x.ArchivedAt));
+        var dtos = profiles.Select(x => new ProfileDto(x.Id.Value, x.RepoId.Value, x.Name.Value, x.HeadRevision.Value, x.ArchivedAt, x.Version));
 
         return TypedResults.Ok(dtos);
     }

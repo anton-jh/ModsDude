@@ -209,6 +209,20 @@ public static class Problems
         Detail = "This account is blocked from using the server."
     };
 
+    public static CustomProblemDetails ProfileChanged => new()
+    {
+        Type = ProblemType.ProfileChanged,
+        Title = "Profile changed",
+        Detail = "Somebody else changed the profile since this change was made against it. Reload it and try again."
+    };
+
+    public static CustomProblemDetails SavegameChanged => new()
+    {
+        Type = ProblemType.SavegameChanged,
+        Title = "Savegame changed",
+        Detail = "Somebody else changed the savegame since this change was made against it. Reload it and try again."
+    };
+
     public static CustomProblemDetails RepoChanged => new()
     {
         Type = ProblemType.RepoChanged,
@@ -702,5 +716,13 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "repo-changed")]
         [JsonStringEnumMemberName(_typeBaseUri + "repo-changed")]
         RepoChanged,
+
+        [EnumMember(Value = _typeBaseUri + "profile-changed")]
+        [JsonStringEnumMemberName(_typeBaseUri + "profile-changed")]
+        ProfileChanged,
+
+        [EnumMember(Value = _typeBaseUri + "savegame-changed")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-changed")]
+        SavegameChanged,
     }
 }

@@ -31,7 +31,7 @@ public class GetProfileV1Endpoint : IEndpoint
             .Where(x => x.RepoId == new RepoId(repoId) && x.Id == new ProfileId(profileId))
             // Addressed by id, so an archived profile is still readable through it - a link into one
             // takes you to the profile, by way of the archive rather than instead of it.
-            .Select(x => new { x.Id, x.RepoId, x.Name, x.HeadRevision, x.ArchivedAt })
+            .Select(x => new { x.Id, x.RepoId, x.Name, x.HeadRevision, x.ArchivedAt, x.Version })
             .FirstOrDefaultAsync(cancellationToken);
         if (profile is null)
         {
@@ -39,7 +39,7 @@ public class GetProfileV1Endpoint : IEndpoint
         }
 
         var dto = new ProfileDto(
-            profile.Id.Value, profile.RepoId.Value, profile.Name.Value, profile.HeadRevision.Value, profile.ArchivedAt);
+            profile.Id.Value, profile.RepoId.Value, profile.Name.Value, profile.HeadRevision.Value, profile.ArchivedAt, profile.Version);
 
         return TypedResults.Ok(dto);
     }

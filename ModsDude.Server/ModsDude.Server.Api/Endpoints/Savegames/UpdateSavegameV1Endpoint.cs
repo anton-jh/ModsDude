@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
@@ -56,18 +57,39 @@ public class UpdateSavegameV1Endpoint : IEndpoint
         // The overload that excludes this savegame, so that saving the row unchanged - which is what
         // renaming something to what it is already called does - is not refused as a clash with
         // itself.
-        if (await dbContext.Savegames.CheckNameIsTaken(new RepoId(repoId), savegame.Id, new SavegameName(request.Name), cancellationToken))
+        var name = new SavegameName(request.Name);
+
+        // Already so: a repeat of this request - a retry, a second click - is answered as the first was.
+        if (savegame.Name == name)
+        {
+            return TypedResults.Ok(await SavegameReads.DescribeAsync(dbContext, savegame, cancellationToken));
+        }
+
+        if (savegame.Version != request.ExpectedVersion)
+        {
+            return TypedResults.BadRequest(Problems.SavegameChanged);
+        }
+
+        if (await dbContext.Savegames.CheckNameIsTaken(new RepoId(repoId), savegame.Id, name, cancellationToken))
         {
             return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
 
-        savegame.Name = new SavegameName(request.Name);
+        savegame.Rename(name);
 
-        await unitOfWork.CommitAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return TypedResults.BadRequest(Problems.SavegameChanged);
+        }
 
         return TypedResults.Ok(await SavegameReads.DescribeAsync(dbContext, savegame, cancellationToken));
     }
 
 
-    public record UpdateSavegameRequest(string Name);
+    /// <param name="ExpectedVersion">The version the rename was made against. Another one is refused.</param>
+    public record UpdateSavegameRequest(string Name, int ExpectedVersion);
 }

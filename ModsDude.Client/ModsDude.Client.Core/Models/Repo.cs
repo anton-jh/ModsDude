@@ -32,6 +32,7 @@ public class Repo
         Tag = repoMembershipDto.Repo.Tag;
         MembershipLevel = repoMembershipDto.MembershipLevel;
         AdapterConfiguration = repoMembershipDto.Repo.AdapterConfiguration;
+        Version = repoMembershipDto.Repo.Version;
 
         Games = [];
 
@@ -55,6 +56,9 @@ public class Repo
     public RepoMembershipLevel MembershipLevel { get; private set; }
     public ObservableCollection<Game> Games { get; }
     public IBaseGameAdapter Adapter { get; private set; }
+
+    /// <summary>Which version of the repo this is, sent back with a change to say what it was made against.</summary>
+    public int Version { get; private set; }
     public GameIdentity Scope => Adapter.Scope;
 
     /// <summary>
@@ -87,6 +91,8 @@ public class Repo
     internal void Apply(RepoDto dto)
     {
         var previousScope = Scope;
+
+        Version = dto.Version;
 
         if (Name != dto.Name)
         {

@@ -109,7 +109,7 @@ public static class SavegameExtensions
             // that is the only thing telling them apart.
             .OrderBy(x => archived ? x.ArchivedAt : null)
             .ThenBy(x => x.Name)
-            .Select(x => new SavegameRow(x.Id, x.Name, x.ProfileId, x.Created, x.HeadSnapshot, x.ArchivedAt))
+            .Select(x => new SavegameRow(x.Id, x.Name, x.ProfileId, x.Created, x.HeadSnapshot, x.ArchivedAt, x.Version))
             .ToListAsync(cancellationToken);
     }
 
@@ -538,7 +538,8 @@ public record SavegameRow(
     ProfileId? ProfileId,
     DateTime Created,
     SavegameSnapshotNumber HeadSnapshot,
-    DateTime? ArchivedAt);
+    DateTime? ArchivedAt,
+    int Version);
 
 
 /// <summary>

@@ -31,15 +31,38 @@ public class Repo : IArchivable
     public bool IsArchived => ArchivedAt is not null;
 
     /// <summary>
+    /// Counts changes to the repo itself - its name, its game settings, archiving it. A concurrency token,
+    /// and what a client sends back to say which repo its change was made against.
+    /// </summary>
+    public int Version { get; private set; }
+
+    /// <summary>
     /// Counts membership changes. A concurrency token, so two requests that each passed the only-Admin
     /// check against the same memberships cannot both be saved.
     /// </summary>
-    public int MembershipRevision { get; private set; }
+    public int MembersVersion { get; private set; }
 
 
     public void Rename(RepoName name)
     {
+        if (Name == name)
+        {
+            return;
+        }
+
         Name = name;
+        Version++;
+    }
+
+    public void Configure(AdapterConfiguration configuration)
+    {
+        if (AdapterData.Configuration == configuration)
+        {
+            return;
+        }
+
+        AdapterData = AdapterData with { Configuration = configuration };
+        Version++;
     }
 
     /// <summary>
@@ -49,7 +72,13 @@ public class Repo : IArchivable
     /// </summary>
     public void Archive(DateTime now)
     {
-        ArchivedAt ??= now;
+        if (ArchivedAt is not null)
+        {
+            return;
+        }
+
+        ArchivedAt = now;
+        Version++;
     }
 
     /// <summary>
@@ -58,7 +87,13 @@ public class Repo : IArchivable
     /// </summary>
     public void Restore()
     {
+        if (ArchivedAt is null)
+        {
+            return;
+        }
+
         ArchivedAt = null;
+        Version++;
     }
 
 
@@ -75,7 +110,7 @@ public class Repo : IArchivable
         }
 
         _memberships.Add(new RepoMembership(user.Id, Id, level));
-        MembershipRevision++;
+        MembersVersion++;
     }
 
     /// <summary>
@@ -99,7 +134,7 @@ public class Repo : IArchivable
         }
 
         membership.Level = level;
-        MembershipRevision++;
+        MembersVersion++;
     }
 
     public void KickMember(UserId userId)
@@ -113,7 +148,7 @@ public class Repo : IArchivable
         }
 
         _memberships.Remove(membership);
-        MembershipRevision++;
+        MembersVersion++;
     }
 
     public bool HasMember(UserId userId)

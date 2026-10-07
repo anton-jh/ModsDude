@@ -9,7 +9,8 @@ namespace ModsDude.Server.Api.Dtos;
 /// - see <see cref="RepoTag"/> for why it is not a suffix on the name itself.
 /// </summary>
 /// <param name="ArchivedAt">When it was put away, or null while it is live.</param>
-public record RepoDto(Guid Id, string Name, string Tag, string AdapterId, string AdapterConfiguration, DateTime? ArchivedAt)
+/// <param name="Version">What a change to the repo sends back, to say which repo it was made against.</param>
+public record RepoDto(Guid Id, string Name, string Tag, string AdapterId, string AdapterConfiguration, DateTime? ArchivedAt, int Version)
 {
     public static RepoDto FromModel(Repo repo)
     {
@@ -19,6 +20,7 @@ public record RepoDto(Guid Id, string Name, string Tag, string AdapterId, string
             RepoTag.For(repo.Id),
             repo.AdapterData.Id.Value,
             repo.AdapterData.Configuration.Value,
-            repo.ArchivedAt);
+            repo.ArchivedAt,
+            repo.Version);
     }
 }

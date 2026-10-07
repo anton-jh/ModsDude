@@ -52,7 +52,7 @@ public class GetProfileIgnoredModsV1Endpoint : IEndpoint
 
         var modIds = await dbContext.ProfileIgnoredMods.GetModIdsAsync(profile.RepoId, profile.Id, cancellationToken);
 
-        return TypedResults.Ok(ProfileIgnoredModsDto.From(modIds));
+        return TypedResults.Ok(ProfileIgnoredModsDto.From(modIds, profile.IgnoredModsVersion));
     }
 }
 
@@ -87,6 +87,19 @@ public class SetProfileIgnoredModsV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.BatchTooLarge(desired.Count, ProfileRevisionWrites.MaximumMods));
         }
 
+        var current = await dbContext.ProfileIgnoredMods.GetModIdsAsync(profile.RepoId, profile.Id, cancellationToken);
+
+        // Already so: a repeat of this request - a retry, a second click - is answered as the first was.
+        if (current.ToHashSet().SetEquals(desired))
+        {
+            return TypedResults.Ok(ProfileIgnoredModsDto.From(current, profile.IgnoredModsVersion));
+        }
+
+        if (profile.IgnoredModsVersion != request.ExpectedVersion)
+        {
+            return TypedResults.BadRequest(Problems.ProfileChanged);
+        }
+
         var overlap = await dbContext.FindPinnedAsync(profile, desired, cancellationToken);
 
         if (overlap.Count > 0)
@@ -97,24 +110,21 @@ public class SetProfileIgnoredModsV1Endpoint : IEndpoint
         try
         {
             await dbContext.ReplaceIgnoredAsync(profile, desired, cancellationToken);
+            profile.NoteIgnoredModsReplaced();
 
             await unitOfWork.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException)
         {
-            // Two writes of the same list raced and the primary key let one through. What it wrote is
-            // what this was asking for, so a second attempt finds nothing left to add.
-            dbContext.ChangeTracker.Clear();
-
-            await dbContext.ReplaceIgnoredAsync(profile, desired, cancellationToken);
-
-            await unitOfWork.CommitAsync(cancellationToken);
+            // Another write of this list got in first. Which one it was is the version's to say.
+            return TypedResults.BadRequest(Problems.ProfileChanged);
         }
 
-        return TypedResults.Ok(ProfileIgnoredModsDto.From(desired));
+        return TypedResults.Ok(ProfileIgnoredModsDto.From(desired, profile.IgnoredModsVersion));
     }
 
 
     /// <param name="ModIds">Everything the profile should ignore. Anything absent stops being ignored.</param>
-    public record SetProfileIgnoredModsRequest(IEnumerable<string> ModIds);
+    /// <param name="ExpectedVersion">The version of the list the change was made against. Another one is refused.</param>
+    public record SetProfileIgnoredModsRequest(IEnumerable<string> ModIds, int ExpectedVersion);
 }

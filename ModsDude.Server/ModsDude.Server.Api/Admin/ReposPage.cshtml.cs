@@ -128,7 +128,7 @@ public class ReposPageModel(
                     repo.AdapterData.Id.Value,
                     repo.Created,
                     repo.ArchivedAt,
-                    repo.MembershipRevision,
+                    repo.MembersVersion,
                     members,
                     [.. userOptions.Where(x => !memberIds.Contains(x.Id))],
                     [.. invites[repo.Id]
@@ -475,7 +475,7 @@ public class ReposPageModel(
     };
 
 
-    /// <param name="MembershipRevision">Sent back with any change to an existing membership.</param>
+    /// <param name="MembersVersion">Sent back with any change to an existing membership.</param>
     /// <param name="AvailableUsers">The users who could be added: not members, not blocked.</param>
     /// <param name="ModBytes">Every mod version the repo has registered.</param>
     /// <param name="SavegameBytes">Every distinct file its savegame snapshots refer to.</param>
@@ -487,7 +487,7 @@ public class ReposPageModel(
         string Game,
         DateTime Created,
         DateTime? ArchivedAt,
-        int MembershipRevision,
+        int MembersVersion,
         IReadOnlyList<MemberRow> Members,
         IReadOnlyList<UserOption> AvailableUsers,
         IReadOnlyList<InviteRow> Invites,

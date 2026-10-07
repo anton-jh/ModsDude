@@ -56,7 +56,7 @@ public class AdminMemberships(
         return null;
     }
 
-    public async Task<string?> SetLevelAsync(RepoId repoId, UserId userId, RepoMembershipLevel level, int expectedRevision, string operatorName, CancellationToken cancellationToken)
+    public async Task<string?> SetLevelAsync(RepoId repoId, UserId userId, RepoMembershipLevel level, int expectedVersion, string operatorName, CancellationToken cancellationToken)
     {
         var repo = await dbContext.Repos.GetAsync(repoId, cancellationToken);
         if (repo?.GetMembership(userId) is not { } membership)
@@ -69,7 +69,7 @@ public class AdminMemberships(
             return null;
         }
 
-        if (repo.MembershipRevision != expectedRevision)
+        if (repo.MembersVersion != expectedVersion)
         {
             return _membersChanged;
         }
@@ -93,7 +93,7 @@ public class AdminMemberships(
         return null;
     }
 
-    public async Task<string?> RemoveAsync(RepoId repoId, UserId userId, int expectedRevision, string operatorName, CancellationToken cancellationToken)
+    public async Task<string?> RemoveAsync(RepoId repoId, UserId userId, int expectedVersion, string operatorName, CancellationToken cancellationToken)
     {
         var repo = await dbContext.Repos.GetAsync(repoId, cancellationToken);
         if (repo?.GetMembership(userId) is null)
@@ -101,7 +101,7 @@ public class AdminMemberships(
             return null;
         }
 
-        if (repo.MembershipRevision != expectedRevision)
+        if (repo.MembersVersion != expectedVersion)
         {
             return _membersChanged;
         }

@@ -1031,7 +1031,9 @@
           "https://server.modsdude.com/api/problems/invalid-display-name",
           "https://server.modsdude.com/api/problems/client-build-mismatch",
           "https://server.modsdude.com/api/problems/user-blocked",
-          "https://server.modsdude.com/api/problems/repo-changed"
+          "https://server.modsdude.com/api/problems/repo-changed",
+          "https://server.modsdude.com/api/problems/profile-changed",
+          "https://server.modsdude.com/api/problems/savegame-changed"
         ],
         "type": "string",
         "x-enumNames": [
@@ -1082,7 +1084,9 @@
           "InvalidDisplayName",
           "ClientBuildMismatch",
           "UserBlocked",
-          "RepoChanged"
+          "RepoChanged",
+          "ProfileChanged",
+          "SavegameChanged"
         ]
       },
       "ProfileDependentDto": {
@@ -1130,6 +1134,10 @@
           "repoId": {
             "format": "guid",
             "type": "string"
+          },
+          "version": {
+            "format": "int32",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -1142,6 +1150,10 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "version": {
+            "format": "int32",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -1478,6 +1490,10 @@
           },
           "tag": {
             "type": "string"
+          },
+          "version": {
+            "format": "int32",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -1744,6 +1760,10 @@
           "totalSizeBytes": {
             "format": "int64",
             "type": "integer"
+          },
+          "version": {
+            "format": "int32",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -1892,6 +1912,10 @@
       "SetProfileIgnoredModsRequest": {
         "additionalProperties": false,
         "properties": {
+          "expectedVersion": {
+            "format": "int32",
+            "type": "integer"
+          },
           "modIds": {
             "items": {
               "type": "string"
@@ -1913,6 +1937,10 @@
       "UpdateProfileRequest": {
         "additionalProperties": false,
         "properties": {
+          "expectedVersion": {
+            "format": "int32",
+            "type": "integer"
+          },
           "name": {
             "type": "string"
           }
@@ -1925,6 +1953,10 @@
           "adapterConfiguration": {
             "type": "string"
           },
+          "expectedVersion": {
+            "format": "int32",
+            "type": "integer"
+          },
           "name": {
             "type": "string"
           }
@@ -1934,6 +1966,10 @@
       "UpdateSavegameRequest": {
         "additionalProperties": false,
         "properties": {
+          "expectedVersion": {
+            "format": "int32",
+            "type": "integer"
+          },
           "name": {
             "type": "string"
           }

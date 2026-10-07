@@ -34,8 +34,22 @@ public class UpdateRepoV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound);
         }
 
-        repo.Rename(new RepoName(request.Name));
-        repo.AdapterData = repo.AdapterData with { Configuration = new(request.AdapterConfiguration) };
+        var name = new RepoName(request.Name);
+        var configuration = new AdapterConfiguration(request.AdapterConfiguration);
+
+        // Already so: a repeat of this request - a retry, a second click - is answered as the first was.
+        if (repo.Name == name && repo.AdapterData.Configuration == configuration)
+        {
+            return TypedResults.Ok(RepoDto.FromModel(repo));
+        }
+
+        if (repo.Version != request.ExpectedVersion)
+        {
+            return TypedResults.BadRequest(Problems.RepoChanged);
+        }
+
+        repo.Rename(name);
+        repo.Configure(configuration);
 
         try
         {
@@ -50,5 +64,6 @@ public class UpdateRepoV1Endpoint : IEndpoint
     }
 
 
-    public record UpdateRepoRequest(string Name, string AdapterConfiguration);
+    /// <param name="ExpectedVersion">The version the change was made against. Another one is refused.</param>
+    public record UpdateRepoRequest(string Name, string AdapterConfiguration, int ExpectedVersion);
 }

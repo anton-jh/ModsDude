@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
@@ -129,6 +130,42 @@ public class ProfileStoreTests
         await harness.Store.RenameAsync(held, "Harvest", CancellationToken.None);
 
         Assert.Equal("Harvest", held.Name);
+    }
+
+    /// <summary>
+    /// Somebody else renamed it since this client read it, so the rename is refused rather than writing
+    /// over theirs - and the profile is read again, so looking again shows their name.
+    /// </summary>
+    [Fact]
+    public async Task A_rename_made_against_an_old_version_is_refused_and_the_profile_read_again()
+    {
+        var harness = new Harness();
+        var season = harness.Add(_repoId, "Season 4", 3);
+        await harness.Store.RefreshAsync(_repoId, CancellationToken.None);
+        var held = harness.Store.Find(_repoId, season.Id)!;
+
+        season.Name = "Theirs";
+        season.Version++;
+
+        await Assert.ThrowsAsync<UserFriendlyException>(() => harness.Store.RenameAsync(held, "Mine", CancellationToken.None));
+
+        Assert.Equal("Theirs", held.Name);
+        Assert.Equal("Theirs", season.Name);
+    }
+
+    [Fact]
+    public async Task A_rename_against_the_version_held_goes_through_and_moves_it_on()
+    {
+        var harness = new Harness();
+        var season = harness.Add(_repoId, "Season 4", 3);
+        await harness.Store.RefreshAsync(_repoId, CancellationToken.None);
+        var held = harness.Store.Find(_repoId, season.Id)!;
+
+        await harness.Store.RenameAsync(held, "Harvest", CancellationToken.None);
+        await harness.Store.RenameAsync(held, "Winter", CancellationToken.None);
+
+        Assert.Equal("Winter", held.Name);
+        Assert.Equal(2, held.Version);
     }
 
     [Fact]
