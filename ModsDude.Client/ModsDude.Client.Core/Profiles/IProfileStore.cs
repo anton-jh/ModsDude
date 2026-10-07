@@ -71,7 +71,9 @@ public interface IProfileStore : IUserScopedState, IProfileRevisions
     /// Puts an older revision's mod list back by copying it to the front. Nothing is deleted, so the
     /// revisions in between stay readable and this is itself undoable.
     /// </summary>
-    Task<ProfileRevisionDto> RestoreRevisionAsync(Profile profile, int number, CancellationToken cancellationToken);
+    /// <param name="basedOn">The head the caller saw. The restore is refused when it has moved.</param>
+    /// <exception cref="Exceptions.UserFriendlyException">Somebody else saved the profile since <paramref name="basedOn"/>.</exception>
+    Task<ProfileRevisionDto> RestoreRevisionAsync(Profile profile, int number, int basedOn, CancellationToken cancellationToken);
 
     /// <summary>Records the revision a save just wrote as the profile's newest.</summary>
     Task ApplyRevisionSavedAsync(Guid repoId, Guid profileId, int number);

@@ -113,18 +113,25 @@ public sealed class ProfileStore(
         }
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ProfileChanged)
         {
-            // So that looking again shows what somebody else changed. Not reading it is no reason to
-            // hide why the rename was refused.
-            try
-            {
-                await RefreshAsync(profile.RepoId, cancellationToken);
-            }
-            catch (Exception refresh) when (refresh is not OperationCanceledException)
-            {
-                logger.LogWarning(refresh, "Could not read the profiles of repo {Repo} again after a rename was refused.", profile.RepoId);
-            }
+            await RefreshAfterRefusalAsync(profile.RepoId, "a rename", cancellationToken);
 
             throw new UserFriendlyException("Somebody else changed this profile", "Look at it again and rename it again.", exception);
+        }
+    }
+
+    /// <summary>
+    /// So that looking again shows what somebody else changed. Not reading it is no reason to hide
+    /// why the write was refused, so a failed read is only logged.
+    /// </summary>
+    private async Task RefreshAfterRefusalAsync(Guid repoId, string refused, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RefreshAsync(repoId, cancellationToken);
+        }
+        catch (Exception refresh) when (refresh is not OperationCanceledException)
+        {
+            logger.LogWarning(refresh, "Could not read the profiles of repo {Repo} again after {Refused} was refused.", repoId, refused);
         }
     }
 
@@ -153,12 +160,25 @@ public sealed class ProfileStore(
             () => Remove(repoId, profileId),
             cancellationToken);
 
-    public Task<ProfileRevisionDto> RestoreRevisionAsync(Profile profile, int number, CancellationToken cancellationToken)
-        => _loads.WriteAsync(
-            profile.RepoId,
-            ct => profilesClient.RestoreProfileRevisionV1Async(profile.RepoId, profile.Id, number, new RestoreProfileRevisionRequest(), ct),
-            revision => ApplyHeadRevision(profile.RepoId, profile.Id, revision.Number),
-            cancellationToken);
+    public async Task<ProfileRevisionDto> RestoreRevisionAsync(Profile profile, int number, int basedOn, CancellationToken cancellationToken)
+    {
+        var request = new RestoreProfileRevisionRequest { RequestId = Guid.NewGuid(), BasedOn = basedOn };
+
+        try
+        {
+            return await _loads.WriteAsync(
+                profile.RepoId,
+                ct => profilesClient.RestoreProfileRevisionV1Async(profile.RepoId, profile.Id, number, request, ct),
+                revision => ApplyHeadRevision(profile.RepoId, profile.Id, revision.Number),
+                cancellationToken);
+        }
+        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ProfileRevisionStale)
+        {
+            await RefreshAfterRefusalAsync(profile.RepoId, "a revision restore", cancellationToken);
+
+            throw new UserFriendlyException("Somebody else saved this profile", "Look at its history again and restore again.", exception);
+        }
+    }
 
     public Task ApplyRevisionSavedAsync(Guid repoId, Guid profileId, int number)
         => _loads.ApplyAsync(repoId, () => ApplyHeadRevision(repoId, profileId, number));

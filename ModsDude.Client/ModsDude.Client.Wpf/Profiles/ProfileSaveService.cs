@@ -536,10 +536,15 @@ public sealed class ProfileSaveService(
     {
         var basedOn = request.BasedOn;
 
+        // One per save, kept when it is sent again over a newer head: only a save the server
+        // recorded is answered again, and a refused one recorded nothing.
+        var requestId = Guid.NewGuid();
+
         while (true)
         {
             var body = new SaveProfileRevisionRequest
             {
+                RequestId = requestId,
                 BasedOn = basedOn,
                 Label = string.IsNullOrWhiteSpace(request.Label) ? null : request.Label.Trim(),
                 Mods = [.. request.Desired.Select(x => new ProfileModPinRequest

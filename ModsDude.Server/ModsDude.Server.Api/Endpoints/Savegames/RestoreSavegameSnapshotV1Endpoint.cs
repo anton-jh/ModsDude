@@ -56,7 +56,7 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
 
     private static async Task<Results<Ok<SavegameSnapshotDto>, BadRequest<CustomProblemDetails>>> Restore(
         Guid repoId, Guid savegameId, int number,
-        RestoreSavegameSnapshotRequest? request,
+        RestoreSavegameSnapshotRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         ITimeService timeService,
@@ -65,11 +65,28 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
+        var requestId = new SavegameSnapshotRequestId(request.RequestId);
 
         var savegame = await dbContext.Savegames.GetAsync(new RepoId(repoId), new SavegameId(savegameId), cancellationToken);
         if (savegame is null)
         {
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No savegame '{savegameId}' found in repo '{repoId}'"));
+        }
+
+        var previous = await dbContext.SavegameSnapshotRequests.FirstOrDefaultAsync(
+            x => x.RepoId == savegame.RepoId && x.SavegameId == savegame.Id && x.UserId == userId, cancellationToken);
+
+        // Before the stale check: a repeat is based on the head its original moved on from.
+        if (previous is not null && previous.Answers(requestId))
+        {
+            return await AnswerAgainAsync(dbContext, previous, cancellationToken);
+        }
+
+        var basedOn = new SavegameSnapshotNumber(request.BasedOn);
+
+        if (basedOn != savegame.HeadSnapshot)
+        {
+            return TypedResults.BadRequest(Problems.SavegameSnapshotStale(savegame.Id, basedOn, savegame.HeadSnapshot));
         }
 
         var sourceNumber = new SavegameSnapshotNumber(number);
@@ -83,6 +100,8 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Savegame '{savegameId}' has no snapshot {number}"));
         }
 
+        var now = timeService.Now();
+
         // The blob is not checked for. Its address is already named by a snapshot that is registered,
         // so anything that would fail here has failed for the source too - and a restore is the one
         // thing that can still be useful when a blob has gone: it moves nothing.
@@ -91,11 +110,11 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
             source.ContentHash,
             source.SizeBytes,
             userId,
-            timeService.Now(),
+            now,
             // The source's own label is not copied. A label is the note somebody wrote on the
             // snapshot they named, and duplicating it would leave two rows claiming to be the one
             // that was kept.
-            request?.Label,
+            request.Label,
             SavegameSnapshotOrigin.Restored,
             sourceNumber,
             // Copied forward with the bytes. A restore is the same save, so the map it was played on
@@ -105,16 +124,39 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
 
         dbContext.SavegameSnapshots.Add(snapshot);
 
+        // The claim is left alone, so whether the caller holds it is only read.
+        var open = await dbContext.SavegameCheckouts.GetOpenCheckoutAsync(savegame.RepoId, savegame.Id, cancellationToken);
+        var callerHoldsClaim = open?.UserId == userId;
+
+        if (previous is null)
+        {
+            dbContext.SavegameSnapshotRequests.Add(new SavegameSnapshotRequest(
+                savegame.RepoId, savegame.Id, userId, requestId, now, snapshot.Number, callerHoldsClaim, takenFrom: null));
+        }
+        else
+        {
+            previous.Replace(requestId, now, snapshot.Number, callerHoldsClaim, takenFrom: null);
+        }
+
         try
         {
             await unitOfWork.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException)
         {
+            // The same restore sent twice at once: the other copy committed first, and its answer is
+            // this one's too.
+            var repeated = await dbContext.SavegameSnapshotRequests.AsNoTracking().FirstOrDefaultAsync(
+                x => x.RepoId == savegame.RepoId && x.SavegameId == savegame.Id && x.UserId == userId, cancellationToken);
+
+            if (repeated is not null && repeated.Answers(requestId))
+            {
+                return await AnswerAgainAsync(dbContext, repeated, cancellationToken);
+            }
+
             // Somebody checked in against the head this restore also computed a successor to, and
-            // the primary key let one of them through. Reported as staleness because that is what it
-            // is: the restore was built on a head that has moved.
-            return TypedResults.BadRequest(Problems.SavegameSnapshotStale(savegame.Id, sourceNumber, snapshot.Number));
+            // the primary key let one of them through.
+            return TypedResults.BadRequest(Problems.SavegameSnapshotStale(savegame.Id, basedOn, snapshot.Number));
         }
 
         await CheckInSavegameV1Endpoint.ReleaseAfterNewSnapshotAsync(retentionUpkeep, savegame, cancellationToken);
@@ -122,11 +164,34 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
         return TypedResults.Ok(await SavegameReads.ToDtoAsync(dbContext, snapshot, cancellationToken));
     }
 
+    private static async Task<Results<Ok<SavegameSnapshotDto>, BadRequest<CustomProblemDetails>>> AnswerAgainAsync(
+        ApplicationDbContext dbContext,
+        SavegameSnapshotRequest original,
+        CancellationToken cancellationToken)
+    {
+        var snapshot = await dbContext.SavegameSnapshots.GetRowAsync(
+            original.RepoId, original.SavegameId, original.AnsweredWith, cancellationToken);
 
-    /// <summary>
+        return snapshot is null
+            ? TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail =
+                $"Snapshot {original.AnsweredWith.Value} of savegame '{original.SavegameId.Value}', which this restore was answered with, has since been deleted."))
+            : TypedResults.Ok(await SavegameReads.ToDtoAsync(dbContext, original.RepoId, snapshot, cancellationToken));
+    }
+
+
+    /// <param name="RequestId">
+    /// Chosen by the client and sent again with a repeat of the same restore, which is then answered
+    /// as the original was.
+    /// </param>
+    /// <param name="BasedOn">
+    /// The head the user saw when they chose to restore. Refused when it is no longer the head, so a
+    /// restore never silently undoes a check-in the user has not seen.
+    /// </param>
+    /// <param name="Label">What to call the restored snapshot in the history. Optional.</param>
+    /// <remarks>
     /// A restore is recorded whether or not it changes anything - unlike a check-in, which mints
     /// nothing when the bytes are unchanged. Restoring the snapshot that is already the head is
     /// somebody asking for it explicitly, and a history that quietly did nothing would read as a bug.
-    /// </summary>
-    public record RestoreSavegameSnapshotRequest(string? Label);
+    /// </remarks>
+    public record RestoreSavegameSnapshotRequest(Guid RequestId, int BasedOn, string? Label);
 }

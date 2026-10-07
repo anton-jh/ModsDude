@@ -25,13 +25,14 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<Profile> Profiles { get; init; }
     public required DbSet<ProfileRevision> ProfileRevisions { get; init; }
     public required DbSet<ProfileIgnoredMod> ProfileIgnoredMods { get; init; }
+    public required DbSet<ProfileRevisionRequest> ProfileRevisionRequests { get; init; }
     public required DbSet<ModVersion> ModVersions { get; init; }
     public required DbSet<ModVersionDeletion> ModVersionDeletions { get; init; }
     public required DbSet<RepoChangeCounter> RepoChangeCounters { get; init; }
     public required DbSet<Savegame> Savegames { get; init; }
     public required DbSet<SavegameSnapshot> SavegameSnapshots { get; init; }
     public required DbSet<SavegameCheckout> SavegameCheckouts { get; init; }
-    public required DbSet<SavegameCheckInRequest> SavegameCheckInRequests { get; init; }
+    public required DbSet<SavegameSnapshotRequest> SavegameSnapshotRequests { get; init; }
     public required DbSet<SavegamePublishRequest> SavegamePublishRequests { get; init; }
     public required DbSet<ModHubMod> ModHubMods { get; init; }
     public required DbSet<ModHubCrawlState> ModHubCrawlStates { get; init; }

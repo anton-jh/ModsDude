@@ -40,7 +40,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// </para>
 /// <para>
 /// <b>A repeat is answered as the original was.</b> The request id of each person's latest check-in
-/// on a savegame is recorded with its answer, and is looked up before anything else, since a repeat
+/// or restore on a savegame is recorded with its answer, and is looked up before anything else, since a repeat
 /// would otherwise be refused as stale against the snapshot it minted itself.
 /// </para>
 /// </remarks>
@@ -66,7 +66,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var userId = claimsPrincipal.GetUserId();
-        var requestId = new SavegameCheckInRequestId(request.RequestId);
+        var requestId = new SavegameSnapshotRequestId(request.RequestId);
 
         var savegame = await dbContext.Savegames.GetAsync(new RepoId(repoId), new SavegameId(savegameId), cancellationToken);
         if (savegame is null)
@@ -74,7 +74,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No savegame '{savegameId}' found in repo '{repoId}'"));
         }
 
-        var previous = await dbContext.SavegameCheckInRequests.FirstOrDefaultAsync(
+        var previous = await dbContext.SavegameSnapshotRequests.FirstOrDefaultAsync(
             x => x.RepoId == savegame.RepoId && x.SavegameId == savegame.Id && x.UserId == userId, cancellationToken);
 
         if (previous is not null && previous.Answers(requestId))
@@ -161,7 +161,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
 
         if (previous is null)
         {
-            dbContext.SavegameCheckInRequests.Add(new SavegameCheckInRequest(
+            dbContext.SavegameSnapshotRequests.Add(new SavegameSnapshotRequest(
                 savegame.RepoId, savegame.Id, userId, requestId, now, answeredWith, claim.CallerHolds(), takenFrom?.Id));
         }
         else
@@ -177,7 +177,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         {
             // The same check-in sent twice at once: the other copy committed first, and its answer is
             // this one's too.
-            var repeated = await dbContext.SavegameCheckInRequests.AsNoTracking().FirstOrDefaultAsync(
+            var repeated = await dbContext.SavegameSnapshotRequests.AsNoTracking().FirstOrDefaultAsync(
                 x => x.RepoId == savegame.RepoId && x.SavegameId == savegame.Id && x.UserId == userId, cancellationToken);
 
             if (repeated is not null && repeated.Answers(requestId))
@@ -262,7 +262,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
 
     private static async Task<Results<Ok<CheckInSavegameResponse>, BadRequest<CustomProblemDetails>>> AnswerAgainAsync(
         ApplicationDbContext dbContext,
-        SavegameCheckInRequest original,
+        SavegameSnapshotRequest original,
         CancellationToken cancellationToken)
     {
         var snapshot = await dbContext.SavegameSnapshots.GetRowAsync(

@@ -5733,7 +5733,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<ProfileRevisionDto> RestoreProfileRevisionV1Async(System.Guid repoId, System.Guid profileId, int number, RestoreProfileRevisionRequest? request = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<ProfileRevisionDto> RestoreProfileRevisionV1Async(System.Guid repoId, System.Guid profileId, int number, RestoreProfileRevisionRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
     }
 
@@ -7363,7 +7363,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<ProfileRevisionDto> RestoreProfileRevisionV1Async(System.Guid repoId, System.Guid profileId, int number, RestoreProfileRevisionRequest? request = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<ProfileRevisionDto> RestoreProfileRevisionV1Async(System.Guid repoId, System.Guid profileId, int number, RestoreProfileRevisionRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (repoId == null)
                 throw new System.ArgumentNullException("repoId");
@@ -7373,6 +7373,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
             if (number == null)
                 throw new System.ArgumentNullException("number");
+
+            if (request == null)
+                throw new System.ArgumentNullException("request");
 
             var client_ = _httpClient;
             var disposeClient_ = false;
@@ -7996,7 +7999,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<SavegameSnapshotDto> RestoreSavegameSnapshotV1Async(System.Guid repoId, System.Guid savegameId, int number, RestoreSavegameSnapshotRequest? request = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<SavegameSnapshotDto> RestoreSavegameSnapshotV1Async(System.Guid repoId, System.Guid savegameId, int number, RestoreSavegameSnapshotRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
     }
 
@@ -9620,7 +9623,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<SavegameSnapshotDto> RestoreSavegameSnapshotV1Async(System.Guid repoId, System.Guid savegameId, int number, RestoreSavegameSnapshotRequest? request = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<SavegameSnapshotDto> RestoreSavegameSnapshotV1Async(System.Guid repoId, System.Guid savegameId, int number, RestoreSavegameSnapshotRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (repoId == null)
                 throw new System.ArgumentNullException("repoId");
@@ -9630,6 +9633,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
             if (number == null)
                 throw new System.ArgumentNullException("number");
+
+            if (request == null)
+                throw new System.ArgumentNullException("request");
 
             var client_ = _httpClient;
             var disposeClient_ = false;
@@ -12324,8 +12330,14 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     public partial record RestoreProfileRevisionRequest
     {
 
+        [Newtonsoft.Json.JsonProperty("basedOn", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public int BasedOn { get; set; } = default!;
+
         [Newtonsoft.Json.JsonProperty("label", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public string? Label { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("requestId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Guid RequestId { get; set; } = default!;
 
     }
 
@@ -12342,8 +12354,14 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     public partial record RestoreSavegameSnapshotRequest
     {
 
+        [Newtonsoft.Json.JsonProperty("basedOn", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public int BasedOn { get; set; } = default!;
+
         [Newtonsoft.Json.JsonProperty("label", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public string? Label { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("requestId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Guid RequestId { get; set; } = default!;
 
     }
 
@@ -12359,6 +12377,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [Newtonsoft.Json.JsonProperty("mods", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Collections.Generic.ICollection<ProfileModPinRequest> Mods { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("requestId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Guid RequestId { get; set; } = default!;
 
     }
 

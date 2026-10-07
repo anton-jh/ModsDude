@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
@@ -51,6 +52,9 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     private readonly IShellNavigationService _shellNavigation;
 
     private ProfileHistory? _fetched;
+
+    /// <summary>The head of the history on screen, which is what a restore is based on.</summary>
+    private int _shownHead;
 
     /// <summary>
     /// Which revision a deep link asked for, used once and then forgotten - a later refresh keeps
@@ -516,11 +520,17 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
 
         try
         {
-            var restored = await _profileStore.RestoreRevisionAsync(_profile, revision.Number, cancellationToken);
+            var restored = await _profileStore.RestoreRevisionAsync(_profile, revision.Number, _shownHead, cancellationToken);
 
             _toasts.Show($"Restored revision {revision.Number} as revision {restored.Number}. Apply the profile to put it in your mod folder.");
 
             await ReloadAsync(select: restored.Number, cancellationToken);
+        }
+        catch (UserFriendlyException exception)
+        {
+            // The newer revision is what the refusal is about, so it is put on screen before saying so.
+            await ReloadAsync(select: null, cancellationToken);
+            await _errorReporter.ShowAsync(exception, $"restoring revision {revision.Number} of '{_profile.Name}'");
         }
         finally
         {
@@ -652,6 +662,8 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     private void Publish(ProfileHistory history, int? select = null)
     {
         var wanted = select ?? Selected?.Number ?? history.HeadRevision;
+
+        _shownHead = history.HeadRevision;
 
         foreach (var existing in Revisions)
         {

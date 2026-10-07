@@ -49,7 +49,6 @@ public class SavegameCheckOutTests
     }
 
     /// <summary>
-    /// <summary>
     /// Somebody checked in after the list was read, so the snapshot this caller meant to write into a
     /// slot is no longer the head. Refused before anything is claimed or written, rather than writing
     /// the older snapshot under a claim on the newer one.
@@ -332,6 +331,46 @@ public class SavegameCheckOutTests
 
             Assert.Equal(last.Total, last.Completed);
         }
+    }
+
+    /// <summary>
+    /// Restoring copies the old snapshot forward on the head the caller saw, and a check-out after it
+    /// takes the restored bytes, because the restored snapshot is what it expects the head to be.
+    /// </summary>
+    [Fact]
+    public async Task Restoring_copies_the_snapshot_forward_and_checking_out_then_takes_it()
+    {
+        using var harness = new SavegameHarness();
+        var first = await harness.SeedHeadAsync("a savegame");
+        var second = harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("a savegame, played once"));
+
+        var restored = await harness.CheckOut.RestoreAsync(harness.Server.Savegame, first.Number, CancellationToken.None);
+        await harness.CheckOut.CheckOutAsync(harness.Game, restored, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+
+        var request = Assert.Single(harness.Server.SnapshotRestores);
+        Assert.Equal(second.Number, request.BasedOn);
+        Assert.NotEqual(Guid.Empty, request.RequestId);
+        Assert.Equal(second.Number + 1, restored.Head?.Number);
+        Assert.Equal(first.ContentHash, restored.Head?.ContentHash);
+        Assert.Equal("a savegame", harness.ReadSlotFile(_slot1));
+    }
+
+    /// <summary>
+    /// Somebody checked in after the list was read. Restoring over that would undo play nobody here
+    /// has seen, so it is refused and nothing is copied forward.
+    /// </summary>
+    [Fact]
+    public async Task Restoring_after_the_head_moved_is_refused_and_copies_nothing()
+    {
+        using var harness = new SavegameHarness();
+        var first = await harness.SeedHeadAsync("a savegame");
+        var seen = harness.Server.Savegame;
+        var moved = harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("a savegame, played once"));
+
+        await Assert.ThrowsAsync<UserFriendlyException>(
+            () => harness.CheckOut.RestoreAsync(seen, first.Number, CancellationToken.None));
+
+        Assert.Equal(moved, harness.Server.Head);
     }
 
     /// <summary>

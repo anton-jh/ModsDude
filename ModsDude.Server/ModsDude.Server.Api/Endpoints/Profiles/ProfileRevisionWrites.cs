@@ -1,4 +1,6 @@
-﻿using ModsDude.Server.Api.Dtos;
+﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
+using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
@@ -99,6 +101,66 @@ internal static class ProfileRevisionWrites
         var author = await dbContext.Users.GetAsync(revision.CreatedBy, cancellationToken);
 
         return ProfileRevisionDto.FromModel(revision, ProfileRevisionReads.Describe(revision.CreatedBy, author is null ? null : UserNameplate.Of(author)));
+    }
+
+
+    /// <summary>The latest save or restore <paramref name="userId"/> made on the profile, tracked so it can be replaced.</summary>
+    public static Task<ProfileRevisionRequest?> FindRequestAsync(
+        ApplicationDbContext dbContext,
+        Profile profile,
+        UserId userId,
+        CancellationToken cancellationToken)
+    {
+        return dbContext.ProfileRevisionRequests.FirstOrDefaultAsync(
+            x => x.RepoId == profile.RepoId && x.ProfileId == profile.Id && x.UserId == userId, cancellationToken);
+    }
+
+    /// <summary>
+    /// After a commit failed: the same request sent twice at once, where the other copy committed
+    /// first and recorded the answer this one is given too. Null where the failure was anything else.
+    /// </summary>
+    public static Task<ProfileRevisionRequest?> FindRepeatAsync(
+        ApplicationDbContext dbContext,
+        Profile profile,
+        UserId userId,
+        ProfileRevisionRequestId requestId,
+        CancellationToken cancellationToken)
+    {
+        return dbContext.ProfileRevisionRequests.AsNoTracking().FirstOrDefaultAsync(
+            x => x.RepoId == profile.RepoId && x.ProfileId == profile.Id && x.UserId == userId && x.RequestId == requestId,
+            cancellationToken);
+    }
+
+    public static void RecordRequest(
+        ApplicationDbContext dbContext,
+        ProfileRevisionRequest? previous,
+        Profile profile,
+        UserId userId,
+        ProfileRevisionRequestId requestId,
+        DateTime now,
+        RevisionNumber answeredWith)
+    {
+        if (previous is null)
+        {
+            dbContext.ProfileRevisionRequests.Add(new ProfileRevisionRequest(profile.RepoId, profile.Id, userId, requestId, now, answeredWith));
+        }
+        else
+        {
+            previous.Replace(requestId, now, answeredWith);
+        }
+    }
+
+    public static async Task<Results<Ok<ProfileRevisionDto>, BadRequest<CustomProblemDetails>>> AnswerAgainAsync(
+        ApplicationDbContext dbContext,
+        ProfileRevisionRequest original,
+        CancellationToken cancellationToken)
+    {
+        var revision = await ProfileRevisionReads.GetAsync(dbContext, original.RepoId, original.ProfileId, original.AnsweredWith, cancellationToken);
+
+        return revision is null
+            ? TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail =
+                $"Revision {original.AnsweredWith.Value} of profile '{original.ProfileId.Value}', which this request was answered with, has since been deleted."))
+            : TypedResults.Ok(revision);
     }
 
 

@@ -49,7 +49,7 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
 
     private static async Task<Results<Ok<ProfileRevisionDto>, BadRequest<CustomProblemDetails>>> Restore(
         Guid repoId, Guid profileId, int number,
-        RestoreProfileRevisionRequest? request,
+        RestoreProfileRevisionRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         ITimeService timeService,
@@ -65,6 +65,21 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{profileId}' found in repo '{repoId}'"));
         }
 
+        var requestId = new ProfileRevisionRequestId(request.RequestId);
+
+        var previousRequest = await ProfileRevisionWrites.FindRequestAsync(dbContext, profile, userId, cancellationToken);
+        if (previousRequest is not null && previousRequest.Answers(requestId))
+        {
+            return await ProfileRevisionWrites.AnswerAgainAsync(dbContext, previousRequest, cancellationToken);
+        }
+
+        var basedOn = new RevisionNumber(request.BasedOn);
+
+        if (basedOn != profile.HeadRevision)
+        {
+            return TypedResults.BadRequest(Problems.ProfileRevisionStale(profile.Id, basedOn, profile.HeadRevision));
+        }
+
         var source = new RevisionNumber(number);
 
         if (!await dbContext.ProfileRevisions.ExistsAsync(profile.RepoId, profile.Id, source, cancellationToken))
@@ -73,7 +88,7 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
         }
 
         var pins = await dbContext.ProfileRevisions.GetPinsAsync(profile.RepoId, profile.Id, source, cancellationToken);
-        var previous = await dbContext.ProfileRevisions.GetPinsAsync(profile.RepoId, profile.Id, profile.HeadRevision, cancellationToken);
+        var headPins = await dbContext.ProfileRevisions.GetPinsAsync(profile.RepoId, profile.Id, profile.HeadRevision, cancellationToken);
 
         var resolved = await ProfileRevisionWrites.ResolveAsync(dbContext, profile.RepoId, pins, cancellationToken);
         if (resolved.Problem is not null)
@@ -83,17 +98,21 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
             return TypedResults.BadRequest(resolved.Problem);
         }
 
+        var now = timeService.Now();
+
         var revision = profile.CreateRevision(
             resolved.Dependencies!,
-            previous,
+            headPins,
             userId,
-            timeService.Now(),
-            request?.Label,
+            now,
+            request.Label,
             ProfileRevisionOrigin.Restored,
             sourceRevision: source);
 
         dbContext.ProfileRevisions.Add(revision);
         await dbContext.ReleasePinnedAsync(profile, pins, cancellationToken);
+
+        ProfileRevisionWrites.RecordRequest(dbContext, previousRequest, profile, userId, requestId, now, revision.Number);
 
         try
         {
@@ -101,7 +120,14 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
         }
         catch (DbUpdateException)
         {
-            return TypedResults.BadRequest(Problems.ProfileRevisionStale(profile.Id, profile.HeadRevision, revision.Number));
+            var repeated = await ProfileRevisionWrites.FindRepeatAsync(dbContext, profile, userId, requestId, cancellationToken);
+            if (repeated is not null)
+            {
+                return await ProfileRevisionWrites.AnswerAgainAsync(dbContext, repeated, cancellationToken);
+            }
+
+            // Somebody saved against the same head and the primary key let one of them through.
+            return TypedResults.BadRequest(Problems.ProfileRevisionStale(profile.Id, basedOn, revision.Number));
         }
 
         // A new revision moves the profile's window, and pins versions that may have been scheduled.
@@ -112,10 +138,19 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
     }
 
 
-    /// <summary>
+    /// <param name="RequestId">
+    /// Chosen by the client and sent again with a repeat of the same restore, which is then answered
+    /// as the original was.
+    /// </param>
+    /// <param name="BasedOn">
+    /// The head the user saw when they chose to restore. Refused when it is no longer the head, so a
+    /// restore never silently undoes a save the user has not seen.
+    /// </param>
+    /// <param name="Label">What to call the restored revision in the history. Optional.</param>
+    /// <remarks>
     /// A restore is recorded whether or not it changes anything - unlike a save, which mints nothing
     /// when the list is unchanged. Restoring the revision that is already the head is somebody
     /// asking for it explicitly, and a history that quietly did nothing would read as a bug.
-    /// </summary>
-    public record RestoreProfileRevisionRequest(string? Label);
+    /// </remarks>
+    public record RestoreProfileRevisionRequest(Guid RequestId, int BasedOn, string? Label);
 }

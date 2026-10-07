@@ -14,6 +14,11 @@ public interface ISavegameCheckOut
     /// </exception>
     Task<SavegameCheckOutResult> CheckOutAsync(Game game, SavegameDto savegame, SavegameSlotRef slot, SavegameRevisionMode revisionMode, CancellationToken ct, IProgress<SavegameProgress>? progress = null);
 
+    /// <summary>Copies an older snapshot forward as the new head, so it can be checked out.</summary>
+    /// <returns>The savegame as the caller saw it, with the restored snapshot as its head.</returns>
+    /// <exception cref="Exceptions.UserFriendlyException">The head is no longer the one the caller saw.</exception>
+    Task<SavegameDto> RestoreAsync(SavegameDto savegame, int snapshotNumber, CancellationToken ct);
+
     /// <summary>
     /// Writes a named snapshot into a slot without claiming or binding anything. The slot reads as
     /// unrecognised afterwards.

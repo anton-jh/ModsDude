@@ -18,7 +18,6 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// </remarks>
 public sealed class SavegameCheckOutFlow(
     ISavegameCheckOut savegameCheckOut,
-    ISavegamesClient savegamesClient,
     ISavegameStore store,
     ISavegameCheckInFlow checkInFlow,
     ISavegameProfileActivation profileActivation,
@@ -276,12 +275,7 @@ public sealed class SavegameCheckOutFlow(
         {
             task.Report($"Restoring snapshot {snapshotNumber} as the newest one");
 
-            await store.WriteAsync(
-                repo.Id,
-                token => savegamesClient.RestoreSavegameSnapshotV1Async(repo.Id, savegame.Id, snapshotNumber, new RestoreSavegameSnapshotRequest(), token),
-                cancellationToken);
-
-            savegame = store.Find(repo.Id, savegame.Id) ?? savegame;
+            savegame = await savegameCheckOut.RestoreAsync(savegame, snapshotNumber, cancellationToken);
         }
 
         task.Report("Taking the claim");

@@ -8,6 +8,7 @@ namespace ModsDude.Client.Core.Tests.Profiles;
 internal sealed class FakeProfilesServer : IProfilesClient
 {
     private TaskCompletionSource? _held;
+    private (Guid RequestId, int AnsweredWith)? _lastRevisionRequest;
 
     public List<ProfileDto> Profiles { get; } = [];
 
@@ -71,9 +72,35 @@ internal sealed class FakeProfilesServer : IProfilesClient
             x.Name = request?.Name ?? x.Name;
         }));
 
+    /// <summary>Every revision restore the client sent, so a test can read what it based itself on.</summary>
+    public List<RestoreProfileRevisionRequest> RevisionRestores { get; } = [];
+
+    /// <summary>
+    /// Answers a repeat of the latest restore as the original was, and refuses one based on another
+    /// head, as the server does.
+    /// </summary>
     public Task<ProfileRevisionDto> RestoreProfileRevisionV1Async(Guid repoId, Guid profileId, int number, RestoreProfileRevisionRequest? request = null, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
+        RevisionRestores.Add(request);
+
+        if (_lastRevisionRequest is { } last && last.RequestId == request.RequestId)
+        {
+            return Task.FromResult(new ProfileRevisionDto { Number = last.AnsweredWith });
+        }
+
+        var profile = Profiles.Single(x => x.RepoId == repoId && x.Id == profileId);
+
+        if (request.BasedOn != profile.HeadRevision)
+        {
+            throw new ApiException<CustomProblemDetails>(
+                "Stale", 400, null, new Dictionary<string, IEnumerable<string>>(), new CustomProblemDetails { Type = ProblemType.ProfileRevisionStale }, null);
+        }
+
         var restored = Change(repoId, profileId, x => x.HeadRevision++);
+
+        _lastRevisionRequest = (request.RequestId, restored.HeadRevision);
 
         return Task.FromResult(new ProfileRevisionDto { Number = restored.HeadRevision });
     }

@@ -1576,8 +1576,16 @@
       "RestoreProfileRevisionRequest": {
         "additionalProperties": false,
         "properties": {
+          "basedOn": {
+            "format": "int32",
+            "type": "integer"
+          },
           "label": {
             "nullable": true,
+            "type": "string"
+          },
+          "requestId": {
+            "format": "guid",
             "type": "string"
           }
         },
@@ -1596,8 +1604,16 @@
       "RestoreSavegameSnapshotRequest": {
         "additionalProperties": false,
         "properties": {
+          "basedOn": {
+            "format": "int32",
+            "type": "integer"
+          },
           "label": {
             "nullable": true,
+            "type": "string"
+          },
+          "requestId": {
+            "format": "guid",
             "type": "string"
           }
         },
@@ -1619,6 +1635,10 @@
               "$ref": "#/components/schemas/ProfileModPinRequest"
             },
             "type": "array"
+          },
+          "requestId": {
+            "format": "guid",
+            "type": "string"
           }
         },
         "type": "object"
@@ -6022,6 +6042,7 @@
               }
             }
           },
+          "required": true,
           "x-name": "request",
           "x-position": 4
         },
@@ -7373,6 +7394,7 @@
               }
             }
           },
+          "required": true,
           "x-name": "request",
           "x-position": 4
         },

@@ -42,6 +42,11 @@ namespace ModsDude.Server.Api.Endpoints.Profiles;
 /// person's list. A save now names the revision it was built on and is refused if that is no longer
 /// the head, which is a question the old shape could not even ask. See docs/06-flows.md.
 /// </para>
+/// <para>
+/// <b>A repeat is answered as the original was.</b> Each person's latest save or restore on a
+/// profile is recorded with the revision it was answered with, and is looked up before the stale
+/// check, which a repeat would otherwise fail against the revision it minted itself.
+/// </para>
 /// </remarks>
 public class SaveProfileRevisionV1Endpoint : IEndpoint
 {
@@ -71,6 +76,15 @@ public class SaveProfileRevisionV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{profileId}' found in repo '{repoId}'"));
         }
 
+        var requestId = new ProfileRevisionRequestId(request.RequestId);
+
+        // Before the stale check: a repeat is based on the head its original moved on from.
+        var previous = await ProfileRevisionWrites.FindRequestAsync(dbContext, profile, userId, cancellationToken);
+        if (previous is not null && previous.Answers(requestId))
+        {
+            return await ProfileRevisionWrites.AnswerAgainAsync(dbContext, previous, cancellationToken);
+        }
+
         var basedOn = new RevisionNumber(request.BasedOn);
 
         if (basedOn != profile.HeadRevision)
@@ -88,31 +102,31 @@ public class SaveProfileRevisionV1Endpoint : IEndpoint
             return TypedResults.BadRequest(resolved.Problem);
         }
 
-        var previous = await dbContext.ProfileRevisions.GetPinsAsync(profile.RepoId, profile.Id, profile.HeadRevision, cancellationToken);
+        var headPins = await dbContext.ProfileRevisions.GetPinsAsync(profile.RepoId, profile.Id, profile.HeadRevision, cancellationToken);
 
-        var changes = ProfileRevisionChanges.Between(previous, pins);
+        var changes = ProfileRevisionChanges.Between(headPins, pins);
 
-        if (changes.IsEmpty)
+        var now = timeService.Now();
+
+        // Nothing happened, so no revision is recorded. The head is answered with instead, which is
+        // what the client would have been given had it saved.
+        var revision = changes.IsEmpty
+            ? null
+            : profile.CreateRevision(
+                resolved.Dependencies!,
+                headPins,
+                userId,
+                now,
+                request.Label,
+                ProfileRevisionOrigin.Saved);
+
+        if (revision is not null)
         {
-            // Nothing happened, so nothing is recorded. The head is answered with instead, which is
-            // what the client would have been given had it saved.
-            var head = await ProfileRevisionReads.GetAsync(dbContext, profile.RepoId, profile.Id, profile.HeadRevision, cancellationToken);
-
-            return head is null
-                ? TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{profileId}' has no revision {profile.HeadRevision.Value}"))
-                : TypedResults.Ok(head);
+            dbContext.ProfileRevisions.Add(revision);
+            await dbContext.ReleasePinnedAsync(profile, pins, cancellationToken);
         }
 
-        var revision = profile.CreateRevision(
-            resolved.Dependencies!,
-            previous,
-            userId,
-            timeService.Now(),
-            request.Label,
-            ProfileRevisionOrigin.Saved);
-
-        dbContext.ProfileRevisions.Add(revision);
-        await dbContext.ReleasePinnedAsync(profile, pins, cancellationToken);
+        ProfileRevisionWrites.RecordRequest(dbContext, previous, profile, userId, requestId, now, profile.HeadRevision);
 
         try
         {
@@ -120,10 +134,25 @@ public class SaveProfileRevisionV1Endpoint : IEndpoint
         }
         catch (DbUpdateException)
         {
+            var repeated = await ProfileRevisionWrites.FindRepeatAsync(dbContext, profile, userId, requestId, cancellationToken);
+            if (repeated is not null)
+            {
+                return await ProfileRevisionWrites.AnswerAgainAsync(dbContext, repeated, cancellationToken);
+            }
+
             // Two saves based on the same head both computed the same next number, and the primary
             // key let exactly one of them through. The check above is what usually catches this; the
             // database is what makes it true rather than likely.
-            return TypedResults.BadRequest(Problems.ProfileRevisionStale(profile.Id, basedOn, revision.Number));
+            return TypedResults.BadRequest(Problems.ProfileRevisionStale(profile.Id, basedOn, profile.HeadRevision));
+        }
+
+        if (revision is null)
+        {
+            var head = await ProfileRevisionReads.GetAsync(dbContext, profile.RepoId, profile.Id, profile.HeadRevision, cancellationToken);
+
+            return head is null
+                ? TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{profileId}' has no revision {profile.HeadRevision.Value}"))
+                : TypedResults.Ok(head);
         }
 
         // A new revision moves the profile's window, and pins versions that may have been scheduled.
@@ -134,6 +163,10 @@ public class SaveProfileRevisionV1Endpoint : IEndpoint
     }
 
 
+    /// <param name="RequestId">
+    /// Chosen by the client and sent again with a repeat of the same save, which is then answered
+    /// as the original was.
+    /// </param>
     /// <param name="BasedOn">
     /// The revision this list was built from. A save is refused when it is no longer the head, so
     /// that a member editing a stale copy is told rather than silently overwriting somebody.
@@ -143,7 +176,7 @@ public class SaveProfileRevisionV1Endpoint : IEndpoint
     /// Everything the profile should pin, in full. Anything absent is removed, which is what makes
     /// this a snapshot rather than a patch.
     /// </param>
-    public record SaveProfileRevisionRequest(int BasedOn, string? Label, IEnumerable<ProfileModPinRequest> Mods);
+    public record SaveProfileRevisionRequest(Guid RequestId, int BasedOn, string? Label, IEnumerable<ProfileModPinRequest> Mods);
 
     /// <param name="Locked">
     /// The profile's own lock. The adapter's - <see cref="ModVersion.Locked"/> - is a fact about the

@@ -29,6 +29,7 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     private readonly UserDto _me = new() { Id = "me", DisplayName = "Me", Tag = "0002" };
 
     private (Guid RequestId, CheckInSavegameResponse Response)? _lastCheckIn;
+    private (Guid RequestId, SavegameSnapshotDto Response)? _lastRestore;
     private readonly Dictionary<Guid, PublishSavegameResponse> _publishAnswers = [];
 
     private SavegameDto _savegame = null!;
@@ -355,8 +356,36 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 
         return Task.FromResult<ICollection<SavegameDto>>([_savegame with { Checkout = ListedCheckout }]);
     }
+    /// <summary>Every snapshot restore the client sent, so a test can read what it based itself on.</summary>
+    public List<RestoreSavegameSnapshotRequest> SnapshotRestores { get; } = [];
+
+    /// <summary>
+    /// Copies a snapshot forward as the new head. A repeat of the latest restore is answered as the
+    /// original was, and one based on another head is refused, as the server does.
+    /// </summary>
     public Task<SavegameSnapshotDto> RestoreSavegameSnapshotV1Async(Guid repoId, Guid savegameId, int number, RestoreSavegameSnapshotRequest? request = null, CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        SnapshotRestores.Add(request);
+
+        if (_lastRestore is { } last && last.RequestId == request.RequestId)
+        {
+            return Task.FromResult(last.Response);
+        }
+
+        if (request.BasedOn != _savegame.Head?.Number)
+        {
+            throw Problem(ProblemType.SavegameSnapshotStale, $"Based on {request.BasedOn}, head is {_savegame.Head?.Number}.");
+        }
+
+        var source = _snapshots.Single(x => x.Number == number);
+        var restored = AddSnapshot(source.ContentHash, source.SizeBytes, source.ProfileRevision, SavegameSnapshotOrigin.Restored, number, request.Label);
+
+        _lastRestore = (request.RequestId, restored);
+
+        return Task.FromResult(restored);
+    }
     public Task<CreateModDownloadLinkResponse> CreateModDownloadLinkV1Async(CreateModDownloadLinkRequest request, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
     public Task<CreateModUploadLinkResponse> CreateModUploadLinkV1Async(CreateModUploadLinkRequest request, CancellationToken cancellationToken = default)

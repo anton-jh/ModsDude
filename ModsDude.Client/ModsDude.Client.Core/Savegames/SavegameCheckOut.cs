@@ -109,6 +109,34 @@ public sealed class SavegameCheckOut(
         }
     }
 
+    public async Task<SavegameDto> RestoreAsync(SavegameDto savegame, int snapshotNumber, CancellationToken ct)
+    {
+        var head = savegame.Head
+            ?? throw new UserFriendlyException(
+                $"'{savegame.Name}' has nothing to restore",
+                $"Savegame '{savegame.Id}' has no head snapshot, so it has no snapshot to restore either.");
+
+        var request = new RestoreSavegameSnapshotRequest { RequestId = Guid.NewGuid(), BasedOn = head.Number };
+
+        try
+        {
+            var restored = await store.WriteAsync(
+                savegame.RepoId,
+                token => savegamesClient.RestoreSavegameSnapshotV1Async(savegame.RepoId, savegame.Id, snapshotNumber, request, token),
+                ct);
+
+            return savegame with { Head = restored };
+        }
+        catch (ApiException<CustomProblemDetails> exception)
+            when (exception.Result.Type is ProblemType.SavegameSnapshotStale)
+        {
+            throw new UserFriendlyException(
+                $"'{savegame.Name}' changed",
+                "Somebody checked it in or restored a snapshot just now. Look at it again before checking it out.",
+                exception);
+        }
+    }
+
     public async Task<DisplacedSavegame?> TakeCopyAsync(Game game, SavegameDto savegame, int snapshotNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)
     {
         runningGuard.EnsureNotRunning(game.Identity, game.Name);

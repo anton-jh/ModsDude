@@ -194,10 +194,48 @@ public class ProfileStoreTests
         await harness.Store.RefreshAsync(_repoId, CancellationToken.None);
         var held = harness.Store.Find(_repoId, season.Id)!;
 
-        var restored = await harness.Store.RestoreRevisionAsync(held, 1, CancellationToken.None);
+        var restored = await harness.Store.RestoreRevisionAsync(held, 1, basedOn: 3, CancellationToken.None);
 
         Assert.Equal(4, restored.Number);
         Assert.Equal(4, held.HeadRevision);
+        Assert.Equal(3, Assert.Single(harness.Server.RevisionRestores).BasedOn);
+    }
+
+    /// <summary>Each restore is its own action, so a second one is not mistaken for a repeat of the first.</summary>
+    [Fact]
+    public async Task Two_restores_send_different_request_ids_and_each_moves_the_head()
+    {
+        var harness = new Harness();
+        var season = harness.Add(_repoId, "Season 4", 3);
+        await harness.Store.RefreshAsync(_repoId, CancellationToken.None);
+        var held = harness.Store.Find(_repoId, season.Id)!;
+
+        await harness.Store.RestoreRevisionAsync(held, 1, basedOn: 3, CancellationToken.None);
+        var second = await harness.Store.RestoreRevisionAsync(held, 2, basedOn: 4, CancellationToken.None);
+
+        Assert.Equal(5, second.Number);
+        Assert.Equal(2, harness.Server.RevisionRestores.Select(x => x.RequestId).Distinct().Count());
+        Assert.DoesNotContain(Guid.Empty, harness.Server.RevisionRestores.Select(x => x.RequestId));
+    }
+
+    /// <summary>
+    /// Somebody saved while the history was on screen. The restore is refused rather than undoing a
+    /// save nobody here has seen, and the store reads the profiles again so the newer head shows.
+    /// </summary>
+    [Fact]
+    public async Task A_restore_based_on_an_old_head_is_refused_and_the_list_is_read_again()
+    {
+        var harness = new Harness();
+        var season = harness.Add(_repoId, "Season 4", 3);
+        await harness.Store.RefreshAsync(_repoId, CancellationToken.None);
+        var held = harness.Store.Find(_repoId, season.Id)!;
+        season.HeadRevision = 4;
+
+        await Assert.ThrowsAsync<UserFriendlyException>(
+            () => harness.Store.RestoreRevisionAsync(held, 1, basedOn: 3, CancellationToken.None));
+
+        Assert.Equal(4, held.HeadRevision);
+        Assert.Equal(4, season.HeadRevision);
     }
 
     [Fact]
