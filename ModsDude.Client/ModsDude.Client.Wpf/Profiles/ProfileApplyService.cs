@@ -895,7 +895,7 @@ public sealed class ProfileApplyService(
     }
 
     private async Task<HeldSavegameName> NameHeldAsync(Repo repo, Game game, Guid savegameId, CancellationToken cancellationToken)
-        => (await heldSavegameNames.ReadAsync(game, repo.Id, [], cancellationToken)).GetValueOrDefault(savegameId)
+        => (await heldSavegameNames.ReadAsync(game, repo.Id, cancellationToken)).GetValueOrDefault(savegameId)
             ?? HeldSavegameName.Unknown;
 
     public bool IsBusy(Repo repo, Game game)

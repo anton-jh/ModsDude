@@ -18,6 +18,7 @@ using ModsDude.Client.Wpf.Shell.Notices;
 using ModsDude.Client.Wpf.Shell.Sidebar;
 using ModsDude.Client.Wpf.Shell.Toasts;
 using System.Collections.ObjectModel;
+using System.Windows;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
@@ -46,7 +47,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 {
     private readonly Repo _repo;
     private readonly ISavegamesClient _savegamesClient;
-    private readonly ISavegameSightingCache _sightings;
+    private readonly ISavegameStore _store;
+    private readonly IGameRepository _games;
     private readonly ISavegameSlots _slots;
     private readonly ISavegameHolds _holds;
     private readonly ISavegameBindingStore _bindingStore;
@@ -64,6 +66,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
     private readonly LatestLoad _timelineLoad;
+    private readonly LatestLoad _publishLoad;
     private readonly IBackgroundProblemReporter _problems;
     private readonly IToastService _toasts;
     private readonly IUserAvatarFactory _avatarFactory;
@@ -72,10 +75,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
 
-    private IReadOnlyList<SavegameDto> _fetched = [];
     private IReadOnlyDictionary<Guid, HeldSavegameName> _heldNames = new Dictionary<Guid, HeldSavegameName>();
     private string? _currentUserId;
     private Guid? _selectOnArrival;
+    private CancellationTokenSource? _annotation;
+    private bool _annotationDue;
 
 
     public RepoSavegamesPageViewModel(
@@ -83,7 +87,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         ISavegamesClient savegamesClient,
         ISavegameSlots slots,
         ISavegameHolds holds,
-        ISavegameSightingCache sightings,
+        ISavegameStore store,
+        IGameRepository games,
         ISavegameBindingStore bindingStore,
         IProfileStore profileStore,
         ICurrentUserStore currentUser,
@@ -111,7 +116,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         _savegamesClient = savegamesClient;
         _slots = slots;
         _holds = holds;
-        _sightings = sightings;
+        _store = store;
+        _games = games;
         _bindingStore = bindingStore;
         _profileStore = profileStore;
         _currentUser = currentUser;
@@ -131,6 +137,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         // than an ObjectDisposedException off the source it came from.
         _lifetime = _pageLifetime.Token;
         _timelineLoad = new LatestLoad(loading => IsLoadingTimeline = loading, _lifetime);
+        _publishLoad = new LatestLoad(_ => { }, _lifetime);
 
         IsMember = repo.MembershipLevel >= RepoMembershipLevel.Member;
 
@@ -238,11 +245,11 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             _currentUserId = null;
         }
 
-        _fetched = [.. await _savegamesClient.GetSavegamesV1Async(_repo.Id, _lifetime)];
+        await _store.EnsureLoadedAsync(_repo.Id, _lifetime);
 
         await ForgetDeletedHoldsAsync();
 
-        _heldNames = await ReadHeldNamesAsync(_fetched);
+        _heldNames = await ReadHeldNamesAsync(_lifetime);
     }
 
     /// <summary>
@@ -286,15 +293,9 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             return;
         }
 
-        HashSet<Guid> known;
-
         try
         {
-            known =
-            [
-                .. _fetched.Select(x => x.Id),
-                .. (await _savegamesClient.GetArchivedSavegamesV1Async(_repo.Id, _lifetime)).Select(x => x.Id)
-            ];
+            await _store.EnsureArchivedLoadedAsync(_repo.Id, _lifetime);
         }
         catch (Exception)
         {
@@ -304,6 +305,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             // than a binding that gets swept on the next visit instead.
             return;
         }
+
+        HashSet<Guid> known = [.. _store.Live(_repo.Id).Select(x => x.Id), .. _store.Archived(_repo.Id).Select(x => x.Id)];
 
         foreach (var binding in held.Where(x => known.Contains(x.SavegameId) is false))
         {
@@ -316,9 +319,16 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         var select = _selectOnArrival;
         _selectOnArrival = null;
 
-        Publish(_fetched, select);
+        Publish(select, annotate: true);
 
         IsLoading = false;
+
+        // After the first publish, so nothing redraws a list that has not been drawn.
+        _store.Changed += OnSavegamesChanged;
+        _profileStore.Changed += OnProfilesChanged;
+        _bindingStore.BindingsChanged += OnBindingsChanged;
+        _games.GameChanged += OnFolderStateChanged;
+        _driftMonitor.Changed += OnFolderStateChanged;
     }
 
     /// <summary>
@@ -331,19 +341,27 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// </summary>
     public void Select(Guid savegameId)
     {
-        if (IsLoading)
+        if (IsLoading is false && Savegames.FirstOrDefault(x => x.Id == savegameId) is SavegameListItemViewModel row)
         {
-            _selectOnArrival = savegameId;
+            Selected = row;
 
             return;
         }
 
-        Selected = Savegames.FirstOrDefault(x => x.Id == savegameId) ?? Selected;
+        // Not drawn yet - a savegame just published is on its way - so the next drawing selects it.
+        _selectOnArrival = savegameId;
     }
 
     public void Dispose()
     {
+        _store.Changed -= OnSavegamesChanged;
+        _profileStore.Changed -= OnProfilesChanged;
+        _bindingStore.BindingsChanged -= OnBindingsChanged;
+        _games.GameChanged -= OnFolderStateChanged;
+        _driftMonitor.Changed -= OnFolderStateChanged;
+
         _pageLifetime.Cancel();
+        _annotation?.Cancel();
 
         Savegames.Clear();
 
@@ -352,10 +370,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
 
     [RelayCommand]
-    private async Task Refresh()
-    {
-        await ReloadAsync(Selected?.Id);
-    }
+    private Task Refresh()
+        => RunAsync("reading the savegames", () => _store.RefreshAsync(_repo.Id, _lifetime));
 
     /// <summary>
     /// Makes a savegame out of a save that is already on this disk. Here so a repo's first savegame
@@ -368,7 +384,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         try
         {
-            await _publishFlow.PublishAsync(_repo, preselectProfileId: null, id => ReloadAsync(id ?? Selected?.Id), _lifetime);
+            await _publishFlow.PublishAsync(_repo, preselectProfileId: null, Select, _lifetime);
         }
         finally
         {
@@ -432,6 +448,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         var message = "What everybody else in this repo will see it called. Its snapshots, its history and "
             + "whoever is holding it are untouched, and so is the mod list it follows.";
         var suggested = row.Name;
+        var previous = row.Name;
 
         try
         {
@@ -449,8 +466,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
                 try
                 {
-                    await _savegamesClient.UpdateSavegameV1Async(
-                        _repo.Id, row.Id, new UpdateSavegameRequest { Name = name }, _lifetime);
+                    await _store.WriteAsync(
+                        _repo.Id,
+                        token => _savegamesClient.UpdateSavegameV1Async(_repo.Id, row.Id, new UpdateSavegameRequest { Name = name }, token),
+                        _lifetime);
                 }
                 catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NameTaken)
                 {
@@ -465,9 +484,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
                     IsWorking = false;
                 }
 
-                _toasts.Show($"'{row.Name}' is called '{name}' now.");
-
-                await ReloadAsync(row.Id);
+                _toasts.Show($"'{previous}' is called '{name}' now.");
 
                 return;
             }
@@ -522,9 +539,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         await RunAsync("archiving a savegame", async () =>
         {
-            await _savegamesClient.ArchiveSavegameV1Async(_repo.Id, row.Id, _lifetime);
-
-            await ReloadAsync(null);
+            await _store.WriteAsync(_repo.Id, token => _savegamesClient.ArchiveSavegameV1Async(_repo.Id, row.Id, token), _lifetime);
         });
     }
 
@@ -573,9 +588,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         await RunAsync("deleting a savegame snapshot", async () =>
         {
-            await _savegamesClient.DeleteSavegameSnapshotV1Async(_repo.Id, row.Id, number, _lifetime);
-
-            await LoadTimelineAsync(row);
+            await _store.WriteAsync(_repo.Id, token => _savegamesClient.DeleteSavegameSnapshotV1Async(_repo.Id, row.Id, number, token), _lifetime);
         });
     }
 
@@ -622,21 +635,19 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     }
 
 
-    private void Publish(IReadOnlyList<SavegameDto> savegames, Guid? select = null)
+    /// <summary>
+    /// Brings the list in line with the savegames the store holds. Rows are kept by id and updated in
+    /// place, so the selection and the history beside it survive a read that changed nothing about them.
+    /// </summary>
+    /// <param name="annotate">
+    /// Whether to work the late chips out again. They hash slots on disk, so only a change to the savegames,
+    /// the profiles or what this machine holds asks for them - not every drift check.
+    /// </param>
+    private void Publish(Guid? select, bool annotate)
     {
-        // Every path that renders a savegame list goes through here, which is why the drift check's
-        // "somebody took this over" is fed from this one place rather than from each fetch. The claim
-        // watch feeds it too, for the repos this machine holds a save in, whether or not this page is
-        // open.
-        _sightings.Record(_repo.Id, savegames, _currentUserId);
-
-        // Kept here for the same reason: the held-save names are read off it, so a reload has to replace
-        // it, or they go on answering about the list as it was when the page opened.
-        _fetched = savegames;
-
-        var wanted = select ?? Selected?.Id;
-
-        Savegames.Clear();
+        var savegames = _store.Live(_repo.Id);
+        var ordered = InListOrder(savegames).ToList();
+        var wanted = select ?? _selectOnArrival ?? Selected?.Id;
 
         StatisticsText = DescribeStatistics(SavegameStatistics.From(savegames));
 
@@ -645,27 +656,52 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         var ambiguous = UserDisplay.FindAmbiguous(
             savegames.Select(x => x.Checkout?.User).OfType<UserDto>());
 
-        // One read of the game's folder state for the whole list, rather than one per row: a
-        // manifest is every mod in the profile with a hash each, and twenty rows must not cost twenty
-        // parses of it.
-        var host = _offers.ReadHost(_repo);
+        var rows = Savegames.ToDictionary(x => x.Id);
+        var selectedHistoryMoved = false;
 
-        foreach (var savegame in InListOrder(savegames))
+        for (var i = Savegames.Count - 1; i >= 0; i--)
         {
-            var row = new SavegameListItemViewModel(
-                savegame,
-                _currentUserId,
-                IsMember,
-                ambiguous.Contains(savegame.Checkout?.User.Id ?? ""),
-                _time,
-                savegame.Checkout?.User is UserDto holder ? _avatarFactory.Create(holder) : null,
-                this);
-
-            Savegames.Add(row);
+            if (ordered.All(x => x.Id != Savegames[i].Id))
+            {
+                Savegames.RemoveAt(i);
+            }
         }
 
-        // After the rows exist, because a refusal names the savegame in the way - which is a row in
-        // this same list.
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            var savegame = ordered[index];
+            var isAmbiguous = ambiguous.Contains(savegame.Checkout?.User.Id ?? "");
+
+            if (rows.TryGetValue(savegame.Id, out var row))
+            {
+                selectedHistoryMoved |= row == Selected && HistoryMoved(row.Savegame, savegame);
+
+                row.Update(savegame, isAmbiguous, HolderAvatar(savegame, row));
+            }
+            else
+            {
+                row = new SavegameListItemViewModel(
+                    savegame, _currentUserId, IsMember, isAmbiguous, _time, HolderAvatar(savegame, null), this);
+            }
+
+            var at = Savegames.IndexOf(row);
+
+            if (at == -1)
+            {
+                Savegames.Insert(index, row);
+            }
+            else if (at != index)
+            {
+                Savegames.Move(at, index);
+            }
+        }
+
+        // One read of the game's folder state for the whole list, rather than one per row: a
+        // manifest is every mod in the profile with a hash each, and twenty rows must not cost twenty
+        // parses of it. After the rows exist, because a refusal names the savegame in the way - which
+        // is a row in this same list.
+        var host = _offers.ReadHost(_repo);
+
         foreach (var row in Savegames)
         {
             _offers.Offer(_repo, row, host, _heldNames);
@@ -674,10 +710,104 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         IsEmpty = Savegames.Count == 0;
 
-        // Assigning this is what loads the timeline, so it happens after the rows exist.
+        var previous = Selected;
+
+        // Assigning a different row is what loads its timeline.
         Selected = Savegames.FirstOrDefault(x => x.Id == wanted) ?? Savegames.FirstOrDefault();
 
-        _ = AnnotateAsync([.. Savegames]);
+        if (wanted is Guid arrived && Selected?.Id == arrived)
+        {
+            _selectOnArrival = null;
+        }
+
+        if (selectedHistoryMoved && Selected is SavegameListItemViewModel selected && selected == previous)
+        {
+            _ = LoadTimelineAsync(selected);
+        }
+
+        if (annotate)
+        {
+            _annotation?.Cancel();
+            _annotation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime);
+            _ = AnnotateAsync([.. Savegames], _annotation.Token);
+        }
+    }
+
+    /// <summary>Whether what the history column shows for a savegame can have changed.</summary>
+    private static bool HistoryMoved(SavegameDto before, SavegameDto after)
+        => before.Head?.Number != after.Head?.Number
+            || before.SnapshotCount != after.SnapshotCount
+            || before.Checkout?.Id != after.Checkout?.Id
+            || before.Checkout?.Status != after.Checkout?.Status;
+
+    /// <summary>The holder's avatar, kept where the holder has not changed so its picture is not loaded again.</summary>
+    private AvatarViewModel? HolderAvatar(SavegameDto savegame, SavegameListItemViewModel? row)
+    {
+        if (savegame.Checkout?.User is not UserDto holder)
+        {
+            return null;
+        }
+
+        return row?.Savegame.Checkout?.User.Id == holder.Id && row.HolderAvatar is AvatarViewModel kept
+            ? kept
+            : _avatarFactory.Create(holder);
+    }
+
+    /// <summary>
+    /// Draws the list again from what the store holds, after anything it is worked out from changed:
+    /// the savegames, the profiles, or what this machine holds and where its mod folder is.
+    /// </summary>
+    /// <remarks>
+    /// A newer redraw supersedes an older one still reading, so an annotation asked for is carried over
+    /// until a redraw lands rather than lost with the one that asked.
+    /// </remarks>
+    private Task RepublishAsync(bool annotate)
+    {
+        _annotationDue |= annotate;
+
+        return _publishLoad.RunAsync(
+            ReadHeldNamesAsync,
+            names =>
+            {
+                var due = _annotationDue;
+                _annotationDue = false;
+
+                _heldNames = names;
+                Publish(select: null, due);
+            },
+            exception =>
+            {
+                _errorReporter.Record(exception, "drawing the savegame list again");
+                _problems.Report(BackgroundProblem.DeferredLoad);
+
+                return Task.CompletedTask;
+            });
+    }
+
+    private void OnSavegamesChanged(Guid repoId)
+    {
+        // Any repo: a savegame this game holds from another one is named on the rows here.
+        _ = RepublishAsync(annotate: true);
+    }
+
+    private void OnProfilesChanged(Guid repoId)
+    {
+        if (repoId == _repo.Id)
+        {
+            _ = RepublishAsync(annotate: true);
+        }
+    }
+
+    /// <summary>Raised on whichever thread changed it, so the redraw is posted.</summary>
+    private void OnBindingsChanged(object? sender, EventArgs e)
+    {
+        _ = Application.Current?.Dispatcher.InvokeAsync(() => RepublishAsync(annotate: true));
+    }
+
+    /// <summary>Which profile the game follows and what its folders hold, which decide every row'"'"'s offer.</summary>
+    private void OnFolderStateChanged(object? sender, EventArgs e)
+    {
+        _ = Application.Current?.Dispatcher.InvokeAsync(() => RepublishAsync(annotate: false));
     }
 
     /// <summary>
@@ -714,32 +844,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         return $"{saves} · {snapshots} · {ByteSize.Describe(statistics.TotalBytes)} stored";
     }
 
-    private async Task ReloadAsync(Guid? select)
-    {
-        IsLoading = true;
-
-        try
-        {
-            IReadOnlyList<SavegameDto> savegames = [.. await _savegamesClient.GetSavegamesV1Async(_repo.Id, _lifetime)];
-
-            _heldNames = await ReadHeldNamesAsync(savegames);
-
-            Publish(savegames, select);
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away mid-refresh. There is nothing left to publish to.
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-
     /// <summary>What the savegames this repo's game holds are called, whichever repo each is in.</summary>
-    private async Task<IReadOnlyDictionary<Guid, HeldSavegameName>> ReadHeldNamesAsync(IReadOnlyList<SavegameDto> savegames)
+    private async Task<IReadOnlyDictionary<Guid, HeldSavegameName>> ReadHeldNamesAsync(CancellationToken cancellationToken)
         => _repo.Games.FirstOrDefault() is Game game
-            ? await _heldSavegameNames.ReadAsync(game, _repo.Id, savegames, _lifetime)
+            ? await _heldSavegameNames.ReadAsync(game, _repo.Id, cancellationToken)
             : new Dictionary<Guid, HeldSavegameName>();
 
     /// <summary>
@@ -748,12 +856,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// holding up a list that is otherwise ready, and both are absorbed on failure - a missing chip
     /// costs a caption, and the row is still correct without it.
     /// </summary>
-    private async Task AnnotateAsync(IReadOnlyList<SavegameListItemViewModel> rows)
+    private async Task AnnotateAsync(IReadOnlyList<SavegameListItemViewModel> rows, CancellationToken cancellationToken)
     {
         try
         {
-            await AnnotateRevisionsAsync(rows);
-            await AnnotateUnpublishedPlayAsync(rows);
+            await AnnotateRevisionsAsync(rows, cancellationToken);
+            await AnnotateUnpublishedPlayAsync(rows, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -766,7 +874,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         }
     }
 
-    private async Task AnnotateRevisionsAsync(IReadOnlyList<SavegameListItemViewModel> rows)
+    private async Task AnnotateRevisionsAsync(IReadOnlyList<SavegameListItemViewModel> rows, CancellationToken cancellationToken)
     {
         if (_repo.Adapter.FindSavegameCompatibility() is not SavegameCompatibilityPolicy policy)
         {
@@ -775,18 +883,20 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         foreach (var row in rows)
         {
-            _lifetime.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (row.Savegame.Head?.ProfileRevision is not int played ||
                 _profileStore.Find(_repo.Id, row.Savegame.ProfileId) is not Profile profile)
             {
+                row.SetCompatibility(false);
+
                 continue;
             }
 
             try
             {
                 var verdict = await _compatibilityCheck.AssessAsync(
-                    _repo.Id, profile.Id, played, profile.HeadRevision, policy, _lifetime);
+                    _repo.Id, profile.Id, played, profile.HeadRevision, policy, cancellationToken);
 
                 row.SetCompatibility(verdict?.ShouldPrompt is true);
             }
@@ -799,8 +909,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         }
     }
 
-    private async Task AnnotateUnpublishedPlayAsync(IReadOnlyList<SavegameListItemViewModel> rows)
+    private async Task AnnotateUnpublishedPlayAsync(IReadOnlyList<SavegameListItemViewModel> rows, CancellationToken cancellationToken)
     {
+        var played = new HashSet<Guid>();
+
         foreach (var game in _repo.Games.ToList())
         {
             // A hold whose folder the settings no longer name has nothing to hash, so there is
@@ -812,7 +924,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
             foreach (var binding in _bindingStore.GetBindings(game.Identity))
             {
-                _lifetime.ThrowIfCancellationRequested();
+                cancellationToken.ThrowIfCancellationRequested();
 
                 if (rows.FirstOrDefault(x => x.Id == binding.SavegameId) is not SavegameListItemViewModel row
                     || unreachable.Contains(binding.SavegameId))
@@ -820,13 +932,19 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
                     continue;
                 }
 
-                var availability = await _slots.ClassifySlotAsync(game, binding.Slot, _lifetime);
+                var availability = await _slots.ClassifySlotAsync(game, binding.Slot, cancellationToken);
 
                 if (availability is SavegameSlotAvailability.HeldWithUnpublishedPlay)
                 {
-                    row.SetUnpublishedPlay(true);
+                    played.Add(row.Id);
                 }
             }
+        }
+
+        // Every row, so one checked in since the last pass loses the chip.
+        foreach (var row in rows)
+        {
+            row.SetUnpublishedPlay(played.Contains(row.Id));
         }
     }
 
@@ -899,7 +1017,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// </remarks>
     Task ISavegameRowActions.CheckInAsync(SavegameListItemViewModel row)
         => row.HeldHere is Game game
-            ? RunAsync("checking a savegame in", () => _checkInFlow.CheckInHeldAsync(game, row.Id, row.Name, () => ReloadAsync(row.Id), _lifetime))
+            ? RunAsync("checking a savegame in", () => _checkInFlow.CheckInHeldAsync(game, row.Id, row.Name, _lifetime))
             : Task.CompletedTask;
 
     /// <summary>
@@ -929,7 +1047,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             }
 
             await _driftMonitor.CheckAsync();
-            await ReloadAsync(row.Id);
         });
     }
 
@@ -959,7 +1076,6 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             _toasts.Show($"ModsDude has stopped tracking '{row.Name}'. The save is still on this disk, and the claim is still yours.");
 
             await _driftMonitor.CheckAsync();
-            await ReloadAsync(row.Id);
         });
     }
 
@@ -996,7 +1112,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         SavegameCheckOutMode mode,
         SavegameRevisionMode? revisionMode)
         => RunAsync("checking a savegame out", () => _checkOutFlow.CheckOutAsync(
-            _repo, row.Savegame, snapshotNumber, playedRevision, mode, revisionMode, _currentUserId, _heldNames, () => ReloadAsync(row.Id), _lifetime));
+            _repo, row.Savegame, snapshotNumber, playedRevision, mode, revisionMode, _currentUserId, _heldNames, _lifetime));
 
 
     public class Factory(IServiceProvider serviceProvider)

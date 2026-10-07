@@ -7,7 +7,9 @@ using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Tests.GameProcesses;
+using ModsDude.Client.Core.Tests.Stores;
 using ModsDude.Client.Core.Tests.Sync;
+using ModsDude.Client.Core.Tests.Users;
 
 namespace ModsDude.Client.Core.Tests.Savegames;
 
@@ -76,14 +78,15 @@ internal sealed class SavegameHarness : IDisposable
         HeldSavegames = new HeldSavegames(Bindings);
         PlayAttribution = new SavegamePlayAttribution(Bindings, Reader, ManifestStore, NullLogger<SavegamePlayAttribution>.Instance);
         DriftCheck = new SavegameDriftCheck(Reader, ManifestStore, Sightings);
-        Holds = new SavegameHolds(Server, Bindings, adapters, NullLogger<SavegameHolds>.Instance);
-        CheckOut = new SavegameCheckOut(Server, Bindings, adapters, Slots, transfer, Sightings, Guard, time);
+        SavegameStore = new SavegameStore(Server, new FixedCurrentUser("me"), InlineStoreDispatcher.Instance, NullLogger<SavegameStore>.Instance);
+        Holds = new SavegameHolds(Server, SavegameStore, Bindings, adapters, NullLogger<SavegameHolds>.Instance);
+        CheckOut = new SavegameCheckOut(Server, Bindings, adapters, Slots, transfer, SavegameStore, Guard, time);
         CheckIn = new SavegameCheckIn(
-            Server, packer, Bindings, adapters, Slots, transfer, recycler, renamer, Holds, PlayAttribution, Guard, time,
+            Server, SavegameStore, packer, Bindings, adapters, Slots, transfer, recycler, renamer, Holds, PlayAttribution, Guard, time,
             NullLogger<SavegameCheckIn>.Instance);
         PendingPublishes = new SavegamePendingPublishes(State);
         Publisher = new SavegamePublisher(
-            Server, packer, Bindings, PendingPublishes, HeldSavegames, adapters, Slots, transfer, recycler, renamer, Guard, time,
+            Server, SavegameStore, packer, Bindings, PendingPublishes, HeldSavegames, adapters, Slots, transfer, recycler, renamer, Guard, time,
             NullLogger<SavegamePublisher>.Instance);
     }
 
@@ -95,6 +98,7 @@ internal sealed class SavegameHarness : IDisposable
     public FakeSavegameUploader Uploader { get; }
     public FakeSlotRecycleBin RecycleBin { get; } = new();
     public FakeSavegameSightings Sightings { get; } = new();
+    public SavegameStore SavegameStore { get; }
     public FakeGameRunningGuard Guard { get; } = new();
     public FakeGameState State { get; } = new();
     public FakeSavegameAdapter Adapter { get; }

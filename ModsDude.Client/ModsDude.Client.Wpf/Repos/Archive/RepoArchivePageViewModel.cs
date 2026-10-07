@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -41,6 +42,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
     private readonly IProfileStore _profileStore;
     private readonly IGameRepository _games;
     private readonly ISavegamesClient _savegamesClient;
+    private readonly ISavegameStore _savegames;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
     private readonly IToastService _toasts;
@@ -59,6 +61,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
         IProfileStore profileStore,
         IGameRepository games,
         ISavegamesClient savegamesClient,
+        ISavegameStore savegames,
         IModalService modalService,
         IErrorReporter errorReporter,
         IToastService toasts)
@@ -68,6 +71,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
         _profileStore = profileStore;
         _games = games;
         _savegamesClient = savegamesClient;
+        _savegames = savegames;
         _modalService = modalService;
         _errorReporter = errorReporter;
         _toasts = toasts;
@@ -157,9 +161,9 @@ public partial class RepoArchivePageViewModel : PageViewModel
     private async Task<(IReadOnlyList<ProfileDto> Profiles, IReadOnlyList<SavegameDto> Savegames)> FetchAsync()
     {
         var profiles = await _profileService.GetArchivedProfiles(_repo.Id, _lifetime.Token);
-        var savegames = await _savegamesClient.GetArchivedSavegamesV1Async(_repo.Id, _lifetime.Token);
+        await _savegames.RefreshArchivedAsync(_repo.Id, _lifetime.Token);
 
-        return (profiles, [.. savegames]);
+        return (profiles, _savegames.Archived(_repo.Id));
     }
 
     /// <summary>Fills the two lists. Dispatcher thread only.</summary>
@@ -240,8 +244,10 @@ public partial class RepoArchivePageViewModel : PageViewModel
     {
         await RunAsync(async name =>
         {
-            await _savegamesClient.RestoreSavegameV1Async(
-                _repo.Id, item.Id, new RestoreRequest { Name = name }, _lifetime.Token);
+            await _savegames.WriteAsync(
+                _repo.Id,
+                token => _savegamesClient.RestoreSavegameV1Async(_repo.Id, item.Id, new RestoreRequest { Name = name }, token),
+                _lifetime.Token);
 
             _toasts.Show($"'{name ?? item.Name}' is back in the repo's saves.");
         }, item, "savegame");
@@ -366,7 +372,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
 
         try
         {
-            await _savegamesClient.DeleteSavegameV1Async(_repo.Id, item.Id, _lifetime.Token);
+            await _savegames.WriteAsync(_repo.Id, token => _savegamesClient.DeleteSavegameV1Async(_repo.Id, item.Id, token), _lifetime.Token);
 
             _toasts.Show($"'{item.Name}' is gone for good.");
 

@@ -3,7 +3,6 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
-using ModsDude.Client.Core.Services;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
@@ -14,14 +13,13 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// </remarks>
 public sealed class HeldSavegameNames(
     ISavegameBindingStore bindingStore,
-    ISavegamesClient savegamesClient,
+    ISavegameStore savegames,
     IRepoStore repos,
     ILogger<HeldSavegameNames> logger) : IHeldSavegameNames
 {
     public async Task<IReadOnlyDictionary<Guid, HeldSavegameName>> ReadAsync(
         Game game,
         Guid currentRepoId,
-        IReadOnlyCollection<SavegameDto> known,
         CancellationToken cancellationToken)
     {
         var names = new Dictionary<Guid, HeldSavegameName>();
@@ -35,19 +33,13 @@ public sealed class HeldSavegameNames(
 
             var wanted = held.Select(x => x.SavegameId).ToHashSet();
 
-            if (repoId == currentRepoId)
-            {
-                Add(names, known, wanted, otherRepoName);
-            }
+            await TryReadAsync(repoId, savegames.EnsureLoadedAsync, cancellationToken);
+            Add(names, savegames.Live(repoId), wanted, otherRepoName);
 
             if (wanted.Count > 0)
             {
-                Add(names, await TryReadAsync(repoId, archived: false, cancellationToken), wanted, otherRepoName);
-            }
-
-            if (wanted.Count > 0)
-            {
-                Add(names, await TryReadAsync(repoId, archived: true, cancellationToken), wanted, otherRepoName);
+                await TryReadAsync(repoId, savegames.EnsureArchivedLoadedAsync, cancellationToken);
+                Add(names, savegames.Archived(repoId), wanted, otherRepoName);
             }
         }
 
@@ -68,26 +60,18 @@ public sealed class HeldSavegameNames(
     }
 
     /// <summary>
-    /// A repo's savegames, or none where they cannot be read - access lost, the repo gone, the server
-    /// unreachable. A name is only ever wording, so the savegame is then referred to without it.
+    /// Reads one of a repo's lists, or leaves it unread where it cannot be - access lost, the repo gone,
+    /// the server unreachable. A name is only ever wording, so the savegame is then referred to without it.
     /// </summary>
-    private async Task<IEnumerable<SavegameDto>> TryReadAsync(Guid repoId, bool archived, CancellationToken cancellationToken)
+    private async Task TryReadAsync(Guid repoId, Func<Guid, CancellationToken, Task> read, CancellationToken cancellationToken)
     {
         try
         {
-            return archived
-                ? await savegamesClient.GetArchivedSavegamesV1Async(repoId, cancellationToken)
-                : await savegamesClient.GetSavegamesV1Async(repoId, cancellationToken);
+            await read(repoId, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogWarning(
-                exception,
-                "Could not read the {Which} savegames of repo {RepoId} to name the savegames held from it.",
-                archived ? "archived" : "live",
-                repoId);
-
-            return [];
+            logger.LogWarning(exception, "Could not read the savegames of repo {RepoId} to name the savegames held from it.", repoId);
         }
     }
 }

@@ -140,12 +140,9 @@ public sealed record SavegameClaimSighting(SavegameClaimHolder? Holder, bool IsY
 /// happens to know about.
 /// </summary>
 /// <remarks>
-/// Deliberately partial, and deliberately <b>not</b> a client call - the same bargain
-/// <see cref="Sync.IProfileRevisions"/> strikes for profiles, and for the same reason. The answer is
-/// there for the repo whose savegame list the user has loaded, and for the repos this machine holds a
-/// save in once the claim watch has read theirs, and absent for the rest - because the alternative is
-/// a network round trip per held savegame on every window activation, in a check whose entire point
-/// is that it works offline and costs a directory listing.
+/// Answered from the savegames the client holds - see <see cref="ISavegameStore"/> - which include those
+/// of every repo this machine holds a save in once the claim watch has read them. A repo not read yet
+/// answers null rather than a network round trip per held savegame on every window activation.
 /// </remarks>
 public interface ISavegameSightings
 {

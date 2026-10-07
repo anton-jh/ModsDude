@@ -706,12 +706,11 @@ public partial class App : Application
         services.AddSingleton<IProfileRevisionComparer>(sp => sp.GetRequiredService<IProfileService>());
         services.AddSingleton<IKnownRepos>(sp => sp.GetRequiredService<IRepoStore>());
 
-        // The savegame counterpart, populated as a side effect of reading a savegame list - the Saves
-        // page, or the claim watch reading the lists of whatever this machine holds. Registered under
-        // both names for the same reason: those record into it, the drift check reads it, and they
-        // have to be the one object.
-        services.AddSingleton<ISavegameSightingCache, SavegameSightingCache>();
-        services.AddSingleton<ISavegameSightings>(sp => sp.GetRequiredService<ISavegameSightingCache>());
+        // The savegame counterpart: the drift check reads the head and claim of every savegame held here
+        // from the same store the pages read.
+        services.AddSingleton<ISavegameStore, SavegameStore>();
+        services.AddSingleton<ISavegameSightings>(sp => sp.GetRequiredService<ISavegameStore>());
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<ISavegameStore>());
         services.AddSingleton<ISavegameClaimWatch, SavegameClaimWatch>();
 
         // Which processes are which game comes off the repos' adapters, for the same reason the

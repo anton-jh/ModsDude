@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Repos;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using System.Collections.Specialized;
 using System.Windows;
@@ -9,8 +10,8 @@ using System.Windows.Threading;
 namespace ModsDude.Client.Wpf.Shared;
 
 /// <summary>
-/// Reads the repo list, and the profiles of every repo the client holds, again now and then, so what
-/// other people changed shows up without anybody asking for it.
+/// Reads the repo list, and the profiles and savegames of every repo the client holds, again now and
+/// then, so what other people changed shows up without anybody asking for it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -30,6 +31,7 @@ namespace ModsDude.Client.Wpf.Shared;
 public sealed class RemoteChangeWatcher(
     IRepoStore repoStore,
     IProfileStore profileStore,
+    ISavegameStore savegameStore,
     IGameRepository games,
     ILogger<RemoteChangeWatcher> logger)
     : IRemoteChangeWatcher
@@ -147,6 +149,18 @@ public sealed class RemoteChangeWatcher(
                 catch (Exception exception)
                 {
                     logger.LogInformation(exception, "Could not read the profiles of repo {RepoId} again.", repoId);
+                }
+            }
+
+            foreach (var repoId in savegameStore.LoadedRepos.Where(x => repoStore.Repos.Any(repo => repo.Id == x)))
+            {
+                try
+                {
+                    await savegameStore.RefreshAsync(repoId, CancellationToken.None);
+                }
+                catch (Exception exception)
+                {
+                    logger.LogInformation(exception, "Could not read the savegames of repo {RepoId} again.", repoId);
                 }
             }
         }

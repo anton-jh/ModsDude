@@ -9,6 +9,7 @@ namespace ModsDude.Client.Core.Savegames;
 
 public sealed class SavegameCheckIn(
     ISavegamesClient savegamesClient,
+    ISavegameStore store,
     ISavegamePacker packer,
     ISavegameBindingStore bindings,
     ILocalSavegameAdapters adapters,
@@ -85,7 +86,7 @@ public sealed class SavegameCheckIn(
 
             progress?.Report(new SavegameProgress(SavegameStage.Recording, 0, 0));
 
-            response = await savegamesClient.CheckInSavegameV1Async(binding.RepoId, savegameId, new CheckInSavegameRequest
+            response = await store.WriteAsync(binding.RepoId, token => savegamesClient.CheckInSavegameV1Async(binding.RepoId, savegameId, new CheckInSavegameRequest
             {
                 RequestId = pending.RequestId,
                 BasedOn = binding.Snapshot,
@@ -97,7 +98,7 @@ public sealed class SavegameCheckIn(
                 KeepPlaying = keepPlaying,
                 TakeOver = takeOver,
                 Details = details
-            }, ct);
+            }, token), ct);
         }
         finally
         {

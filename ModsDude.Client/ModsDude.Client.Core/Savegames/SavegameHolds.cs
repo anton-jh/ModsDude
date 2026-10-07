@@ -7,6 +7,7 @@ namespace ModsDude.Client.Core.Savegames;
 
 public sealed class SavegameHolds(
     ISavegamesClient savegamesClient,
+    ISavegameStore store,
     ISavegameBindingStore bindings,
     ILocalSavegameAdapters adapters,
     ILogger<SavegameHolds> logger)
@@ -14,7 +15,7 @@ public sealed class SavegameHolds(
 {
     public async Task ReleaseAsync(Game game, Guid repoId, Guid savegameId, CancellationToken ct)
     {
-        await savegamesClient.DiscardSavegameCheckoutV1Async(repoId, savegameId, ct);
+        await store.WriteAsync(repoId, token => savegamesClient.DiscardSavegameCheckoutV1Async(repoId, savegameId, token), ct);
 
         bindings.ClearBinding(game.Identity, savegameId);
     }

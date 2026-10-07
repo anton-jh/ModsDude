@@ -131,7 +131,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     }
 
 
-    public SavegameDto Savegame { get; }
+    public SavegameDto Savegame { get; private set; }
 
     public Guid Id => Savegame.Id;
     public string Name => Savegame.Name;
@@ -398,10 +398,10 @@ public partial class SavegameListItemViewModel : ObservableObject
         && _currentUserId is not null
         && held.User.Id == _currentUserId;
 
-    public bool ShowHolderTag { get; }
+    public bool ShowHolderTag { get; private set; }
 
     public string? HolderTag => Holder?.User.Tag;
-    public AvatarViewModel? HolderAvatar { get; }
+    public AvatarViewModel? HolderAvatar { get; private set; }
     public bool HasHolder => Holder is not null;
 
 
@@ -455,6 +455,25 @@ public partial class SavegameListItemViewModel : ObservableObject
     private Task TakeCopyInCompatibilityMode()
         => _actions?.TakeCopyAsync(this, SavegameRevisionMode.Compatibility) ?? Task.CompletedTask;
 
+
+    /// <summary>
+    /// Takes the savegame as the server now describes it. The row stays, and so does the selection on it.
+    /// </summary>
+    public void Update(SavegameDto savegame, bool isAmbiguous, AvatarViewModel? holderAvatar)
+    {
+        Savegame = savegame;
+        ShowHolderTag = isAmbiguous;
+        HolderAvatar = holderAvatar;
+
+        // Everything on a row is worked out from the savegame, so all of it may have moved.
+        OnPropertyChanged(string.Empty);
+
+        CheckOutCommand.NotifyCanExecuteChanged();
+        CheckInCommand.NotifyCanExecuteChanged();
+        DiscardCommand.NotifyCanExecuteChanged();
+
+        RefreshChips();
+    }
 
     /// <summary>
     /// Records that the slot this machine holds for this savegame has moved since it was written -

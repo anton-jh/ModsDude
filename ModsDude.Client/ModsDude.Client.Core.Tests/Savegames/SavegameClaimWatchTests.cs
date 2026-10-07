@@ -34,7 +34,7 @@ public class SavegameClaimWatchTests
 
         Assert.True(await harness.Watch.RefreshAsync(CancellationToken.None));
 
-        var claim = harness.Sightings.GetClaim(harness.Server.RepoId, harness.Server.SavegameId);
+        var claim = harness.Store.GetClaim(harness.Server.RepoId, harness.Server.SavegameId);
 
         Assert.NotNull(claim);
         Assert.False(claim.IsYours);
@@ -67,7 +67,7 @@ public class SavegameClaimWatchTests
 
         await harness.Watch.RefreshAsync(CancellationToken.None);
 
-        Assert.True(harness.Sightings.GetClaim(harness.Server.RepoId, harness.Server.SavegameId)?.IsYours);
+        Assert.True(harness.Store.GetClaim(harness.Server.RepoId, harness.Server.SavegameId)?.IsYours);
     }
 
 
@@ -100,18 +100,21 @@ public class SavegameClaimWatchTests
 
             _bindings = new SavegameBindingStore(_state);
 
+            var currentUser = new CurrentUserStore(new Users(), InlineStoreDispatcher.Instance, NullLogger<CurrentUserStore>.Instance);
+
+            Store = new SavegameStore(Server, currentUser, InlineStoreDispatcher.Instance, NullLogger<SavegameStore>.Instance);
+
             Watch = new SavegameClaimWatch(
                 new Candidates(),
                 _bindings,
-                Server,
-                new CurrentUserStore(new Users(), InlineStoreDispatcher.Instance, NullLogger<CurrentUserStore>.Instance),
-                Sightings,
+                Store,
+                currentUser,
                 NullLogger<SavegameClaimWatch>.Instance);
         }
 
 
         public FakeSavegameServer Server { get; } = new();
-        public SavegameSightingCache Sightings { get; } = new();
+        public SavegameStore Store { get; }
         public SavegameClaimWatch Watch { get; }
 
 

@@ -34,7 +34,7 @@ public sealed class SavegamePublishFlow(
     public async Task PublishAsync(
         Repo repo,
         Guid? preselectProfileId,
-        Func<Guid?, Task> changed,
+        Action<Guid>? published,
         CancellationToken cancellationToken)
     {
         if (repo.Games.FirstOrDefault() is not Game game)
@@ -69,7 +69,7 @@ public sealed class SavegamePublishFlow(
                 return;
             }
 
-            await ExecuteAsync(game, repo, plan, changed, cancellationToken);
+            await ExecuteAsync(game, repo, plan, published, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -112,7 +112,7 @@ public sealed class SavegamePublishFlow(
         Game game,
         Repo repo,
         SavegamePublishPlan plan,
-        Func<Guid?, Task> changed,
+        Action<Guid>? published,
         CancellationToken cancellationToken)
     {
         // Before the first step, since an activation into a running game would be recorded and then
@@ -129,11 +129,7 @@ public sealed class SavegamePublishFlow(
 
         if (plan.CheckInFirst is SavegamePublishCheckIn checkIn)
         {
-            var released = await CheckInFirstAsync(game, plan, checkIn, cancellationToken);
-
-            await changed(null);
-
-            if (released is false)
+            if (await CheckInFirstAsync(game, plan, checkIn, cancellationToken) is false)
             {
                 return;
             }
@@ -143,8 +139,6 @@ public sealed class SavegamePublishFlow(
             && plan.Profile.ProfileId is Guid profileId
             && await profileActivation.ActivateFirstAsync(repo, game, profileId, plan.Profile.Name, revision: null, cancellationToken) is false)
         {
-            await changed(null);
-
             return;
         }
 
@@ -164,7 +158,7 @@ public sealed class SavegamePublishFlow(
                 : $"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. The local copy went to the Recycle Bin.");
         }
 
-        await changed(outcome.Savegame.Id);
+        published?.Invoke(outcome.Savegame.Id);
     }
 
     /// <returns>Whether the savegame was handed back, which is what frees the mod folder.</returns>

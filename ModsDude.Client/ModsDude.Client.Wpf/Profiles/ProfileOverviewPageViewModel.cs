@@ -7,6 +7,7 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Games;
@@ -35,7 +36,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     private readonly Profile _profile;
     private readonly IProfileService _profileService;
     private readonly LatestLoad _statisticsLoad;
-    private readonly ISavegamesClient _savegamesClient;
+    private readonly ISavegameStore _savegames;
     private readonly ISavegamePublishFlow _publishFlow;
     private readonly IShellNavigationService _navigation;
     private readonly IDriftMonitor _driftMonitor;
@@ -47,15 +48,15 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     private ProfileModStatistics? _fetchedModStatistics;
 
-    /// <summary>The repo's live savegames, or null where the repo could not be read.</summary>
-    private IReadOnlyList<SavegameDto>? _fetchedSavegames;
+    /// <summary>Whether the repo's savegames could be read when the page opened.</summary>
+    private bool _savegamesRead;
 
 
     public ProfileOverviewPageViewModel(
         Repo repo,
         Profile profile,
         IProfileService profileService,
-        ISavegamesClient savegamesClient,
+        ISavegameStore savegames,
         ISavegamePublishFlow publishFlow,
         IShellNavigationService navigation,
         IDriftMonitor driftMonitor,
@@ -67,7 +68,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         _repo = repo;
         _profile = profile;
         _profileService = profileService;
-        _savegamesClient = savegamesClient;
+        _savegames = savegames;
         _publishFlow = publishFlow;
         _navigation = navigation;
         _driftMonitor = driftMonitor;
@@ -142,6 +143,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         _pageLifetime.Cancel();
 
         _profile.PropertyChanged -= OnProfileChanged;
+        _savegames.Changed -= OnSavegamesChanged;
         _repo.Games.CollectionChanged -= OnGamesChanged;
         _driftMonitor.Changed -= OnDriftChanged;
 
@@ -162,7 +164,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            await _publishFlow.PublishAsync(_repo, _profile.Id, _ => ReloadSavegamesAsync(), _lifetime);
+            await _publishFlow.PublishAsync(_repo, _profile.Id, published: null, _lifetime);
         }
         finally
         {
@@ -176,7 +178,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     protected override async Task InitAsync()
     {
         _fetchedModStatistics = await _profileService.GetModStatistics(_repo.Id, _profile.Id, _lifetime);
-        _fetchedSavegames = await LoadSavegamesAsync(_lifetime);
+        _savegamesRead = await ReadSavegamesAsync(_lifetime);
     }
 
     protected override void OnInitCompleted()
@@ -187,6 +189,8 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         DescribeSavegames();
 
         IsWorking = false;
+
+        _savegames.Changed += OnSavegamesChanged;
     }
 
     /// <summary>
@@ -211,45 +215,39 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     /// A failed read leaves the section saying so rather than saying the profile has no savegame -
     /// "none yet" guessed from a dropped connection would be a sentence somebody acts on.
     /// </remarks>
-    private async Task<IReadOnlyList<SavegameDto>?> LoadSavegamesAsync(CancellationToken cancellationToken)
+    private async Task<bool> ReadSavegamesAsync(CancellationToken cancellationToken)
     {
         if (HasSavegames is false)
         {
-            return [];
+            return true;
         }
 
         try
         {
-            return [.. await _savegamesClient.GetSavegamesV1Async(_repo.Id, cancellationToken)];
+            await _savegames.EnsureLoadedAsync(_repo.Id, cancellationToken);
+
+            return true;
         }
         catch (ApiException exception)
         {
             _logger.LogWarning(exception, "Could not read the savegames of repo {RepoId} for profile {ProfileId}.", _repo.Id, _profile.Id);
 
-            return null;
+            return false;
         }
-    }
-
-    /// <summary>After a publish: the card says what the repo says now.</summary>
-    private async Task ReloadSavegamesAsync()
-    {
-        _fetchedSavegames = await LoadSavegamesAsync(_lifetime);
-
-        DescribeSavegames();
     }
 
     private void DescribeSavegames()
     {
         Savegames.Clear();
 
-        if (_fetchedSavegames is null)
+        if (_savegamesRead is false)
         {
             SavegamesNote = "This repo's saves could not be read just now.";
 
             return;
         }
 
-        var savegames = _fetchedSavegames
+        var savegames = _savegames.Live(_repo.Id)
             .Where(x => x.ProfileId == _profile.Id)
             .OrderByDescending(x => x.Head?.Created)
             .ThenBy(x => x.Name, NaturalOrder.Comparer)
@@ -333,6 +331,16 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
                 return Task.CompletedTask;
             });
+
+    private void OnSavegamesChanged(Guid repoId)
+    {
+        if (repoId == _repo.Id)
+        {
+            // A read landed, so whatever the first one could not say, the store now can.
+            _savegamesRead = true;
+            DescribeSavegames();
+        }
+    }
 
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {

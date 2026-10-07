@@ -9,6 +9,7 @@ namespace ModsDude.Client.Core.Savegames;
 
 public sealed class SavegamePublisher(
     ISavegamesClient savegamesClient,
+    ISavegameStore store,
     ISavegamePacker packer,
     ISavegameBindingStore bindings,
     ISavegamePendingPublishes pendingPublishes,
@@ -67,7 +68,7 @@ public sealed class SavegamePublisher(
 
             progress?.Report(new SavegameProgress(SavegameStage.Recording, 0, 0));
 
-            response = await savegamesClient.PublishSavegameV1Async(repoId, new PublishSavegameRequest
+            response = await store.WriteAsync(repoId, token => savegamesClient.PublishSavegameV1Async(repoId, new PublishSavegameRequest
             {
                 RequestId = pending.RequestId,
                 SavegameId = pending.SavegameId,
@@ -79,7 +80,7 @@ public sealed class SavegamePublisher(
                 Label = label,
                 Details = details,
                 KeepPlaying = keepPlaying
-            }, ct);
+            }, token), ct);
         }
         finally
         {

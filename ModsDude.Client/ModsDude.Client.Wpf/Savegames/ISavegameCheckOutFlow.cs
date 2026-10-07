@@ -22,10 +22,6 @@ public interface ISavegameCheckOutFlow
     /// read, and then any holder is asked about.
     /// </param>
     /// <param name="heldNames">What the savegames the game holds are called.</param>
-    /// <param name="changed">
-    /// Called whenever the repo moved under the caller, including where a check-in or activation
-    /// before the check-out stopped it.
-    /// </param>
     Task CheckOutAsync(
         Repo repo,
         SavegameDto savegame,
@@ -35,6 +31,5 @@ public interface ISavegameCheckOutFlow
         SavegameRevisionMode? revisionMode,
         string? currentUserId,
         IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
-        Func<Task> changed,
         CancellationToken cancellationToken);
 }

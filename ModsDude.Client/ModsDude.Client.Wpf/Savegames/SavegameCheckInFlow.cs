@@ -49,7 +49,6 @@ public sealed class SavegameCheckInFlow(
         Game game,
         Guid savegameId,
         string savegameName,
-        Func<Task> changed,
         CancellationToken cancellationToken)
     {
         try
@@ -101,7 +100,6 @@ public sealed class SavegameCheckInFlow(
             }
 
             await driftMonitor.CheckAsync();
-            await changed();
         }
         catch (OperationCanceledException)
         {

@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Games;
 using ModsDude.Client.Wpf.Mods;
@@ -40,7 +41,7 @@ public partial class RepoPageViewModel
     /// </summary>
     private readonly MenuItemViewModel? _savesMenuItem;
     private readonly MenuItemViewModel _archiveMenuItem;
-    private readonly ISavegamesClient _savegamesClient;
+    private readonly ISavegameStore _savegames;
     private readonly IProfileSyncStatusService _syncStatus;
 
     /// <summary>The Overview entry, kept so the header's repo name can take the user back to it.</summary>
@@ -80,7 +81,7 @@ public partial class RepoPageViewModel
         RepoModsPageViewModel.Factory repoModsPageViewModelFactory,
         RepoSavegamesPageViewModel.Factory repoSavegamesPageViewModelFactory,
         RepoArchivePageViewModel.Factory repoArchivePageViewModelFactory,
-        ISavegamesClient savegamesClient,
+        ISavegameStore savegames,
         IProfileSyncStatusService syncStatus,
         IProfileStore profileStore,
         IProfileService profileService,
@@ -100,7 +101,7 @@ public partial class RepoPageViewModel
         }
 
         _repo = repo;
-        _savegamesClient = savegamesClient;
+        _savegames = savegames;
         _syncStatus = syncStatus;
         _repoAdminPageViewModelFactory = repoAdminPageViewModelFactory;
         _createProfilePageViewModelFactory = createProfilePageViewModelFactory;
@@ -370,8 +371,9 @@ public partial class RepoPageViewModel
 
         try
         {
-            archived = (await _savegamesClient.GetArchivedSavegamesV1Async(_repo.Id, CancellationToken.None))
-                .Any(x => x.Id == savegameId);
+            await _savegames.RefreshArchivedAsync(_repo.Id, CancellationToken.None);
+
+            archived = _savegames.Archived(_repo.Id).Any(x => x.Id == savegameId);
         }
         catch (Exception)
         {

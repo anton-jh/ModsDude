@@ -13,9 +13,9 @@ namespace ModsDude.Client.Core.Savegames;
 /// <remarks>
 /// <para>
 /// <b>The one savegame fact the drift check cannot find on this disk.</b> Everything else it reports
-/// is a hash or a manifest; who holds the claim is only on the server. The check itself stays
-/// offline and reads <see cref="ISavegameSightings"/>, and this is what keeps that answered for the
-/// saves that matter - the ones held here - rather than only for a repo somebody happened to open.
+/// is a hash or a manifest; who holds the claim is only on the server. The check reads it from
+/// <see cref="ISavegameStore"/>, and this is what keeps that answered for the saves that matter - the
+/// ones held here - rather than only for a repo somebody happened to open.
 /// </para>
 /// <para>
 /// <b>Costs nothing on the ordinary machine.</b> A slot is occupied by ModsDude only while a save is
@@ -26,9 +26,8 @@ namespace ModsDude.Client.Core.Savegames;
 public sealed class SavegameClaimWatch(
     IDriftCandidateSource games,
     ISavegameBindingStore bindings,
-    ISavegamesClient savegamesClient,
+    ISavegameStore store,
     ICurrentUserStore currentUser,
-    ISavegameSightingCache sightings,
     ILogger<SavegameClaimWatch> logger) : ISavegameClaimWatch
 {
     public async Task<bool> RefreshAsync(CancellationToken ct)
@@ -44,7 +43,8 @@ public sealed class SavegameClaimWatch(
 
         var before = Describe(held);
 
-        var currentUserId = (await currentUser.GetAsync(ct)).Id;
+        // Before the reads: whose a claim is cannot be told without it.
+        await currentUser.GetAsync(ct);
 
         foreach (var repoId in held.Select(x => x.RepoId).Distinct())
         {
@@ -52,7 +52,7 @@ public sealed class SavegameClaimWatch(
             // the others' takeovers from being noticed.
             try
             {
-                sightings.Record(repoId, await savegamesClient.GetSavegamesV1Async(repoId, ct), currentUserId);
+                await store.RefreshAsync(repoId, ct);
             }
             catch (ApiException exception)
             {
@@ -67,7 +67,7 @@ public sealed class SavegameClaimWatch(
     private List<(int? Head, SavegameClaimSighting? Claim)> Describe(IEnumerable<SavegameCheckoutBinding> held)
     {
         return [.. held.Select(x => (
-            sightings.GetHeadSnapshot(x.RepoId, x.SavegameId),
-            sightings.GetClaim(x.RepoId, x.SavegameId)))];
+            store.GetHeadSnapshot(x.RepoId, x.SavegameId),
+            store.GetClaim(x.RepoId, x.SavegameId)))];
     }
 }

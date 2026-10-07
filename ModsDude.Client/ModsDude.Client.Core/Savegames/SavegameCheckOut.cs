@@ -11,7 +11,7 @@ public sealed class SavegameCheckOut(
     ILocalSavegameAdapters adapters,
     ISavegameSlots slots,
     ISavegameTransfer transfer,
-    ISavegameSightings sightings,
+    ISavegameStore store,
     IGameRunningGuard runningGuard,
     TimeProvider time)
     : ISavegameCheckOut
@@ -47,9 +47,9 @@ public sealed class SavegameCheckOut(
 
         await EnsureWritableAsync(game, slot, savegame.Name, ct);
 
-        var claim = await savegamesClient.CheckOutSavegameV1Async(savegame.RepoId, savegame.Id, ct);
+        var claim = await store.WriteAsync(savegame.RepoId, token => savegamesClient.CheckOutSavegameV1Async(savegame.RepoId, savegame.Id, token), ct);
 
-        sightings.RecordOwnClaim(savegame.RepoId, savegame.Id, claim.Checkout);
+        store.RecordOwnClaim(savegame.RepoId, savegame.Id, claim.Checkout);
 
         var displaced = await transfer.DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, head.ContentHash, slot.Slot, progress, ct);
 

@@ -11,13 +11,10 @@ public interface ISavegamePublishFlow
     /// <param name="preselectProfileId">
     /// The profile the publish step opens on. Null opens it on the profile this game follows.
     /// </param>
-    /// <param name="changed">
-    /// Called whenever the repo moved under the caller, with the new savegame's id once it exists, so
-    /// the caller can re-read.
-    /// </param>
+    /// <param name="published">Called with the new savegame's id, so the caller can select it.</param>
     Task PublishAsync(
         Repo repo,
         Guid? preselectProfileId,
-        Func<Guid?, Task> changed,
+        Action<Guid>? published,
         CancellationToken cancellationToken);
 }

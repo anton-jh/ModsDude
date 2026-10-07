@@ -19,6 +19,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 public sealed class SavegameCheckOutFlow(
     ISavegameCheckOut savegameCheckOut,
     ISavegamesClient savegamesClient,
+    ISavegameStore store,
     ISavegameCheckInFlow checkInFlow,
     ISavegameProfileActivation profileActivation,
     ISavegameCheckOutContextBuilder contextBuilder,
@@ -41,13 +42,12 @@ public sealed class SavegameCheckOutFlow(
         SavegameRevisionMode? revisionMode,
         string? currentUserId,
         IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
-        Func<Task> changed,
         CancellationToken cancellationToken)
     {
         try
         {
             await StartAsync(
-                repo, savegame, snapshotNumber, playedRevision, mode, revisionMode, currentUserId, heldNames, changed, cancellationToken);
+                repo, savegame, snapshotNumber, playedRevision, mode, revisionMode, currentUserId, heldNames, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -68,7 +68,6 @@ public sealed class SavegameCheckOutFlow(
         SavegameRevisionMode? revisionMode,
         string? currentUserId,
         IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
-        Func<Task> changed,
         CancellationToken cancellationToken)
     {
         if (savegame.Head is null || snapshotNumber <= 0)
@@ -120,7 +119,7 @@ public sealed class SavegameCheckOutFlow(
             return;
         }
 
-        await ExecuteAsync(repo, game, savegame, snapshotNumber, mode, plan, changed, takingFrom?.User.Id, cancellationToken);
+        await ExecuteAsync(repo, game, savegame, snapshotNumber, mode, plan, takingFrom?.User.Id, cancellationToken);
     }
 
     private SavegameRevisionMode? HeldMode(Game game, SavegameDto savegame)
@@ -161,7 +160,6 @@ public sealed class SavegameCheckOutFlow(
         int snapshotNumber,
         SavegameCheckOutMode mode,
         SavegameCheckOutPlan plan,
-        Func<Task> changed,
         string? agreedToTakeFrom,
         CancellationToken cancellationToken)
     {
@@ -193,17 +191,11 @@ public sealed class SavegameCheckOutFlow(
             {
                 if (await CheckInFirstAsync(game, savegame, checkIn, cancellationToken) is false)
                 {
-                    await changed();
-
                     return;
                 }
             }
 
-            await changed();
-
-            // Read again: a check-in a moment ago is exactly the kind of thing that moves the savegame's state.
-            savegame = (await savegamesClient.GetSavegamesV1Async(repo.Id, cancellationToken))
-                .FirstOrDefault(x => x.Id == savegame.Id) ?? savegame;
+            savegame = store.Find(repo.Id, savegame.Id) ?? savegame;
         }
 
         // Named, not left to the game: nothing is holding this savegame yet, so the game would resolve
@@ -212,12 +204,10 @@ public sealed class SavegameCheckOutFlow(
             && await profileActivation.ActivateFirstAsync(
                 repo, game, profile.Id, profile.Name, plan.PinnedRevision ?? profile.HeadRevision, cancellationToken) is false)
         {
-            await changed();
-
             return;
         }
 
-        await WriteAsync(repo, savegame, snapshotNumber, mode, plan.RevisionMode, game, plan.Slot, changed, agreedToTakeFrom, cancellationToken);
+        await WriteAsync(repo, savegame, snapshotNumber, mode, plan.RevisionMode, game, plan.Slot, agreedToTakeFrom, cancellationToken);
     }
 
     /// <returns>Whether the savegame was handed back, which is what frees the folder or slot it held.</returns>
@@ -257,7 +247,6 @@ public sealed class SavegameCheckOutFlow(
         SavegameRevisionMode revisionMode,
         Game game,
         SavegameSlotOptionViewModel slot,
-        Func<Task> changed,
         string? agreedToTakeFrom,
         CancellationToken cancellationToken)
     {
@@ -281,9 +270,6 @@ public sealed class SavegameCheckOutFlow(
 
             ReportDisplaced(displacedByCopy);
 
-            // The copy may have activated the profile first, which moves every row's answer about the folder.
-            await changed();
-
             return;
         }
 
@@ -293,12 +279,12 @@ public sealed class SavegameCheckOutFlow(
         {
             task.Report($"Restoring snapshot {snapshotNumber} as the newest one");
 
-            await savegamesClient.RestoreSavegameSnapshotV1Async(
-                repo.Id, savegame.Id, snapshotNumber, new RestoreSavegameSnapshotRequest(), cancellationToken);
+            await store.WriteAsync(
+                repo.Id,
+                token => savegamesClient.RestoreSavegameSnapshotV1Async(repo.Id, savegame.Id, snapshotNumber, new RestoreSavegameSnapshotRequest(), token),
+                cancellationToken);
 
-            var refreshed = await savegamesClient.GetSavegamesV1Async(repo.Id, cancellationToken);
-
-            savegame = refreshed.FirstOrDefault(x => x.Id == savegame.Id) ?? savegame;
+            savegame = store.Find(repo.Id, savegame.Id) ?? savegame;
         }
 
         task.Report("Taking the claim");
@@ -326,8 +312,6 @@ public sealed class SavegameCheckOutFlow(
         }
 
         await profileActivation.ActivateCheckedOutAsync(repo, game, savegame, cancellationToken);
-
-        await changed();
     }
 
     /// <summary>Where the save a check-out or copy replaced went, where that is worth saying.</summary>

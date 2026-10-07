@@ -71,13 +71,10 @@ public class SavegameCheckOutTests
             EndedReason = SavegameCheckoutEndReason.TakenOver,
             Status = SavegameCheckoutStatus.Ended
         };
-        harness.Sightings.SetClaim(harness.Server.SavegameId, new SavegameClaimSighting(
-            new SavegameClaimHolder("bob", "Bob", since), IsYours: false));
-
         var (takenFrom, _) = await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         Assert.Equal(new SavegameClaimHolder("bob", "Bob", since), takenFrom);
-        Assert.True(harness.Sightings.GetClaim(harness.Server.RepoId, harness.Server.SavegameId)?.IsYours);
+        Assert.True(harness.SavegameStore.GetClaim(harness.Server.RepoId, harness.Server.SavegameId)?.IsYours);
     }
 
     [Fact]

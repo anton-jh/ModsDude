@@ -34,12 +34,10 @@ public interface ISavegameCheckInFlow
     /// Checks a save in from the game holding it, says what happened in a toast, and re-runs the drift
     /// check. Failures are reported here.
     /// </summary>
-    /// <param name="changed">Called once a snapshot landed, so the caller can re-read.</param>
     Task CheckInHeldAsync(
         Game game,
         Guid savegameId,
         string savegameName,
-        Func<Task> changed,
         CancellationToken cancellationToken);
 
     /// <summary>

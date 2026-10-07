@@ -291,7 +291,7 @@ public sealed class SavegamePublishWizard
     /// <summary>What the savegame holding the mod folder is called, read once per wizard.</summary>
     private async Task<HeldSavegameName> HeldNameAsync(Guid savegameId, CancellationToken cancellationToken)
     {
-        _heldNames ??= await _heldSavegameNames.ReadAsync(_game, _repo.Id, [], cancellationToken);
+        _heldNames ??= await _heldSavegameNames.ReadAsync(_game, _repo.Id, cancellationToken);
 
         return _heldNames.GetValueOrDefault(savegameId) ?? HeldSavegameName.Unknown;
     }
