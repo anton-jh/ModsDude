@@ -47,9 +47,12 @@ public sealed class SavegameCheckOut(
 
         await EnsureWritableAsync(game, slot, savegame.Name, ct);
 
-        var claim = await store.WriteAsync(savegame.RepoId, token => savegamesClient.CheckOutSavegameV1Async(savegame.RepoId, savegame.Id, token), ct);
+        var claim = await TakeClaimAsync(savegame, head, ct);
 
         store.RecordOwnClaim(savegame.RepoId, savegame.Id, claim.Checkout);
+
+        // The head the claim was granted on, which the request made sure is the one the caller saw.
+        head = claim.Head;
 
         var displaced = await transfer.DownloadIntoSlotAsync(adapter, target, savegame.RepoId, savegame.Id, head.ContentHash, slot.Slot, progress, ct);
 
@@ -74,6 +77,36 @@ public sealed class SavegameCheckOut(
             : null;
 
         return new SavegameCheckOutResult(holder, displaced);
+    }
+
+    /// <summary>
+    /// Takes the claim on the terms the caller saw: this head, and this holder or none. Anything else is
+    /// refused by the server - the store reads the savegame again on a refusal - and the caller is told
+    /// to look again.
+    /// </summary>
+    private async Task<CheckOutSavegameResponse> TakeClaimAsync(SavegameDto savegame, SavegameSnapshotDto head, CancellationToken ct)
+    {
+        var request = new CheckOutSavegameRequest
+        {
+            ExpectedHead = head.Number,
+            ExpectedCheckoutId = savegame.Checkout is { Status: not SavegameCheckoutStatus.Ended } open ? open.Id : null
+        };
+
+        try
+        {
+            return await store.WriteAsync(
+                savegame.RepoId,
+                token => savegamesClient.CheckOutSavegameV1Async(savegame.RepoId, savegame.Id, request, token),
+                ct);
+        }
+        catch (ApiException<CustomProblemDetails> exception)
+            when (exception.Result.Type is ProblemType.SavegameHeadMoved or ProblemType.SavegameClaimChanged)
+        {
+            throw new UserFriendlyException(
+                $"'{savegame.Name}' changed",
+                "Somebody checked it in or took it just now. Look at it again before checking it out.",
+                exception);
+        }
     }
 
     public async Task<DisplacedSavegame?> TakeCopyAsync(Game game, SavegameDto savegame, int snapshotNumber, SavegameSlotRef slot, CancellationToken ct, IProgress<SavegameProgress>? progress = null)

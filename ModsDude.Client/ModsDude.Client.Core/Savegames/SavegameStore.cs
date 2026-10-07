@@ -77,12 +77,33 @@ public sealed class SavegameStore(
     {
         // Marked as a write on both lists, so a read that was out while it was sent is read again
         // rather than landing on top of it.
-        var answer = await _liveLoads.WriteAsync(repoId, send, _ => { }, cancellationToken);
-        await _archivedLoads.ApplyAsync(repoId, () => { });
+        T answer;
 
-        // The write has happened, so nothing after it may report it as failed: a caller told otherwise
-        // would skip the local half of what it just did. A read that does not get through is the next
-        // read's to catch up.
+        try
+        {
+            answer = await _liveLoads.WriteAsync(repoId, send, _ => { }, cancellationToken);
+            await _archivedLoads.ApplyAsync(repoId, () => { });
+        }
+        catch (ApiException<CustomProblemDetails>)
+        {
+            // The server refused it, which is the usual sign that what the caller saw has moved on.
+            await RefreshAfterWriteAsync(repoId);
+
+            throw;
+        }
+
+        await RefreshAfterWriteAsync(repoId);
+
+        return answer;
+    }
+
+    /// <summary>
+    /// Reads the repo again after a write, never failing: where the write happened, a caller told it
+    /// failed would skip the local half of what it just did. A read that does not get through is the
+    /// next read'"'"'s to catch up.
+    /// </summary>
+    private async Task RefreshAfterWriteAsync(Guid repoId)
+    {
         try
         {
             await RefreshAsync(repoId, CancellationToken.None);
@@ -91,8 +112,6 @@ public sealed class SavegameStore(
         {
             logger.LogWarning(exception, "Could not read the savegames of repo {RepoId} after writing to one of them.", repoId);
         }
-
-        return answer;
     }
 
     public Task WriteAsync(Guid repoId, Func<CancellationToken, Task> send, CancellationToken cancellationToken)

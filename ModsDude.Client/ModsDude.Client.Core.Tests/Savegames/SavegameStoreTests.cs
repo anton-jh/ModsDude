@@ -330,7 +330,7 @@ public class SavegameStoreTests
         public Task<SavegameDto> UpdateSavegameV1Async(Guid repoId, Guid savegameId, UpdateSavegameRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task ArchiveSavegameV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<GetSavegameCheckoutsResponse> GetSavegameCheckoutsV1Async(Guid repoId, Guid savegameId, int? skip = null, int? limit = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<CheckOutSavegameResponse> CheckOutSavegameV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<CheckOutSavegameResponse> CheckOutSavegameV1Async(Guid repoId, Guid savegameId, CheckOutSavegameRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DiscardSavegameCheckoutV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task RestoreSavegameV1Async(Guid repoId, Guid savegameId, RestoreRequest? request = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<GetSavegameSnapshotsResponse> GetSavegameSnapshotsV1Async(Guid repoId, Guid savegameId, int? skip = null, int? limit = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();

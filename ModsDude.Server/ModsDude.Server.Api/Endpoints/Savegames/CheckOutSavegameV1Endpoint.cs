@@ -26,9 +26,10 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// sends the same request either way and the server decides which it was.
 /// </para>
 /// <para>
-/// <b>Taking it from somebody is allowed.</b> That is this design's whole position on conflict: the
-/// claim is the social half and refusing here would only teach people to check in junk snapshots to
-/// free a save. The previous claim is closed as
+/// <b>Taking it from somebody is allowed - knowingly.</b> That is this design's whole position on
+/// conflict: the claim is the social half and refusing here would only teach people to check in junk
+/// snapshots to free a save. The request says which claim the caller saw, and a different one is
+/// refused, so nobody's evening is interrupted on the strength of a list that did not show them. The previous claim is closed as
 /// <see cref="SavegameCheckoutEndReason.TakenOver"/> and returned in
 /// <see cref="CheckOutSavegameResponse.TakenFrom"/>, so the client can say whose evening it just
 /// interrupted and since when - a warning naming a person is the only kind anybody reads.
@@ -39,9 +40,9 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// <c>TakenOver</c> in the log for something nobody did.
 /// </para>
 /// <para>
-/// The response carries no snapshot. <b>Check-out always takes the head</b> - a restore copies
-/// forward rather than moving the head back - so the snapshot to write into the slot is the one the
-/// savegame listing already gives.
+/// <b>Check-out always takes the head</b> - a restore copies forward rather than moving the head
+/// back. The request says which head the caller saw, a different one is refused, and the response
+/// carries the head the claim was granted on: that is the snapshot to write into the slot.
 /// </para>
 /// </remarks>
 public class CheckOutSavegameV1Endpoint : IEndpoint
@@ -56,6 +57,7 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
 
     private static async Task<Results<Ok<CheckOutSavegameResponse>, BadRequest<CustomProblemDetails>>> CheckOut(
         Guid repoId, Guid savegameId,
+        CheckOutSavegameRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         ITimeService timeService,
@@ -74,8 +76,24 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
         var now = timeService.Now();
         var existing = await dbContext.SavegameCheckouts.GetOpenCheckoutAsync(savegame.RepoId, savegame.Id, cancellationToken);
 
+        if (savegame.HeadSnapshot.Value != request.ExpectedHead)
+        {
+            return TypedResults.BadRequest(Problems.SavegameHeadMoved(savegame.Id, request.ExpectedHead, savegame.HeadSnapshot));
+        }
+
+        if (existing is not null && existing.UserId != userId && existing.Id.Value != request.ExpectedCheckoutId)
+        {
+            return TypedResults.BadRequest(Problems.SavegameClaimChanged(savegame.Id, await SavegameReads.ToDtoAsync(dbContext, existing, cancellationToken)));
+        }
+
         SavegameCheckout checkout;
         SavegameCheckout? takenFrom = null;
+        var head = await dbContext.SavegameSnapshots.GetRowAsync(savegame.RepoId, savegame.Id, savegame.HeadSnapshot, cancellationToken);
+
+        if (head is null)
+        {
+            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Savegame '{savegameId}' has no snapshot to check out yet."));
+        }
 
         if (existing is not null && existing.UserId == userId)
         {
@@ -93,11 +111,7 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
 
             // The head is what is about to be written into the slot, so its revision is where this
             // claim's play starts - see SavegameCheckout.HoldsFromRevision.
-            var head = savegame.ProfileId is null
-                ? null
-                : await dbContext.SavegameSnapshots.GetRowAsync(savegame.RepoId, savegame.Id, savegame.HeadSnapshot, cancellationToken);
-
-            checkout = new SavegameCheckout(savegame.RepoId, savegame.Id, userId, now, head?.ProfileRevision);
+            checkout = new SavegameCheckout(savegame.RepoId, savegame.Id, userId, now, savegame.ProfileId is null ? null : head.ProfileRevision);
             dbContext.SavegameCheckouts.Add(checkout);
         }
 
@@ -122,7 +136,8 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
 
         return TypedResults.Ok(new CheckOutSavegameResponse(
             await SavegameReads.ToDtoAsync(dbContext, checkout, cancellationToken),
-            takenFrom is null ? null : await SavegameReads.ToDtoAsync(dbContext, takenFrom, cancellationToken)));
+            takenFrom is null ? null : await SavegameReads.ToDtoAsync(dbContext, takenFrom, cancellationToken),
+            await SavegameReads.ToDtoAsync(dbContext, savegame.RepoId, head, cancellationToken)));
     }
 
 
@@ -133,5 +148,13 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
     /// it - which is the difference between a warning that means something and one people click
     /// past.
     /// </param>
-    public record CheckOutSavegameResponse(SavegameCheckoutDto Checkout, SavegameCheckoutDto? TakenFrom);
+    /// <param name="Head">The snapshot the claim was granted on, which is the one to write into the slot.</param>
+    public record CheckOutSavegameResponse(SavegameCheckoutDto Checkout, SavegameCheckoutDto? TakenFrom, SavegameSnapshotDto Head);
+
+    /// <param name="ExpectedCheckoutId">
+    /// The open claim the caller saw, or null where it saw none. Somebody else's claim other than this one
+    /// is refused rather than taken: the caller agreed to take the one it saw.
+    /// </param>
+    /// <param name="ExpectedHead">The head snapshot the caller saw. A different head is refused.</param>
+    public record CheckOutSavegameRequest(Guid? ExpectedCheckoutId, int ExpectedHead);
 }

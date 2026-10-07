@@ -87,6 +87,29 @@ public static class Problems
         Detail = "Send both a profile and the revision the save was played on, or neither - a savegame with no mod list records no revision."
     };
 
+    /// <summary>
+    /// Somebody checked in or restored since the caller looked, so the snapshot it meant to write into a
+    /// slot is no longer the head.
+    /// </summary>
+    public static CustomProblemDetails SavegameHeadMoved(SavegameId savegameId, int expected, SavegameSnapshotNumber head) => new()
+    {
+        Type = ProblemType.SavegameHeadMoved,
+        Title = "The savegame changed",
+        Detail = $"Savegame '{savegameId.Value}' is at snapshot {head.Value}, not {expected}. Reload and decide again."
+    };
+
+    /// <summary>
+    /// Somebody other than the holder the caller saw has the claim now, and taking it from them is a
+    /// decision nobody was asked to make.
+    /// </summary>
+    public static CustomProblemDetails SavegameClaimChanged(SavegameId savegameId, SavegameCheckoutDto holder) => new()
+    {
+        Type = ProblemType.SavegameClaimChanged,
+        Title = "Somebody else took the savegame",
+        Detail = $"Savegame '{savegameId.Value}' is checked out to {holder.User.DisplayName}, which the request did not expect. Reload and decide again.",
+        Holder = holder
+    };
+
     public static CustomProblemDetails SavegameNotCheckedOut(SavegameId savegameId) => new()
     {
         Type = ProblemType.SavegameNotCheckedOut,
@@ -619,6 +642,14 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "savegame-checkout-conflict")]
         [JsonStringEnumMemberName(_typeBaseUri + "savegame-checkout-conflict")]
         SavegameCheckoutConflict,
+
+        [EnumMember(Value = _typeBaseUri + "savegame-head-moved")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-head-moved")]
+        SavegameHeadMoved,
+
+        [EnumMember(Value = _typeBaseUri + "savegame-claim-changed")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-claim-changed")]
+        SavegameClaimChanged,
 
         [EnumMember(Value = _typeBaseUri + "savegame-not-checked-out")]
         [JsonStringEnumMemberName(_typeBaseUri + "savegame-not-checked-out")]

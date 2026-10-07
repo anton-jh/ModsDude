@@ -49,6 +49,50 @@ public class SavegameCheckOutTests
     }
 
     /// <summary>
+    /// <summary>
+    /// Somebody checked in after the list was read, so the snapshot this caller meant to write into a
+    /// slot is no longer the head. Refused before anything is claimed or written, rather than writing
+    /// the older snapshot under a claim on the newer one.
+    /// </summary>
+    [Fact]
+    public async Task Checking_out_after_the_head_moved_is_refused_and_touches_nothing()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        var seen = harness.Server.Savegame with { Head = harness.Server.Head! with { Number = harness.Server.Head!.Number - 1 } };
+
+        await Assert.ThrowsAsync<UserFriendlyException>(
+            () => harness.CheckOut.CheckOutAsync(harness.Game, seen, _slot1, SavegameRevisionMode.Latest, CancellationToken.None));
+
+        Assert.Equal(0, harness.Server.CheckoutsTaken);
+        Assert.Null(harness.Bindings.GetBinding(harness.Game.Identity, harness.Server.SavegameId));
+    }
+
+    /// <summary>
+    /// The list showed the save free, or held by somebody else, and somebody else entirely has it now.
+    /// Taking it from them is a decision nobody was asked to make, so it is refused.
+    /// </summary>
+    [Fact]
+    public async Task Checking_out_a_save_somebody_took_since_the_list_was_read_is_refused()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        harness.Server.HeldBySomebodyElse = new SavegameCheckoutDto
+        {
+            Id = Guid.NewGuid(),
+            RepoId = harness.Server.RepoId,
+            SavegameId = harness.Server.SavegameId,
+            User = new UserDto { Id = "bob", DisplayName = "Bob", Tag = "0001" },
+            TakenAt = DateTime.UtcNow,
+            Status = SavegameCheckoutStatus.Held
+        };
+
+        await Assert.ThrowsAsync<UserFriendlyException>(
+            () => harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None));
+
+        Assert.Equal(0, harness.Server.CheckoutsTaken);
+    }
+
     /// Taking a save from somebody is allowed, and the server says whose it was so the caller can
     /// name them - and until the next list read, the claim just taken is recorded as this user's, so a
     /// drift check in between cannot report the check-out as their own save having been taken over.

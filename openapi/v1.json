@@ -130,11 +130,29 @@
         },
         "type": "object"
       },
+      "CheckOutSavegameRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedCheckoutId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
+          "expectedHead": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "CheckOutSavegameResponse": {
         "additionalProperties": false,
         "properties": {
           "checkout": {
             "$ref": "#/components/schemas/SavegameCheckoutDto"
+          },
+          "head": {
+            "$ref": "#/components/schemas/SavegameSnapshotDto"
           },
           "takenFrom": {
             "nullable": true,
@@ -999,6 +1017,8 @@
           "https://server.modsdude.com/api/problems/profile-revision-stale",
           "https://server.modsdude.com/api/problems/savegame-snapshot-stale",
           "https://server.modsdude.com/api/problems/savegame-checkout-conflict",
+          "https://server.modsdude.com/api/problems/savegame-head-moved",
+          "https://server.modsdude.com/api/problems/savegame-claim-changed",
           "https://server.modsdude.com/api/problems/savegame-not-checked-out",
           "https://server.modsdude.com/api/problems/savegame-claim-held-by-other",
           "https://server.modsdude.com/api/problems/profile-in-use-by-savegame",
@@ -1048,6 +1068,8 @@
           "ProfileRevisionStale",
           "SavegameSnapshotStale",
           "SavegameCheckoutConflict",
+          "SavegameHeadMoved",
+          "SavegameClaimChanged",
           "SavegameNotCheckedOut",
           "SavegameClaimHeldByOther",
           "ProfileInUseBySavegame",
@@ -6733,6 +6755,18 @@
             "x-position": 2
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckOutSavegameRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 3
+        },
         "responses": {
           "200": {
             "content": {

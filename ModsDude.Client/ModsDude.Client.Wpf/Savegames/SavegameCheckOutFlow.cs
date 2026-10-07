@@ -119,7 +119,7 @@ public sealed class SavegameCheckOutFlow(
             return;
         }
 
-        await ExecuteAsync(repo, game, savegame, snapshotNumber, mode, plan, takingFrom?.User.Id, cancellationToken);
+        await ExecuteAsync(repo, game, savegame, snapshotNumber, mode, plan, cancellationToken);
     }
 
     private SavegameRevisionMode? HeldMode(Game game, SavegameDto savegame)
@@ -152,7 +152,6 @@ public sealed class SavegameCheckOutFlow(
     /// what holds the mod folder or the slot, activate the profile, then write the save. Each step
     /// stops the rest where it does not finish.
     /// </summary>
-    /// <param name="agreedToTakeFrom">Whose claim the user agreed to take, so a later toast can tell it from a surprise.</param>
     private async Task ExecuteAsync(
         Repo repo,
         Game game,
@@ -160,7 +159,6 @@ public sealed class SavegameCheckOutFlow(
         int snapshotNumber,
         SavegameCheckOutMode mode,
         SavegameCheckOutPlan plan,
-        string? agreedToTakeFrom,
         CancellationToken cancellationToken)
     {
         // Before the first step, since an activation into a running game would be recorded and then
@@ -207,7 +205,7 @@ public sealed class SavegameCheckOutFlow(
             return;
         }
 
-        await WriteAsync(repo, savegame, snapshotNumber, mode, plan.RevisionMode, game, plan.Slot, agreedToTakeFrom, cancellationToken);
+        await WriteAsync(repo, savegame, snapshotNumber, mode, plan.RevisionMode, game, plan.Slot, cancellationToken);
     }
 
     /// <returns>Whether the savegame was handed back, which is what frees the folder or slot it held.</returns>
@@ -247,7 +245,6 @@ public sealed class SavegameCheckOutFlow(
         SavegameRevisionMode revisionMode,
         Game game,
         SavegameSlotOptionViewModel slot,
-        string? agreedToTakeFrom,
         CancellationToken cancellationToken)
     {
         var name = savegame.Name;
@@ -297,18 +294,10 @@ public sealed class SavegameCheckOutFlow(
         {
             toasts.Show($"'{name}' is checked out to you, in '{game.Name}'.");
         }
-        else if (takenFrom.UserId == agreedToTakeFrom)
+        else
         {
             toasts.Show($"'{name}' is checked out to you, in '{game.Name}'. {takenFrom.DisplayName} no longer has it, " +
                         "and their ModsDude will tell them.");
-        }
-        else
-        {
-            // Somebody took the save after the list was read, so the take-over question was never
-            // asked about them. The claim is taken by now; all that is left is to say whose it was.
-            toasts.Show($"{takenFrom.DisplayName} had '{name}' checked out since {SavegameWording.Exactly(takenFrom.TakenAt)} - " +
-                        $"the list you started from did not show it yet. It is yours now, in '{game.Name}', and their ModsDude will tell them.",
-                        ToastSeverity.Warning);
         }
 
         await profileActivation.ActivateCheckedOutAsync(repo, game, savegame, cancellationToken);

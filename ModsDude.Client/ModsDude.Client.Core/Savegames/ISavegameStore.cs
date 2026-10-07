@@ -40,8 +40,8 @@ public interface ISavegameStore : IUserScopedState, ISavegameSightings
     Task RefreshArchivedAsync(Guid repoId, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Sends a write to one of the repo's savegames, then reads the repo again, so nothing reads the
-    /// list from before it.
+    /// Sends a write to one of the repo's savegames, then reads the repo again - also where the server
+    /// refused it, which usually means the list moved - so nothing reads the list from before it.
     /// </summary>
     /// <returns>The server's answer.</returns>
     Task<T> WriteAsync<T>(Guid repoId, Func<CancellationToken, Task<T>> send, CancellationToken cancellationToken);

@@ -112,13 +112,24 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     public void PutBlob(string link, byte[] content) => _blobs[link] = content;
 
 
-    public Task<CheckOutSavegameResponse> CheckOutSavegameV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default)
+    /// <summary>Refuses a head or a holder other than the one the request saw, as the server does.</summary>
+    public Task<CheckOutSavegameResponse> CheckOutSavegameV1Async(Guid repoId, Guid savegameId, CheckOutSavegameRequest request, CancellationToken cancellationToken = default)
     {
+        if (request.ExpectedHead != _savegame.Head?.Number)
+        {
+            throw Problem(ProblemType.SavegameHeadMoved, "The savegame changed");
+        }
+
+        if (HeldBySomebodyElse is { Status: not SavegameCheckoutStatus.Ended } holder && holder.Id != request.ExpectedCheckoutId)
+        {
+            throw Problem(ProblemType.SavegameClaimChanged, "Somebody else took the savegame", holder);
+        }
+
         CheckoutsTaken++;
 
         Claim = Checkout();
 
-        return Task.FromResult(new CheckOutSavegameResponse { Checkout = Claim, TakenFrom = HeldBySomebodyElse });
+        return Task.FromResult(new CheckOutSavegameResponse { Checkout = Claim, TakenFrom = HeldBySomebodyElse, Head = _savegame.Head! });
     }
 
     public Task DiscardSavegameCheckoutV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default)
