@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -173,6 +174,7 @@ public sealed class DriftMonitor : IDriftMonitor
     private readonly IHeldSavegames _heldSavegames;
     private readonly ISavegameDriftCheck _savegameDrift;
     private readonly IStoreIntegrityService _storeIntegrity;
+    private readonly IServerConnection _connection;
     private readonly TimeProvider _timeProvider;
     private readonly Lock _lock = new();
     private readonly ILogger _logger;
@@ -198,6 +200,7 @@ public sealed class DriftMonitor : IDriftMonitor
         IHeldSavegames heldSavegames,
         ISavegameDriftCheck savegameDrift,
         IStoreIntegrityService storeIntegrity,
+        IServerConnection connection,
         ILogger<DriftMonitor> logger)
     {
         _logger = logger;
@@ -209,6 +212,7 @@ public sealed class DriftMonitor : IDriftMonitor
         _heldSavegames = heldSavegames;
         _savegameDrift = savegameDrift;
         _storeIntegrity = storeIntegrity;
+        _connection = connection;
         _timeProvider = timeProvider;
     }
 
@@ -417,8 +421,11 @@ public sealed class DriftMonitor : IDriftMonitor
                 // on, and it comes out equal on its own. Against head instead, a game holding such a
                 // savegame would report drift permanently and offer a re-apply to head that the
                 // apply table refuses.
+                //
+                // Offline, the head revision the store last heard of may be out of date, so it is not
+                // compared against at all.
                 currentRevision: _heldSavegames.GetRequiredRevision(candidate.Identity, active.ProfileId)
-                    ?? _profileRevisions.GetHeadRevision(active),
+                    ?? (_connection.IsOnline ? _profileRevisions.GetHeadRevision(active) : null),
                 savegameDrift: savegameDrift);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

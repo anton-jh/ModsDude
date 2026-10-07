@@ -49,171 +49,6 @@
                Content="{Binding Path=CurrentPage}"
                NavigationUIVisibility="Hidden" />
 
-        <!-- Along the top edge, and about the present rather than the past: the two notices in the
-             bottom corner both report something that has already happened and both offer a way to
-             deal with it, so this one is somewhere else on purpose. It survives navigation - an
-             import queued on one page is still visible from another - which is the half a page's own
-             progress cannot do. Nothing to dismiss: it goes when the work does.
-
-             A fixed width rather than one sized to its text: the widest line is a subtask name or a
-             phase, both of which change every few seconds, and a strip that follows them breathes.
-             Long lines trim instead. -->
-        <Border Grid.Column="0"
-                DataContext="{Binding BackgroundTasks}"
-                Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
-                HorizontalAlignment="Center" VerticalAlignment="Top"
-                Width="520"
-                Margin="0 4 0 0"
-                Padding="16 10"
-                CornerRadius="6"
-                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
-            <Border.Effect>
-                <DropShadowEffect Color="#66000000" BlurRadius="12" ShadowDepth="2" />
-            </Border.Effect>
-
-            <StackPanel Orientation="Vertical">
-
-                <Grid ColumnDefinitions="* auto auto">
-                    <TextBlock Grid.Column="0"
-                               Text="{Binding Title}"
-                               ToolTip="{Binding Title}"
-                               FontWeight="SemiBold"
-                               TextTrimming="CharacterEllipsis"
-                               VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-
-                    <!-- One task at a time, with the others an arrow away rather than a second bar
-                         racing this one. Nothing pages itself: a task starting while somebody is
-                         watching another leaves a dot here instead of taking the strip. -->
-                    <StackPanel Grid.Column="1"
-                                Orientation="Horizontal"
-                                Margin="12 0 0 0"
-                                VerticalAlignment="Center"
-                                Visibility="{Binding HasMultiple, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <Button Content="&#x2039;"
-                                Padding="6 0"
-                                MinWidth="0"
-                                Command="{Binding PreviousCommand}"
-                                IsEnabled="{Binding CanGoPrevious}" />
-
-                        <TextBlock Text="{Binding PagerText}"
-                                   Margin="6 0"
-                                   VerticalAlignment="Center"
-                                   Style="{DynamicResource CaptionTextBlockStyle}"
-                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-
-                        <Ellipse Width="6" Height="6"
-                                 Margin="0 0 6 0"
-                                 VerticalAlignment="Center"
-                                 Fill="{DynamicResource AccentFillColorDefaultBrush}"
-                                 Visibility="{Binding HasUnseen, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                        <Button Content="&#x203a;"
-                                Padding="6 0"
-                                MinWidth="0"
-                                Command="{Binding NextCommand}"
-                                IsEnabled="{Binding CanGoNext}" />
-                    </StackPanel>
-
-                    <!-- The only control on the strip, and only for the task on screen - which is why
-                         the pager beside it matters. It has to live here rather than on the page that
-                         started the job: a page is rebuilt from scratch on every navigation, so the
-                         Cancel somebody had disappears the moment they use the freedom this strip
-                         exists to give them. It asks rather than kills - a sync stops at the next file
-                         - so the entry stays up until the work unwinds, which is why the button goes
-                         away on the first press rather than inviting a second.
-
-                         Greyed rather than hidden for the second after a task ends underneath it: a
-                         click aimed at work that has just finished must not land on its neighbour,
-                         and a button that vanished would move everything beside it. -->
-                    <Button Grid.Column="2"
-                            Content="Cancel"
-                            Margin="12 0 0 0"
-                            Padding="10 2"
-                            VerticalAlignment="Center"
-                            Command="{Binding CancelCommand}"
-                            IsEnabled="{Binding IsCancelEnabled}"
-                            Visibility="{Binding CanCancel, Converter={StaticResource BoolToVisibilityConverter}}" />
-                </Grid>
-
-                <!-- What the task said on the left, and how long it reckons is left on the right. The
-                     estimate is its own column so a long detail trims instead of pushing it off. -->
-                <Grid ColumnDefinitions="* auto"
-                      Margin="0 2 0 0"
-                      Visibility="{Binding HasStatusLine, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Grid.Column="0"
-                               Text="{Binding Detail}"
-                               TextTrimming="CharacterEllipsis"
-                               Style="{DynamicResource CaptionTextBlockStyle}"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding Remaining}"
-                               Margin="12 0 0 0"
-                               Style="{DynamicResource CaptionTextBlockStyle}"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                               Visibility="{Binding HasRemaining, Converter={StaticResource BoolToVisibilityConverter}}" />
-                </Grid>
-
-                <!-- Only for work that moves bytes while a speed limit is set, so a slow transfer
-                     explains itself. Quieter than the detail above: it is why, not what. -->
-                <TextBlock Text="{Binding Limit}"
-                           Margin="0 2 0 0"
-                           TextTrimming="CharacterEllipsis"
-                           Style="{DynamicResource CaptionTextBlockStyle}"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Visibility="{Binding HasLimit, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                <ProgressBar Height="5"
-                             Margin="0 8 0 0"
-                             Minimum="0" Maximum="100"
-                             Value="{Binding Progress, Mode=OneWay}"
-                             IsIndeterminate="{Binding IsIndeterminate}" />
-
-                <!-- Only the parts that have been going long enough to be worth naming. The fast ones
-                     are the count on the line above: five names cycling through one line is what this
-                     replaced, and five rows cycling would be that plus a strip that changes height. -->
-                <ItemsControl ItemsSource="{Binding Subtasks}"
-                              Margin="0 8 0 0"
-                              Visibility="{Binding HasSubtasks, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type backgroundtasks:BackgroundSubtaskViewModel}">
-                            <StackPanel Margin="0 0 0 6">
-                                <Grid ColumnDefinitions="* auto">
-                                    <TextBlock Grid.Column="0"
-                                               Text="{Binding Name}"
-                                               TextTrimming="CharacterEllipsis"
-                                               Style="{DynamicResource CaptionTextBlockStyle}"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-
-                                    <TextBlock Grid.Column="1"
-                                               Text="{Binding Amount}"
-                                               Margin="12 0 0 0"
-                                               Style="{DynamicResource CaptionTextBlockStyle}"
-                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                               Visibility="{Binding HasAmount, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                </Grid>
-
-                                <ProgressBar Height="4"
-                                             Margin="0 3 0 0"
-                                             Minimum="0" Maximum="100"
-                                             Value="{Binding Progress, Mode=OneWay}"
-                                             IsIndeterminate="{Binding IsIndeterminate}" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <TextBlock Text="{Binding MoreSubtasks}"
-                           TextTrimming="CharacterEllipsis"
-                           Style="{DynamicResource CaptionTextBlockStyle}"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                           Visibility="{Binding HasMoreSubtasks, Converter={StaticResource BoolToVisibilityConverter}}" />
-            </StackPanel>
-        </Border>
-
         <!-- Beside the modal slot, not in it. Everything in this column has to be visible from every
              view and must not stop the user working: the drift already happened while they were in
              the game, and the background failures are things the app chose to absorb.
@@ -602,6 +437,183 @@
                 </StackPanel>
             </Grid>
         </Button>
+
+        <!-- Over the page and the notices both: nothing on them works while the server does not answer.
+             Under the progress strip, so work already running can still be cancelled. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Background="{DynamicResource SolidBackgroundFillColorTertiaryBrush}"
+              Visibility="{Binding Offline.IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+
+            <ContentControl Content="{Binding Offline}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+
+        </Grid>
+
+        <!-- Along the top edge, and about the present rather than the past: the two notices in the
+             bottom corner both report something that has already happened and both offer a way to
+             deal with it, so this one is somewhere else on purpose. It survives navigation - an
+             import queued on one page is still visible from another - which is the half a page's own
+             progress cannot do. Nothing to dismiss: it goes when the work does.
+
+             A fixed width rather than one sized to its text: the widest line is a subtask name or a
+             phase, both of which change every few seconds, and a strip that follows them breathes.
+             Long lines trim instead. -->
+        <Border Grid.Column="0"
+                DataContext="{Binding BackgroundTasks}"
+                Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                HorizontalAlignment="Center" VerticalAlignment="Top"
+                Width="520"
+                Margin="0 4 0 0"
+                Padding="16 10"
+                CornerRadius="6"
+                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+            <Border.Effect>
+                <DropShadowEffect Color="#66000000" BlurRadius="12" ShadowDepth="2" />
+            </Border.Effect>
+
+            <StackPanel Orientation="Vertical">
+
+                <Grid ColumnDefinitions="* auto auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding Title}"
+                               ToolTip="{Binding Title}"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <!-- One task at a time, with the others an arrow away rather than a second bar
+                         racing this one. Nothing pages itself: a task starting while somebody is
+                         watching another leaves a dot here instead of taking the strip. -->
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                Margin="12 0 0 0"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding HasMultiple, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Button Content="&#x2039;"
+                                Padding="6 0"
+                                MinWidth="0"
+                                Command="{Binding PreviousCommand}"
+                                IsEnabled="{Binding CanGoPrevious}" />
+
+                        <TextBlock Text="{Binding PagerText}"
+                                   Margin="6 0"
+                                   VerticalAlignment="Center"
+                                   Style="{DynamicResource CaptionTextBlockStyle}"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+                        <Ellipse Width="6" Height="6"
+                                 Margin="0 0 6 0"
+                                 VerticalAlignment="Center"
+                                 Fill="{DynamicResource AccentFillColorDefaultBrush}"
+                                 Visibility="{Binding HasUnseen, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                        <Button Content="&#x203a;"
+                                Padding="6 0"
+                                MinWidth="0"
+                                Command="{Binding NextCommand}"
+                                IsEnabled="{Binding CanGoNext}" />
+                    </StackPanel>
+
+                    <!-- The only control on the strip, and only for the task on screen - which is why
+                         the pager beside it matters. It has to live here rather than on the page that
+                         started the job: a page is rebuilt from scratch on every navigation, so the
+                         Cancel somebody had disappears the moment they use the freedom this strip
+                         exists to give them. It asks rather than kills - a sync stops at the next file
+                         - so the entry stays up until the work unwinds, which is why the button goes
+                         away on the first press rather than inviting a second.
+
+                         Greyed rather than hidden for the second after a task ends underneath it: a
+                         click aimed at work that has just finished must not land on its neighbour,
+                         and a button that vanished would move everything beside it. -->
+                    <Button Grid.Column="2"
+                            Content="Cancel"
+                            Margin="12 0 0 0"
+                            Padding="10 2"
+                            VerticalAlignment="Center"
+                            Command="{Binding CancelCommand}"
+                            IsEnabled="{Binding IsCancelEnabled}"
+                            Visibility="{Binding CanCancel, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </Grid>
+
+                <!-- What the task said on the left, and how long it reckons is left on the right. The
+                     estimate is its own column so a long detail trims instead of pushing it off. -->
+                <Grid ColumnDefinitions="* auto"
+                      Margin="0 2 0 0"
+                      Visibility="{Binding HasStatusLine, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding Detail}"
+                               TextTrimming="CharacterEllipsis"
+                               Style="{DynamicResource CaptionTextBlockStyle}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Remaining}"
+                               Margin="12 0 0 0"
+                               Style="{DynamicResource CaptionTextBlockStyle}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Visibility="{Binding HasRemaining, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </Grid>
+
+                <!-- Only for work that moves bytes while a speed limit is set, so a slow transfer
+                     explains itself. Quieter than the detail above: it is why, not what. -->
+                <TextBlock Text="{Binding Limit}"
+                           Margin="0 2 0 0"
+                           TextTrimming="CharacterEllipsis"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Visibility="{Binding HasLimit, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <ProgressBar Height="5"
+                             Margin="0 8 0 0"
+                             Minimum="0" Maximum="100"
+                             Value="{Binding Progress, Mode=OneWay}"
+                             IsIndeterminate="{Binding IsIndeterminate}" />
+
+                <!-- Only the parts that have been going long enough to be worth naming. The fast ones
+                     are the count on the line above: five names cycling through one line is what this
+                     replaced, and five rows cycling would be that plus a strip that changes height. -->
+                <ItemsControl ItemsSource="{Binding Subtasks}"
+                              Margin="0 8 0 0"
+                              Visibility="{Binding HasSubtasks, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type backgroundtasks:BackgroundSubtaskViewModel}">
+                            <StackPanel Margin="0 0 0 6">
+                                <Grid ColumnDefinitions="* auto">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding Name}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Style="{DynamicResource CaptionTextBlockStyle}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Amount}"
+                                               Margin="12 0 0 0"
+                                               Style="{DynamicResource CaptionTextBlockStyle}"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               Visibility="{Binding HasAmount, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                </Grid>
+
+                                <ProgressBar Height="4"
+                                             Margin="0 3 0 0"
+                                             Minimum="0" Maximum="100"
+                                             Value="{Binding Progress, Mode=OneWay}"
+                                             IsIndeterminate="{Binding IsIndeterminate}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="{Binding MoreSubtasks}"
+                           TextTrimming="CharacterEllipsis"
+                           Style="{DynamicResource CaptionTextBlockStyle}"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Visibility="{Binding HasMoreSubtasks, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </StackPanel>
+        </Border>
 
         <!-- Over the page and the notices both: nothing on them works while the server refuses this build. -->
         <Grid Grid.Column="0" Grid.ColumnSpan="2"

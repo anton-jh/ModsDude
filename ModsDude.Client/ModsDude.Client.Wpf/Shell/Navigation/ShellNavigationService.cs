@@ -21,6 +21,8 @@ public sealed class ShellNavigationService : IShellNavigationService
 
     public void Register(MainPageViewModel shell) => _shell = shell;
 
+    public void ReloadOpenPage() => _shell?.NavManager.ReloadInnermost();
+
     public void Unregister(MainPageViewModel shell)
     {
         if (ReferenceEquals(_shell, shell))

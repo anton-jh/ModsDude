@@ -10,14 +10,14 @@ public enum ConnectionTarget
     /// <summary>The identity provider, which has to answer before anything else can be asked.</summary>
     SignIn,
 
-    /// <summary>The ModsDude server, for the repo list the shell is built around.</summary>
+    /// <summary>The ModsDude server. Its outage is the offline state rather than a notice.</summary>
     Server
 }
 
 
 /// <summary>
-/// Keeps trying what the app needs on the way up until something answers, and says so in the notice
-/// column while it does.
+/// Keeps trying what the app needs until something answers, and says so while it does: in the notice
+/// column for sign-in, and through <see cref="GetOutage"/> for the offline state.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -33,8 +33,8 @@ public enum ConnectionTarget
 /// </para>
 /// <para>
 /// <b>A notice, not a dialog, and one that cannot be dismissed.</b> It reports a state rather than an
-/// event: waving it away would not make the repos arrive, and nothing else on screen explains why
-/// they have not. Pending rather than Warning, so a start at sign-in with the network still coming up
+/// event: waving it away would not make sign-in happen, and nothing else on screen explains why it
+/// has not. Pending rather than Warning, so a start at sign-in with the network still coming up
 /// is not announced as a Windows toast.
 /// </para>
 /// </remarks>
@@ -48,7 +48,7 @@ public sealed class ConnectionRetry(
 
     private readonly TimeProvider _timeProvider = timeProvider;
     private readonly Lock _lock = new();
-    private readonly Dictionary<ConnectionTarget, Outage> _outages = [];
+    private readonly Dictionary<ConnectionTarget, ConnectionOutage> _outages = [];
 
     private TaskCompletionSource _wake = NewWake();
 
@@ -76,7 +76,7 @@ public sealed class ConnectionRetry(
         CancellationToken cancellationToken)
     {
         var failures = 0;
-        Outage? outage = null;
+        ConnectionOutage? outage = null;
 
         try
         {
@@ -103,7 +103,7 @@ public sealed class ConnectionRetry(
                         target, failures, delay);
                 }
 
-                outage = Set(target, new Outage(failures, _timeProvider.GetUtcNow() + delay));
+                outage = Set(target, new ConnectionOutage(failures, _timeProvider.GetUtcNow() + delay));
 
                 if (await WaitAsync(delay, cancellationToken) is false)
                 {
@@ -111,7 +111,7 @@ public sealed class ConnectionRetry(
                 }
 
                 // Said before the attempt rather than after it, so pressing Retry now visibly does something.
-                outage = Set(target, new Outage(failures, NextAttempt: null));
+                outage = Set(target, new ConnectionOutage(failures, NextAttempt: null));
             }
         }
         finally
@@ -136,16 +136,17 @@ public sealed class ConnectionRetry(
         woken.TrySetResult();
     }
 
-    public IReadOnlyList<Notice> Build()
+    public ConnectionOutage? GetOutage(ConnectionTarget target)
     {
-        KeyValuePair<ConnectionTarget, Outage>[] snapshot;
-
         lock (_lock)
         {
-            snapshot = [.. _outages.OrderBy(x => x.Key)];
+            return _outages.GetValueOrDefault(target);
         }
+    }
 
-        return [.. snapshot.Select(x => Describe(x.Key, x.Value))];
+    public IReadOnlyList<Notice> Build()
+    {
+        return GetOutage(ConnectionTarget.SignIn) is { } outage ? [DescribeSignIn(outage)] : [];
     }
 
 
@@ -169,7 +170,7 @@ public sealed class ConnectionRetry(
         return cancellationToken.IsCancellationRequested is false;
     }
 
-    private Outage Set(ConnectionTarget target, Outage outage)
+    private ConnectionOutage Set(ConnectionTarget target, ConnectionOutage outage)
     {
         lock (_lock)
         {
@@ -182,10 +183,10 @@ public sealed class ConnectionRetry(
     }
 
     /// <summary>
-    /// Only where the notice up is still this run's. A replaced shell starts a second run for the same
-    /// target while the first is winding down, and the first finishing must not clear the second's.
+    /// Only where the outage recorded is still this run's. A replaced shell starts a second run for the
+    /// same target while the first is winding down, and the first finishing must not clear the second's.
     /// </summary>
-    private void Clear(ConnectionTarget target, Outage outage)
+    private void Clear(ConnectionTarget target, ConnectionOutage outage)
     {
         lock (_lock)
         {
@@ -200,31 +201,20 @@ public sealed class ConnectionRetry(
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    private Notice Describe(ConnectionTarget target, Outage outage)
+    private Notice DescribeSignIn(ConnectionOutage outage)
     {
-        var (headline, body) = target switch
-        {
-            ConnectionTarget.SignIn => (
-                "Could not sign in",
-                "The sign-in service did not answer, so nothing can be loaded yet. This is tried again on "
-                    + "its own - if it goes on, check this machine's internet connection."),
-
-            _ => (
-                "The ModsDude server did not answer",
-                "Your repos could not be loaded. They load on their own as soon as the server is back.")
-        };
-
         var tried = outage.Failures == 1 ? "Tried once." : $"Tried {outage.Failures} times.";
 
         var next = outage.NextAttempt is DateTimeOffset at
             ? $"Trying again at {TimeZoneInfo.ConvertTime(at, _timeProvider.LocalTimeZone):HH:mm:ss}."
             : "Trying again now...";
 
-        var key = $"{KeyPrefix}{target}";
+        var key = $"{KeyPrefix}{ConnectionTarget.SignIn}";
 
-        return new Notice(key, key, NoticeSeverity.Pending, headline)
+        return new Notice(key, key, NoticeSeverity.Pending, "Could not sign in")
         {
-            Body = body,
+            Body = "The sign-in service did not answer, so nothing can be loaded yet. This is tried again on "
+                + "its own - if it goes on, check this machine's internet connection.",
             Footnote = $"{tried} {next}",
             CanDismiss = false,
             Actions = [new(NoticeActionKind.RetryConnection, "Retry now") { IsPrimary = true }]
@@ -232,8 +222,8 @@ public sealed class ConnectionRetry(
     }
 
     private static TaskCompletionSource NewWake() => new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-
-    /// <param name="NextAttempt">Null while an attempt is under way.</param>
-    private sealed record Outage(int Failures, DateTimeOffset? NextAttempt);
 }
+
+
+/// <param name="NextAttempt">Null while an attempt is under way.</param>
+public sealed record ConnectionOutage(int Failures, DateTimeOffset? NextAttempt);

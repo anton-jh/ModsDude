@@ -4,7 +4,7 @@ namespace ModsDude.Client.Core.Connectivity;
 
 public interface IConnectionRetry
 {
-    /// <summary>Raised when the column would say something different. Fired from whatever thread the attempt ran on.</summary>
+    /// <summary>Raised when an outage starts, changes or ends. Fired from whatever thread the attempt ran on.</summary>
     event EventHandler? Changed;
 
     /// <summary>
@@ -20,5 +20,9 @@ public interface IConnectionRetry
     /// <summary>Cuts short every wait in progress, so each one tries again straight away.</summary>
     void RetryNow();
 
+    /// <summary>How the current attempts at <paramref name="target"/> are going, or null where nothing is failing.</summary>
+    ConnectionOutage? GetOutage(ConnectionTarget target);
+
+    /// <summary>The sign-in outage as a notice. The server's is the offline state instead.</summary>
     IReadOnlyList<Notice> Build();
 }

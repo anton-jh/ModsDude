@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.Models;
@@ -77,7 +78,7 @@ internal sealed class SavegameHarness : IDisposable
         Slots = new SavegameSlots(adapters, Bindings, packer, NullLogger<SavegameSlots>.Instance);
         HeldSavegames = new HeldSavegames(Bindings);
         PlayAttribution = new SavegamePlayAttribution(Bindings, Reader, ManifestStore, NullLogger<SavegamePlayAttribution>.Instance);
-        DriftCheck = new SavegameDriftCheck(Reader, ManifestStore, Sightings);
+        DriftCheck = new SavegameDriftCheck(Reader, ManifestStore, Sightings, new ServerConnection());
         SavegameStore = new SavegameStore(Server, new FixedCurrentUser("me"), InlineStoreDispatcher.Instance, NullLogger<SavegameStore>.Instance);
         Holds = new SavegameHolds(Server, SavegameStore, Bindings, adapters, NullLogger<SavegameHolds>.Instance);
         CheckOut = new SavegameCheckOut(Server, Bindings, adapters, Slots, transfer, SavegameStore, Guard, time);

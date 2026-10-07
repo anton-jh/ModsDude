@@ -26,7 +26,7 @@ public class ConnectionRetryTests
     {
         var attempts = new Attempts(Succeed);
 
-        Assert.True(await _retry.RunAsync(ConnectionTarget.Server, attempts.Next, CancellationToken.None));
+        Assert.True(await _retry.RunAsync(ConnectionTarget.SignIn, attempts.Next, CancellationToken.None));
 
         Assert.Equal(1, attempts.Count);
         Assert.Empty(_retry.Build());
@@ -38,12 +38,12 @@ public class ConnectionRetryTests
     {
         var attempts = new Attempts(Unreachable, Succeed);
 
-        var run = _retry.RunAsync(ConnectionTarget.Server, attempts.Next, CancellationToken.None);
+        var run = _retry.RunAsync(ConnectionTarget.SignIn, attempts.Next, CancellationToken.None);
 
         await WaitUntil(() => _time.PendingTimers == 1);
 
         var notice = Assert.Single(_retry.Build());
-        Assert.Equal($"{ConnectionRetry.KeyPrefix}{ConnectionTarget.Server}", notice.Key);
+        Assert.Equal($"{ConnectionRetry.KeyPrefix}{ConnectionTarget.SignIn}", notice.Key);
         Assert.Equal(NoticeSeverity.Pending, notice.Severity);
         Assert.False(notice.CanDismiss);
         Assert.Equal(NoticeActionKind.RetryConnection, Assert.Single(notice.Actions).Kind);
@@ -80,6 +80,26 @@ public class ConnectionRetryTests
         Assert.True(await run.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
+    /// <summary>The server's outage is the offline state, which reads it from here rather than from a notice.</summary>
+    [Fact]
+    public async Task The_servers_outage_is_no_notice_but_says_how_it_is_going()
+    {
+        var attempts = new Attempts(Unreachable, Succeed);
+
+        var run = _retry.RunAsync(ConnectionTarget.Server, attempts.Next, CancellationToken.None);
+
+        await WaitUntil(() => _time.PendingTimers == 1);
+
+        Assert.Empty(_retry.Build());
+        Assert.Equal(new ConnectionOutage(1, _time.GetUtcNow() + TimeSpan.FromSeconds(5)), _retry.GetOutage(ConnectionTarget.Server));
+        Assert.Null(_retry.GetOutage(ConnectionTarget.SignIn));
+
+        _retry.RetryNow();
+
+        Assert.True(await run.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Null(_retry.GetOutage(ConnectionTarget.Server));
+    }
+
     [Fact]
     public void The_wait_grows_and_then_settles_at_a_minute()
     {
@@ -93,7 +113,7 @@ public class ConnectionRetryTests
     {
         var attempts = new Attempts(Unreachable, Succeed);
 
-        var run = _retry.RunAsync(ConnectionTarget.Server, attempts.Next, CancellationToken.None);
+        var run = _retry.RunAsync(ConnectionTarget.SignIn, attempts.Next, CancellationToken.None);
 
         await WaitUntil(() => _time.PendingTimers == 1);
 
@@ -109,7 +129,7 @@ public class ConnectionRetryTests
     {
         var attempts = new Attempts(Unreachable, () => throw new InvalidOperationException("Refused."));
 
-        var run = _retry.RunAsync(ConnectionTarget.Server, attempts.Next, CancellationToken.None);
+        var run = _retry.RunAsync(ConnectionTarget.SignIn, attempts.Next, CancellationToken.None);
 
         await WaitUntil(() => _time.PendingTimers == 1);
         Assert.Single(_retry.Build());
@@ -126,7 +146,7 @@ public class ConnectionRetryTests
         using var cancellation = new CancellationTokenSource();
         var attempts = new Attempts(Unreachable, Succeed);
 
-        var run = _retry.RunAsync(ConnectionTarget.Server, attempts.Next, cancellation.Token);
+        var run = _retry.RunAsync(ConnectionTarget.SignIn, attempts.Next, cancellation.Token);
 
         await WaitUntil(() => _time.PendingTimers == 1);
 
@@ -143,10 +163,10 @@ public class ConnectionRetryTests
     {
         using var first = new CancellationTokenSource();
 
-        var older = _retry.RunAsync(ConnectionTarget.Server, new Attempts(Unreachable).Next, first.Token);
+        var older = _retry.RunAsync(ConnectionTarget.SignIn, new Attempts(Unreachable).Next, first.Token);
         await WaitUntil(() => _time.PendingTimers == 1);
 
-        var newer = _retry.RunAsync(ConnectionTarget.Server, new Attempts(Unreachable, Succeed).Next, CancellationToken.None);
+        var newer = _retry.RunAsync(ConnectionTarget.SignIn, new Attempts(Unreachable, Succeed).Next, CancellationToken.None);
         await WaitUntil(() => _time.PendingTimers == 2);
 
         first.Cancel();

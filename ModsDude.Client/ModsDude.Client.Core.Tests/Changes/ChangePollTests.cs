@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.Changes;
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Models;
@@ -220,6 +221,51 @@ public class ChangePollTests
         Assert.Equal(before with { Repos = before.Repos + 1, Friends = before.Friends + 1 }, harness.Reads());
     }
 
+    /// <summary>Offline the reconnect probe is what asks; a poll would only fail.</summary>
+    [Fact]
+    public async Task A_poll_while_offline_reads_nothing()
+    {
+        var harness = new Harness();
+        await harness.LoadProfilesAsync();
+        harness.Connection.ReportUnreachable();
+        var before = harness.Reads();
+
+        await harness.PollAsync();
+
+        Assert.Equal(before, harness.Reads());
+        Assert.Equal(0, harness.Changes.Reads);
+    }
+
+    [Fact]
+    public async Task Reading_everything_again_reads_every_loaded_store_though_nothing_moved()
+    {
+        var harness = new Harness();
+        await harness.LoadProfilesAsync();
+        await harness.LoadSavegamesAsync();
+        await harness.PollAsync();
+        var before = harness.Reads();
+
+        await harness.Poll.RereadAllAsync(CancellationToken.None);
+
+        Assert.Equal(before with
+        {
+            Repos = before.Repos + 1,
+            Profiles = before.Profiles + 1,
+            Savegames = before.Savegames + 1,
+            Friends = before.Friends + 1
+        }, harness.Reads());
+
+        await harness.PollAsync();
+
+        Assert.Equal(before with
+        {
+            Repos = before.Repos + 1,
+            Profiles = before.Profiles + 1,
+            Savegames = before.Savegames + 1,
+            Friends = before.Friends + 1
+        }, harness.Reads());
+    }
+
     [Fact]
     public async Task Cancelling_a_poll_stops_it()
     {
@@ -278,11 +324,13 @@ public class ChangePollTests
                 _candidates,
                 Drift,
                 currentUser,
+                Connection,
                 NullLogger<ChangePoll>.Instance);
         }
 
 
         public FakeChangesServer Changes { get; } = new();
+        public ServerConnection Connection { get; } = new();
         public FakeRepoStore Repos { get; } = new();
         public FakeProfilesServer ProfilesServer { get; } = new();
         public FakeSavegameServer SavegameServer { get; } = new();
@@ -346,9 +394,13 @@ public class ChangePollTests
         public TaskCompletionSource Hold()
             => _held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        public int Reads { get; private set; }
+
         public async Task<GetChangesResponse> GetChangesV1Async(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            Reads++;
 
             var answer = new GetChangesResponse { Repos = [.. _repos] };
 

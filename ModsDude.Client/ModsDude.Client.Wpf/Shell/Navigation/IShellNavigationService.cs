@@ -35,4 +35,7 @@ public interface IShellNavigationService
     /// link that landed on the head instead would make the user find the number themselves.
     /// </param>
     Task<bool> GoToProfileHistoryAsync(Guid repoId, Guid profileId, int? selectRevision = null);
+
+    /// <summary>Builds the page on screen again, unless it holds unsaved changes. On the UI thread.</summary>
+    void ReloadOpenPage();
 }

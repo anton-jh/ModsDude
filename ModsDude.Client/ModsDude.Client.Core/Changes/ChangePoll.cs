@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Activity;
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
@@ -41,22 +42,29 @@ public sealed class ChangePoll(
     IDriftCandidateSource games,
     IDriftMonitor driftMonitor,
     ICurrentUserStore currentUser,
+    IServerConnection connection,
     ILogger<ChangePoll> logger)
     : IChangePoll
 {
     private readonly Lock _lock = new();
     private IReadOnlyDictionary<Guid, RepoChangesDto>? _seen;
-    private int _user;
+    private int _generation;
 
 
     public async Task PollAsync(CancellationToken cancellationToken)
     {
-        int user;
+        // The reconnect probe is what notices the server coming back.
+        if (connection.IsOnline is false)
+        {
+            return;
+        }
+
+        int generation;
         IReadOnlyDictionary<Guid, RepoChangesDto>? seen;
 
         lock (_lock)
         {
-            user = _user;
+            generation = _generation;
             seen = _seen;
         }
 
@@ -79,19 +87,30 @@ public sealed class ChangePoll(
 
         lock (_lock)
         {
-            // A poll that started for the previous user says nothing about this one's repos.
-            if (_user == user)
+            // A poll that started before a user change or a reread says nothing about what came after.
+            if (_generation == generation)
             {
                 _seen = answer.ToDictionary(x => x.RepoId);
             }
         }
     }
 
-    public void ClearUserState()
+    public Task RereadAllAsync(CancellationToken cancellationToken)
+    {
+        Forget();
+
+        return PollAsync(cancellationToken);
+    }
+
+    public void ClearUserState() => Forget();
+
+
+    /// <summary>Drops the counters compared against, and lets a poll already out know its answer is for an older state.</summary>
+    private void Forget()
     {
         lock (_lock)
         {
-            _user++;
+            _generation++;
             _seen = null;
         }
     }

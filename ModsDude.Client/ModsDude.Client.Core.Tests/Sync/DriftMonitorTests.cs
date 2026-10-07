@@ -1,5 +1,6 @@
-using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.Connectivity;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
@@ -171,6 +172,28 @@ public class DriftMonitorTests
         fixture.Monitor.Check();
 
         Assert.False(fixture.Monitor.HasDrift);
+    }
+
+    /// <summary>
+    /// Offline, the head the store last heard of may be stale, so the profile is not said to have moved
+    /// - and once the server answers again, it is.
+    /// </summary>
+    [Fact]
+    public void A_profile_saved_elsewhere_is_not_reported_as_moved_while_offline()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(6, ("fs25_a.zip", "one"));
+        fixture.Revisions.Head = 8;
+
+        fixture.Connection.ReportUnreachable();
+        fixture.Monitor.Check();
+
+        Assert.False(fixture.Monitor.HasDrift);
+
+        fixture.Connection.ReportReachable();
+        fixture.Monitor.Check();
+
+        Assert.True(Assert.Single(fixture.Monitor.Drifted).Report.ProfileHasMoved);
     }
 
     /// <summary>
@@ -765,11 +788,12 @@ public class DriftMonitorTests
 
             Held = new FakeHeldSavegames(Manifests);
 
-            Monitor = new DriftMonitor(Candidates, Drift, Manifests, Revisions, KnownRepos, Time, Held, Held, Integrity, NullLogger<DriftMonitor>.Instance);
+            Monitor = new DriftMonitor(Candidates, Drift, Manifests, Revisions, KnownRepos, Time, Held, Held, Integrity, Connection, NullLogger<DriftMonitor>.Instance);
         }
 
 
         public TempDirectory Folder { get; }
+        public ServerConnection Connection { get; } = new();
         public FakeCandidates Candidates { get; }
 
         /// <summary>The game's other folder, used only by the tests that give it one.</summary>
@@ -872,7 +896,7 @@ public class DriftMonitorTests
 
         /// <summary>A second monitor over the same state - what the next launch has.</summary>
         public DriftMonitor Restart()
-            => new(Candidates, Drift, Manifests, Revisions, KnownRepos, Time, Held, Held, Integrity, NullLogger<DriftMonitor>.Instance);
+            => new(Candidates, Drift, Manifests, Revisions, KnownRepos, Time, Held, Held, Integrity, Connection, NullLogger<DriftMonitor>.Instance);
 
         public void Dispose()
         {

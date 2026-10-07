@@ -22,7 +22,7 @@ using System.ComponentModel;
 
 namespace ModsDude.Client.Wpf.Repos;
 public partial class RepoPageViewModel
-    : PageViewModel, IDisposable
+    : PageViewModel, INavigationHost, IDisposable
 {
     private readonly Repo _repo;
     private readonly RepoAdminPageViewModel.Factory _repoAdminPageViewModelFactory;

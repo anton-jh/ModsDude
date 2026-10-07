@@ -40,6 +40,7 @@ using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shared.Behaviors;
 using ModsDude.Client.Wpf.Shell;
 using ModsDude.Client.Wpf.Shell.AccountBlock;
+using ModsDude.Client.Wpf.Shell.Offline;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Diagnostics;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -62,6 +63,7 @@ public partial class App : Application
     private ITrayService? _tray;
     private IDriftBackstop? _backstop;
     private IChangeWatcher? _changeWatcher;
+    private IReconnectWatcher? _reconnectWatcher;
     private IPlaySessionWatcher? _playSessionWatcher;
     private IGameConnectionToasts? _gameConnectionToasts;
 
@@ -351,6 +353,9 @@ public partial class App : Application
         _changeWatcher = _serviceProvider.GetRequiredService<IChangeWatcher>();
         _changeWatcher.Start();
 
+        _reconnectWatcher = _serviceProvider.GetRequiredService<IReconnectWatcher>();
+        _reconnectWatcher.Start();
+
         _playSessionWatcher = _serviceProvider.GetRequiredService<IPlaySessionWatcher>();
         _playSessionWatcher.Start();
 
@@ -377,6 +382,7 @@ public partial class App : Application
 
         Interlocked.Exchange(ref _backstop, null)?.Dispose();
         Interlocked.Exchange(ref _changeWatcher, null)?.Dispose();
+        Interlocked.Exchange(ref _reconnectWatcher, null)?.Dispose();
         Interlocked.Exchange(ref _playSessionWatcher, null)?.Dispose();
         Interlocked.Exchange(ref _gameConnectionToasts, null)?.Dispose();
         Interlocked.Exchange(ref _tray, null)?.Dispose();
@@ -485,6 +491,10 @@ public partial class App : Application
         services.AddSingleton<IChangeWatcher, ChangeWatcher>();
         services.AddSingleton<IChangePoll, ChangePoll>();
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IChangePoll>());
+
+        // Probes the server while it does not answer, and reads everything again once it does - see the class.
+        services.AddSingleton<IReconnectWatcher, ReconnectWatcher>();
+        services.AddSingleton<IServerReconnect, ServerReconnect>();
 
         // Notices a game closing after a checked-out savegame was played in it - see the class.
         services.AddSingleton<IPlaySessionWatcher, PlaySessionWatcher>();
@@ -616,6 +626,7 @@ public partial class App : Application
 
         services.AddSingleton<BuildMismatchViewModel>();
         services.AddSingleton<AccountBlockedViewModel>();
+        services.AddSingleton<OfflineViewModel>();
 
         services.AddSingleton<ModListItemViewModel.Factory>();
 

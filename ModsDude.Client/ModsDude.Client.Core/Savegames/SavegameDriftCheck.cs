@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Sync;
 
@@ -6,17 +7,22 @@ namespace ModsDude.Client.Core.Savegames;
 public sealed class SavegameDriftCheck(
     IHeldSlotReader reader,
     ISyncManifestStore manifestStore,
-    ISavegameSightings sightings)
+    ISavegameSightings sightings,
+    IServerConnection connection)
     : ISavegameDriftCheck
 {
     public async Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct)
     {
         var drift = new List<SavegameDrift>();
 
+        // Offline, what the store last heard about heads and claims may no longer be true, so it is
+        // not said at all: only what this disk shows.
+        var online = connection.IsOnline;
+
         foreach (var (binding, currentHash, slotDisplayName) in await reader.ReadAsync(game, ct))
         {
-            var head = sightings.GetHeadSnapshot(binding.RepoId, binding.SavegameId);
-            var claim = sightings.GetClaim(binding.RepoId, binding.SavegameId);
+            var head = online ? sightings.GetHeadSnapshot(binding.RepoId, binding.SavegameId) : null;
+            var claim = online ? sightings.GetClaim(binding.RepoId, binding.SavegameId) : null;
             var manifest = manifestStore.TryRead(new ModTargetRef(game, binding.Slot.Target));
 
             var kinds = SavegameDriftRules.Classify(

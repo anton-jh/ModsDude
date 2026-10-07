@@ -38,7 +38,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 /// anyway; asking here makes the refusal arrive before the click rather than after it.
 /// </para>
 /// </remarks>
-public partial class ProfilePageViewModel : PageViewModel, IDisposable
+public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDisposable
 {
     private readonly Repo _repo;
     private readonly Profile _profile;

@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Accounts;
 using ModsDude.Client.Core.Builds;
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 
 namespace ModsDude.Client.Core.ModsDudeServer;
@@ -20,6 +21,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ILogger<BuildHeaderHandler>>()));
         services.AddSingleton<IAccountStatus, AccountStatus>();
         services.AddTransient<AccountStatusHandler>();
+        services.AddSingleton<IServerConnection, ServerConnection>();
+        services.AddTransient<ServerConnectionHandler>();
 
         AddClient<IReposClient>(services, (configuration, http) => new ReposClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IUsersClient>(services, (configuration, http) => new UsersClient(configuration, http) { BaseUrl = serverBaseUrl });
@@ -44,6 +47,7 @@ public static class ServiceCollectionExtensions
         where TClient : class
     {
         services.AddHttpClient(typeof(TClient).Name)
+            .AddHttpMessageHandler<ServerConnectionHandler>()
             .AddHttpMessageHandler<BuildHeaderHandler>()
             .AddHttpMessageHandler<AccountStatusHandler>()
             .AddTypedClient((http, sp) => create(sp.GetRequiredService<ClientConfiguration>(), http));

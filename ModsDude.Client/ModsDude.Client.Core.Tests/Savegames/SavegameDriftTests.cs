@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Persistence;
@@ -268,6 +269,20 @@ public class SavegameDriftTests
         Assert.Equal("Bob", drift.TakenBy?.DisplayName);
     }
 
+    /// <summary>Offline, who holds the claim and where the head is may no longer be true, so neither is said.</summary>
+    [Fact]
+    public async Task A_claim_or_head_the_client_last_saw_is_not_reported_while_offline()
+    {
+        using var harness = new DriftHarness();
+
+        harness.Hold(await harness.WriteAndHashAsync("a savegame"), snapshot: 3);
+        harness.Sightings.Set(_savegameId, 4);
+        harness.Sightings.SetClaim(_savegameId, Claim("bob"));
+        harness.Connection.ReportUnreachable();
+
+        Assert.Empty(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+    }
+
     /// <summary>
     /// No hashing, no network, no directory listing beyond the slot list: two integers already in
     /// local state. It is the reason this state is worth having at all.
@@ -412,11 +427,12 @@ public class SavegameDriftTests
             var reader = new HeldSlotReader(
                 new FakeSavegameAdapters(Adapter), _bindings, new SavegamePacker(), NullLogger<HeldSlotReader>.Instance);
 
-            DriftCheck = new SavegameDriftCheck(reader, _manifestStore, Sightings);
+            DriftCheck = new SavegameDriftCheck(reader, _manifestStore, Sightings, Connection);
         }
 
 
         public FakeSavegameSightings Sightings { get; } = new();
+        public ServerConnection Connection { get; } = new();
         public FakeGameState State { get; } = new();
         public FakeSavegameAdapter Adapter { get; }
         public SavegameDriftCheck DriftCheck { get; }

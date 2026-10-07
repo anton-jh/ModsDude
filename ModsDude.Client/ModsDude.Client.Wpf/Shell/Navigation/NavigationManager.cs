@@ -30,6 +30,30 @@ public partial class NavigationManager(
         set => Navigate(value);
     }
 
+    /// <summary>
+    /// Builds the innermost page on screen again, so it reads everything afresh. Left alone while it
+    /// holds changes nobody has saved.
+    /// </summary>
+    public void ReloadInnermost()
+    {
+        if (CurrentPage is INavigationHost host)
+        {
+            host.NavManager.ReloadInnermost();
+
+            return;
+        }
+
+        if (_current is null || navigationLockService.HasLock())
+        {
+            return;
+        }
+
+        (CurrentPage as IDisposable)?.Dispose();
+
+        CurrentPage = _current.GetPage();
+        CurrentPage.TriggerInit();
+    }
+
     public void Dispose()
     {
         if (CurrentPage is IDisposable disposable)
