@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core;
 using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.Builds;
+using ModsDude.Client.Core.Changes;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Extensions;
@@ -60,10 +61,8 @@ public partial class App : Application
     private SingleInstance? _singleInstance;
     private ITrayService? _tray;
     private IDriftBackstop? _backstop;
-    private IRemoteChangeWatcher? _remoteChanges;
-    private ISavegameClaimWatcher? _claimWatcher;
+    private IChangeWatcher? _changeWatcher;
     private IPlaySessionWatcher? _playSessionWatcher;
-    private IFriendActivityWatcher? _friendWatcher;
     private IGameConnectionToasts? _gameConnectionToasts;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -194,11 +193,6 @@ public partial class App : Application
             window.Show();
             background = false;
         }
-
-        // The opposite of the background presence above: it only asks while the window is in sight,
-        // because what it finds is a dot in the sidebar and nothing else.
-        _remoteChanges = _serviceProvider.GetRequiredService<IRemoteChangeWatcher>();
-        _remoteChanges.Start(window);
 
         RepairAutostart();
 
@@ -354,14 +348,11 @@ public partial class App : Application
         _backstop = _serviceProvider.GetRequiredService<IDriftBackstop>();
         _backstop.Start();
 
-        _claimWatcher = _serviceProvider.GetRequiredService<ISavegameClaimWatcher>();
-        _claimWatcher.Start();
+        _changeWatcher = _serviceProvider.GetRequiredService<IChangeWatcher>();
+        _changeWatcher.Start();
 
         _playSessionWatcher = _serviceProvider.GetRequiredService<IPlaySessionWatcher>();
         _playSessionWatcher.Start();
-
-        _friendWatcher = _serviceProvider.GetRequiredService<IFriendActivityWatcher>();
-        _friendWatcher.Start();
 
         _serviceProvider.GetRequiredService<IAppUpdater>().Start();
 
@@ -385,10 +376,8 @@ public partial class App : Application
         _serviceProvider?.GetService<ISystemToasts>()?.ClearAll();
 
         Interlocked.Exchange(ref _backstop, null)?.Dispose();
-        Interlocked.Exchange(ref _remoteChanges, null)?.Dispose();
-        Interlocked.Exchange(ref _claimWatcher, null)?.Dispose();
+        Interlocked.Exchange(ref _changeWatcher, null)?.Dispose();
         Interlocked.Exchange(ref _playSessionWatcher, null)?.Dispose();
-        Interlocked.Exchange(ref _friendWatcher, null)?.Dispose();
         Interlocked.Exchange(ref _gameConnectionToasts, null)?.Dispose();
         Interlocked.Exchange(ref _tray, null)?.Dispose();
         Interlocked.Exchange(ref _singleInstance, null)?.Dispose();
@@ -492,17 +481,13 @@ public partial class App : Application
         services.AddSingleton<ITrayService, TrayService>();
         services.AddSingleton<IDriftBackstop, DriftBackstop>();
 
-        // Asks whether the sidebar's lists are behind the server, and only says so - see the class.
-        services.AddSingleton<IRemoteChangeWatcher, RemoteChangeWatcher>();
-
-        // Asks who holds the savegames checked out here, so a takeover reaches the notice - see the class.
-        services.AddSingleton<ISavegameClaimWatcher, SavegameClaimWatcher>();
+        // Polls the server's change counters and reads again what moved - see the class.
+        services.AddSingleton<IChangeWatcher, ChangeWatcher>();
+        services.AddSingleton<IChangePoll, ChangePoll>();
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IChangePoll>());
 
         // Notices a game closing after a checked-out savegame was played in it - see the class.
         services.AddSingleton<IPlaySessionWatcher, PlaySessionWatcher>();
-
-        // Reads what friends are on, so a switch or a check-out reaches the column - see the class.
-        services.AddSingleton<IFriendActivityWatcher, FriendActivityWatcher>();
 
         services.AddSingleton<IGameConnectionToasts, GameConnectionToasts>();
 
@@ -711,7 +696,7 @@ public partial class App : Application
         services.AddSingleton<ISavegameStore, SavegameStore>();
         services.AddSingleton<ISavegameSightings>(sp => sp.GetRequiredService<ISavegameStore>());
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<ISavegameStore>());
-        services.AddSingleton<ISavegameClaimWatch, SavegameClaimWatch>();
+        services.AddSingleton<IHeldSavegameClaims, HeldSavegameClaims>();
 
         // Which processes are which game comes off the repos' adapters, for the same reason the
         // savegame adapters do: a game does not carry the base settings that hydrate one.

@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
         AddClient<IModHubClient>(services, (configuration, http) => new ModHubClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IImagesClient>(services, (configuration, http) => new ImagesClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IActivityClient>(services, (configuration, http) => new ActivityClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IChangesClient>(services, (configuration, http) => new ChangesClient(configuration, http) { BaseUrl = serverBaseUrl });
 
         return services;
     }

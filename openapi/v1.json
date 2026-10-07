@@ -515,6 +515,18 @@
           "SavegameCheckedOut"
         ]
       },
+      "GetChangesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "repos": {
+            "items": {
+              "$ref": "#/components/schemas/RepoChangesDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "GetModDependenciesResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1448,6 +1460,40 @@
         },
         "type": "object"
       },
+      "RepoChangesDto": {
+        "additionalProperties": false,
+        "properties": {
+          "activity": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "members": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "mods": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "profiles": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "repo": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "repoId": {
+            "format": "guid",
+            "type": "string"
+          },
+          "savegames": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "RepoDetailsDto": {
         "allOf": [
           {
@@ -2232,6 +2278,61 @@
         ],
         "tags": [
           "Activity"
+        ]
+      }
+    },
+    "/api/v1/changes": {
+      "get": {
+        "operationId": "GetChangesV1",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetChangesResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Changes"
         ]
       }
     },

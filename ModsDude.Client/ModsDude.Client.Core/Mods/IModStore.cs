@@ -14,4 +14,7 @@ public interface IModStore : IUserScopedState
     /// </summary>
     /// <returns>Ordered by mod and version id.</returns>
     Task<IReadOnlyList<ModDto>> GetAsync(Guid repoId, CancellationToken cancellationToken);
+
+    /// <summary>Whether the repo's versions have been read at least once.</summary>
+    bool IsLoaded(Guid repoId);
 }

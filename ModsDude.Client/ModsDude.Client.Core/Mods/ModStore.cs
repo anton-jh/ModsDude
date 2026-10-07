@@ -27,6 +27,14 @@ public sealed class ModStore(
         }
     }
 
+    public bool IsLoaded(Guid repoId)
+    {
+        lock (_lock)
+        {
+            return _held.ContainsKey(repoId);
+        }
+    }
+
     public void ClearUserState()
     {
         _loads.Reset();

@@ -3,7 +3,6 @@ using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
-using ModsDude.Client.Wpf.Savegames;
 using System.Windows.Threading;
 
 namespace ModsDude.Client.Wpf.Games;
@@ -15,7 +14,7 @@ namespace ModsDude.Client.Wpf.Games;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Whether or not the window is in sight</b>, for the reason <see cref="SavegameClaimWatcher"/>
+/// <b>Whether or not the window is in sight</b>, for the reason <see cref="Shell.ChangeWatcher"/>
 /// gives: the person this is for has just been in the game, with ModsDude behind it or in the tray.
 /// </para>
 /// <para>
