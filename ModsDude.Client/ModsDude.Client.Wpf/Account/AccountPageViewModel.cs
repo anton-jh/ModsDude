@@ -89,7 +89,6 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
     {
         var user = await _userAccountService.SetDisplayName(Name.Trim(), cancellationToken);
 
-        Account.Apply(user);
         Name = user.DisplayName;
 
         _toasts.Show($"You are now called {user.DisplayName}.");
@@ -125,7 +124,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
                 return;
             }
 
-            Account.Apply(await _userAccountService.SetAvatar(picture, AvatarPicture.ContentType, cancellationToken));
+            await _userAccountService.SetAvatar(picture, AvatarPicture.ContentType, cancellationToken);
         }
         finally
         {
@@ -142,7 +141,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            Account.Apply(await _userAccountService.RemoveAvatar(cancellationToken));
+            await _userAccountService.RemoveAvatar(cancellationToken);
         }
         finally
         {

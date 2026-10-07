@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Account;
 using ModsDude.Client.Wpf.Games;
@@ -13,7 +14,7 @@ using System.Collections.ObjectModel;
 namespace ModsDude.Client.Wpf.Repos;
 
 public partial class CreateRepoFormViewModel(
-    IRepoRepository repoRepository,
+    IRepoStore repoStore,
     IGameAdapterIndex gameAdapterIndex,
     INavigationLockService navigationLockService,
     IFilePickerService filePickerService,
@@ -61,7 +62,7 @@ public partial class CreateRepoFormViewModel(
 
         navigationLockService.ReleaseLock(this);
 
-        await repoRepository.CreateRepo(
+        await repoStore.CreateRepo(
             Name,
             SelectedGameAdapter.Id.ToString(),
             BaseSettingsEditor.ExtractResults(),

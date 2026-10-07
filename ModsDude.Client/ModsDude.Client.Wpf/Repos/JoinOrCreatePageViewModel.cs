@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using System.Collections.Specialized;
@@ -10,19 +11,19 @@ namespace ModsDude.Client.Wpf.Repos;
 /// </summary>
 public sealed class JoinOrCreatePageViewModel : PageViewModel, IDisposable
 {
-    private readonly IRepoRepository _repoRepository;
+    private readonly IRepoStore _repoStore;
 
 
     public JoinOrCreatePageViewModel(
-        IRepoRepository repoRepository,
+        IRepoStore repoStore,
         JoinRepoFormViewModel join,
         CreateRepoFormViewModel create)
     {
-        _repoRepository = repoRepository;
+        _repoStore = repoStore;
         Join = join;
         Create = create;
 
-        _repoRepository.Repos.CollectionChanged += OnReposChanged;
+        _repoStore.Repos.CollectionChanged += OnReposChanged;
     }
 
 
@@ -30,12 +31,12 @@ public sealed class JoinOrCreatePageViewModel : PageViewModel, IDisposable
 
     public CreateRepoFormViewModel Create { get; }
 
-    public string Title => _repoRepository.Repos.Count == 0 ? "Welcome to ModsDude" : "Join or create";
+    public string Title => _repoStore.Repos.Count == 0 ? "Welcome to ModsDude" : "Join or create";
 
 
     public void Dispose()
     {
-        _repoRepository.Repos.CollectionChanged -= OnReposChanged;
+        _repoStore.Repos.CollectionChanged -= OnReposChanged;
         Create.Dispose();
     }
 

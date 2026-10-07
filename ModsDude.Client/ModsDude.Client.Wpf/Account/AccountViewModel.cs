@@ -1,8 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Sidebar;
@@ -31,38 +30,31 @@ namespace ModsDude.Client.Wpf.Account;
 public partial class AccountViewModel : ObservableObject
 {
     private readonly IAuthenticationService _authenticationService;
-    private readonly ICurrentUserService _currentUserService;
+    private readonly ICurrentUserStore _currentUser;
     private readonly INavigationLockService _navigationLockService;
     private readonly IUserAvatarFactory _avatarFactory;
     private readonly Lazy<IModalService> _modalService;
-    private readonly ILogger<AccountViewModel> _logger;
 
 
     public AccountViewModel(
         IAuthenticationService authenticationService,
-        ICurrentUserService currentUserService,
+        ICurrentUserStore currentUser,
         INavigationLockService navigationLockService,
         IUserAvatarFactory avatarFactory,
-        Lazy<IModalService> modalService,
-        ILogger<AccountViewModel> logger)
+        Lazy<IModalService> modalService)
     {
         _authenticationService = authenticationService;
-        _currentUserService = currentUserService;
+        _currentUser = currentUser;
         _navigationLockService = navigationLockService;
         _avatarFactory = avatarFactory;
         _modalService = modalService;
-        _logger = logger;
 
         _displayName = Describe(authenticationService.CurrentAccount);
 
         _authenticationService.AccountChanged += OnAccountChanged;
+        _currentUser.Changed += OnUserChanged;
 
-        // Signing in happens before this exists, so the account it is being built around has
-        // usually already raised its event and will not raise another one.
-        if (authenticationService.CurrentAccount is not null)
-        {
-            _ = RefreshIdentityAsync();
-        }
+        Show(_currentUser.User);
     }
 
 
@@ -104,26 +96,6 @@ public partial class AccountViewModel : ObservableObject
     public string Description => Tag is null ? DisplayName : $"{DisplayName} {Tag}";
 
 
-    /// <summary>
-    /// Takes the server's answer as the account's - after sign-in, and after every change the
-    /// account page makes, each of which answers with the user as they now are.
-    /// </summary>
-    public void Apply(CurrentUserDto user)
-    {
-        DisplayName = user.DisplayName;
-        Avatar = _avatarFactory.Create(user);
-        HasPicture = user.AvatarHash is not null;
-        IsTrusted = user.IsTrusted;
-        Tag = user.Tag;
-    }
-
-    /// <summary>
-    /// Asks the server again for the tag and colour, where the round trip at sign-in did not get them -
-    /// which is what happens when the server was not answering yet.
-    /// </summary>
-    public Task RefreshIdentityIfMissingAsync()
-        => Tag is null ? RefreshIdentityAsync() : Task.CompletedTask;
-
 
     // Never greyed out while running: a sign-in tab closed without finishing never answers, and
     // clicking again is how the user gets a new one - which ends the old attempt.
@@ -161,30 +133,25 @@ public partial class AccountViewModel : ObservableObject
 
     private void OnAccountChanged(object? sender, SignedInAccount account)
     {
-        DisplayName = Describe(account);
-        Tag = null;
-        Avatar = null;
-        HasPicture = false;
-        IsTrusted = null;
+        Show(_currentUser.User);
         OnPropertyChanged(nameof(Email));
-
-        _ = RefreshIdentityAsync();
     }
 
-    private async Task RefreshIdentityAsync()
+    private void OnUserChanged(object? sender, EventArgs e)
     {
-        try
-        {
-            Apply(await _currentUserService.Get(CancellationToken.None));
-        }
-        catch (Exception exception)
-        {
-            // Swallowed on purpose. A name is already on screen; what is missing is decoration, and
-            // a label is not worth the app's error modal on the way in. It stays out of the
-            // background-problem notice for the same reason, and lands in the log so that a tag which
-            // never arrives can still be accounted for.
-            _logger.LogDebug(exception, "Could not fetch the signed-in user's identity; tag and avatar stay unset.");
-        }
+        Show(_currentUser.User);
+    }
+
+    /// <summary>
+    /// The server's answer where there is one, and the token's name with nothing else until there is.
+    /// </summary>
+    private void Show(CurrentUserDto? user)
+    {
+        DisplayName = user?.DisplayName ?? Describe(_authenticationService.CurrentAccount);
+        Avatar = user is null ? null : _avatarFactory.Create(user);
+        HasPicture = user?.AvatarHash is not null;
+        IsTrusted = user?.IsTrusted;
+        Tag = user?.Tag;
     }
 
     private static string Describe(SignedInAccount? account)

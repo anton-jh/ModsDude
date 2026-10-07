@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Accounts;
 using ModsDude.Client.Core.Connectivity;
-using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Account;
 using ModsDude.Client.Wpf.Shell.Modals;
 using System.Windows;
@@ -18,7 +18,7 @@ public sealed partial class AccountBlockedViewModel : ObservableObject, IDisposa
 {
     private readonly IAccountStatus _status;
     private readonly IConnectionRetry _connection;
-    private readonly ICurrentUserService _currentUser;
+    private readonly ICurrentUserStore _currentUser;
     private readonly IErrorReporter _errorReporter;
     private readonly ILogger<AccountBlockedViewModel> _logger;
 
@@ -26,7 +26,7 @@ public sealed partial class AccountBlockedViewModel : ObservableObject, IDisposa
     public AccountBlockedViewModel(
         IAccountStatus status,
         IConnectionRetry connection,
-        ICurrentUserService currentUser,
+        ICurrentUserStore currentUser,
         IErrorReporter errorReporter,
         AccountViewModel account,
         ILogger<AccountBlockedViewModel> logger)
@@ -58,7 +58,7 @@ public sealed partial class AccountBlockedViewModel : ObservableObject, IDisposa
 
         try
         {
-            await _currentUser.Get(cancellationToken);
+            await _currentUser.RefreshAsync(cancellationToken);
         }
         catch (Exception exception) when (ConnectionFailure.Is(exception))
         {

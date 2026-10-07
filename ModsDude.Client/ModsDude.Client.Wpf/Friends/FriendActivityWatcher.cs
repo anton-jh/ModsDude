@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Activity;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Savegames;
 using System.Windows.Threading;
@@ -22,7 +23,7 @@ namespace ModsDude.Client.Wpf.Friends;
 /// </remarks>
 public sealed class FriendActivityWatcher(
     IFriendActivityService friends,
-    IRepoRepository repoRepository,
+    IRepoStore repoStore,
     ILogger<FriendActivityWatcher> logger)
     : IFriendActivityWatcher
 {
@@ -55,7 +56,7 @@ public sealed class FriendActivityWatcher(
     private void OnTick(object? sender, EventArgs e)
     {
         // Not signed in yet: nothing to ask with, so the first look waits for the next tick.
-        if (repoRepository.HasLoaded is false)
+        if (repoStore.HasLoaded is false)
         {
             return;
         }

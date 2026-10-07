@@ -1,10 +1,11 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Repos;
 
 namespace ModsDude.Client.Core.Savegames;
 
-public sealed class RepoSavegameAdapters(IRepoRepository repos, IGameRepository games)
+public sealed class RepoSavegameAdapters(IRepoStore repos, IGameRepository games)
     : ILocalSavegameAdapters
 {
     public ILocalSavegameAdapter? TryGet(GameIdentity identity)

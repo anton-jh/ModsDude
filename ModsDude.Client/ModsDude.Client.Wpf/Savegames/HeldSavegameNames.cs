@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 
@@ -14,7 +15,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 public sealed class HeldSavegameNames(
     ISavegameBindingStore bindingStore,
     ISavegamesClient savegamesClient,
-    IRepoRepository repos,
+    IRepoStore repos,
     ILogger<HeldSavegameNames> logger) : IHeldSavegameNames
 {
     public async Task<IReadOnlyDictionary<Guid, HeldSavegameName>> ReadAsync(

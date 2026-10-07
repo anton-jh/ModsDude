@@ -1,10 +1,11 @@
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 
 namespace ModsDude.Client.Core.Sync;
 
 /// <summary><see cref="IModTargetAdapters"/> over the repos this client has loaded and the games it has connected.</summary>
-public sealed class RepoModTargetAdapters(IRepoRepository repos, IGameRepository games) : IModTargetAdapters
+public sealed class RepoModTargetAdapters(IRepoStore repos, IGameRepository games) : IModTargetAdapters
 {
     public ResolvedModTarget? Find(ModTargetRef target)
     {

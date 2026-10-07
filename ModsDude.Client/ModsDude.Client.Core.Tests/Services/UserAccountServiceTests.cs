@@ -1,6 +1,7 @@
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Tests.Users;
 
 namespace ModsDude.Client.Core.Tests.Services;
 
@@ -15,7 +16,7 @@ public class UserAccountServiceTests
     {
         var images = new FakeImagesClient();
         var users = new FakeUsersClient();
-        var service = new UserAccountService(users, images, new FakeImageStore());
+        var service = new UserAccountService(users, images, new FakeImageStore(), new FixedCurrentUser("me"));
 
         await service.SetAvatar(_picture, "image/webp", CancellationToken.None);
 
@@ -28,7 +29,7 @@ public class UserAccountServiceTests
     {
         var images = new FakeImagesClient(present: _hash);
         var users = new FakeUsersClient();
-        var service = new UserAccountService(users, images, new FakeImageStore());
+        var service = new UserAccountService(users, images, new FakeImageStore(), new FixedCurrentUser("me"));
 
         await service.SetAvatar(_picture, "image/webp", CancellationToken.None);
 
@@ -40,7 +41,7 @@ public class UserAccountServiceTests
     public async Task The_picture_is_cached_so_the_client_that_made_it_does_not_download_it()
     {
         var store = new FakeImageStore();
-        var service = new UserAccountService(new FakeUsersClient(), new FakeImagesClient(), store);
+        var service = new UserAccountService(new FakeUsersClient(), new FakeImagesClient(), store, new FixedCurrentUser("me"));
 
         await service.SetAvatar(_picture, "image/webp", CancellationToken.None);
 
@@ -51,7 +52,7 @@ public class UserAccountServiceTests
     public async Task A_refused_picture_is_not_cached()
     {
         var store = new FakeImageStore();
-        var service = new UserAccountService(new FakeUsersClient(refuseAvatar: true), new FakeImagesClient(), store);
+        var service = new UserAccountService(new FakeUsersClient(refuseAvatar: true), new FakeImagesClient(), store, new FixedCurrentUser("me"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.SetAvatar(_picture, "image/webp", CancellationToken.None));
 

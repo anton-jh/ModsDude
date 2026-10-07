@@ -12,7 +12,7 @@ namespace ModsDude.Client.Core.Models;
 public class Repo
     : INotifyPropertyChanged, IDisposable
 {
-    private readonly IRepoRepository _repoService;
+    private readonly IRepoStore _repoStore;
     private readonly IGameRepository _gameRepository;
 
     private ObservableCollectionSynchronizer<Game, Game, string> _gamesSynchronizer;
@@ -21,11 +21,11 @@ public class Repo
     public Repo(
         RepoMembershipDto repoMembershipDto,
         IGameAdapterIndex gameAdapterIndex,
-        IRepoRepository repoService,
+        IRepoStore repoStore,
         IGameRepository gameRepository)
     {
         Adapter = gameAdapterIndex.GetById(GameAdapterId.Parse(repoMembershipDto.Repo.AdapterId)).WithBaseSettings(repoMembershipDto.Repo.AdapterConfiguration);
-        _repoService = repoService;
+        _repoStore = repoStore;
         _gameRepository = gameRepository;
         Id = repoMembershipDto.Repo.Id;
         Name = repoMembershipDto.Repo.Name;
@@ -68,7 +68,7 @@ public class Repo
 
     public Task Update(string name, DynamicForm baseSettings, CancellationToken cancellationToken)
     {
-        return _repoService.Update(this, name, baseSettings, cancellationToken);
+        return _repoStore.Update(this, name, baseSettings, cancellationToken);
     }
 
     /// <summary>

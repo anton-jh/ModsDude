@@ -50,7 +50,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private readonly ISavegameHolds _holds;
     private readonly ISavegameBindingStore _bindingStore;
     private readonly IProfileService _profileService;
-    private readonly ICurrentUserService _currentUserService;
+    private readonly ICurrentUserStore _currentUser;
     private readonly IDriftMonitor _driftMonitor;
     private readonly ISavegameOffers _offers;
     private readonly IHeldSavegameNames _heldSavegameNames;
@@ -85,7 +85,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         ISavegameSightingCache sightings,
         ISavegameBindingStore bindingStore,
         IProfileService profileService,
-        ICurrentUserService currentUserService,
+        ICurrentUserStore currentUser,
         IDriftMonitor driftMonitor,
         ISavegameOffers offers,
         IHeldSavegameNames heldSavegameNames,
@@ -113,7 +113,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         _sightings = sightings;
         _bindingStore = bindingStore;
         _profileService = profileService;
-        _currentUserService = currentUserService;
+        _currentUser = currentUser;
         _driftMonitor = driftMonitor;
         _offers = offers;
         _heldSavegameNames = heldSavegameNames;
@@ -233,7 +233,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         // whose is whose is still a list, and everything else on the page works.
         try
         {
-            _currentUserId = (await _currentUserService.Get(_lifetime)).Id;
+            _currentUserId = (await _currentUser.GetAsync(_lifetime)).Id;
         }
         catch (ApiException)
         {

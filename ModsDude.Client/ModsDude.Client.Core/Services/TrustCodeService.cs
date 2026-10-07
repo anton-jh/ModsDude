@@ -1,9 +1,10 @@
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Users;
 
 namespace ModsDude.Client.Core.Services;
 
-public class TrustCodeService(ITrustCodesClient trustCodesClient) : ITrustCodeService
+public class TrustCodeService(ITrustCodesClient trustCodesClient, ICurrentUserStore currentUser) : ITrustCodeService
 {
     public async Task<CurrentUserDto> Redeem(string code, CancellationToken cancellationToken)
     {
@@ -11,7 +12,7 @@ public class TrustCodeService(ITrustCodesClient trustCodesClient) : ITrustCodeSe
 
         try
         {
-            return await trustCodesClient.RedeemTrustCodeV1Async(request, cancellationToken);
+            return await currentUser.WriteAsync(ct => trustCodesClient.RedeemTrustCodeV1Async(request, ct), cancellationToken);
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.TrustCodeNotFound)
         {

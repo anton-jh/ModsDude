@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using System.Windows;
 using System.Windows.Threading;
@@ -27,7 +28,7 @@ namespace ModsDude.Client.Wpf.Shared;
 /// </para>
 /// </remarks>
 public sealed class RemoteChangeWatcher(
-    IRepoRepository repoRepository,
+    IRepoStore repoStore,
     IProfileService profileService,
     ILogger<RemoteChangeWatcher> logger)
     : IRemoteChangeWatcher
@@ -118,7 +119,7 @@ public sealed class RemoteChangeWatcher(
             // Separately, so that one list being unreadable does not keep the other one's dot away.
             try
             {
-                await repoRepository.CheckForChanges(CancellationToken.None);
+                await repoStore.CheckForChanges(CancellationToken.None);
             }
             catch (Exception exception)
             {

@@ -4,6 +4,7 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Account;
 using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Repos.Archive;
@@ -23,7 +24,7 @@ namespace ModsDude.Client.Wpf.Shell;
 public partial class MainPageViewModel
     : PageViewModel, IDisposable
 {
-    private readonly IRepoRepository _repoService;
+    private readonly IRepoStore _repoStore;
     private readonly ILastSelectionRepository _lastSelectionRepository;
     private readonly RepoPageViewModel.Factory _repoPageViewModelFactory;
     private readonly IShellNavigationService _shellNavigationService;
@@ -35,7 +36,7 @@ public partial class MainPageViewModel
     /// </summary>
     private readonly MenuItemViewModel _joinOrCreateMenuItem;
 
-    private readonly AccountViewModel _account;
+    private readonly ICurrentUserStore _currentUser;
     private readonly IProfileSyncStatusService _syncStatus;
     private readonly IConnectionRetry _connection;
     private readonly CancellationTokenSource _disposed = new();
@@ -44,7 +45,7 @@ public partial class MainPageViewModel
 
 
     public MainPageViewModel(
-        IRepoRepository repoService,
+        IRepoStore repoStore,
         ILastSelectionRepository lastSelectionRepository,
         RepoPageViewModel.Factory repoPageViewModelFactory,
         IFactory<JoinOrCreatePageViewModel> joinOrCreatePageViewModelFactory,
@@ -53,12 +54,13 @@ public partial class MainPageViewModel
         INavigationLockService navigationLockService,
         IShellNavigationService shellNavigationService,
         AccountViewModel account,
+        ICurrentUserStore currentUser,
         IModalService modalService,
         IFactory<ArchivePageViewModel> archivePageViewModelFactory,
         IProfileSyncStatusService syncStatus,
         IConnectionRetry connection)
     {
-        _account = account;
+        _currentUser = currentUser;
         _syncStatus = syncStatus;
         _connection = connection;
 
@@ -85,11 +87,11 @@ public partial class MainPageViewModel
         // Join or create page, and showing either before then would be showing a guess.
         NavManager = new(navigationLockService, modalService);
 
-        _repoService = repoService;
+        _repoStore = repoStore;
         _lastSelectionRepository = lastSelectionRepository;
         _repoPageViewModelFactory = repoPageViewModelFactory;
         _shellNavigationService = shellNavigationService;
-        _reposSynchronizer = new(_repoService.Repos, Repos, MapRepoToVm, x => x.Title, NaturalOrder.Comparer);
+        _reposSynchronizer = new(_repoStore.Repos, Repos, MapRepoToVm, x => x.Title, NaturalOrder.Comparer);
 
         // Two repos reading the same is a property of this list, and this list changes while the
         // user is looking at it - joining one, archiving one, or renaming one can make a pair
@@ -103,8 +105,8 @@ public partial class MainPageViewModel
         ReposView = CollectionViewSource.GetDefaultView(Repos);
         ReposView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(RepoItemViewModel.Game)));
 
-        repoService.RepoCreated += OnRepoCreated;
-        repoService.PendingChangesChanged += OnPendingRepoChangesChanged;
+        repoStore.RepoCreated += OnRepoCreated;
+        repoStore.PendingChangesChanged += OnPendingRepoChangesChanged;
         NavManager.PropertyChanged += OnNavigationChanged;
         _syncStatus.Changed += OnSyncStatusChanged;
 
@@ -138,17 +140,17 @@ public partial class MainPageViewModel
     /// Whether the server has repo changes the list does not show yet, which is the only time the
     /// rail offers Refresh - see <see cref="Shared.RemoteChangeWatcher"/>.
     /// </summary>
-    public bool HasPendingRepoChanges => _repoService.PendingChanges is not null;
+    public bool HasPendingRepoChanges => _repoStore.PendingChanges is not null;
 
     /// <summary>Refresh's label, which says what it would bring in.</summary>
-    public string RefreshToolTip => _repoService.PendingChanges is { } changes
+    public string RefreshToolTip => _repoStore.PendingChanges is { } changes
         ? $"Refresh{Environment.NewLine}{changes.Describe()}"
         : "Refresh";
 
 
     protected override void Init()
     {
-        LoadInitialRepos();
+        LoadAtStart();
     }
 
     public void Dispose()
@@ -158,8 +160,8 @@ public partial class MainPageViewModel
 
         _shellNavigationService.Unregister(this);
 
-        _repoService.RepoCreated -= OnRepoCreated;
-        _repoService.PendingChangesChanged -= OnPendingRepoChangesChanged;
+        _repoStore.RepoCreated -= OnRepoCreated;
+        _repoStore.PendingChangesChanged -= OnPendingRepoChangesChanged;
         NavManager.PropertyChanged -= OnNavigationChanged;
         _syncStatus.Changed -= OnSyncStatusChanged;
         Repos.CollectionChanged -= OnReposChanged;
@@ -202,28 +204,33 @@ public partial class MainPageViewModel
 
 
     /// <summary>
-    /// The first load, retried until the server answers - see <see cref="ConnectionRetry"/>.
+    /// The first load of the signed-in user and their repos, retried until the server answers - see
+    /// <see cref="ConnectionRetry"/>.
     /// </summary>
     /// <remarks>
     /// Async void for the same reason the command's own Execute rethrows: a failure that waiting will
     /// not fix still reaches the error modal on the UI thread.
     /// </remarks>
-    private async void LoadInitialRepos()
+    private async void LoadAtStart()
     {
-        // Skipped where Refresh already got the list in while this was waiting.
-        var attempt = (CancellationToken _) => _repoService.HasLoaded ? Task.CompletedTask : LoadReposCommand.ExecuteAsync(null);
-
-        if (await _connection.RunAsync(ConnectionTarget.Server, attempt, _disposed.Token))
+        // Each part skipped where it is already in: Refresh may have got the list while this was waiting.
+        var attempt = async (CancellationToken cancellationToken) =>
         {
-            // Asked for alongside the list and missing for the same reason, and nothing else asks again.
-            await _account.RefreshIdentityIfMissingAsync();
-        }
+            await _currentUser.GetAsync(cancellationToken);
+
+            if (_repoStore.HasLoaded is false)
+            {
+                await LoadReposCommand.ExecuteAsync(null);
+            }
+        };
+
+        await _connection.RunAsync(ConnectionTarget.Server, attempt, _disposed.Token);
     }
 
     [RelayCommand]
     private async Task LoadRepos(CancellationToken cancellationToken)
     {
-        await _repoService.RefreshRepos(cancellationToken);
+        await _repoStore.RefreshRepos(cancellationToken);
 
         SelectLandingPage();
 

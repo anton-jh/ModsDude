@@ -5,7 +5,7 @@ namespace ModsDude.Client.Core.Activity;
 
 public interface IFriendActivityService : IUserScopedState
 {
-    /// <summary>Raised after every read that landed, on whichever thread it completed.</summary>
+    /// <summary>Raised on the store's thread after every read that landed, and when the user changes.</summary>
     event EventHandler? Changed;
 
     /// <summary>

@@ -2,11 +2,12 @@ using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Services;
 using System.Collections.ObjectModel;
 
-namespace ModsDude.Client.Core.Services;
+namespace ModsDude.Client.Core.Repos;
 
-public interface IRepoRepository : IUserScopedState, IKnownRepos
+public interface IRepoStore : IUserScopedState, IKnownRepos
 {
     /// <summary>
     /// Raised for a repo that did not exist a moment ago, so the shell can navigate to it. Renames
@@ -54,11 +55,11 @@ public interface IRepoRepository : IUserScopedState, IKnownRepos
     Task CreateRepo(string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Puts a repo the user has just joined into the list, so the shell can navigate to it without
-    /// waiting for a refresh. Ignored where the repo is already there - redeeming a code twice is
-    /// allowed, and must not produce two of the same repo.
+    /// Sends <paramref name="redeem"/> and puts the repo it joined into the list, so the shell can navigate
+    /// to it without waiting for a refresh. A repo already there stays as it is - redeeming a code twice
+    /// is allowed, and must not produce two of the same repo.
     /// </summary>
-    void AddJoinedRepo(RepoMembershipDto membership);
+    Task<RepoMembershipDto> Join(Func<CancellationToken, Task<RepoMembershipDto>> redeem, CancellationToken cancellationToken);
 
     Task Update(Repo repo, string name, DynamicForm baseSettings, CancellationToken cancellationToken);
 

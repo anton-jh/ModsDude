@@ -1,6 +1,7 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Notices;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 
@@ -16,12 +17,12 @@ namespace ModsDude.Client.Wpf.Shell.Notices;
 /// nothing else.
 /// </remarks>
 public sealed class NoticeEnvironment(
-    IRepoRepository repoRepository,
+    IRepoStore repoStore,
     IGameRepository gameRepository,
     IHeldSavegames heldSavegames)
     : INoticeEnvironment
 {
-    public bool ReposLoaded => repoRepository.HasLoaded;
+    public bool ReposLoaded => repoStore.HasLoaded;
 
 
     /// <summary>
@@ -33,12 +34,12 @@ public sealed class NoticeEnvironment(
     public NoticeRepo? FindRepo(GameIdentity game, Guid? profileRepoId)
     {
         if (profileRepoId is Guid repoId
-            && repoRepository.Repos.FirstOrDefault(x => x.Id == repoId) is Repo owner)
+            && repoStore.Repos.FirstOrDefault(x => x.Id == repoId) is Repo owner)
         {
             return new(owner.Id, owner.MembershipLevel);
         }
 
-        return repoRepository.Repos.FirstOrDefault(x => x.Scope == game) is Repo any
+        return repoStore.Repos.FirstOrDefault(x => x.Scope == game) is Repo any
             ? new(any.Id, any.MembershipLevel)
             : null;
     }
@@ -54,7 +55,7 @@ public sealed class NoticeEnvironment(
             return new Dictionary<TargetKey, string>();
         }
 
-        return repoRepository.Repos.FirstOrDefault(x => x.Scope == game) is Repo repo
+        return repoStore.Repos.FirstOrDefault(x => x.Scope == game) is Repo repo
             ? TargetNames.Read(found, repo.Adapter)
             : new Dictionary<TargetKey, string>();
     }

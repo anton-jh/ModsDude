@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Users;
 
 namespace ModsDude.Client.Core.Services;
 
@@ -14,11 +15,14 @@ namespace ModsDude.Client.Core.Services;
 public class UserAccountService(
     IUsersClient usersClient,
     IImagesClient imagesClient,
-    IModImageStore imageStore) : IUserAccountService
+    IModImageStore imageStore,
+    ICurrentUserStore currentUser) : IUserAccountService
 {
     public Task<CurrentUserDto> SetDisplayName(string displayName, CancellationToken cancellationToken)
     {
-        return usersClient.SetDisplayNameV1Async(new SetDisplayNameRequest { DisplayName = displayName }, cancellationToken);
+        return currentUser.WriteAsync(
+            ct => usersClient.SetDisplayNameV1Async(new SetDisplayNameRequest { DisplayName = displayName }, ct),
+            cancellationToken);
     }
 
     public async Task<CurrentUserDto> SetAvatar(byte[] picture, string contentType, CancellationToken cancellationToken)
@@ -34,7 +38,9 @@ public class UserAccountService(
             await imagesClient.UploadImageV1Async(hash, new FileParameter(content, hash, contentType), cancellationToken);
         }
 
-        var user = await usersClient.SetAvatarV1Async(new SetAvatarRequest { Hash = hash }, cancellationToken);
+        var user = await currentUser.WriteAsync(
+            ct => usersClient.SetAvatarV1Async(new SetAvatarRequest { Hash = hash }, ct),
+            cancellationToken);
 
         // The client that made the picture is the first to draw it, and it already holds the bytes.
         await imageStore.PutAsync(hash, picture, cancellationToken);
@@ -44,6 +50,6 @@ public class UserAccountService(
 
     public Task<CurrentUserDto> RemoveAvatar(CancellationToken cancellationToken)
     {
-        return usersClient.RemoveAvatarV1Async(cancellationToken);
+        return currentUser.WriteAsync(usersClient.RemoveAvatarV1Async, cancellationToken);
     }
 }

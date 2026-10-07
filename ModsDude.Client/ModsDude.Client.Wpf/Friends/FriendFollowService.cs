@@ -2,6 +2,7 @@ using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Profiles;
@@ -28,14 +29,14 @@ namespace ModsDude.Client.Wpf.Friends;
 /// </para>
 /// </remarks>
 public sealed class FriendFollowService(
-    IRepoRepository repoRepository,
+    IRepoStore repoStore,
     IGameRepository gameRepository,
     IProfileApplyService applyService,
     IDriftMonitor driftMonitor) : IFriendFollowService
 {
     public async Task<(string Message, ToastSeverity Severity)> FollowAsync(GameActivityDto activity, CancellationToken cancellationToken)
     {
-        if (repoRepository.Repos.FirstOrDefault(x => x.Id == activity.RepoId) is not Repo repo)
+        if (repoStore.Repos.FirstOrDefault(x => x.Id == activity.RepoId) is not Repo repo)
         {
             return ("The repo that profile is in has not loaded yet. Try again in a moment.", ToastSeverity.Warning);
         }

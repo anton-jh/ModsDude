@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.Repos;
+
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,20 +14,20 @@ namespace ModsDude.Client.Wpf.Repos;
 public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
-    private readonly IRepoRepository _repoService;
+    private readonly IRepoStore _repoStore;
     private readonly INavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
 
 
     public RepoAdminPageViewModel(
         Repo repo,
-        IRepoRepository repoService,
+        IRepoStore repoStore,
         INavigationLockService navigationLockService,
         IModalService modalService,
         IFilePickerService filePickerService)
     {
         _repo = repo;
-        _repoService = repoService;
+        _repoStore = repoStore;
         _navigationLockService = navigationLockService;
         _modalService = modalService;
         _name = repo.Name;
@@ -74,7 +76,7 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         if (await ConfirmArchive())
         {
             _navigationLockService.ReleaseLock(this);
-            await _repoService.ArchiveRepo(_repo.Id, cancellationToken);
+            await _repoStore.ArchiveRepo(_repo.Id, cancellationToken);
         }
     }
 

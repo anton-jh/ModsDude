@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -25,7 +26,7 @@ namespace ModsDude.Client.Wpf.Games;
 public sealed class PlaySessionWatcher(
     IPlaySessionWatch watch,
     IDriftMonitor monitor,
-    IRepoRepository repoRepository,
+    IRepoStore repoStore,
     ILogger<PlaySessionWatcher> logger)
     : IPlaySessionWatcher
 {
@@ -58,7 +59,7 @@ public sealed class PlaySessionWatcher(
         // Which process is which game is read off the repos' adapters, so until they have loaded a
         // running game would read as closed - and the first look is the one that has to know whether
         // it was already running when the app started.
-        if (repoRepository.HasLoaded is false)
+        if (repoStore.HasLoaded is false)
         {
             return;
         }

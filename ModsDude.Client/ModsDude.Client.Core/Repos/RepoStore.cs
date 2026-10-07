@@ -5,18 +5,22 @@ using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Repos;
+using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Stores;
 using System.Collections.Frozen;
 using System.Collections.ObjectModel;
 
-namespace ModsDude.Client.Core.Services;
-public class RepoRepository(
+namespace ModsDude.Client.Core.Repos;
+public class RepoStore(
     IReposClient repoClient,
     IGameAdapterIndex gameAdapterIndex,
     IGameRepository gameRepository,
-    ILogger<RepoRepository> logger)
-    : IRepoRepository
+    IStoreDispatcher dispatcher,
+    ILogger<RepoStore> logger)
+    : IRepoStore
 {
+    private readonly StoreLoads<WholeList> _loads = new(dispatcher, logger);
+
     public event Action<Guid>? RepoCreated;
 
     public ObservableCollection<Repo> Repos { get; } = [];
@@ -57,10 +61,11 @@ public class RepoRepository(
         SetPendingChanges(RepoListChanges.Between(before, reposFromApi));
     }
 
-    public async Task RefreshRepos(CancellationToken cancellationToken)
-    {
-        var reposFromApi = await repoClient.GetMyReposV1Async(cancellationToken);
+    public Task RefreshRepos(CancellationToken cancellationToken)
+        => _loads.ReadAsync(default, repoClient.GetMyReposV1Async, ApplyList, cancellationToken);
 
+    private void ApplyList(ICollection<RepoMembershipDto> reposFromApi)
+    {
         var byId = reposFromApi.ToDictionary(x => x.Repo.Id);
 
         // Reconciled rather than rebuilt. Clearing would discard every menu entry and every open
@@ -144,36 +149,50 @@ public class RepoRepository(
 
         // No name to lose the race for: repo names are not unique, so the only reason this could
         // come back a failure is one the error reporter can say better than a catch here.
-        var repo = await repoClient.CreateRepoV1Async(request, cancellationToken);
+        await _loads.WriteAsync(
+            default,
+            ct => repoClient.CreateRepoV1Async(request, ct),
+            repo =>
+            {
+                // A read that crossed this write may have brought it in already.
+                if (FindRepo(repo.Id) is null)
+                {
+                    // The creator is the repo's first Admin, so the response carries everything the list needs.
+                    var created = MapRepoModel(new RepoMembershipDto()
+                    {
+                        Repo = repo,
+                        MembershipLevel = RepoMembershipLevel.Admin
+                    });
 
-        // The creator is the repo's first Admin, so the response carries everything the list needs.
-        var created = MapRepoModel(new RepoMembershipDto()
-        {
-            Repo = repo,
-            MembershipLevel = RepoMembershipLevel.Admin
-        });
+                    Add(created);
 
-        Add(created);
+                    // Before the shell navigates to it, so it opens with its game already there.
+                    CatchUpGame(created);
+                }
 
-        // Before the shell navigates to it, so it opens with its game already there.
-        CatchUpGame(created);
-
-        RepoCreated?.Invoke(repo.Id);
+                RepoCreated?.Invoke(repo.Id);
+            },
+            cancellationToken);
     }
 
-    public void AddJoinedRepo(RepoMembershipDto membership)
-    {
-        if (FindRepo(membership.Repo.Id) is not null)
-        {
-            return;
-        }
+    public Task<RepoMembershipDto> Join(Func<CancellationToken, Task<RepoMembershipDto>> redeem, CancellationToken cancellationToken)
+        => _loads.WriteAsync(
+            default,
+            redeem,
+            membership =>
+            {
+                if (FindRepo(membership.Repo.Id) is not null)
+                {
+                    return;
+                }
 
-        var joined = MapRepoModel(membership);
+                var joined = MapRepoModel(membership);
 
-        Add(joined);
-        CatchUpGame(joined);
-        RepoCreated?.Invoke(membership.Repo.Id);
-    }
+                Add(joined);
+                CatchUpGame(joined);
+                RepoCreated?.Invoke(membership.Repo.Id);
+            },
+            cancellationToken);
 
     public async Task Update(Repo repo, string name, DynamicForm baseSettings, CancellationToken cancellationToken)
     {
@@ -183,9 +202,7 @@ public class RepoRepository(
             AdapterConfiguration = baseSettings.Serialize()
         };
 
-        var updated = await repoClient.UpdateRepoV1Async(repo.Id, request, cancellationToken);
-
-        repo.Apply(updated);
+        await _loads.WriteAsync(default, ct => repoClient.UpdateRepoV1Async(repo.Id, request, ct), repo.Apply, cancellationToken);
     }
 
     /// <summary>
@@ -194,6 +211,8 @@ public class RepoRepository(
     /// </summary>
     public void ClearUserState()
     {
+        _loads.Reset();
+
         for (var i = Repos.Count - 1; i >= 0; i--)
         {
             Remove(Repos[i]);
@@ -208,25 +227,11 @@ public class RepoRepository(
         SetPendingChanges(null);
     }
 
-    public async Task DeleteRepo(Guid id, CancellationToken cancellationToken)
-    {
-        await repoClient.DeleteRepoV1Async(id, cancellationToken);
+    public Task DeleteRepo(Guid id, CancellationToken cancellationToken)
+        => _loads.WriteAsync(default, ct => repoClient.DeleteRepoV1Async(id, ct), () => RemoveIfHeld(id), cancellationToken);
 
-        if (FindRepo(id) is Repo removed)
-        {
-            Remove(removed);
-        }
-    }
-
-    public async Task ArchiveRepo(Guid id, CancellationToken cancellationToken)
-    {
-        await repoClient.ArchiveRepoV1Async(id, cancellationToken);
-
-        if (FindRepo(id) is Repo archived)
-        {
-            Remove(archived);
-        }
-    }
+    public Task ArchiveRepo(Guid id, CancellationToken cancellationToken)
+        => _loads.WriteAsync(default, ct => repoClient.ArchiveRepoV1Async(id, ct), () => RemoveIfHeld(id), cancellationToken);
 
     public async Task RestoreRepo(Guid id, CancellationToken cancellationToken)
     {
@@ -247,6 +252,14 @@ public class RepoRepository(
     private Repo? FindRepo(Guid id)
     {
         return Repos.FirstOrDefault(x => x.Id == id);
+    }
+
+    private void RemoveIfHeld(Guid id)
+    {
+        if (FindRepo(id) is Repo held)
+        {
+            Remove(held);
+        }
     }
 
     private List<RepoListEntry> Snapshot()

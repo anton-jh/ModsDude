@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Account;
@@ -25,8 +26,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     private readonly Repo _repo;
     private readonly IMembershipService _membershipService;
     private readonly IInviteService _inviteService;
-    private readonly IRepoRepository _repoRepository;
-    private readonly ICurrentUserService _currentUserService;
+    private readonly IRepoStore _repoStore;
+    private readonly ICurrentUserStore _currentUser;
     private readonly INavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
@@ -42,8 +43,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         Repo repo,
         IMembershipService membershipService,
         IInviteService inviteService,
-        IRepoRepository repoRepository,
-        ICurrentUserService currentUserService,
+        IRepoStore repoStore,
+        ICurrentUserStore currentUser,
         INavigationLockService navigationLockService,
         IModalService modalService,
         IErrorReporter errorReporter,
@@ -53,8 +54,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         _repo = repo;
         _membershipService = membershipService;
         _inviteService = inviteService;
-        _repoRepository = repoRepository;
-        _currentUserService = currentUserService;
+        _repoStore = repoStore;
+        _currentUser = currentUser;
         _navigationLockService = navigationLockService;
         _modalService = modalService;
         _errorReporter = errorReporter;
@@ -225,7 +226,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
 
         // Which row is the caller's own decides whether its button says Remove or Leave, and the
         // member list does not say - it describes everybody the same way.
-        _currentUserId = (await _currentUserService.Get(CancellationToken.None)).Id;
+        _currentUserId = (await _currentUser.GetAsync(CancellationToken.None)).Id;
 
         _fetchedMembers = await _membershipService.GetMembers(_repo.Id, CancellationToken.None);
         _fetchedInvites = await _inviteService.GetInvites(_repo.Id, CancellationToken.None);
@@ -384,7 +385,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
                 // This page and the repo it belongs to are about to stop existing for this user, so
                 // there is nothing here to reload - refreshing the shell's list is what takes them
                 // both away.
-                await _repoRepository.RefreshRepos(CancellationToken.None);
+                await _repoStore.RefreshRepos(CancellationToken.None);
                 return;
             }
 

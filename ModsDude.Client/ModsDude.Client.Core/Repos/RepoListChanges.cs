@@ -21,7 +21,7 @@ public static class RepoListChanges
     /// <paramref name="remote"/>, or null where nothing would.
     /// </summary>
     /// <remarks>
-    /// Exactly the fields <see cref="Services.RepoRepository.RefreshRepos"/> folds in - a difference
+    /// Exactly the fields <see cref="RepoStore.RefreshRepos"/> folds in - a difference
     /// the refresh would not apply is one the user would press the button for and see nothing come
     /// of, and the dot would still be there on the next check.
     /// </remarks>

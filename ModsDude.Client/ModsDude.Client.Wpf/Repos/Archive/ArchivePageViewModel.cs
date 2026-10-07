@@ -26,7 +26,7 @@ namespace ModsDude.Client.Wpf.Repos.Archive;
 /// </remarks>
 public partial class ArchivePageViewModel : PageViewModel
 {
-    private readonly IRepoRepository _repoRepository;
+    private readonly IRepoStore _repoStore;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
     private readonly IToastService _toasts;
@@ -37,12 +37,12 @@ public partial class ArchivePageViewModel : PageViewModel
 
 
     public ArchivePageViewModel(
-        IRepoRepository repoRepository,
+        IRepoStore repoStore,
         IModalService modalService,
         IErrorReporter errorReporter,
         IToastService toasts)
     {
-        _repoRepository = repoRepository;
+        _repoStore = repoStore;
         _modalService = modalService;
         _errorReporter = errorReporter;
         _toasts = toasts;
@@ -67,7 +67,7 @@ public partial class ArchivePageViewModel : PageViewModel
     /// </summary>
     protected override async Task InitAsync()
     {
-        _fetched = await _repoRepository.GetArchivedRepos(_lifetime.Token);
+        _fetched = await _repoStore.GetArchivedRepos(_lifetime.Token);
     }
 
     protected override void OnInitCompleted()
@@ -137,7 +137,7 @@ public partial class ArchivePageViewModel : PageViewModel
 
         try
         {
-            Publish(await _repoRepository.GetArchivedRepos(_lifetime.Token));
+            Publish(await _repoStore.GetArchivedRepos(_lifetime.Token));
         }
         catch (OperationCanceledException)
         {
@@ -165,7 +165,7 @@ public partial class ArchivePageViewModel : PageViewModel
 
         try
         {
-            await _repoRepository.RestoreRepo(item.Id, _lifetime.Token);
+            await _repoStore.RestoreRepo(item.Id, _lifetime.Token);
 
             _toasts.Show($"'{item.Name}' is back in your repos.");
 
@@ -200,7 +200,7 @@ public partial class ArchivePageViewModel : PageViewModel
 
         try
         {
-            await _repoRepository.DeleteRepo(item.Id, _lifetime.Token);
+            await _repoStore.DeleteRepo(item.Id, _lifetime.Token);
 
             _toasts.Show($"'{item.Name}' is gone for good.");
 

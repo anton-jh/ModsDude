@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Users;
 using ModsDude.Client.Core.Sync;
 
 namespace ModsDude.Client.Core.Savegames;
@@ -27,7 +27,7 @@ public sealed class SavegameClaimWatch(
     IDriftCandidateSource games,
     ISavegameBindingStore bindings,
     ISavegamesClient savegamesClient,
-    ICurrentUserService currentUserService,
+    ICurrentUserStore currentUser,
     ISavegameSightingCache sightings,
     ILogger<SavegameClaimWatch> logger) : ISavegameClaimWatch
 {
@@ -44,9 +44,7 @@ public sealed class SavegameClaimWatch(
 
         var before = Describe(held);
 
-        // Asked every time rather than remembered: it is one small read, only made while something is
-        // held, and a remembered answer would outlive somebody signing in as another account.
-        var currentUserId = (await currentUserService.Get(ct)).Id;
+        var currentUserId = (await currentUser.GetAsync(ct)).Id;
 
         foreach (var repoId in held.Select(x => x.RepoId).Distinct())
         {

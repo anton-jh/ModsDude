@@ -3,18 +3,16 @@ using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Persistence;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Tests.GameAdapters;
+using ModsDude.Client.Core.Tests.Stores;
 using ModsDude.Client.Core.Tests.Sync;
 
-namespace ModsDude.Client.Core.Tests.Services;
+namespace ModsDude.Client.Core.Tests.Repos;
 
-/// <summary>
-/// <see cref="RepoRepository.IsGone"/>: what the drift check and the overview ask about the repo a
-/// game's profile belongs to.
-/// </summary>
-public class RepoRepositoryTests
+public class RepoStoreTests
 {
     [Fact]
     public void Nothing_is_gone_before_the_list_has_been_read()
@@ -50,6 +48,49 @@ public class RepoRepositoryTests
     }
 
     [Fact]
+    public async Task A_repo_joined_while_the_list_was_being_read_is_listed_once()
+    {
+        using var fixture = new Fixture();
+        var gate = fixture.Server.Hold();
+
+        var refresh = fixture.Repos.RefreshRepos(CancellationToken.None);
+        var joined = fixture.Server.Add();
+        await fixture.Repos.Join(_ => Task.FromResult(fixture.Server.Memberships.Single()), CancellationToken.None);
+        gate.SetResult();
+        await refresh;
+
+        Assert.Equal(joined, Assert.Single(fixture.Repos.Repos).Id);
+    }
+
+    [Fact]
+    public async Task Joining_a_repo_already_listed_keeps_one_of_it()
+    {
+        using var fixture = new Fixture();
+        fixture.Server.Add();
+        await fixture.Repos.RefreshRepos(CancellationToken.None);
+
+        await fixture.Repos.Join(_ => Task.FromResult(fixture.Server.Memberships.Single()), CancellationToken.None);
+
+        Assert.Single(fixture.Repos.Repos);
+    }
+
+    [Fact]
+    public async Task A_read_still_out_when_the_user_changes_lists_nothing_of_theirs()
+    {
+        using var fixture = new Fixture();
+        fixture.Server.Add();
+        var gate = fixture.Server.Hold();
+
+        var refresh = fixture.Repos.RefreshRepos(CancellationToken.None);
+        fixture.Repos.ClearUserState();
+        gate.SetResult();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
+        Assert.Empty(fixture.Repos.Repos);
+        Assert.False(fixture.Repos.HasLoaded);
+    }
+
+    [Fact]
     public async Task A_deleted_repo_is_gone_at_once()
     {
         using var fixture = new Fixture();
@@ -82,17 +123,18 @@ public class RepoRepositoryTests
         {
             var games = new GameRepository(new MemoryStateStore(), new SyncManifestStore(_manifests.Path), new ResourceLeases());
 
-            Repos = new RepoRepository(
+            Repos = new RepoStore(
                 Server,
                 new GameAdapterIndex([new FakeMultiTargetGameAdapter()]),
                 games,
-                NullLogger<RepoRepository>.Instance);
+                InlineStoreDispatcher.Instance,
+                NullLogger<RepoStore>.Instance);
         }
 
 
         public FakeReposServer Server { get; } = new();
 
-        public RepoRepository Repos { get; }
+        public RepoStore Repos { get; }
 
 
         public void Dispose()
@@ -142,8 +184,24 @@ public class RepoRepositoryTests
             return id;
         }
 
-        public Task<ICollection<RepoMembershipDto>> GetMyReposV1Async(CancellationToken cancellationToken = default)
-            => Task.FromResult<ICollection<RepoMembershipDto>>([.. Memberships]);
+        private TaskCompletionSource? _held;
+
+        /// <summary>Holds the next read until the test releases it, answering with the list as it was when asked.</summary>
+        public TaskCompletionSource Hold()
+            => _held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<ICollection<RepoMembershipDto>> GetMyReposV1Async(CancellationToken cancellationToken = default)
+        {
+            List<RepoMembershipDto> answer = [.. Memberships];
+
+            if (_held is { } held)
+            {
+                _held = null;
+                await held.Task.WaitAsync(cancellationToken);
+            }
+
+            return answer;
+        }
 
         public Task DeleteRepoV1Async(Guid repoId, CancellationToken cancellationToken = default)
         {

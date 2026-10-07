@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -41,7 +42,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     private readonly Repo _repo;
     private readonly RepoOverviewLinks _links;
     private readonly IProfileService _profileService;
-    private readonly IRepoRepository _repoRepository;
+    private readonly IRepoStore _repoStore;
     private readonly IMembershipService _membershipService;
     private readonly IDriftMonitor _driftMonitor;
     private readonly ISavegameBindingStore _bindingStore;
@@ -67,7 +68,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         Repo repo,
         RepoOverviewLinks links,
         IProfileService profileService,
-        IRepoRepository repoRepository,
+        IRepoStore repoStore,
         IMembershipService membershipService,
         IDriftMonitor driftMonitor,
         ISavegameBindingStore bindingStore,
@@ -81,7 +82,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         _repo = repo;
         _links = links;
         _profileService = profileService;
-        _repoRepository = repoRepository;
+        _repoStore = repoStore;
         _membershipService = membershipService;
         _driftMonitor = driftMonitor;
         _bindingStore = bindingStore;
@@ -403,7 +404,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
         var gone = new GameDetailLine(label, "No longer exists", IsProblem: true);
 
-        if (_repoRepository.IsGone(active.RepoId))
+        if (_repoStore.IsGone(active.RepoId))
         {
             return gone;
         }
@@ -426,7 +427,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         // list has been read, and then there is nothing to name.
         var owner = active.RepoId == _repo.Id
             ? null
-            : _repoRepository.Repos.FirstOrDefault(x => x.Id == active.RepoId);
+            : _repoStore.Repos.FirstOrDefault(x => x.Id == active.RepoId);
 
         string?[] parts =
         [
@@ -447,7 +448,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     {
         if (activeProfile is not ActiveProfile active
             || _lookupFor == active
-            || _repoRepository.IsGone(active.RepoId)
+            || _repoStore.IsGone(active.RepoId)
             || _profileService.FindLive(active.RepoId, active.ProfileId) is not null)
         {
             return;

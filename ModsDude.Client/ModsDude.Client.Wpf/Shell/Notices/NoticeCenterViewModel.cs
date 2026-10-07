@@ -1,15 +1,16 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.Builds;
-using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Notices;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
-using ModsDude.Client.Core.Updates;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Updates;
 using ModsDude.Client.Wpf.Friends;
 using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Shell.Diagnostics;
@@ -57,7 +58,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     private const int MaxVisible = 6;
 
     private readonly IDriftMonitor _monitor;
-    private readonly IRepoRepository _repoRepository;
+    private readonly IRepoStore _repoStore;
     private readonly IGameRepository _gameRepository;
     private readonly IProfileService _profileService;
     private readonly ISavegameBindingStore _bindingStore;
@@ -92,7 +93,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
     public NoticeCenterViewModel(
         IDriftMonitor monitor,
-        IRepoRepository repoRepository,
+        IRepoStore repoStore,
         IGameRepository gameRepository,
         IProfileService profileService,
         ISavegameBindingStore bindingStore,
@@ -109,7 +110,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         ILogger<NoticeCenterViewModel> logger)
     {
         _monitor = monitor;
-        _repoRepository = repoRepository;
+        _repoStore = repoStore;
         _gameRepository = gameRepository;
         _profileService = profileService;
         _bindingStore = bindingStore;
@@ -132,7 +133,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         // list has been fetched - this is raised from the window's constructor, and the repos are
         // loaded by a command on the shell underneath it. Everything a notice says about membership
         // is unknowable until they land, and nothing else would re-ask.
-        _repoRepository.Repos.CollectionChanged += OnReposChanged;
+        _repoStore.Repos.CollectionChanged += OnReposChanged;
 
         // Everything else that can change the answer, wired here rather than remembered at each call
         // site. A user who edits a profile, repoints a game or checks a save out and then tabs back
@@ -298,7 +299,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     {
         _monitor.Changed -= OnDriftChanged;
         _gameRepository.Games.CollectionChanged -= OnGamesChanged;
-        _repoRepository.Repos.CollectionChanged -= OnReposChanged;
+        _repoStore.Repos.CollectionChanged -= OnReposChanged;
         _gameRepository.GameChanged -= OnFactsChanged;
         _profileService.ProfileUpdated -= OnProfileUpdated;
         _bindingStore.BindingsChanged -= OnFactsChanged;
@@ -465,7 +466,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (_repoRepository.Repos.FirstOrDefault(x => x.Id == repoId) is not Repo repo)
+        if (_repoStore.Repos.FirstOrDefault(x => x.Id == repoId) is not Repo repo)
         {
             // The same window a Review button is missing in: a notice can be up before the repo list
             // has arrived. Saying so beats a button that does nothing when pressed.

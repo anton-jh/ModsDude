@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Exceptions;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shell.Toasts;
 
@@ -13,7 +12,6 @@ namespace ModsDude.Client.Wpf.Account;
 /// </summary>
 public partial class TrustCodeFormViewModel(
     ITrustCodeService trustCodeService,
-    AccountViewModel account,
     IToastService toasts,
     ILogger<TrustCodeFormViewModel> logger)
     : ObservableObject
@@ -35,11 +33,9 @@ public partial class TrustCodeFormViewModel(
     [RelayCommand(CanExecute = nameof(CanRedeem))]
     private async Task Redeem(CancellationToken cancellationToken)
     {
-        CurrentUserDto user;
-
         try
         {
-            user = await trustCodeService.Redeem(Code, cancellationToken);
+            await trustCodeService.Redeem(Code, cancellationToken);
         }
         catch (UserFriendlyException exception)
         {
@@ -49,7 +45,6 @@ public partial class TrustCodeFormViewModel(
         }
 
         Code = "";
-        account.Apply(user);
         toasts.Show("You can now create repos.");
     }
 

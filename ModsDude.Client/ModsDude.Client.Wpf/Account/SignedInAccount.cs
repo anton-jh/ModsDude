@@ -10,7 +10,7 @@ namespace ModsDude.Client.Wpf.Account;
 /// <param name="DisplayName">
 /// The token's <c>name</c> claim - what the identity provider called them, which is only what this
 /// system called them until they first renamed themselves. The stored name has to be asked for; see
-/// <see cref="Core.Services.CurrentUserService"/>.
+/// <see cref="Core.Users.ICurrentUserStore"/>.
 /// </param>
 /// <param name="Email">
 /// The address they sign in with, which is the provider's username for this tenant. Shown on the

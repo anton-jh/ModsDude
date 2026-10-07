@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Stores;
+using ModsDude.Client.Core.Users;
 
 namespace ModsDude.Client.Core.Activity;
 
@@ -28,17 +30,18 @@ namespace ModsDude.Client.Core.Activity;
 /// </remarks>
 public sealed class FriendActivityService(
     IActivityClient activityClient,
-    ICurrentUserService currentUserService,
-    IFriendActivitySeen seen)
+    ICurrentUserStore currentUser,
+    IFriendActivitySeen seen,
+    IStoreDispatcher dispatcher,
+    ILogger<FriendActivityService> logger)
     : IFriendActivityService
 {
     private readonly Lock _lock = new();
+    private readonly StoreLoads<WholeList> _loads = new(dispatcher, logger);
 
     private IReadOnlyList<GameActivityDto> _rows = [];
-    private string? _userId;
     private DateTime? _newsSince;
     private DateTime _announcedUntil;
-    private Task? _refreshing;
 
 
     public event EventHandler? Changed;
@@ -74,24 +77,15 @@ public sealed class FriendActivityService(
 
 
     public Task RefreshAsync(CancellationToken cancellationToken)
-    {
-        lock (_lock)
-        {
-            if (_refreshing is { IsCompleted: false } running)
-            {
-                return running;
-            }
-
-            return _refreshing = RefreshCoreAsync(cancellationToken);
-        }
-    }
+        => _loads.ReadAsync(default, ReadAsync, Apply, cancellationToken);
 
     public void ClearUserState()
     {
+        _loads.Reset();
+
         lock (_lock)
         {
             _rows = [];
-            _userId = null;
             _newsSince = null;
             _announcedUntil = default;
         }
@@ -102,20 +96,24 @@ public sealed class FriendActivityService(
     }
 
 
-    private async Task RefreshCoreAsync(CancellationToken cancellationToken)
+    private async Task<(List<GameActivityDto> Rows, string UserId)> ReadAsync(CancellationToken cancellationToken)
     {
         var rows = (await activityClient.GetGameActivityV1Async(null, cancellationToken))
             .OrderByDescending(x => x.TouchedAt)
+            .ThenBy(x => x.User.Id, StringComparer.Ordinal)
+            .ThenBy(x => x.Game, StringComparer.Ordinal)
             .ToList();
 
-        var userId = _userId ?? (await currentUserService.Get(cancellationToken)).Id;
+        return (rows, (await currentUser.GetAsync(cancellationToken)).Id);
+    }
 
+    private void Apply((List<GameActivityDto> Rows, string UserId) read)
+    {
+        var (rows, userId) = read;
         List<GameActivityDto> fresh;
 
         lock (_lock)
         {
-            _userId = userId;
-
             DateTime? newest = rows.Count > 0 ? rows.Max(x => x.ChangedAt) : null;
 
             if (_newsSince is null)

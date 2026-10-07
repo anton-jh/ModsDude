@@ -12,11 +12,14 @@ using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModsDudeServer;
 using ModsDude.Client.Core.Notices;
 using ModsDude.Client.Core.Persistence;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Startup;
+using ModsDude.Client.Core.Stores;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Updates;
+using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Account;
 using ModsDude.Client.Wpf.Friends;
 using ModsDude.Client.Wpf.Games;
@@ -662,12 +665,15 @@ public partial class App : Application
         services.AddSingleton<IModImagePublisher>(sp => sp.GetRequiredService<ModImagePublisher>());
         services.AddSingleton<IModImageBackfill>(sp => sp.GetRequiredService<ModImagePublisher>());
 
-        services.AddSingleton<IRepoRepository, RepoRepository>();
+        // Every store changes on the UI thread, which is the thread everything bound to it reads from.
+        services.AddSingleton<IStoreDispatcher>(_ => new WpfStoreDispatcher(Current.Dispatcher));
+
+        services.AddSingleton<IRepoStore, RepoStore>();
         services.AddSingleton<IProfileService, ProfileService>();
         services.AddSingleton<IMembershipService, MembershipService>();
         services.AddSingleton<IInviteService, InviteService>();
         services.AddSingleton<ITrustCodeService, TrustCodeService>();
-        services.AddSingleton<ICurrentUserService, CurrentUserService>();
+        services.AddSingleton<ICurrentUserStore, CurrentUserStore>();
         services.AddSingleton<IUserAccountService, UserAccountService>();
         services.AddSingleton<IGameRepository, GameRepository>();
 
@@ -685,15 +691,16 @@ public partial class App : Application
 
         // What the shell drops when the signed-in user changes. Everything else the client holds
         // describes this machine's game installations and survives the switch - see IUserScopedState.
-        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IRepoRepository>());
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IRepoStore>());
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IProfileService>());
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<ICurrentUserStore>());
 
         // The same object again, for the one fact the drift check needs of it: which revision each
         // profile it has loaded is on. It answers null for every other repo, which is why the check
         // still works before anything has been loaded at all.
         services.AddSingleton<IProfileRevisions>(sp => sp.GetRequiredService<IProfileService>());
         services.AddSingleton<IProfileRevisionComparer>(sp => sp.GetRequiredService<IProfileService>());
-        services.AddSingleton<IKnownRepos>(sp => sp.GetRequiredService<IRepoRepository>());
+        services.AddSingleton<IKnownRepos>(sp => sp.GetRequiredService<IRepoStore>());
 
         // The savegame counterpart, populated as a side effect of reading a savegame list - the Saves
         // page, or the claim watch reading the lists of whatever this machine holds. Registered under

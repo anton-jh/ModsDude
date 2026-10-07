@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -26,7 +27,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 public sealed class SavegameClaimWatcher(
     ISavegameClaimWatch watch,
     IDriftMonitor monitor,
-    IRepoRepository repoRepository,
+    IRepoStore repoStore,
     ILogger<SavegameClaimWatcher> logger)
     : ISavegameClaimWatcher
 {
@@ -64,7 +65,7 @@ public sealed class SavegameClaimWatcher(
     {
         // Not signed in yet, or the repos have not arrived: there is nothing to ask with, so the
         // first look waits for the next tick rather than spending the long interval.
-        if (repoRepository.HasLoaded is false)
+        if (repoStore.HasLoaded is false)
         {
             return;
         }

@@ -1,6 +1,9 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Tests.Stores;
+using ModsDude.Client.Core.Tests.Users;
 
 namespace ModsDude.Client.Core.Tests.Activity;
 
@@ -88,6 +91,22 @@ public class FriendActivityServiceTests
         Assert.False(harness.Service.HasLoaded);
     }
 
+    [Fact]
+    public async Task A_read_still_out_when_the_user_changes_is_dropped()
+    {
+        var harness = new Harness();
+        harness.Client.Rows = [Row("alex", _monday)];
+        var gate = harness.Client.Hold();
+
+        var refresh = harness.Service.RefreshAsync(CancellationToken.None);
+        harness.Service.ClearUserState();
+        gate.SetResult();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
+        Assert.Empty(harness.Service.Rows);
+        Assert.False(harness.Service.HasLoaded);
+    }
+
 
     private static GameActivityDto Row(string userId, DateTime changedAt, DateTime? touchedAt = null) => new()
     {
@@ -106,7 +125,12 @@ public class FriendActivityServiceTests
     {
         public Harness()
         {
-            Service = new FriendActivityService(Client, new FixedUser("me"), Seen);
+            Service = new FriendActivityService(
+                Client,
+                new FixedCurrentUser("me"),
+                Seen,
+                InlineStoreDispatcher.Instance,
+                NullLogger<FriendActivityService>.Instance);
             Service.Announced += (_, rows) => Announced.Add(rows);
         }
 
@@ -118,22 +142,31 @@ public class FriendActivityServiceTests
 
     private sealed class FakeActivityClient : IActivityClient
     {
+        private TaskCompletionSource? _held;
+
         public List<GameActivityDto> Rows { get; set; } = [];
 
-        public Task<ICollection<GameActivityDto>> GetGameActivityV1Async(Guid? repoId = null, CancellationToken cancellationToken = default)
-            => Task.FromResult<ICollection<GameActivityDto>>([.. Rows]);
+        public TaskCompletionSource Hold()
+            => _held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<ICollection<GameActivityDto>> GetGameActivityV1Async(Guid? repoId = null, CancellationToken cancellationToken = default)
+        {
+            List<GameActivityDto> answer = [.. Rows];
+
+            if (_held is { } held)
+            {
+                _held = null;
+                await held.Task.WaitAsync(cancellationToken);
+            }
+
+            return answer;
+        }
 
         public Task RecordGameActivityV1Async(RecordGameActivityRequest request, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
         public Task ClearGameActivityV1Async(string game, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
-    }
-
-    private sealed class FixedUser(string id) : CurrentUserService(null!)
-    {
-        public override Task<CurrentUserDto> Get(CancellationToken cancellationToken)
-            => Task.FromResult(new CurrentUserDto { Id = id, DisplayName = id });
     }
 
     private sealed class MemorySeen : IFriendActivitySeen

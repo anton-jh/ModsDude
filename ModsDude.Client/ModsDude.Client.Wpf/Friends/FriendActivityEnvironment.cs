@@ -2,6 +2,7 @@ using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shell.Notices;
@@ -13,7 +14,7 @@ namespace ModsDude.Client.Wpf.Friends;
 /// shell already holds. Thin for the reason <see cref="NoticeEnvironment"/> is.
 /// </summary>
 public sealed class FriendActivityEnvironment(
-    IRepoRepository repoRepository,
+    IRepoStore repoStore,
     IGameRepository gameRepository,
     IHeldSavegames heldSavegames)
     : IFriendActivityEnvironment
@@ -30,7 +31,7 @@ public sealed class FriendActivityEnvironment(
             return game;
         }
 
-        if (repoRepository.Repos.FirstOrDefault(x => x.Scope == identity) is Repo repo)
+        if (repoStore.Repos.FirstOrDefault(x => x.Scope == identity) is Repo repo)
         {
             return repo.Adapter.GameDisplayName;
         }
@@ -39,7 +40,7 @@ public sealed class FriendActivityEnvironment(
     }
 
     public string? DescribeRepo(Guid repoId)
-        => repoRepository.Repos.FirstOrDefault(x => x.Id == repoId)?.Name;
+        => repoStore.Repos.FirstOrDefault(x => x.Id == repoId)?.Name;
 
     public FollowAvailability CanFollow(GameActivityDto activity)
     {

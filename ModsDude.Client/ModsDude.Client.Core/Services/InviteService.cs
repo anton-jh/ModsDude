@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Repos;
 
 namespace ModsDude.Client.Core.Services;
 
@@ -12,7 +13,7 @@ namespace ModsDude.Client.Core.Services;
 /// </remarks>
 public class InviteService(
     IInvitesClient invitesClient,
-    IRepoRepository repoRepository) : IInviteService
+    IRepoStore repoStore) : IInviteService
 {
     public async Task<IReadOnlyList<RepoInviteDto>> GetInvites(Guid repoId, CancellationToken cancellationToken)
     {
@@ -67,15 +68,16 @@ public class InviteService(
         }
     }
 
-    public async Task<RepoMembershipDto> RedeemInvite(string code, CancellationToken cancellationToken)
+    public Task<RepoMembershipDto> RedeemInvite(string code, CancellationToken cancellationToken)
+        => repoStore.Join(ct => SendRedeemAsync(code, ct), cancellationToken);
+
+    private async Task<RepoMembershipDto> SendRedeemAsync(string code, CancellationToken cancellationToken)
     {
         var request = new RedeemInviteRequest() { Code = code };
 
-        RepoMembershipDto membership;
-
         try
         {
-            membership = await invitesClient.RedeemInviteV1Async(request, cancellationToken);
+            return await invitesClient.RedeemInviteV1Async(request, cancellationToken);
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.InviteNotFound)
         {
@@ -89,9 +91,5 @@ public class InviteService(
         {
             throw new UserFriendlyException("Try that again", ex.Result.Detail, ex);
         }
-
-        repoRepository.AddJoinedRepo(membership);
-
-        return membership;
     }
 }

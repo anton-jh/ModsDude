@@ -6,6 +6,8 @@ using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Tests.Stores;
+using ModsDude.Client.Core.Users;
 
 namespace ModsDude.Client.Core.Tests.Savegames;
 
@@ -102,7 +104,7 @@ public class SavegameClaimWatchTests
                 new Candidates(),
                 _bindings,
                 Server,
-                new CurrentUserService(new Users()),
+                new CurrentUserStore(new Users(), InlineStoreDispatcher.Instance, NullLogger<CurrentUserStore>.Instance),
                 Sightings,
                 NullLogger<SavegameClaimWatch>.Instance);
         }
