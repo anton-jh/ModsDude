@@ -3,11 +3,9 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Activity;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Account;
-using ModsDude.Client.Wpf.Savegames;
 using ModsDude.Client.Wpf.Shell.Toasts;
 using System.Collections.ObjectModel;
 using System.Windows;
@@ -15,99 +13,18 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.Friends;
 
 /// <summary>
-/// One friend's game as a list draws it: who, which profile, what they last did with it, and the
-/// button that puts this machine on the same thing.
-/// </summary>
-public sealed partial class FriendActivityRowViewModel : ObservableObject
-{
-    public FriendActivityRowViewModel(
-        GameActivityDto activity,
-        IFriendActivityEnvironment environment,
-        AvatarViewModel avatar,
-        bool showTag,
-        DateTimeOffset now)
-    {
-        Model = activity;
-
-        var availability = environment.CanFollow(activity);
-
-        Name = activity.User.DisplayName;
-        Tag = showTag ? $"#{activity.User.Tag}" : null;
-        Avatar = avatar;
-
-        Profile = activity.ProfileName;
-        ProfileDetail = activity.PinnedRevision is int pinned ? $"rev {pinned}" : "";
-
-        var what = activity.Kind is GameActivityKind.SavegameCheckedOut
-            ? $"Checked out {(activity.SavegameName is string save ? $"'{save}'" : "a savegame")} {SavegameWording.Ago(activity.ChangedAt, now)}"
-            : $"Switched to it {SavegameWording.Ago(activity.ChangedAt, now)}";
-
-        // Only where it says something the first half did not: a re-apply since is somebody still
-        // playing on it, and "switched 3 days ago" alone would read as somebody who has stopped.
-        Summary = activity.TouchedAt - activity.ChangedAt > TimeSpan.FromMinutes(5)
-            ? $"{what} · active {SavegameWording.Ago(activity.TouchedAt, now)}"
-            : what;
-
-        CanFollow = availability is FollowAvailability.Available;
-        FollowLabel = FriendActivityRules.FollowLabel(activity);
-        FollowBlocked = FriendActivityRules.FollowBlocked(activity, availability, environment);
-    }
-
-
-    public GameActivityDto Model { get; }
-
-    public string Name { get; }
-
-    /// <summary>The four digits, only where two friends in this list share a name.</summary>
-    public string? Tag { get; }
-
-    public bool HasTag => Tag is not null;
-
-    public AvatarViewModel Avatar { get; }
-
-    public string Profile { get; }
-
-    public string ProfileLine => $"on '{Profile}'";
-
-    /// <summary>
-    /// The revision where they are held on one. Head goes unsaid, and so does the repo: the list is
-    /// one repo's.
-    /// </summary>
-    public string ProfileDetail { get; }
-
-    public bool HasProfileDetail => ProfileDetail.Length > 0;
-
-    /// <summary>What they last did with it, and when.</summary>
-    public string Summary { get; }
-
-    public bool CanFollow { get; }
-    public string FollowLabel { get; }
-
-    /// <summary>Why there is no button, where there is not.</summary>
-    public string? FollowBlocked { get; }
-
-    public bool HasFollowBlocked => FollowBlocked is not null;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsIdle))]
-    private bool _isFollowing;
-
-    public bool IsIdle => IsFollowing is false;
-}
-
-
-/// <summary>
-/// The friends list on a repo's overview: who else is on which of that repo's profiles.
+/// A list of who else is on which profile: one repo's on its overview, every repo's on Home.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Drawn from <see cref="FriendActivityService"/>, never fetched here.</b> Opening a page asks it
 /// to read again, and every page showing it redraws when any of them - or the watcher - does. So two
-/// overviews opened a minute apart cannot disagree about what Alex is on.
+/// pages opened a minute apart cannot disagree about what Alex is on.
 /// </para>
 /// <para>
 /// Redrawn too when a game here changes, because whether the button is offered depends on what this
-/// machine is on: following somebody turns their row's button into "You are on this too".
+/// machine is on: following somebody turns their row's button into "You are on this too". And on the
+/// service's own tick, because who is playing and how long ago things happened move with the clock.
 /// </para>
 /// </remarks>
 public sealed partial class FriendActivityListViewModel : ObservableObject, IDisposable
@@ -120,10 +37,15 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     private readonly IToastService _toasts;
     private readonly ILogger _logger;
     private readonly TimeProvider _time;
-    private readonly Guid _repoId;
+
+    /// <summary>The one repo listed, or null where every repo is.</summary>
+    private readonly Guid? _repoId;
+
+    /// <summary>The rows a follow started from here is still going on, by notice key.</summary>
+    private readonly HashSet<string> _following = [];
 
 
-    public FriendActivityListViewModel(
+    private FriendActivityListViewModel(
         IFriendActivityService friends,
         IFriendActivityEnvironment environment,
         IUserAvatarFactory avatarFactory,
@@ -132,7 +54,7 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
         IToastService toasts,
         ILogger<FriendActivityListViewModel> logger,
         TimeProvider time,
-        Guid repoId)
+        Guid? repoId)
     {
         _time = time;
         _friends = friends;
@@ -160,7 +82,9 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
         ? null
         : !_friends.HasLoaded
             ? CouldNotRead ? "Could not reach the server to see what your friends are on." : "Looking..."
-            : "Nobody else in this repo has activated one of its profiles in the last week.";
+            : _repoId is null
+                ? "None of your friends has activated a profile in the last week."
+                : "Nobody else in this repo has activated one of its profiles in the last week.";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EmptyText))]
@@ -192,7 +116,10 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     [RelayCommand]
     private async Task Follow(FriendActivityRowViewModel row)
     {
-        row.IsFollowing = true;
+        var key = FriendActivityRules.NoticeKey(row.Model);
+
+        _following.Add(key);
+        Rebuild();
 
         try
         {
@@ -202,7 +129,8 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
         }
         finally
         {
-            row.IsFollowing = false;
+            _following.Remove(key);
+            Rebuild();
         }
     }
 
@@ -213,20 +141,26 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
 
     private void Rebuild()
     {
-        // Rows arrive most recently active first, which is the order they are drawn in.
-        var rows = _friends.Rows
-            .Where(x => x.RepoId == _repoId)
-            .ToList();
+        var now = _time.GetUtcNow();
+
+        var rows = FriendActivityRules.Order(
+            _friends.Rows.Where(x => _repoId is not Guid repoId || x.RepoId == repoId),
+            now.UtcDateTime);
 
         var ambiguous = UserDisplay.FindAmbiguous(rows.Select(x => x.User).DistinctBy(x => x.Id));
 
         Rows.Clear();
 
-        var now = _time.GetUtcNow();
-
         foreach (var row in rows)
         {
-            Rows.Add(new FriendActivityRowViewModel(row, _environment, _avatarFactory.Create(row.User), ambiguous.Contains(row.User.Id), now));
+            Rows.Add(new FriendActivityRowViewModel(
+                row,
+                _environment,
+                _avatarFactory.Create(row.User),
+                showTag: ambiguous.Contains(row.User.Id),
+                showWhere: _repoId is null,
+                isFollowing: _following.Contains(FriendActivityRules.NoticeKey(row)),
+                now));
         }
 
         if (_friends.HasLoaded)
@@ -241,7 +175,11 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
 
     public sealed class Factory(IServiceProvider serviceProvider)
     {
-        public FriendActivityListViewModel Create(Guid repoId)
+        public FriendActivityListViewModel Create(Guid repoId) => Create((Guid?)repoId);
+
+        public FriendActivityListViewModel CreateForAllRepos() => Create(null);
+
+        private FriendActivityListViewModel Create(Guid? repoId)
             => new(
                 serviceProvider.GetRequiredService<IFriendActivityService>(),
                 serviceProvider.GetRequiredService<IFriendActivityEnvironment>(),

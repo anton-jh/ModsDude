@@ -37,7 +37,10 @@ internal sealed class TestTimeProvider : TimeProvider
         }
     }
 
-    /// <summary>One-shot only, which is all anything under test asks for.</summary>
+    /// <summary>Moves the clock to <paramref name="to"/>, firing what falls due on the way.</summary>
+    public void SetUtcNow(DateTimeOffset to) => Advance(to - _now);
+
+    /// <summary>One-shot only: a timer that wants to run again re-arms itself with <see cref="ITimer.Change"/>.</summary>
     public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
     {
         var timer = new TestTimer(this, () => callback(state), _now + dueTime);
@@ -50,6 +53,20 @@ internal sealed class TestTimeProvider : TimeProvider
         return timer;
     }
 
+    private void Rearm(TestTimer timer, TimeSpan dueTime)
+    {
+        lock (_lock)
+        {
+            _timers.Remove(timer);
+
+            if (dueTime != Timeout.InfiniteTimeSpan)
+            {
+                timer.DueAt = _now + dueTime;
+                _timers.Add(timer);
+            }
+        }
+    }
+
     private void Remove(TestTimer timer)
     {
         lock (_lock)
@@ -60,11 +77,16 @@ internal sealed class TestTimeProvider : TimeProvider
 
     private sealed class TestTimer(TestTimeProvider owner, Action fire, DateTimeOffset dueAt) : ITimer
     {
-        public DateTimeOffset DueAt => dueAt;
+        public DateTimeOffset DueAt { get; set; } = dueAt;
 
         public void Fire() => fire();
 
-        public bool Change(TimeSpan dueTime, TimeSpan period) => throw new NotSupportedException();
+        public bool Change(TimeSpan dueTime, TimeSpan period)
+        {
+            owner.Rearm(this, dueTime);
+
+            return true;
+        }
 
         public void Dispose() => owner.Remove(this);
 

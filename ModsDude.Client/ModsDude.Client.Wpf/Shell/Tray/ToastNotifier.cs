@@ -168,15 +168,15 @@ public sealed class ToastNotifier(
     }
 
     /// <summary>
-    /// A friend switched profile or checked out a savegame. One toast per friend per game, each
-    /// replacing the last about the same one - what they are on now is the news. Not where this game
+    /// A friend switched profile, checked out a savegame or started playing. One toast per friend per
+    /// game, each replacing the last about the same one - what they are doing now is the news. Not where this game
     /// is already on it: see <see cref="FriendActivityRules.IsWorthAnnouncing"/>.
     /// </summary>
     /// <remarks>
     /// Clicking opens the window on the column, where the card offers to follow them: the rule above
     /// holds here too, and a toast never changes a mod folder by itself.
     /// </remarks>
-    private void OnFriendNews(object? sender, IReadOnlyList<GameActivityDto> news)
+    private void OnFriendNews(object? sender, IReadOnlyList<FriendNews> news)
     {
         if (Enabled is false)
         {
@@ -190,13 +190,13 @@ public sealed class ToastNotifier(
                 return;
             }
 
-            foreach (var activity in news.Where(x => FriendActivityRules.IsWorthAnnouncing(x, friendEnvironment)))
+            foreach (var item in news.Where(x => FriendActivityRules.IsWorthAnnouncing(x, friendEnvironment)))
             {
                 system.Show(new SystemToast(
-                    FriendActivityRules.Headline(activity),
-                    FriendActivityRules.Describe(activity, friendEnvironment),
+                    FriendActivityRules.Headline(item),
+                    FriendActivityRules.Describe(item, friendEnvironment),
                     _friendsGroup,
-                    Tag: FriendActivityRules.NoticeKey(activity).GetHashCode().ToString("x"),
+                    Tag: FriendActivityRules.NoticeKey(item.Activity).GetHashCode().ToString("x"),
                     new Dictionary<string, string> { [_openArgument] = "open" }));
             }
         });

@@ -66,6 +66,8 @@ public class GetGameActivityV1Endpoint : IEndpoint
             x.Activity.SavegameId?.Value,
             x.SavegameName?.Value,
             x.Activity.ChangedAt,
-            x.Activity.TouchedAt)));
+            x.Activity.TouchedAt,
+            x.Activity.PlayingSince,
+            x.Activity.PlayingUntil)));
     }
 }

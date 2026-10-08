@@ -26,6 +26,7 @@ using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Account;
 using ModsDude.Client.Wpf.Friends;
 using ModsDude.Client.Wpf.Games;
+using ModsDude.Client.Wpf.Home;
 using ModsDude.Client.Wpf.Mods;
 using ModsDude.Client.Wpf.Mods.Imaging;
 using ModsDude.Client.Wpf.Mods.Import;
@@ -496,7 +497,7 @@ public partial class App : Application
         services.AddSingleton<IReconnectWatcher, ReconnectWatcher>();
         services.AddSingleton<IServerReconnect, ServerReconnect>();
 
-        // Notices a game closing after a checked-out savegame was played in it - see the class.
+        // Looks at which games run, for the check-in reminder and for presence - see the class.
         services.AddSingleton<IPlaySessionWatcher, PlaySessionWatcher>();
 
         services.AddSingleton<IGameConnectionToasts, GameConnectionToasts>();
@@ -539,6 +540,7 @@ public partial class App : Application
         services.AddSingleton<RepoAdminPageViewModel.Factory>();
         services.AddSingleton<RepoOverviewPageViewModel.Factory>();
         services.AddSingleton<RepoMembersPageViewModel.Factory>();
+        services.AddFactory<HomePageViewModel>();
         services.AddFactory<JoinOrCreatePageViewModel>();
         services.AddTransient<JoinRepoFormViewModel>();
         services.AddTransient<CreateRepoFormViewModel>();
@@ -579,6 +581,8 @@ public partial class App : Application
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IFriendActivityService>());
         services.AddSingleton<IFriendActivityEnvironment, FriendActivityEnvironment>();
         services.AddSingleton<IFriendFollowService, FriendFollowService>();
+        services.AddSingleton<IPresenceReporter, PresenceReporter>();
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IPresenceReporter>());
 
         // Where the profile a game follows stands against its folders, asked once for the sidebar rows,
         // the repo entries and the header rather than three times with three chances to disagree.
@@ -687,7 +691,6 @@ public partial class App : Application
         // A catalog is created per surface and disposed with it, so its per-source scan cache lives
         // exactly as long as the page whose checkboxes recompose from it.
         services.AddSingleton<ModCatalog.Factory>();
-        services.AddSingleton<ILastSelectionRepository, LastSelectionRepository>();
 
         // What the shell drops when the signed-in user changes. Everything else the client holds
         // describes this machine's game installations and survives the switch - see IUserScopedState.
@@ -714,6 +717,7 @@ public partial class App : Application
         services.AddSingleton<IGameProcessNames, RepoGameProcessNames>();
         services.AddSingleton<IModTargetAdapters, RepoModTargetAdapters>();
         services.AddSingleton<IGameProcesses, SystemGameProcesses>();
+        services.AddSingleton<IGameRunningMonitor, GameRunningMonitor>();
         services.AddSingleton<IPlaySessionWatch, PlaySessionWatch>();
 
         services.AddCore<IAuthenticationService>(configuration["ModsDudeServer:BaseUrl"]

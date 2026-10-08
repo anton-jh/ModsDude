@@ -471,6 +471,16 @@
             "nullable": true,
             "type": "integer"
           },
+          "playingSince": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "playingUntil": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
           "profileId": {
             "format": "guid",
             "type": "string"
@@ -1619,6 +1629,18 @@
           "Admin"
         ]
       },
+      "ReportPlayingRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "game": {
+            "type": "string"
+          },
+          "isPlaying": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "RestoreProfileRevisionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2238,6 +2260,66 @@
                 }
               }
             },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/v1/activity/playing": {
+      "put": {
+        "operationId": "ReportPlayingV1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportPlayingRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-name": "request",
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
             "description": ""
           },
           "401": {

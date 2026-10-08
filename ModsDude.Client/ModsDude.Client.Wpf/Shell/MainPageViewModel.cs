@@ -2,9 +2,9 @@ using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Repos;
-using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Account;
+using ModsDude.Client.Wpf.Home;
 using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Repos.Archive;
 using ModsDude.Client.Wpf.Repos;
@@ -24,15 +24,14 @@ public partial class MainPageViewModel
     : PageViewModel, IDisposable
 {
     private readonly IRepoStore _repoStore;
-    private readonly ILastSelectionRepository _lastSelectionRepository;
     private readonly RepoPageViewModel.Factory _repoPageViewModelFactory;
     private readonly IShellNavigationService _shellNavigationService;
     private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
 
-    /// <summary>
-    /// Joining or creating a repo: the first of <see cref="PlaceItems"/>, and where the app lands when
-    /// there is no repo to open.
-    /// </summary>
+    /// <summary>Where the app opens, and where it goes when the open page leaves the rail.</summary>
+    private readonly MenuItemViewModel _homeMenuItem;
+
+    /// <summary>Joining or creating a repo: the first of <see cref="PlaceItems"/>.</summary>
     private readonly MenuItemViewModel _joinOrCreateMenuItem;
 
     private readonly ICurrentUserStore _currentUser;
@@ -45,7 +44,7 @@ public partial class MainPageViewModel
 
     public MainPageViewModel(
         IRepoStore repoStore,
-        ILastSelectionRepository lastSelectionRepository,
+        IFactory<HomePageViewModel> homePageViewModelFactory,
         RepoPageViewModel.Factory repoPageViewModelFactory,
         IFactory<JoinOrCreatePageViewModel> joinOrCreatePageViewModelFactory,
         IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
@@ -62,6 +61,11 @@ public partial class MainPageViewModel
         _currentUser = currentUser;
         _syncStatus = syncStatus;
         _connection = connection;
+
+        _homeMenuItem = new MenuItemViewModel("Home", homePageViewModelFactory.Create)
+            .WithIcon(MenuIcons.Home);
+
+        HomeItems = [_homeMenuItem];
 
         _joinOrCreateMenuItem = new MenuItemViewModel("Join or create", joinOrCreatePageViewModelFactory.Create)
             .WithIcon(MenuIcons.JoinOrCreate);
@@ -82,12 +86,11 @@ public partial class MainPageViewModel
 
         Repos = [];
 
-        // Nothing until the repo list is in: the first load decides between the last repo and the
-        // Join or create page, and showing either before then would be showing a guess.
+        // Nothing until the repo list is in: Home draws from it, and showing it before then would show
+        // an empty app.
         NavManager = new(navigationLockService, modalService);
 
         _repoStore = repoStore;
-        _lastSelectionRepository = lastSelectionRepository;
         _repoPageViewModelFactory = repoPageViewModelFactory;
         _shellNavigationService = shellNavigationService;
         _reposSynchronizer = new(_repoStore.Repos, Repos, MapRepoToVm, x => x.Title, NaturalOrder.Comparer);
@@ -126,6 +129,9 @@ public partial class MainPageViewModel
     /// fail to notice a rename, which is the one thing the synchronizer exists to handle. Groups come
     /// out in the order their first repo does, which is stable for as long as the list is.
     /// </remarks>
+    /// <summary>Home, above the repos.</summary>
+    public IReadOnlyList<MenuItemViewModel> HomeItems { get; }
+
     public ICollectionView ReposView { get; }
 
     /// <summary>Join or create, and the archive of repos.</summary>
@@ -188,6 +194,8 @@ public partial class MainPageViewModel
         return NavManager.CurrentPage as RepoPageViewModel;
     }
 
+    public void SelectJoinOrCreate() => NavManager.Selected = _joinOrCreateMenuItem;
+
 
     /// <summary>
     /// The first load of the signed-in user and their repos, retried until the server answers - see
@@ -215,11 +223,11 @@ public partial class MainPageViewModel
     }
 
     /// <summary>
-    /// Where the app opens: the repo last open, else the first one the rail lists, else Join or create.
+    /// Where the app opens: Home.
     /// </summary>
     /// <remarks>
-    /// Only once. Jumping the user back to where they were an hour ago because the list was read again
-    /// would be its own bug. Nor where something was chosen while the list was still on its way.
+    /// Only once. Jumping the user back to Home because the list was read again would be its own bug.
+    /// Nor where something was chosen while the list was still on its way.
     /// </remarks>
     private void SelectLandingPage()
     {
@@ -230,55 +238,36 @@ public partial class MainPageViewModel
 
         _selectionRestored = true;
 
-        if (NavManager.Selected is not null)
+        if (NavManager.Selected is null)
         {
-            return;
+            NavManager.Selected = _homeMenuItem;
         }
-
-        var entries = Repos.OfType<RepoItemViewModel>().ToList();
-
-        NavManager.Selected = _lastSelectionRepository.GetLastRepo(entries.Select(x => x.Id)) is Guid repoId
-            ? entries.First(x => x.Id == repoId)
-            : DefaultEntry();
     }
 
     /// <summary>
-    /// Opens the default entry where the page has gone blank - which is the open repo leaving the list,
-    /// archived or left, and the repo list letting go of it as its row went.
+    /// Opens Home where the page has gone blank - which is the open repo leaving the list, archived or
+    /// left, and the repo list letting go of it as its row went.
     /// </summary>
     /// <remarks>
     /// Looked at once the dispatcher is idle rather than at once, because every navigation passes through
     /// nothing on its way to the next page, and only a nothing still there afterwards is a blank page.
     /// </remarks>
-    private void FallBackToDefault()
+    private void FallBackToHome()
     {
         Application.Current?.Dispatcher.BeginInvoke(() =>
         {
             if (_disposed.IsCancellationRequested is false && NavManager.Selected is null && NavManager.CurrentPage is null)
             {
-                NavManager.Selected = DefaultEntry();
+                NavManager.Selected = _homeMenuItem;
             }
         }, DispatcherPriority.ApplicationIdle);
     }
-
-    /// <summary>
-    /// The first repo as drawn, which is first in the first game's group - groups come in the order of
-    /// their first repo, so that is the head of the list - or Join or create where there is none.
-    /// </summary>
-    private MenuItemViewModel DefaultEntry()
-        => Repos.OfType<RepoItemViewModel>().FirstOrDefault() ?? _joinOrCreateMenuItem;
 
     private void OnNavigationChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(NavigationManager.CurrentPage) && NavManager.CurrentPage is null && _selectionRestored)
         {
-            FallBackToDefault();
-        }
-
-        if (e.PropertyName == nameof(NavigationManager.Selected) &&
-            NavManager.Selected is RepoItemViewModel repo)
-        {
-            _lastSelectionRepository.RecordRepo(repo.Id);
+            FallBackToHome();
         }
     }
 

@@ -17,14 +17,13 @@ public class PlaySessionWatchTests
 
 
     [Fact]
-    public async Task A_machine_holding_nothing_asks_for_no_process_list()
+    public async Task A_machine_holding_nothing_tracks_no_session()
     {
         var harness = new Harness();
         harness.Processes.Running = true;
 
-        await harness.Watch.PollAsync(CancellationToken.None);
+        await harness.Poll();
 
-        Assert.Equal(0, harness.Processes.Asked);
         Assert.False(harness.Watch.IsRunning(Keys.Game()));
     }
 
@@ -140,19 +139,6 @@ public class PlaySessionWatchTests
     }
 
     [Fact]
-    public async Task A_game_whose_adapter_names_no_process_is_never_running()
-    {
-        var harness = new Harness();
-        harness.Hold();
-        harness.Names.Names = [];
-        harness.Processes.Running = true;
-
-        await harness.Poll();
-
-        Assert.False(harness.Watch.IsRunning(Keys.Game()));
-    }
-
-    [Fact]
     public async Task An_unreadable_slot_says_nothing()
     {
         var harness = new Harness();
@@ -173,6 +159,7 @@ public class PlaySessionWatchTests
     {
         private readonly FakeGameState _state = new();
         private readonly SavegameBindingStore _bindings;
+        private readonly GameRunningMonitor _running;
 
 
         public Harness()
@@ -187,13 +174,13 @@ public class PlaySessionWatchTests
 
             _bindings = new SavegameBindingStore(_state);
             Held = new Readings(_bindings);
+            _running = new GameRunningMonitor(new Candidates(), new ProcessNames(), Processes);
 
             Watch = new PlaySessionWatch(
                 new Candidates(),
                 _bindings,
                 Held,
-                Names,
-                Processes,
+                _running,
                 NullLogger<PlaySessionWatch>.Instance);
 
             Watch.Played += (_, played) => Raised.Add(played);
@@ -203,13 +190,18 @@ public class PlaySessionWatchTests
         public Guid RepoId { get; } = Guid.NewGuid();
         public Guid SavegameId { get; } = Guid.NewGuid();
         public Readings Held { get; }
-        public ProcessNames Names { get; } = new();
         public Processes Processes { get; } = new();
         public PlaySessionWatch Watch { get; }
         public List<IReadOnlyList<PlayedSavegame>> Raised { get; } = [];
 
 
-        public Task<IReadOnlyList<PlayedSavegame>> Poll() => Watch.PollAsync(CancellationToken.None);
+        /// <summary>The monitor first, then the watch - the order the app polls them in.</summary>
+        public Task<IReadOnlyList<PlayedSavegame>> Poll()
+        {
+            _running.Poll();
+
+            return Watch.PollAsync(CancellationToken.None);
+        }
 
         public void Hold(string contentHash = CheckedOut) => _bindings.SetBinding(Keys.Game(), new SavegameCheckoutBinding(
             RepoId,
@@ -227,22 +219,14 @@ public class PlaySessionWatchTests
 
     private sealed class ProcessNames : IGameProcessNames
     {
-        public IReadOnlyList<string> Names { get; set; } = ["FarmingSimulator2025Game"];
-
-        public IReadOnlyList<string> Get(GameIdentity game) => Names;
+        public IReadOnlyList<string> Get(GameIdentity game) => ["FarmingSimulator2025Game"];
     }
 
     private sealed class Processes : IGameProcesses
     {
         public bool Running { get; set; }
-        public int Asked { get; private set; }
 
-        public bool IsAnyRunning(IReadOnlyList<string> processNames)
-        {
-            Asked++;
-
-            return Running;
-        }
+        public bool IsAnyRunning(IReadOnlyList<string> processNames) => Running;
     }
 
     /// <summary>Every held slot, reading as <see cref="Hash"/> - which starts out as what was checked out.</summary>

@@ -27,8 +27,8 @@ public sealed record PlayedSavegame(
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Only while something is checked out.</b> A game holding nothing is not looked for at all, so
-/// the ordinary machine - which holds nothing, nearly all of the time - asks for no process list.
+/// <b>Only while something is checked out.</b> A game holding nothing has nothing to remind about, so
+/// its sessions are not tracked. Whether a game runs is <see cref="IGameRunningMonitor"/>'s answer.
 /// </para>
 /// <para>
 /// <b>Played this session, and not yet checked in.</b> Each held slot is hashed when the game is
@@ -47,8 +47,7 @@ public sealed class PlaySessionWatch(
     IDriftCandidateSource games,
     ISavegameBindingStore bindings,
     IHeldSlotReader reader,
-    IGameProcessNames processNames,
-    IGameProcesses processes,
+    IGameRunningMonitor runningGames,
     ILogger<PlaySessionWatch> logger) : IPlaySessionWatch
 {
     private readonly Lock _lock = new();
@@ -87,14 +86,13 @@ public sealed class PlaySessionWatch(
                 session = _sessions.GetValueOrDefault(game);
             }
 
-            // Asked only while there is something to remind about, or a session to see the end of.
+            // Tracked only while there is something to remind about, or a session to see the end of.
             if (session is null && bindings.GetBindings(game).Count == 0)
             {
                 continue;
             }
 
-            var names = processNames.Get(game);
-            var running = names.Count > 0 && processes.IsAnyRunning(names);
+            var running = runningGames.IsRunning(game);
 
             if (running && session is null)
             {

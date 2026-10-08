@@ -30,12 +30,21 @@ namespace ModsDude.Server.Domain.Activity;
 /// another profile, a savegame checked out - and is what a client announces.
 /// </para>
 /// <para>
+/// <b>Playing is a heartbeat.</b> The client says so every minute while the game runs, and once more
+/// when it closes. A client that crashes or goes offline says nothing, so a game counts as playing
+/// only until <see cref="PlayingTimeout"/> after the last beat.
+/// </para>
+/// <para>
 /// There is no deactivated state. A game that stops following a profile is on nothing, and the row is
 /// deleted: a list of what people are on has nothing to say about it.
 /// </para>
 /// </remarks>
 public class GameActivity
 {
+    /// <summary>How long after the last heartbeat a game still counts as playing: a few missed beats.</summary>
+    public static readonly TimeSpan PlayingTimeout = TimeSpan.FromMinutes(3);
+
+
     // ef
     private GameActivity() { }
 
@@ -91,8 +100,41 @@ public class GameActivity
     /// <summary>When this game last moved onto something - another profile, or a savegame.</summary>
     public DateTime ChangedAt { get; private set; }
 
-    /// <summary>When this game was last reported at all, re-applies included.</summary>
+    /// <summary>When this game was last reported at all, re-applies and heartbeats included.</summary>
     public DateTime TouchedAt { get; private set; }
+
+    /// <summary>When the current play session started, or null where the game is not being played.</summary>
+    public DateTime? PlayingSince { get; private set; }
+
+    /// <summary>The last heartbeat of the current play session, or null where the game is not being played.</summary>
+    public DateTime? PlayingSeenAt { get; private set; }
+
+    /// <summary>Until when the game counts as playing without another heartbeat, or null where it is not being played.</summary>
+    public DateTime? PlayingUntil => PlayingSeenAt + PlayingTimeout;
+
+
+    public bool IsPlaying(DateTime now) => PlayingUntil is DateTime until && now < until;
+
+    /// <summary>
+    /// Folds in a heartbeat. A session starts where the game was not playing - never, stopped, or
+    /// timed out - and goes on otherwise.
+    /// </summary>
+    public void SeenPlaying(DateTime now)
+    {
+        if (IsPlaying(now) is false)
+        {
+            PlayingSince = now;
+        }
+
+        PlayingSeenAt = now;
+        TouchedAt = now;
+    }
+
+    public void StoppedPlaying()
+    {
+        PlayingSince = null;
+        PlayingSeenAt = null;
+    }
 
 
     /// <summary>

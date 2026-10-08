@@ -9,7 +9,7 @@
              d:DataContext="{d:DesignInstance Type=friends:FriendActivityListViewModel, IsDesignTimeCreatable=False}"
              d:DesignWidth="640">
 
-    <!-- Who is on which of one repo's profiles, most recently active first. -->
+    <!-- Who is on which profile, whoever is playing first, then the most recently active. -->
     <StackPanel Orientation="Vertical">
 
         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -45,7 +45,17 @@
                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                            TextTrimming="CharacterEllipsis"
                                            Text="{Binding ProfileLine}" />
+                                <Border Margin="8 0 0 0"
+                                        Style="{StaticResource SuccessStatusChip}"
+                                        Visibility="{Binding IsPlaying, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="Playing" />
+                                </Border>
                             </StackPanel>
+
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="{Binding HasWhere, Converter={StaticResource BoolToVisibilityConverter}}"
+                                       Text="{Binding Where}" />
 
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        TextTrimming="CharacterEllipsis"

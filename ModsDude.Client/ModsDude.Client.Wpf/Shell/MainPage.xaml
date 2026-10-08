@@ -13,8 +13,8 @@
 
     <Grid ColumnDefinitions="auto *">
 
-        <!-- The rail: the repos, grouped by game, then the places that are not a repo, and the user's own
-             settings and account at the foot. Pictures only; each one's name comes out of it on hover. -->
+        <!-- The rail: Home, the repos, grouped by game, then the places that are not a repo, and the user's
+             own settings and account at the foot. Pictures only; each one's name comes out of it on hover. -->
         <Border Grid.Column="0"
                 Width="{StaticResource RailWidth}"
                 Style="{StaticResource SidebarSurface}">
@@ -29,6 +29,12 @@
                               VerticalScrollBarVisibility="Hidden"
                               HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Orientation="Vertical">
+
+                        <ListView Margin="0 0 0 6"
+                                  Style="{StaticResource RailList}"
+                                  ItemsSource="{Binding HomeItems}"
+                                  SelectedItem="{Binding NavManager.Selected, Mode=TwoWay}"
+                                  behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
 
                         <ListView Style="{StaticResource RailList}"
                                   ItemsSource="{Binding ReposView}"

@@ -36,6 +36,13 @@ public interface IShellNavigationService
     /// </param>
     Task<bool> GoToProfileHistoryAsync(Guid repoId, Guid profileId, int? selectRevision = null);
 
+    /// <summary>Into a profile's own page. Reached from a game on Home, which names the profile it follows.</summary>
+    /// <returns>False where the shell is not up yet, the target is gone, or navigation was refused.</returns>
+    Task<bool> GoToProfileAsync(Guid repoId, Guid profileId);
+
+    /// <summary>To joining or creating a repo, from a Home with no repo to show.</summary>
+    void GoToJoinOrCreate();
+
     /// <summary>Builds the page on screen again, unless it holds unsaved changes. On the UI thread.</summary>
     void ReloadOpenPage();
 }

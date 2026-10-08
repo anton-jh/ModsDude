@@ -507,7 +507,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task UseProfileAsync(Notice notice, NoticeViewModel? card)
     {
-        if (_friends.News.FirstOrDefault(x => FriendActivityRules.NoticeKey(x) == notice.Key) is not { } activity)
+        if (_friends.News.FirstOrDefault(x => FriendActivityRules.NoticeKey(x.Activity) == notice.Key)?.Activity is not { } activity)
         {
             card?.ReportStatus("They have moved on since - look on the repo's overview for what they are on now.");
 

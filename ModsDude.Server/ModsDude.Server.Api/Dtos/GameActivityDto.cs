@@ -14,6 +14,11 @@ namespace ModsDude.Server.Api.Dtos;
 /// re-apply, which only moves <paramref name="TouchedAt"/>.
 /// </param>
 /// <param name="SavegameName">The savegame checked out, where it still exists.</param>
+/// <param name="PlayingSince">When the current play session started, or null where nobody is playing.</param>
+/// <param name="PlayingUntil">
+/// Until when the game counts as playing without another heartbeat, or null where nobody is playing.
+/// The reader compares it with its own clock: a client that stopped beating changes no counter.
+/// </param>
 public record GameActivityDto(
     UserDto User,
     string Game,
@@ -25,4 +30,6 @@ public record GameActivityDto(
     Guid? SavegameId,
     string? SavegameName,
     DateTime ChangedAt,
-    DateTime TouchedAt);
+    DateTime TouchedAt,
+    DateTime? PlayingSince,
+    DateTime? PlayingUntil);

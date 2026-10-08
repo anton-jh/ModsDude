@@ -9,7 +9,7 @@
         xmlns:toasts="clr-namespace:ModsDude.Client.Wpf.Shell.Toasts"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=shell:MainWindowViewModel, IsDesignTimeCreatable=False}"
-        Title="ModsDude" Width="1600" Height="900"
+        Title="ModsDude" Width="1600" Height="900" MinWidth="1000"
         Icon="/Assets/AppIcon.ico"
         WindowStartupLocation="CenterScreen"
         WindowState="Maximized"

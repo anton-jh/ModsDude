@@ -200,9 +200,7 @@
                             Visibility="{Binding HasSecondaryChip, Converter={StaticResource BoolToVisibilityConverter}}">
 
                         <Border.Style>
-                            <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
-                                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                            <Style TargetType="Border" BasedOn="{StaticResource SuccessStatusChip}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding HasSourceConflict}" Value="True">
                                         <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />

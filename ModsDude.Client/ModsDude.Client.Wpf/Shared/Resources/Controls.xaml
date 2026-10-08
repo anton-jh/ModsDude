@@ -405,6 +405,34 @@
         <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
     </Style>
 
+    <Style x:Key="SuccessStatusChip" TargetType="Border" BasedOn="{StaticResource StatusChip}">
+        <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+    </Style>
+
+    <!-- Where a game's profile stands against its folders, bound to a SyncState of type
+         ProfileSyncState on the data context. -->
+    <Style x:Key="ProfileSyncChip" TargetType="Border" BasedOn="{StaticResource StatusChip}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding SyncState}" Value="InSync">
+                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SyncState}" Value="Drifted">
+                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SyncState}" Value="NotApplied">
+                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SyncState}" Value="Applying">
+                <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- A presence filter chip. Radio buttons so the group enforces one active filter without any
          view model bookkeeping; the chrome is the button's, not the radio's. -->
     <Style x:Key="FilterChip" TargetType="RadioButton">

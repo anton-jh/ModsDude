@@ -461,11 +461,11 @@ public class ChangePollTests
     private sealed class FakeFriends : IFriendActivityService
     {
         public event EventHandler? Changed { add { } remove { } }
-        public event EventHandler<IReadOnlyList<GameActivityDto>>? Announced { add { } remove { } }
+        public event EventHandler<IReadOnlyList<FriendNews>>? Announced { add { } remove { } }
 
         public IReadOnlyList<GameActivityDto> Rows => [];
         public bool HasLoaded => true;
-        public IReadOnlyList<GameActivityDto> News => [];
+        public IReadOnlyList<FriendNews> News => [];
         public int Refreshes { get; private set; }
         public bool FailNext { get; set; }
 

@@ -30,7 +30,6 @@ public partial class RepoPageViewModel
     private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
     private readonly IProfileStore _profileStore;
     private readonly IProfileService _profileService;
-    private readonly ILastSelectionRepository _lastSelectionRepository;
     private readonly ConnectGamePageViewModel.Factory _connectGamePageViewModelFactory;
     private readonly RepoModsPageViewModel.Factory _repoModsPageViewModelFactory;
     private readonly GameSettingsPageViewModel.Factory _gameSettingsPageViewModelFactory;
@@ -85,7 +84,6 @@ public partial class RepoPageViewModel
         IProfileSyncStatusService syncStatus,
         IProfileStore profileStore,
         IProfileService profileService,
-        ILastSelectionRepository lastSelectionRepository,
         IGameRepository gameRepository,
         INavigationLockService navigationLockService,
         IModalService modalService)
@@ -108,7 +106,6 @@ public partial class RepoPageViewModel
         _profilePageViewModelFactory = profilePageViewModelFactory;
         _profileStore = profileStore;
         _profileService = profileService;
-        _lastSelectionRepository = lastSelectionRepository;
         _connectGamePageViewModelFactory = connectGamePageViewModelFactory;
         _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
         _gameSettingsPageViewModelFactory = gameSettingsPageViewModelFactory;
@@ -538,11 +535,6 @@ public partial class RepoPageViewModel
 
         OnPropertyChanged(nameof(ShowConnectGame));
         OnPropertyChanged(nameof(IsCreateProfileSelected));
-
-        if (NavManager.Selected is ProfileItemViewModel profile)
-        {
-            _lastSelectionRepository.RecordProfile(profile.Id);
-        }
     }
 
     private void OnProfileCreated(Profile created)

@@ -181,8 +181,7 @@
                     <!-- The game, under the name, on every page: it is what the repo is about, and it does not stop
                          being so when a profile is open. Where the profile stands against the game follows it, on
                          the profile the game follows only: on any other there is nothing to say, and a chip reading
-                         "not active" on every other profile would only be noise. The fills are the theme's status
-                         colours, paired with the text colour each is legible under - see StatusChip. -->
+                         "not active" on every other profile would only be noise. -->
                     <StackPanel Grid.Row="1" Margin="0 4 0 0" Orientation="Horizontal">
                         <TextBlock VerticalAlignment="Center"
                                    FontSize="14"
@@ -193,31 +192,10 @@
                              the chip is a little taller than the text beside it, and without it showing the chip
                              would push the whole page down by the difference. -->
                         <Border Margin="14 -3 0 -3"
-                                VerticalAlignment="Center"
-                                Visibility="{Binding OpenProfile.HasSyncState, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
-                            <Border.Style>
-                                <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="InSync">
-                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="Drifted">
-                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="NotApplied">
-                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding OpenProfile.SyncState}" Value="Applying">
-                                            <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <TextBlock FontSize="13" Text="{Binding OpenProfile.SyncLabel}" />
+                                DataContext="{Binding OpenProfile}"
+                                Style="{StaticResource ProfileSyncChip}"
+                                Visibility="{Binding HasSyncState, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
+                            <TextBlock FontSize="13" Text="{Binding SyncLabel}" />
                         </Border>
                     </StackPanel>
                 </Grid>

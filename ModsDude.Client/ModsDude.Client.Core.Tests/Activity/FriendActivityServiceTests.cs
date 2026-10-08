@@ -41,7 +41,7 @@ public class FriendActivityServiceTests
         await harness.Service.RefreshAsync(CancellationToken.None);
 
         var announced = Assert.Single(harness.Announced);
-        Assert.Equal("alex", Assert.Single(announced).User.Id);
+        Assert.Equal("alex", Assert.Single(announced).Activity.User.Id);
         Assert.Single(harness.Service.News);
     }
 
@@ -74,8 +74,61 @@ public class FriendActivityServiceTests
         await harness.Service.RefreshAsync(CancellationToken.None);
 
         var announced = Assert.Single(harness.Announced);
-        Assert.Equal("alex", Assert.Single(announced).User.Id);
+        Assert.Equal("alex", Assert.Single(announced).Activity.User.Id);
         Assert.Equal(_monday.AddHours(2), harness.Seen.Get("me"));
+    }
+
+    [Fact]
+    public async Task A_start_of_play_while_the_app_was_closed_is_announced_once()
+    {
+        var harness = new Harness();
+        harness.Seen.Set("me", _monday);
+        harness.Time.SetUtcNow(_monday.AddHours(1).AddMinutes(1));
+        harness.Client.Rows = [Playing("alex", changedAt: _monday.AddHours(-1), since: _monday.AddHours(1))];
+
+        await harness.Service.RefreshAsync(CancellationToken.None);
+        await harness.Service.RefreshAsync(CancellationToken.None);
+
+        var news = Assert.Single(Assert.Single(harness.Announced));
+        Assert.True(news.IsPlaying);
+        Assert.True(Assert.Single(harness.Service.News).IsPlaying);
+        Assert.Equal(_monday.AddHours(1), harness.Seen.Get("me"));
+    }
+
+    /// <summary>Whoever played it has gone, so there is nobody to join - but it is told, so never told later.</summary>
+    [Fact]
+    public async Task A_session_that_ended_while_the_app_was_closed_is_not_news()
+    {
+        var harness = new Harness();
+        harness.Seen.Set("me", _monday);
+        harness.Time.SetUtcNow(_monday.AddHours(5));
+        harness.Client.Rows = [Playing("alex", changedAt: _monday.AddHours(-1), since: _monday.AddHours(1))];
+
+        await harness.Service.RefreshAsync(CancellationToken.None);
+
+        Assert.Empty(harness.Announced);
+        Assert.Empty(harness.Service.News);
+        Assert.Equal(_monday.AddHours(1), harness.Seen.Get("me"));
+    }
+
+    /// <summary>Nothing on the server moves when heartbeats stop, so the news must go by the clock.</summary>
+    [Fact]
+    public async Task A_playing_session_stops_being_news_when_it_runs_out_and_the_lists_hear_of_it()
+    {
+        var harness = new Harness();
+        harness.Seen.Set("me", _monday);
+        harness.Time.SetUtcNow(_monday.AddHours(1).AddMinutes(1));
+        harness.Client.Rows = [Playing("alex", changedAt: _monday.AddHours(-1), since: _monday.AddHours(1))];
+        await harness.Service.RefreshAsync(CancellationToken.None);
+        var changes = 0;
+        harness.Service.Changed += (_, _) => changes++;
+
+        harness.Time.Advance(FriendActivityService.TickInterval);
+        harness.Time.Advance(FriendActivityService.TickInterval);
+        harness.Time.Advance(TimeSpan.FromMinutes(5));
+
+        Assert.True(changes >= 3);
+        Assert.Empty(harness.Service.News);
     }
 
     [Fact]
@@ -121,6 +174,17 @@ public class FriendActivityServiceTests
     };
 
 
+    /// <summary>Playing since <paramref name="since"/>, with heartbeats until three minutes after it.</summary>
+    private static GameActivityDto Playing(string userId, DateTime changedAt, DateTime since)
+    {
+        var row = Row(userId, changedAt, touchedAt: since);
+        row.PlayingSince = since;
+        row.PlayingUntil = since.AddMinutes(3);
+
+        return row;
+    }
+
+
     private sealed class Harness
     {
         public Harness()
@@ -130,14 +194,16 @@ public class FriendActivityServiceTests
                 new FixedCurrentUser("me"),
                 Seen,
                 InlineStoreDispatcher.Instance,
+                Time,
                 NullLogger<FriendActivityService>.Instance);
             Service.Announced += (_, rows) => Announced.Add(rows);
         }
 
         public FakeActivityClient Client { get; } = new();
+        public TestTimeProvider Time { get; } = new();
         public MemorySeen Seen { get; } = new();
         public FriendActivityService Service { get; }
-        public List<IReadOnlyList<GameActivityDto>> Announced { get; } = [];
+        public List<IReadOnlyList<FriendNews>> Announced { get; } = [];
     }
 
     private sealed class FakeActivityClient : IActivityClient
@@ -166,6 +232,9 @@ public class FriendActivityServiceTests
             => Task.CompletedTask;
 
         public Task ClearGameActivityV1Async(string game, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task ReportPlayingV1Async(ReportPlayingRequest request, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 

@@ -19,7 +19,7 @@ public sealed class HeldSavegameNames(
 {
     public async Task<IReadOnlyDictionary<Guid, HeldSavegameName>> ReadAsync(
         Game game,
-        Guid currentRepoId,
+        Guid? currentRepoId,
         CancellationToken cancellationToken)
     {
         var names = new Dictionary<Guid, HeldSavegameName>();

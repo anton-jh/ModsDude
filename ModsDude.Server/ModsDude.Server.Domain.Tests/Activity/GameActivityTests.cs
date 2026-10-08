@@ -106,6 +106,94 @@ public class GameActivityTests
     }
 
     [Fact]
+    public void A_first_heartbeat_starts_a_session()
+    {
+        var activity = CreateActivity();
+
+        activity.SeenPlaying(_start.AddHours(1));
+
+        Assert.Equal(_start.AddHours(1), activity.PlayingSince);
+        Assert.Equal(_start.AddHours(1), activity.TouchedAt);
+        Assert.True(activity.IsPlaying(_start.AddHours(1)));
+    }
+
+    [Fact]
+    public void Later_heartbeats_keep_the_session_and_its_start()
+    {
+        var activity = CreateActivity();
+
+        activity.SeenPlaying(_start);
+        activity.SeenPlaying(_start.AddMinutes(1));
+        activity.SeenPlaying(_start.AddMinutes(2));
+
+        Assert.Equal(_start, activity.PlayingSince);
+        Assert.Equal(_start.AddMinutes(2), activity.PlayingSeenAt);
+        Assert.Equal(_start.AddMinutes(2) + GameActivity.PlayingTimeout, activity.PlayingUntil);
+    }
+
+    /// <summary>A client that crashed or went offline never says it stopped.</summary>
+    [Fact]
+    public void A_session_without_heartbeats_times_out()
+    {
+        var activity = CreateActivity();
+
+        activity.SeenPlaying(_start);
+
+        Assert.True(activity.IsPlaying(_start + GameActivity.PlayingTimeout - TimeSpan.FromSeconds(1)));
+        Assert.False(activity.IsPlaying(_start + GameActivity.PlayingTimeout));
+    }
+
+    [Fact]
+    public void A_heartbeat_after_a_timeout_starts_a_new_session()
+    {
+        var activity = CreateActivity();
+        var later = _start + GameActivity.PlayingTimeout + TimeSpan.FromMinutes(1);
+
+        activity.SeenPlaying(_start);
+        activity.SeenPlaying(later);
+
+        Assert.Equal(later, activity.PlayingSince);
+    }
+
+    [Fact]
+    public void A_heartbeat_after_a_stop_starts_a_new_session()
+    {
+        var activity = CreateActivity();
+
+        activity.SeenPlaying(_start);
+        activity.StoppedPlaying();
+        activity.SeenPlaying(_start.AddMinutes(1));
+
+        Assert.Equal(_start.AddMinutes(1), activity.PlayingSince);
+    }
+
+    [Fact]
+    public void A_stop_ends_the_session_at_once()
+    {
+        var activity = CreateActivity();
+
+        activity.SeenPlaying(_start);
+        activity.StoppedPlaying();
+
+        Assert.False(activity.IsPlaying(_start));
+        Assert.Null(activity.PlayingSince);
+        Assert.Null(activity.PlayingUntil);
+    }
+
+    /// <summary>Joining a friend's savegame while the game runs is still the same evening.</summary>
+    [Fact]
+    public void A_report_during_a_session_keeps_it()
+    {
+        var activity = CreateActivity();
+
+        activity.SeenPlaying(_start);
+        activity.Record(_repoId, _otherProfile, null, GameActivityKind.Activated, null, _start.AddMinutes(1));
+
+        Assert.Equal(_start, activity.PlayingSince);
+        Assert.True(activity.IsPlaying(_start.AddMinutes(1)));
+    }
+
+    [Fact]
     public void A_game_must_be_named()
     {
         Assert.Throws<DomainValidationException>(() => new GameKey(" "));

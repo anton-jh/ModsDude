@@ -5,8 +5,8 @@ using ModsDude.Client.Wpf.Repos;
 namespace ModsDude.Client.Wpf.Shell.Navigation;
 
 /// <summary>
-/// Deep-links into the sidebar's nested navigation from outside it - which today means the app-level
-/// drift notice, whose whole point is being reachable from any view.
+/// Deep-links into the sidebar's nested navigation from outside it: the notices, which are reachable
+/// from any view, and pages such as Home that lead into a repo.
 /// </summary>
 /// <remarks>
 /// The shell registers itself rather than being handed in, because it is built by the login
@@ -88,4 +88,21 @@ public sealed class ShellNavigationService : IShellNavigationService
 
         return profilePage.TrySelectHistory(selectRevision);
     }
+
+    public async Task<bool> GoToProfileAsync(Guid repoId, Guid profileId)
+    {
+        if (_shell is not MainPageViewModel shell)
+        {
+            return false;
+        }
+
+        if (await shell.TrySelectRepoAsync(repoId) is not RepoPageViewModel repoPage)
+        {
+            return false;
+        }
+
+        return await repoPage.TrySelectProfileAsync(profileId) is not null;
+    }
+
+    public void GoToJoinOrCreate() => _shell?.SelectJoinOrCreate();
 }

@@ -33,8 +33,8 @@ public interface IFriendActivityEnvironment
 
 
 /// <summary>
-/// The rules for drawing a friend's game and for following them onto it, in one place for a
-/// repo's overview and the notice column.
+/// The rules for drawing a friend's game and for following them onto it, in one place for Home, a
+/// repo's overview, the notice column and the Windows toasts.
 /// </summary>
 public static class FriendActivityRules
 {
@@ -71,18 +71,55 @@ public static class FriendActivityRules
     }
 
     /// <summary>
-    /// Whether a change is worth a card or a toast.
+    /// Whether the friend's game is being played, by the server's last heartbeat and this machine's clock.
+    /// </summary>
+    public static bool IsPlaying(GameActivityDto activity, DateTime now)
+        => activity.PlayingUntil is DateTime until && now < until;
+
+    /// <summary>
+    /// Whether a row says something that happened after <paramref name="since"/>: a switch or a
+    /// check-out, or a play session that started since and is still going.
+    /// </summary>
+    /// <remarks>
+    /// A session that has already ended is not news: whoever played it is not there to be joined.
+    /// </remarks>
+    public static bool IsNews(GameActivityDto activity, DateTime since, DateTime now)
+        => activity.ChangedAt > since
+            || (IsPlaying(activity, now) && activity.PlayingSince > since);
+
+    /// <summary>The newest thing a row says happened, which is how far the news has been told once it is.</summary>
+    public static DateTime NewsAt(GameActivityDto activity)
+        => activity.PlayingSince is DateTime since && since > activity.ChangedAt ? since : activity.ChangedAt;
+
+    /// <summary>The news in a row, or null where it has none.</summary>
+    public static FriendNews? ToNews(GameActivityDto activity, DateTime since, DateTime now)
+        => IsNews(activity, since, now) ? new FriendNews(activity, IsPlaying(activity, now)) : null;
+
+    /// <summary>
+    /// The order lists draw friends in: whoever is playing first, then the most recently active.
+    /// </summary>
+    public static IReadOnlyList<GameActivityDto> Order(IEnumerable<GameActivityDto> rows, DateTime now)
+        => [.. rows
+            .OrderByDescending(x => IsPlaying(x, now))
+            .ThenByDescending(x => x.TouchedAt)
+            .ThenBy(x => x.User.Id, StringComparer.Ordinal)
+            .ThenBy(x => x.Game, StringComparer.Ordinal)];
+
+    /// <summary>
+    /// Whether news is worth a card or a toast.
     /// </summary>
     /// <remarks>
     /// <b>A friend switching onto what this game is already on tells nobody anything.</b> They have come
     /// to where this user already is, and there is nothing to follow. Measured the way
     /// <see cref="CanFollow"/> measures it, so a friend held on a revision this game is not on still
     /// counts. A check-out is always news: it names the savegame they are playing, which the profile
-    /// alone does not. A repo's overview still lists the friend - this is only about announcing.
+    /// alone does not. So is starting to play: somebody already on the same profile is exactly who can
+    /// join them at once. A repo's overview still lists the friend - this is only about announcing.
     /// </remarks>
-    public static bool IsWorthAnnouncing(GameActivityDto activity, IFriendActivityEnvironment environment)
-        => activity.Kind is GameActivityKind.SavegameCheckedOut
-            || environment.CanFollow(activity) is not FollowAvailability.AlreadyOn;
+    public static bool IsWorthAnnouncing(FriendNews news, IFriendActivityEnvironment environment)
+        => news.IsPlaying
+            || news.Activity.Kind is GameActivityKind.SavegameCheckedOut
+            || environment.CanFollow(news.Activity) is not FollowAvailability.AlreadyOn;
 
     /// <summary>The game identity as the client parses it, or null where the report named something unreadable.</summary>
     public static GameIdentity? ParseGame(string game)
@@ -98,20 +135,36 @@ public static class FriendActivityRules
     }
 
     /// <summary>What a friend did, as a sentence starting with their name.</summary>
-    public static string Headline(GameActivityDto activity)
-        => activity.Kind is GameActivityKind.SavegameCheckedOut
-            ? $"{activity.User.DisplayName} checked out {Quote(activity.SavegameName) ?? "a savegame"}"
-            : $"{activity.User.DisplayName} switched to '{activity.ProfileName}'";
+    public static string Headline(FriendNews news)
+    {
+        var activity = news.Activity;
+
+        return news.IsPlaying
+            ? $"{activity.User.DisplayName} is playing"
+            : activity.Kind is GameActivityKind.SavegameCheckedOut
+                ? $"{activity.User.DisplayName} checked out {Quote(activity.SavegameName) ?? "a savegame"}"
+                : $"{activity.User.DisplayName} switched to '{activity.ProfileName}'";
+    }
 
     /// <summary>Which mod list that puts them on, and where - one line under the headline.</summary>
-    public static string Describe(GameActivityDto activity, IFriendActivityEnvironment environment)
+    public static string Describe(FriendNews news, IFriendActivityEnvironment environment)
     {
+        var activity = news.Activity;
+        var game = environment.DescribeGame(activity.Game);
         var repo = environment.DescribeRepo(activity.RepoId) is string name ? $" in {name}" : "";
         var revision = activity.PinnedRevision is int pinned ? $" rev {pinned}" : "";
+        var savegame = activity.Kind is GameActivityKind.SavegameCheckedOut
+            ? $", {Quote(activity.SavegameName) ?? "a savegame"}"
+            : "";
+
+        if (news.IsPlaying)
+        {
+            return $"{game}{savegame}, on '{activity.ProfileName}'{revision}{repo}.";
+        }
 
         return activity.Kind is GameActivityKind.SavegameCheckedOut
-            ? $"{environment.DescribeGame(activity.Game)}, on '{activity.ProfileName}'{revision}{repo}."
-            : $"{environment.DescribeGame(activity.Game)}{repo}.{(revision.Length > 0 ? $" Held on{revision}." : "")}";
+            ? $"{game}, on '{activity.ProfileName}'{revision}{repo}."
+            : $"{game}{repo}.{(revision.Length > 0 ? $" Held on{revision}." : "")}";
     }
 
     /// <summary>
@@ -141,9 +194,10 @@ public static class FriendActivityRules
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Keyed on the friend and the game, signed with when it changed.</b> A second switch replaces
-    /// the first card rather than stacking under it - what they are on now is the news - and brings
-    /// it back even where the first one was dismissed.
+    /// <b>Keyed on the friend and the game, signed with what happened when.</b> A second switch, or
+    /// starting to play, replaces the first card rather than stacking under it - what they are doing
+    /// now is the news - and brings it back even where the first one was dismissed. A playing card
+    /// goes once they stop, leaving the switch before it where that is still news.
     /// </para>
     /// <para>
     /// Info, because nothing here is wrong: it is somebody else's evening, offered in case this user
@@ -155,27 +209,31 @@ public static class FriendActivityRules
     /// friend is somewhere this user is not, and the card has a follow button to offer.
     /// </para>
     /// </remarks>
-    public static IReadOnlyList<Notice> BuildNotices(IEnumerable<GameActivityDto> news, IFriendActivityEnvironment environment)
+    public static IReadOnlyList<Notice> BuildNotices(IEnumerable<FriendNews> news, IFriendActivityEnvironment environment)
     {
         var notices = new List<Notice>();
 
-        foreach (var activity in news.OrderByDescending(x => x.ChangedAt))
+        foreach (var item in news.OrderByDescending(x => NewsAt(x.Activity)).ThenBy(x => NoticeKey(x.Activity), StringComparer.Ordinal))
         {
-            if (IsWorthAnnouncing(activity, environment) is false)
+            if (IsWorthAnnouncing(item, environment) is false)
             {
                 continue;
             }
 
+            var activity = item.Activity;
             var availability = environment.CanFollow(activity);
             var game = ParseGame(activity.Game);
+            var happened = item.IsPlaying
+                ? $"playing/{activity.PlayingSince?.Ticks}"
+                : $"{activity.ChangedAt.Ticks}/{activity.Kind}";
 
             notices.Add(new Notice(
                 NoticeKey(activity),
-                $"{activity.ChangedAt.Ticks}/{activity.Kind}/{activity.ProfileId}/{activity.PinnedRevision}",
+                $"{happened}/{activity.ProfileId}/{activity.PinnedRevision}",
                 NoticeSeverity.Info,
-                Headline(activity))
+                Headline(item))
             {
-                Body = Describe(activity, environment),
+                Body = Describe(item, environment),
                 Footnote = FollowBlocked(activity, availability, environment),
                 Actions = availability is FollowAvailability.Available
                     ? [new NoticeAction(NoticeActionKind.UseProfile, FollowLabel(activity)) { IsPrimary = true }]

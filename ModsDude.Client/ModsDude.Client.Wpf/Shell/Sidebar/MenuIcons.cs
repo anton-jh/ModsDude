@@ -14,6 +14,7 @@ namespace ModsDude.Client.Wpf.Shell.Sidebar;
 internal static class MenuIcons
 {
     // Rail
+    public const string Home = "\xE80F";
     public const string JoinOrCreate = "\xE710";
     public const string Archive = "\xE7B8";
     public const string Settings = "\xE713";
