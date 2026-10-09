@@ -163,8 +163,9 @@
                         <th>Status</th>
                         <th>Newest</th>
                         <th class="number">Age</th>
-                        <th class="number">Size</th>
+                        <th class="number">Newest size</th>
                         <th class="number">Kept</th>
+                        <th class="number">Total</th>
                         <th>Oldest</th>
                     </tr>
                 </thead>
@@ -178,11 +179,16 @@
                             <td class="number">@(tier.Newest is { } newestAge ? AdminFormat.Age(Model.BackupsCheckedAt - newestAge.TakenAt) : "")</td>
                             <td class="number">@(tier.Newest is { } newestSize ? AdminFormat.Bytes(newestSize.Length) : "")</td>
                             <td class="number">@AdminFormat.Count(tier.Count)</td>
+                            <td class="number">@AdminFormat.Bytes(tier.TotalBytes)</td>
                             <td>@(tier.Oldest is { } oldest ? AdminFormat.Time(oldest.TakenAt.UtcDateTime) : "")</td>
                         </tr>
                     }
                 </tbody>
             </table>
+        </div>
+
+        <div class="tiles">
+            <div class="tile"><div class="label">Total stored</div><div class="value">@AdminFormat.Bytes(backups.TotalBytes)</div></div>
         </div>
 
         @if (backups.Unrecognised.Count > 0)
