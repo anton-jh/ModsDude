@@ -3,7 +3,6 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
-      xmlns:friends="clr-namespace:ModsDude.Client.Wpf.Friends"
       xmlns:home="clr-namespace:ModsDude.Client.Wpf.Home"
       xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -35,28 +34,21 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Friends first, because joining one is what the page is for; every repo under them. -->
-                <StackPanel Orientation="Vertical"
-                            Visibility="{Binding HasRepos, Converter={StaticResource BoolToVisibilityConverter}}">
-
-                    <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                            CornerRadius="4"
-                            Padding="16">
-                        <GroupBox Header="Friends" Padding="0 16 0 0">
-                            <friends:FriendActivityList DataContext="{Binding Friends}" />
-                        </GroupBox>
-                    </Border>
-
-                    <Border Margin="0 16 0 0"
-                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                            CornerRadius="4"
-                            Padding="16">
-                        <GroupBox Header="Repos" Padding="0 16 0 0">
+                <!-- Every repo, with the profiles friends are on in it. -->
+                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="4"
+                        Padding="16"
+                        Visibility="{Binding HasRepos, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <GroupBox Header="Repos" Padding="0 16 0 0">
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock Margin="0 0 0 12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Visibility="{Binding Friends.CouldNotRead, Converter={StaticResource BoolToVisibilityConverter}}"
+                                       Text="Could not load what friends are on." />
                             <home:HomeRepoList DataContext="{Binding RepoList}" />
-                        </GroupBox>
-                    </Border>
-
-                </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+                </Border>
 
             </StackPanel>
         </ScrollViewer>

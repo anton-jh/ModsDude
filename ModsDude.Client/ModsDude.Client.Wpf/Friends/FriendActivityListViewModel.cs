@@ -1,5 +1,4 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Activity;
@@ -13,7 +12,8 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.Friends;
 
 /// <summary>
-/// A list of who else is on which profile: one repo's on its overview, every repo's on Home.
+/// Which profiles others are on, one row per mod list: one repo's on its overview, every repo's for
+/// Home to split by repo.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -23,7 +23,7 @@ namespace ModsDude.Client.Wpf.Friends;
 /// </para>
 /// <para>
 /// Redrawn too when a game here changes, because whether the button is offered depends on what this
-/// machine is on: following somebody turns their row's button into "You are on this too". And on the
+/// machine is on: following somebody turns the row's button into "You are on this too". And on the
 /// service's own tick, because who is playing and how long ago things happened move with the clock.
 /// </para>
 /// </remarks>
@@ -41,8 +41,8 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     /// <summary>The one repo listed, or null where every repo is.</summary>
     private readonly Guid? _repoId;
 
-    /// <summary>The rows a follow started from here is still going on, by notice key.</summary>
-    private readonly HashSet<string> _following = [];
+    /// <summary>The groups a follow started from here is still going on.</summary>
+    private readonly HashSet<(Guid RepoId, Guid ProfileId, int? PinnedRevision)> _following = [];
 
 
     private FriendActivityListViewModel(
@@ -73,18 +73,17 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     }
 
 
-    public ObservableCollection<FriendActivityRowViewModel> Rows { get; } = [];
+    /// <summary>The most recently active first.</summary>
+    public ObservableCollection<FriendProfileGroupViewModel> Groups { get; } = [];
 
-    public bool HasRows => Rows.Count > 0;
+    public bool HasGroups => Groups.Count > 0;
 
     /// <summary>What an empty list says, once it is known to be empty rather than not yet read.</summary>
-    public string? EmptyText => HasRows
+    public string? EmptyText => HasGroups
         ? null
         : !_friends.HasLoaded
             ? CouldNotRead ? "Could not reach the server to see what your friends are on." : "Looking..."
-            : _repoId is null
-                ? "None of your friends has activated a profile in the last week."
-                : "Nobody else in this repo has activated one of its profiles in the last week.";
+            : "Nobody else in this repo has activated one of its profiles in the last week.";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EmptyText))]
@@ -113,17 +112,16 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     }
 
 
-    [RelayCommand]
-    private async Task Follow(FriendActivityRowViewModel row)
+    internal async Task FollowAsync(FriendProfileGroupViewModel group)
     {
-        var key = FriendActivityRules.NoticeKey(row.Model);
+        var key = KeyOf(group.Model);
 
         _following.Add(key);
         Rebuild();
 
         try
         {
-            var (message, severity) = await _follow.FollowAsync(row.Model, CancellationToken.None);
+            var (message, severity) = await _follow.FollowAsync(group.Model.Latest, CancellationToken.None);
 
             _toasts.Show(message, severity);
         }
@@ -143,24 +141,20 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     {
         var now = _time.GetUtcNow();
 
-        var rows = FriendActivityRules.Order(
-            _friends.Rows.Where(x => _repoId is not Guid repoId || x.RepoId == repoId),
-            now.UtcDateTime);
+        var activities = _friends.Rows.Where(x => _repoId is not Guid repoId || x.RepoId == repoId).ToList();
+        var ambiguous = UserDisplay.FindAmbiguous(activities.Select(x => x.User).DistinctBy(x => x.Id));
 
-        var ambiguous = UserDisplay.FindAmbiguous(rows.Select(x => x.User).DistinctBy(x => x.Id));
+        Groups.Clear();
 
-        Rows.Clear();
-
-        foreach (var row in rows)
+        foreach (var group in FriendProfileGroup.Build(activities))
         {
-            Rows.Add(new FriendActivityRowViewModel(
-                row,
-                _environment,
-                _avatarFactory.Create(row.User),
-                showTag: ambiguous.Contains(row.User.Id),
-                showWhere: _repoId is null,
-                isFollowing: _following.Contains(FriendActivityRules.NoticeKey(row)),
-                now));
+            var friends = group.Activities
+                .Select(x => new FriendAvatar(
+                    _avatarFactory.Create(x.User),
+                    ambiguous.Contains(x.User.Id) ? $"{x.User.DisplayName} #{x.User.Tag}" : x.User.DisplayName))
+                .ToList();
+
+            Groups.Add(new FriendProfileGroupViewModel(this, group, friends, _environment, _following.Contains(KeyOf(group)), now));
         }
 
         if (_friends.HasLoaded)
@@ -168,9 +162,12 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
             CouldNotRead = false;
         }
 
-        OnPropertyChanged(nameof(HasRows));
+        OnPropertyChanged(nameof(HasGroups));
         OnPropertyChanged(nameof(EmptyText));
     }
+
+    private static (Guid RepoId, Guid ProfileId, int? PinnedRevision) KeyOf(FriendProfileGroup group)
+        => (group.RepoId, group.ProfileId, group.PinnedRevision);
 
 
     public sealed class Factory(IServiceProvider serviceProvider)

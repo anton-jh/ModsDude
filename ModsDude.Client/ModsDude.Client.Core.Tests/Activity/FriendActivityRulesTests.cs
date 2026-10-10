@@ -203,17 +203,6 @@ public class FriendActivityRulesTests
         Assert.True(FriendActivityRules.IsWorthAnnouncing(new FriendNews(row, IsPlaying: true), new Environment(FollowAvailability.AlreadyOn)));
     }
 
-    [Fact]
-    public void Lists_put_whoever_is_playing_first()
-    {
-        var idle = Row(changedAt: _at.AddHours(2));
-        var playing = Playing(_at, until: _at.AddHours(1));
-        playing.User = new UserDto { Id = "bea", DisplayName = "bea", Tag = "0002" };
-
-        Assert.Equal([playing, idle], FriendActivityRules.Order([idle, playing], _at.AddMinutes(1)));
-        Assert.Equal([idle, playing], FriendActivityRules.Order([idle, playing], _at.AddHours(1)));
-    }
-
 
     private static GameActivityDto Row(int? pinned = null, GameActivityKind kind = GameActivityKind.Activated, DateTime? changedAt = null) => new()
     {

@@ -96,16 +96,6 @@ public static class FriendActivityRules
         => IsNews(activity, since, now) ? new FriendNews(activity, IsPlaying(activity, now)) : null;
 
     /// <summary>
-    /// The order lists draw friends in: whoever is playing first, then the most recently active.
-    /// </summary>
-    public static IReadOnlyList<GameActivityDto> Order(IEnumerable<GameActivityDto> rows, DateTime now)
-        => [.. rows
-            .OrderByDescending(x => IsPlaying(x, now))
-            .ThenByDescending(x => x.TouchedAt)
-            .ThenBy(x => x.User.Id, StringComparer.Ordinal)
-            .ThenBy(x => x.Game, StringComparer.Ordinal)];
-
-    /// <summary>
     /// Whether news is worth a card or a toast.
     /// </summary>
     /// <remarks>

@@ -141,7 +141,7 @@ public partial class RepoPageViewModel
             }
         }
 
-        var sections = RepoSections.Of(repo);
+        var sections = RepoSections.Of(repo).Where(x => x.IsSupported).ToList();
 
         _sections = sections.ToDictionary(
             x => x.Section,

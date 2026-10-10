@@ -25,8 +25,8 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.Home;
 
 /// <summary>
-/// Every repo, under the game it is for: how it stands on this machine, who is playing in it, and a
-/// way into each of its pages.
+/// Every repo, under the game it is for: how it stands on this machine, which of its profiles friends
+/// are on, and a way into each of its pages.
 /// </summary>
 /// <remarks>
 /// <b>Drawn from stores other pages share</b>, and drawn again whenever one of them says it changed,
@@ -89,7 +89,7 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
         _logger = logger;
         _namesLoad = new(_ => { }, _lifetime.Token);
 
-        _friends.Rows.CollectionChanged += OnCollectionChanged;
+        _friends.Groups.CollectionChanged += OnCollectionChanged;
         _games.Games.CollectionChanged += OnCollectionChanged;
         _games.GameChanged += OnChanged;
         _repos.Repos.CollectionChanged += OnReposChanged;
@@ -108,7 +108,7 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
-        _friends.Rows.CollectionChanged -= OnCollectionChanged;
+        _friends.Groups.CollectionChanged -= OnCollectionChanged;
         _games.Games.CollectionChanged -= OnCollectionChanged;
         _games.GameChanged -= OnChanged;
         _repos.Repos.CollectionChanged -= OnReposChanged;
@@ -328,7 +328,7 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
     {
         var repos = _repos.Repos.ToList();
         var ambiguous = RepoDisplay.FindAmbiguous(repos.Select(x => (x.Id, x.Name)));
-        var playing = _friends.Rows.Where(x => x.IsPlaying).ToLookup(x => x.Model.RepoId);
+        var friends = _friends.Groups.ToLookup(x => x.Model.RepoId);
 
         var groups = repos
             .GroupBy(x => x.Scope)
@@ -339,7 +339,7 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
                 Repos = x
                     .OrderBy(repo => repo.Name, NaturalOrder.Comparer)
                     .ThenBy(repo => repo.Id)
-                    .Select(repo => CreateRepoState(repo, ambiguous.Contains(repo.Id), playing[repo.Id]))
+                    .Select(repo => CreateRepoState(repo, ambiguous.Contains(repo.Id), friends[repo.Id]))
                     .ToList()
             })
             .OrderBy(x => x.State.Name, NaturalOrder.Comparer)
@@ -384,13 +384,12 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
             game is not null && _runningGames.IsRunning(game.Identity));
     }
 
-    private HomeRepoState CreateRepoState(Repo repo, bool isAmbiguous, IEnumerable<FriendActivityRowViewModel> playing)
+    private HomeRepoState CreateRepoState(Repo repo, bool isAmbiguous, IEnumerable<FriendProfileGroupViewModel> friends)
     {
         var game = repo.Games.FirstOrDefault();
         var followedId = _syncStatus.ActiveProfileOf(repo);
         var syncState = _syncStatus.StateOf(repo);
         var canPickProfile = game is not null && repo.Adapter.CanSupportMods;
-        var friends = playing.ToList();
 
         var action = game is null
             ? GameRepository.ConnectsAutomatically(repo.Adapter) ? HomeRepoAction.None : HomeRepoAction.ConnectGame
@@ -433,8 +432,7 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
             canPickProfile,
             _profiles.IsLoaded(repo.Id),
             profiles,
-            [.. friends.Select(x => x.Avatar)],
-            string.Join(", ", friends.Select(x => x.Name)),
+            [.. friends],
             [.. RepoSections.Of(repo).Where(x => x.Section is not RepoSection.Overview)],
             held);
     }
