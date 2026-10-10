@@ -21,6 +21,14 @@ namespace ModsDude.Client.Wpf.Shell.Tray;
 /// </remarks>
 public sealed class SingleInstance : IDisposable
 {
+    /// <summary>
+    /// Passed to the copy a restart starts. It waits for the copy that started it to exit rather than
+    /// asking it to come forward.
+    /// </summary>
+    public const string RestartArgument = "--restarted";
+
+    private static readonly TimeSpan _restartWait = TimeSpan.FromSeconds(15);
+
     // Per install, not per machine: a debug build must be able to run beside the copy somebody is
     // actually using rather than being turned into a request to bring that one forward.
     private static string MutexName => $@"Local\{AppIdentity.Name}.Client.Instance";
@@ -37,15 +45,6 @@ public sealed class SingleInstance : IDisposable
         _mutex = mutex;
         _activate = activate;
     }
-
-
-    /// <summary>
-    /// Passed to the copy a restart starts. It waits for the copy that started it to exit rather than
-    /// asking it to come forward.
-    /// </summary>
-    public const string RestartArgument = "--restarted";
-
-    private static readonly TimeSpan _restartWait = TimeSpan.FromSeconds(15);
 
 
     /// <summary>
