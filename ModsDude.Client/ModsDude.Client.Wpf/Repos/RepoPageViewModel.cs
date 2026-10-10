@@ -20,6 +20,7 @@ using ModsDude.Client.Wpf.Shell.Sidebar;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Windows;
 
 namespace ModsDude.Client.Wpf.Repos;
 public partial class RepoPageViewModel
@@ -40,6 +41,7 @@ public partial class RepoPageViewModel
     /// </summary>
     private readonly IReadOnlyDictionary<RepoSection, MenuItemViewModel> _sections;
     private readonly ISavegameStore _savegames;
+    private readonly ISavegameBindingStore _bindings;
     private readonly IProfileSyncStatusService _syncStatus;
 
     /// <summary>
@@ -77,6 +79,7 @@ public partial class RepoPageViewModel
         RepoSavegamesPageViewModel.Factory repoSavegamesPageViewModelFactory,
         RepoArchivePageViewModel.Factory repoArchivePageViewModelFactory,
         ISavegameStore savegames,
+        ISavegameBindingStore bindings,
         IProfileSyncStatusService syncStatus,
         IProfileStore profileStore,
         IProfileService profileService,
@@ -100,6 +103,7 @@ public partial class RepoPageViewModel
 
         _repo = repo;
         _savegames = savegames;
+        _bindings = bindings;
         _syncStatus = syncStatus;
         _createProfilePageViewModelFactory = createProfilePageViewModelFactory;
         _profilePageViewModelFactory = profilePageViewModelFactory;
@@ -178,6 +182,7 @@ public partial class RepoPageViewModel
         Profiles = [];
         _profileStore.ProfileCreated += OnProfileCreated;
         _profilesSynchronizer = new(_profileStore.Live(repo.Id), Profiles, MapProfileToVm, x => x.Title, NaturalOrder.Comparer);
+        UpdateSavesBadge();
 
         // A repo with nothing connected is a repo nothing works in, so being pushed at the one thing
         // that fixes that beats landing on an overview describing it - where there is anything to
@@ -188,6 +193,7 @@ public partial class RepoPageViewModel
         _repo.Games.CollectionChanged += OnGamesChanged;
         _repo.PropertyChanged += OnRepoChanged;
         _syncStatus.Changed += OnSyncStatusChanged;
+        _bindings.BindingsChanged += OnBindingsChanged;
         NavManager.PropertyChanged += OnNavigationChanged;
     }
 
@@ -250,6 +256,7 @@ public partial class RepoPageViewModel
         _repo.Games.CollectionChanged -= OnGamesChanged;
         _repo.PropertyChanged -= OnRepoChanged;
         _syncStatus.Changed -= OnSyncStatusChanged;
+        _bindings.BindingsChanged -= OnBindingsChanged;
         NavManager.PropertyChanged -= OnNavigationChanged;
 
         _profilesSynchronizer.Dispose();
@@ -616,6 +623,7 @@ public partial class RepoPageViewModel
             NavManager.GoBackCommand.Execute(null);
         }
 
+        UpdateSavesBadge();
         OnPropertyChanged(nameof(ShowConnectGame));
     }
 
@@ -637,6 +645,19 @@ public partial class RepoPageViewModel
         {
             profile.SyncState = _syncStatus.StateOf(_repo, profile.Id);
         }
+    }
+
+
+    private void OnBindingsChanged(object? sender, EventArgs e)
+        => Application.Current?.Dispatcher.InvokeAsync(UpdateSavesBadge);
+
+    /// <summary>Marks Saves while a save from this repo is checked out into a slot of the connected game.</summary>
+    private void UpdateSavesBadge()
+    {
+        var held = ConnectedGame() is Game game
+            && _bindings.GetBindings(game.Identity).Any(x => x.RepoId == _repo.Id);
+
+        _sections.GetValueOrDefault(RepoSection.Saves)?.Badge = held ? "Checked out" : null;
     }
 
 

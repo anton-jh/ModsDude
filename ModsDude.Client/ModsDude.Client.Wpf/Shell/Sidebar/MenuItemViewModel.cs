@@ -114,6 +114,13 @@ public partial class MenuItemViewModel
     /// </summary>
     public string TagText => Tag is null ? "" : $" #{Tag}";
 
+    /// <summary>A short state drawn as a chip under the title, or null for none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasBadge))]
+    private string? _badge;
+
+    public bool HasBadge => Badge is not null;
+
     /// <summary>
     /// Whether the entry names a thing somebody called something - a repo or a profile - rather than a
     /// place the app offers. Such a name can be any length, so its row gets two lines; a fixed label
