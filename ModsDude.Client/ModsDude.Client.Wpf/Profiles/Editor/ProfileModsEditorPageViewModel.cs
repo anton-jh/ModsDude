@@ -59,6 +59,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly NoticeCenterViewModel _notices;
     private readonly IResourceLeases _leases;
     private readonly IToastService _toasts;
+    private readonly TimeProvider _time;
     private readonly ActiveProfile _activeProfile;
     private readonly CancellationTokenSource _cancellation = new();
     private readonly List<Game> _watchedGames = [];
@@ -102,7 +103,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         IDriftMonitor driftMonitor,
         NoticeCenterViewModel notices,
         IResourceLeases leases,
-        IToastService toasts)
+        IToastService toasts,
+        TimeProvider time)
     {
         _repo = repo;
         _profile = profile;
@@ -120,6 +122,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _notices = notices;
         _leases = leases;
         _toasts = toasts;
+        _time = time;
         _activeProfile = new ActiveProfile(repo.Id, profile.Id);
 
         _catalog = catalogFactory.Create(repo);
@@ -277,7 +280,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     #region The one path
 
-    private ProfileEditorInputs Inputs() => new(_history.Current.Draft, _catalogView)
+    private ProfileEditorInputs Inputs() => new(_history.Current.Draft, _catalogView, _time.GetLocalNow())
     {
         IncludeRegistered = Sources.IncludeRegistered,
         ProfileSources = Sources.EnabledProfiles,

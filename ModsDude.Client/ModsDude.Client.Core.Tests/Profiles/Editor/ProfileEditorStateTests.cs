@@ -104,7 +104,7 @@ public class ProfileEditorStateTests
 
         var state = ProfileEditorState.Compute(new ProfileEditorInputs(draft, Catalog(
             [Registered("pinned", "1.0", 0), Registered("other", "1.0", 0)],
-            [standbyOnly, Local("other", "2.0", Usb), Local("pinned", "3.0", Usb)])));
+            [standbyOnly, Local("other", "2.0", Usb), Local("pinned", "3.0", Usb)]), Now));
 
         var row = state.Row("pinned");
 
