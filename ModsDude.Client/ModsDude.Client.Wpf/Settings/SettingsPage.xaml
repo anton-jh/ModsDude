@@ -243,15 +243,6 @@
                                           IsChecked="{Binding CloseToTray, Mode=TwoWay}" />
 
                                 <CheckBox Margin="0 12 0 0"
-                                          Content="Show Windows notifications when ModsDude is not in front"
-                                          IsChecked="{Binding Notifications, Mode=TwoWay}" />
-
-                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                           Margin="28 4 0 0"
-                                           Text="For drift and savegames that need attention, and for what a finished action would otherwise tell a window nobody is looking at. Clicking one opens ModsDude." />
-
-                                <CheckBox Margin="0 12 0 0"
                                           Content="Start ModsDude when I sign in to Windows"
                                           IsEnabled="{Binding IsAutostartAvailable}"
                                           IsChecked="{Binding StartWithWindows, Mode=TwoWay}" />
@@ -260,6 +251,37 @@
                                            TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                                            Margin="28 4 0 0"
                                            Text="{Binding AutostartNote}" />
+
+                            </StackPanel>
+                        </GroupBox>
+                    </Border>
+
+                    <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="4"
+                            Padding="16"
+                            Margin="0 16 0 0">
+                        <GroupBox Header="Windows notifications" Padding="0 16 0 16">
+                            <StackPanel Orientation="Vertical">
+
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                           Text="Shown while ModsDude is not in front. Clicking one opens ModsDude. Notifications inside the window always show." />
+
+                                <CheckBox Margin="0 12 0 0"
+                                          Content="Mod folders and savegames that need attention"
+                                          IsChecked="{Binding NotifyDrift, Mode=TwoWay}" />
+
+                                <CheckBox Margin="0 12 0 0"
+                                          Content="Reminders to check in a played savegame"
+                                          IsChecked="{Binding NotifyCheckInReminders, Mode=TwoWay}" />
+
+                                <CheckBox Margin="0 12 0 0"
+                                          Content="Finished actions"
+                                          IsChecked="{Binding NotifyFinishedActions, Mode=TwoWay}" />
+
+                                <CheckBox Margin="0 12 0 0"
+                                          Content="Friend activity"
+                                          IsChecked="{Binding NotifyFriendActivity, Mode=TwoWay}" />
 
                             </StackPanel>
                         </GroupBox>

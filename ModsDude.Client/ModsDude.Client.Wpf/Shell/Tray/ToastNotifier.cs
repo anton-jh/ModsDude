@@ -1,6 +1,7 @@
 using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Notices;
+using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -15,11 +16,11 @@ namespace ModsDude.Client.Wpf.Shell.Tray;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Two sources, one rule.</b> Drift notices from the column and the in-app toasts a finished action
-/// puts up at the bottom of the window are both drawn to a window that, in the tray or behind the game,
-/// nobody is looking at. Each becomes a Windows toast exactly when the window is not the thing in front
-/// of the user - hidden, minimised, or simply not the active window - and never otherwise, so somebody
-/// working in the app is not told twice.
+/// <b>Four sources, one rule.</b> Drift notices, check-in reminders, the in-app toasts a finished
+/// action puts up and friend activity are all drawn to a window that, in the tray or behind the game,
+/// nobody may be looking at. Each becomes a Windows toast exactly when the window is not the thing in
+/// front of the user - hidden, minimised, or simply not the active window - and its kind is switched
+/// on in <see cref="NotificationSettings"/>, so somebody working in the app is not told twice.
 /// </para>
 /// <para>
 /// <b>What a drift toast is worth is decided in Core</b> - see <see cref="DriftToastPlanner"/> - which
@@ -74,7 +75,7 @@ public sealed class ToastNotifier(
     }
 
 
-    private bool Enabled => settings.Read(x => x.Background.Notifications);
+    private bool Allows(Func<NotificationSettings, bool> kind) => settings.Read(x => kind(x.Notifications));
 
     private bool WindowInFront => window.IsVisible
         && window.WindowState is not WindowState.Minimized
@@ -90,7 +91,7 @@ public sealed class ToastNotifier(
         var toast = _planner.Observe(
             live,
             environment.ReposLoaded,
-            WindowInFront || Enabled is false,
+            WindowInFront || Allows(x => x.Drift) is false,
             holdBack: x => DriftToastPlanner.IsPlayInProgress(x, drifted, sessions.IsRunning));
 
         if (toast is null)
@@ -125,7 +126,7 @@ public sealed class ToastNotifier(
             {
                 var toast = _planner.Remind(save);
 
-                if (Enabled is false || WindowInFront)
+                if (Allows(x => x.CheckInReminders) is false || WindowInFront)
                 {
                     continue;
                 }
@@ -145,7 +146,7 @@ public sealed class ToastNotifier(
     /// </summary>
     private void OnAppToast(string message, ToastSeverity severity)
     {
-        if (Enabled is false)
+        if (Allows(x => x.FinishedActions) is false)
         {
             return;
         }
@@ -178,7 +179,7 @@ public sealed class ToastNotifier(
     /// </remarks>
     private void OnFriendNews(object? sender, IReadOnlyList<FriendNews> news)
     {
-        if (Enabled is false)
+        if (Allows(x => x.FriendActivity) is false)
         {
             return;
         }

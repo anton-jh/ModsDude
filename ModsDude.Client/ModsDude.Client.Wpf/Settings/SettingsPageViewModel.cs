@@ -121,7 +121,10 @@ public partial class SettingsPageViewModel
         _downloadLimit = DescribeLimit(settings.Transfers.DownloadBytesPerSecond);
         _uploadLimit = DescribeLimit(settings.Transfers.UploadBytesPerSecond);
         _closeToTray = settings.Background.CloseToTray;
-        _notifications = settings.Background.Notifications;
+        _notifyDrift = settings.Notifications.Drift;
+        _notifyCheckInReminders = settings.Notifications.CheckInReminders;
+        _notifyFinishedActions = settings.Notifications.FinishedActions;
+        _notifyFriendActivity = settings.Notifications.FriendActivity;
         _startWithWindows = autostart.State is AutostartState.On;
 
         foreach (var volume in modFolderVolumes)
@@ -184,9 +187,19 @@ public partial class SettingsPageViewModel
     [ObservableProperty]
     private bool _closeToTray;
 
-    /// <summary>Whether Windows notifications may be sent while the window is not in front.</summary>
+    // Which Windows notifications may be sent while the window is not in front. See NotificationSettings.
+
     [ObservableProperty]
-    private bool _notifications;
+    private bool _notifyDrift;
+
+    [ObservableProperty]
+    private bool _notifyCheckInReminders;
+
+    [ObservableProperty]
+    private bool _notifyFinishedActions;
+
+    [ObservableProperty]
+    private bool _notifyFriendActivity;
 
     /// <summary>
     /// Whether the app starts with Windows. Read from Windows rather than from a setting of ours - see
@@ -292,7 +305,10 @@ public partial class SettingsPageViewModel
             settings.Transfers.UploadBytesPerSecond = ParseLimit(UploadLimit);
 
             settings.Background.CloseToTray = CloseToTray;
-            settings.Background.Notifications = Notifications;
+            settings.Notifications.Drift = NotifyDrift;
+            settings.Notifications.CheckInReminders = NotifyCheckInReminders;
+            settings.Notifications.FinishedActions = NotifyFinishedActions;
+            settings.Notifications.FriendActivity = NotifyFriendActivity;
         });
 
         // Into the live limiters as well as the file, so a download already running slows down - or
@@ -830,7 +846,13 @@ public partial class SettingsPageViewModel
 
     partial void OnCloseToTrayChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
 
-    partial void OnNotificationsChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+    partial void OnNotifyDriftChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+
+    partial void OnNotifyCheckInRemindersChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+
+    partial void OnNotifyFinishedActionsChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+
+    partial void OnNotifyFriendActivityChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
 
     partial void OnStartWithWindowsChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
 

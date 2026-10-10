@@ -26,6 +26,8 @@ public class ClientSettings
     /// <summary>How the app behaves while nobody is looking at it. See <see cref="BackgroundSettings"/>.</summary>
     public BackgroundSettings Background { get; init; } = new();
 
+    public NotificationSettings Notifications { get; init; } = new();
+
     /// <summary>
     /// Which volume's store serves the mod folders on a volume, keyed by volume root. A volume
     /// served by its own store materialises by hardlink; one served from another disk materialises
@@ -116,14 +118,28 @@ public class BackgroundSettings
     public bool CloseToTray { get; set; } = true;
 
     /// <summary>
-    /// Whether the app may put up Windows notifications while its window is not in front: drift, and
-    /// the toasts a finished action would otherwise draw to a window nobody is looking at.
-    /// </summary>
-    public bool Notifications { get; set; } = true;
-
-    /// <summary>
     /// Whether the user has been told, once, that closing the window leaves the app in the tray. Kept
     /// so the explanation is given the first time it is needed and never again.
     /// </summary>
     public bool TrayHintShown { get; set; }
+}
+
+
+/// <summary>
+/// Which kinds of Windows notification the app may put up while its window is not in front. The
+/// window's own toasts and notices show regardless.
+/// </summary>
+public class NotificationSettings
+{
+    /// <summary>Mod folders and savegames that need attention.</summary>
+    public bool Drift { get; set; } = true;
+
+    /// <summary>A game closed with a checked-out savegame played in it.</summary>
+    public bool CheckInReminders { get; set; } = true;
+
+    /// <summary>The toasts a finished action draws in the window.</summary>
+    public bool FinishedActions { get; set; } = true;
+
+    /// <summary>Friends switching profile, checking out a savegame or starting to play.</summary>
+    public bool FriendActivity { get; set; } = true;
 }
