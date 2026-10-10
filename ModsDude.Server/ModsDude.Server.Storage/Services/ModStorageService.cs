@@ -1,26 +1,19 @@
 ﻿using Azure;
 using Azure.Storage.Blobs;
-using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Sas;
 using ModsDude.Server.Application.Dependencies;
+using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
 using System.Runtime.CompilerServices;
 
 namespace ModsDude.Server.Storage.Services;
 internal class ModStorageService(
-    BlobServiceClient blobServiceClient)
+    BlobServiceClient blobServiceClient,
+    ITimeService timeService)
     : IModStorageService
 {
     private const string _modsContainerName = "mods";
-    private const int _sasLifetime = 30;
-
-    /// <summary>
-    /// How far a SAS is backdated to absorb the difference between this server's clock and the
-    /// storage account's. Generous on purpose: the cost of too much is a credential usable slightly
-    /// earlier than intended, and the cost of too little is an upload that fails outright.
-    /// </summary>
-    private static readonly TimeSpan _clockSkewAllowance = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// Sent as <c>x-ms-meta-sha256</c>. The client writes it as it uploads, because the API never
@@ -111,40 +104,11 @@ internal class ModStorageService(
         => StoredBlobDeletion.DeleteIfUnchangedAsync(blobServiceClient.GetBlobContainerClient(_modsContainerName), blob, cancellationToken);
 
 
-    private async Task<string> GetSasLink(RepoId repoId, ModId modId, ModVersionId versionId, BlobSasPermissions permissions, CancellationToken cancellationToken)
+    private Task<string> GetSasLink(RepoId repoId, ModId modId, ModVersionId versionId, BlobSasPermissions permissions, CancellationToken cancellationToken)
     {
         var blobClient = GetBlobClient(repoId, modId, versionId);
 
-        // Backdated, because the signature is checked against Azure's clock rather than ours. A key
-        // starting at this instant is rejected outright by a storage node running a second behind -
-        // "Signature not valid in the specified time frame" - and the failure lands on the client
-        // mid-upload, where it reads as an authentication problem rather than as the clock difference
-        // it is. The window still ends _sasLifetime from now, so nothing is valid for longer.
-        var startsOn = DateTimeOffset.UtcNow - _clockSkewAllowance;
-        var expiresOn = DateTimeOffset.UtcNow.AddMinutes(_sasLifetime);
-
-        var userDelegationKey = await blobServiceClient.GetUserDelegationKeyAsync(startsOn, expiresOn, cancellationToken);
-
-        var sasBuilder = new BlobSasBuilder(permissions, expiresOn)
-        {
-            BlobContainerName = blobClient.BlobContainerName,
-            BlobName = blobClient.Name,
-            Resource = "b",
-            StartsOn = startsOn,
-            ExpiresOn = expiresOn
-        };
-
-        var uriBuilder = new BlobUriBuilder(blobClient.Uri)
-        {
-            Sas = sasBuilder.ToSasQueryParameters(
-                userDelegationKey,
-                blobClient
-                    .GetParentBlobContainerClient()
-                    .GetParentBlobServiceClient()
-                    .AccountName)
-        };
-
-        return uriBuilder.ToUri().ToString();
+        return BlobSasLinks.CreateAsync(blobServiceClient, blobClient, permissions, new DateTimeOffset(timeService.Now()), cancellationToken);
     }
 
     private BlobClient GetBlobClient(RepoId repoId, ModId modId, ModVersionId versionId)
