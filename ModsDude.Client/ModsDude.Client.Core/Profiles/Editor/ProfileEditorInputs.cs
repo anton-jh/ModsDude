@@ -5,7 +5,7 @@ using ModsDude.Client.Core.Models;
 namespace ModsDude.Client.Core.Profiles.Editor;
 
 /// <summary>Everything a <see cref="ProfileEditorState"/> is computed from.</summary>
-public sealed record ProfileEditorInputs(ProfileDraft Draft, ProfileEditorCatalog Catalog)
+public sealed record ProfileEditorInputs(ProfileDraft Draft, ProfileEditorCatalog Catalog, DateTimeOffset Now)
 {
     /// <summary>Whether the repo's registered versions are among what the left list offers.</summary>
     public bool IncludeRegistered { get; init; } = true;
@@ -30,8 +30,6 @@ public sealed record ProfileEditorInputs(ProfileDraft Draft, ProfileEditorCatalo
 
     public PinnedModFilter PinnedFilter { get; init; }
     public ModListSort PinnedSort { get; init; } = new();
-
-    public DateTimeOffset Now { get; init; } = DateTimeOffset.Now;
 }
 
 

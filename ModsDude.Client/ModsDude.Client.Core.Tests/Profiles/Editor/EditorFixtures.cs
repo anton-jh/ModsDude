@@ -11,6 +11,7 @@ internal static class EditorFixtures
 {
     public static readonly ModSource Downloads = new(ModSourceId.Downloads, "Downloads", @"C:\Downloads", ModSourceKind.Downloads);
     public static readonly ModSource Usb = new(ModSourceId.ForFolder(@"E:\mods"), "mods", @"E:\mods", ModSourceKind.AdHoc);
+    public static readonly DateTimeOffset Now = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
 
 
     public static ProfileModPin Pin(string modId, string version, bool locked = false)
@@ -39,7 +40,7 @@ internal static class EditorFixtures
     }
 
     public static ProfileEditorInputs Inputs(ProfileDraft draft, params CatalogModVersion[] visible)
-        => new(draft, Catalog(visible));
+        => new(draft, Catalog(visible), Now);
 
     public static ProfileDraft Draft(params ProfileModPin[] saved) => new(saved, []);
 
