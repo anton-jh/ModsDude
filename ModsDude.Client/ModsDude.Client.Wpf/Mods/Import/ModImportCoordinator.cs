@@ -223,9 +223,9 @@ public sealed class ModImportCoordinator(
         private readonly ConcurrentDictionary<ModVersionIdentity, byte> _finished = new();
 
         /// <summary>
-        /// The live subtask per version. Opened on the first report that is not an outcome and closed
-        /// on the one that is; anything left behind by a path that reports neither goes when the task
-        /// itself does.
+        /// The live subtask per version. Opened when the version starts work and closed on its
+        /// outcome; anything left behind by a path that reports no outcome goes when the task itself
+        /// does. A queued version is only counted: waiting its turn is not slow work.
         /// </summary>
         private readonly ConcurrentDictionary<ModVersionIdentity, IBackgroundSubtask> _subtasks = new();
 
@@ -243,7 +243,7 @@ public sealed class ModImportCoordinator(
                     done.Dispose();
                 }
             }
-            else
+            else if (value.Phase is not ModImportPhase.Queued)
             {
                 Track(value, name);
             }
