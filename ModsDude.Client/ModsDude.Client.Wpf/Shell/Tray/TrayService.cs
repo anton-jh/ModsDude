@@ -32,6 +32,7 @@ public sealed class TrayService(
     NoticeCenterViewModel notices,
     IClientSettingsRepository settings,
     IUpdateStatus updates,
+    IAppLifetime lifetime,
     ILogger<TrayService> logger) : ITrayService
 {
     private static string _name => AppIdentity.DisplayName;
@@ -57,7 +58,7 @@ public sealed class TrayService(
             _restart.Click += async (_, _) => await updates.RestartAsync();
 
             var quit = new MenuItem { Header = "Quit" };
-            quit.Click += (_, _) => window.Quit();
+            quit.Click += async (_, _) => await lifetime.QuitAsync();
 
             var menu = new ContextMenu();
             menu.Items.Add(open);

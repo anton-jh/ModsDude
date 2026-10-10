@@ -125,7 +125,9 @@ public partial class App : Application
         // Before configuration or the container: a second copy has nothing to build. It has told the
         // first one to come forward - unless it was a background start, which asks for nothing - and
         // has no reason to exist any longer.
-        _singleInstance = SingleInstance.TryAcquire(bringExistingForward: background is false);
+        _singleInstance = SingleInstance.TryAcquire(
+            bringExistingForward: background is false,
+            restarted: e.Args.Contains(SingleInstance.RestartArgument, StringComparer.OrdinalIgnoreCase));
 
         if (_singleInstance is null)
         {
@@ -487,6 +489,7 @@ public partial class App : Application
         // Updates for an installed copy. One object seen two ways: the column and the tray ask it whether
         // something is waiting, the Settings page and the shell ask it for the rest.
         services.AddSingleton(sp => new Lazy<MainWindow>(sp.GetRequiredService<MainWindow>));
+        services.AddSingleton<IAppLifetime, AppLifetime>();
         services.AddSingleton<IAppUpdater>(sp => new AppUpdater(
             configuration["Updates:GithubRepository"],
             configuration["Updates:Directory"],

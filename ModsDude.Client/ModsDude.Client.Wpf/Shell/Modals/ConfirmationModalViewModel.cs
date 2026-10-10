@@ -82,6 +82,17 @@ public partial class ConfirmationModalViewModel(
             "Keep it here");
     }
 
+    /// <param name="leaving">What the user is about to do, as a verb phrase: "navigate away", "quit".</param>
+    public static ConfirmationModalViewModel ConfirmDiscardChanges(string leaving)
+    {
+        return new ConfirmationModalViewModel(
+            "Discard changes?",
+            $"Are you sure you want to {leaving}?\nThis will discard your current changes!",
+            IconKind.Warning,
+            "Discard changes",
+            "Stay");
+    }
+
     public static ConfirmationModalViewModel ConfirmDisconnectGame(string name)
     {
         return new ConfirmationModalViewModel(

@@ -40,16 +40,38 @@ public sealed class SingleInstance : IDisposable
 
 
     /// <summary>
+    /// Passed to the copy a restart starts. It waits for the copy that started it to exit rather than
+    /// asking it to come forward.
+    /// </summary>
+    public const string RestartArgument = "--restarted";
+
+    private static readonly TimeSpan _restartWait = TimeSpan.FromSeconds(15);
+
+
+    /// <summary>
     /// Claims the instance, or asks whoever holds it to come forward.
     /// </summary>
     /// <param name="bringExistingForward">False for a start the app made itself, which must not surface a window.</param>
+    /// <param name="restarted">Whether this copy was started by a restart, and so waits for the instance to be released.</param>
     /// <returns>Null where another copy is running - it has been told, and this one should exit.</returns>
-    public static SingleInstance? TryAcquire(bool bringExistingForward = true)
+    public static SingleInstance? TryAcquire(bool bringExistingForward, bool restarted)
     {
-        var mutex = new Mutex(initiallyOwned: true, MutexName, out var created);
+        var mutex = new Mutex(initiallyOwned: false, MutexName);
         var activate = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateName);
 
-        if (created is false)
+        bool acquired;
+
+        try
+        {
+            acquired = mutex.WaitOne(restarted ? _restartWait : TimeSpan.Zero);
+        }
+        catch (AbandonedMutexException)
+        {
+            // The holder exited without releasing it - a crash or a kill. Ownership passes to us.
+            acquired = true;
+        }
+
+        if (acquired is false)
         {
             // This process was just started by the user, so it is allowed to hand the foreground to
             // the copy it is about to ask to take it. Without this, Windows answers the running copy's

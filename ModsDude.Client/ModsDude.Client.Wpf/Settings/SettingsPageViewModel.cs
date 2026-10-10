@@ -10,6 +10,7 @@ using ModsDude.Client.Core.Startup;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.Shared;
+using ModsDude.Client.Wpf.Shell;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
@@ -59,6 +60,7 @@ public partial class SettingsPageViewModel
     private readonly TransferLimits _transferLimits;
     private readonly IAutostartService _autostart;
     private readonly IAppUpdater _updater;
+    private readonly IAppLifetime _lifetime;
     private readonly Dictionary<string, ContentStoreViewModel> _storesByVolume = [];
 
     /// <summary>
@@ -81,8 +83,10 @@ public partial class SettingsPageViewModel
         IBackgroundTaskReporter backgroundTasks,
         TransferLimits transferLimits,
         IAutostartService autostart,
-        IAppUpdater updater)
+        IAppUpdater updater,
+        IAppLifetime lifetime)
     {
+        _lifetime = lifetime;
         _settingsRepository = settingsRepository;
         _maintenance = maintenance;
         _imageCache = imageCache;
@@ -225,7 +229,45 @@ public partial class SettingsPageViewModel
 
     /// <summary>Restarts into the downloaded version. Asks first if something is still running.</summary>
     [RelayCommand]
-    private Task RestartToUpdate() => _updater.RestartAsync();
+    private async Task RestartToUpdate()
+    {
+        if (await ConfirmLeavingAsync("restart"))
+        {
+            await _updater.RestartAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task Restart()
+    {
+        if (await ConfirmLeavingAsync("restart"))
+        {
+            await _lifetime.RestartAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task Quit()
+    {
+        if (await ConfirmLeavingAsync("quit"))
+        {
+            await _lifetime.QuitAsync();
+        }
+    }
+
+    /// <summary>Asks before unsaved settings are lost to the app leaving. True where there are none.</summary>
+    private async Task<bool> ConfirmLeavingAsync(string leaving)
+    {
+        if (HasUnsavedChanges is false)
+        {
+            return true;
+        }
+
+        var modal = ConfirmationModalViewModel.ConfirmDiscardChanges(leaving);
+        await _modalService.Show(modal);
+
+        return modal.Result;
+    }
 
     /// <summary>
     /// The updater reports from whichever thread it happened to be on; everything bound here is the UI's.

@@ -213,7 +213,7 @@ public sealed class AppUpdater : IAppUpdater
 
         // The same question closing the window asks, because it is the same thing: leaving with work
         // still running stops it part way.
-        if (await _window.Value.PrepareForRestartAsync() is false)
+        if (await _window.Value.PrepareToLeaveAsync() is false)
         {
             return;
         }

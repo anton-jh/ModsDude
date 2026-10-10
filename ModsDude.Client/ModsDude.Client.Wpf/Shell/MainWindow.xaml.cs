@@ -13,12 +13,6 @@ public partial class MainWindow : Window
     /// </summary>
     private bool _closeConfirmed;
 
-    /// <summary>
-    /// Whether the close now under way is the user asking to leave rather than to tuck the window
-    /// away. See <see cref="Quit"/>.
-    /// </summary>
-    private bool _quitting;
-
 
     /// <summary>
     /// Whether closing the window should hide it instead. Set by the tray, and only while there is an
@@ -240,7 +234,7 @@ public partial class MainWindow : Window
 
         // Hiding is not leaving, so nothing that only matters on leaving is asked: whatever is
         // running keeps running behind the tray icon, which is the point of it.
-        if (_quitting is false && HideOnClose?.Invoke() is true)
+        if (HideOnClose?.Invoke() is true)
         {
             Hide();
 
@@ -254,19 +248,8 @@ public partial class MainWindow : Window
 
     private async Task ConfirmThenCloseAsync(MainWindowViewModel shell)
     {
-        // The question is a modal in this window's own slot, so a window that is hidden to the tray
-        // has to be brought back before it can be asked. Only when there is something to ask: quitting
-        // an idle app from the tray should not flash the window up on the way out.
-        if (shell.NeedsCloseConfirmation && IsVisible is false)
-        {
-            ShowFromTray();
-        }
-
         if (await shell.ConfirmCloseAsync() is false)
         {
-            // Not spent: the next close from the X hides again, and the next Quit asks again.
-            _quitting = false;
-
             return;
         }
 
@@ -329,15 +312,16 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Asks whether the app may leave for an update, and lets the close through if so.
+    /// Asks whether the app may leave - to quit, restart or update - and lets the close through if so.
     /// </summary>
     /// <remarks>
-    /// The same question as closing, and for the same reason: an update restarts the process, which stops
-    /// whatever is running part way. Skipped where nothing is - an idle app in the tray restarts without a
-    /// window flashing up on the way.
+    /// The same question as closing, and for the same reason: leaving stops whatever is running part
+    /// way. Skipped where nothing is - an idle app in the tray leaves without a window flashing up on
+    /// the way. The question is a modal in this window's own slot, so a hidden window is brought back
+    /// before it is asked.
     /// </remarks>
     /// <returns>False where the user would rather it kept working.</returns>
-    public async Task<bool> PrepareForRestartAsync()
+    public async Task<bool> PrepareToLeaveAsync()
     {
         if (DataContext is not MainWindowViewModel shell)
         {
@@ -357,17 +341,6 @@ public partial class MainWindow : Window
         AllowClose();
 
         return true;
-    }
-
-    /// <summary>
-    /// Leaves for real: the tray's Quit. Goes through the same close as the X, which is what puts the
-    /// "something is still running" question in front of it.
-    /// </summary>
-    public void Quit()
-    {
-        _quitting = true;
-
-        Close();
     }
 
     /// <summary>
