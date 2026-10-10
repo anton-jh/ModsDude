@@ -253,7 +253,7 @@ public partial class SettingsPageViewModel
 
 
     [RelayCommand]
-    public async Task SaveChanges()
+    public async Task SaveChanges(CancellationToken cancellationToken)
     {
         var errors = GetValidationErrors();
 
@@ -305,18 +305,12 @@ public partial class SettingsPageViewModel
         // A limit that has just come down is the third way a store ends up over it, and the only one
         // with a person watching. Before the measure, so what the rows then report is the size after
         // the trim rather than a number that shrinks a second later on its own.
-        await _maintenance.SweepAllAsync(CancellationToken.None);
+        await _maintenance.SweepAllAsync(cancellationToken);
 
         // The stores may now be somewhere else or allowed to be a different size, so what was
         // measured a moment ago is about a different set of folders.
         await RefreshUsageAsync();
     }
-
-    // There was a "Sweep to limit" button here. Keeping a store inside a limit the user typed is the
-    // app's promise to keep, not a chore to hand back to them - and a button is only pressed by the
-    // people who notice it. ContentStoreMaintenance.SweepAllAsync does it now, on the three events
-    // that can put a store over: startup, a finished import, and this page being saved with a smaller
-    // number in it.
 
     /// <summary>
     /// Reads every file in a store and drops the ones that are no longer what their name says.

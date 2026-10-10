@@ -67,6 +67,7 @@ public partial class App : Application
     private IReconnectWatcher? _reconnectWatcher;
     private IPlaySessionWatcher? _playSessionWatcher;
     private IGameConnectionToasts? _gameConnectionToasts;
+    private IContentStoreTidier? _storeTidier;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -199,7 +200,10 @@ public partial class App : Application
 
         RepairAutostart();
 
-        TidyStoresInBackground();
+        // The safety net under the size limit: a store that no longer serves any mod folder is never
+        // swept by a sync, and startup is the one moment guaranteed to come round for it.
+        _storeTidier = _serviceProvider.GetRequiredService<IContentStoreTidier>();
+        _storeTidier.Request();
 
         return new StartedApp(window, background);
     }
@@ -386,43 +390,9 @@ public partial class App : Application
         Interlocked.Exchange(ref _reconnectWatcher, null)?.Dispose();
         Interlocked.Exchange(ref _playSessionWatcher, null)?.Dispose();
         Interlocked.Exchange(ref _gameConnectionToasts, null)?.Dispose();
+        Interlocked.Exchange(ref _storeTidier, null)?.Dispose();
         Interlocked.Exchange(ref _tray, null)?.Dispose();
         Interlocked.Exchange(ref _singleInstance, null)?.Dispose();
-    }
-
-
-    /// <summary>
-    /// Puts every content store back inside its size limit, once, on the way up.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>The safety net under the limit.</b> Every apply sweeps the store it used, which covers the
-    /// ordinary case - but a store that no longer serves any mod folder is never visited by a sync at
-    /// all, and that is precisely the store quietly holding tens of gigabytes of a game somebody
-    /// uninstalled. Startup is the one moment guaranteed to come round for it.
-    /// </para>
-    /// <para>
-    /// <b>Off the UI thread and never awaited.</b> It walks each store's blob tree, which is thousands
-    /// of files, and nothing about showing a window depends on the answer. It logs; it has no other
-    /// way to fail, because a store that could not be tidied is only a store that is still too big.
-    /// </para>
-    /// </remarks>
-    private void TidyStoresInBackground()
-    {
-        var maintenance = _serviceProvider.GetRequiredService<IContentStoreMaintenance>();
-        var log = _serviceProvider.GetRequiredService<ILogger<App>>();
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await maintenance.SweepAllAsync(CancellationToken.None);
-            }
-            catch (Exception exception)
-            {
-                log.LogWarning(exception, "Could not tidy the content stores at startup.");
-            }
-        });
     }
 
 

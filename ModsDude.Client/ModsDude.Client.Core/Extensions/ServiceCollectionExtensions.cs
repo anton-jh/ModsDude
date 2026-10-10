@@ -44,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GameFiles.IGameFileEditor, GameFiles.GameFileEditor>();
         services.AddSingleton<GameProcesses.IGameRunningGuard, GameProcesses.GameRunningGuard>();
         services.AddSingleton<IContentStoreMaintenance, ContentStoreMaintenance>();
+        services.AddSingleton<IContentStoreTidier, ContentStoreTidier>();
         services.AddSingleton<Savegames.ISavegamePacker, Savegames.SavegamePacker>();
 
         // StateStore itself is registered by the host (App.xaml.cs), so this only names the seam the

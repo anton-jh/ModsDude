@@ -57,7 +57,7 @@ public sealed record ModImportOutcome(ModImportResult? Result, string? Refusal)
 /// </remarks>
 public sealed class ModImportCoordinator(
     IModImportService importService,
-    IContentStoreMaintenance maintenance,
+    IContentStoreTidier storeTidier,
     Lazy<IModalService> modalService,
     IBackgroundTaskReporter backgroundTasks,
     IResourceLeases leases) : IModImportCoordinator
@@ -123,26 +123,12 @@ public sealed class ModImportCoordinator(
         }
         finally
         {
-            // An import seeds what it registered into the store serving these mod folders, so it is
-            // one of only two things in the app that makes a store bigger - and unlike the other one
-            // it has no sync behind it to sweep afterwards. Without this a run of imports walks a
-            // store straight past its limit and leaves it there. In the finally because a cancelled
-            // or partly failed import has still seeded whatever got that far.
-            TidyStoresInBackground();
+            // An import seeds what it registered into the store serving these mod folders, with no
+            // sync behind it to sweep afterwards. In the finally because a cancelled or partly failed
+            // import has still seeded whatever got that far. Not awaited and not on the strip: it is
+            // housekeeping nobody asked for, and the import's result is what the caller waits on.
+            storeTidier.Request();
         }
-    }
-
-    /// <summary>
-    /// Puts the stores back inside their limits after an import has grown one.
-    /// </summary>
-    /// <remarks>
-    /// Not awaited and not reported: it is housekeeping nobody asked for, it skips any store still in
-    /// use, and the import's own result is what the caller is waiting on. Making somebody watch a
-    /// progress bar for it would be the opposite of the point.
-    /// </remarks>
-    private void TidyStoresInBackground()
-    {
-        _ = Task.Run(() => maintenance.SweepAllAsync(CancellationToken.None));
     }
 
     public int RecycleSuperseded(IReadOnlyList<ModSupersededFile> superseded)

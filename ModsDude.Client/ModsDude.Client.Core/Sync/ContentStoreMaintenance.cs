@@ -59,7 +59,12 @@ public sealed class ContentStoreMaintenance(
             .OrderBy(x => x.VolumeRoot, StringComparer.OrdinalIgnoreCase)];
     }
 
-    public async Task<long> SweepAllAsync(CancellationToken cancellationToken)
+    // On the thread pool: the work is synchronous (the claim is a try, the evict walks and deletes
+    // files), and some callers await this from the UI thread.
+    public Task<long> SweepAllAsync(CancellationToken cancellationToken)
+        => Task.Run(() => SweepAll(cancellationToken), cancellationToken);
+
+    private long SweepAll(CancellationToken cancellationToken)
     {
         long reclaimed = 0;
 
@@ -70,10 +75,7 @@ public sealed class ContentStoreMaintenance(
             reclaimed += SweepIfIdle(store, cancellationToken);
         }
 
-        // Nothing awaits inside the loop - the claim is a try and the evict is synchronous - but the
-        // signature stays asynchronous because every caller is firing this off the UI thread and
-        // would otherwise have to remember to.
-        return await Task.FromResult(reclaimed);
+        return reclaimed;
     }
 
     /// <summary>One store, if nothing else is using it. Returns the bytes it gave back.</summary>
