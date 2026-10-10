@@ -19,8 +19,10 @@ public class BackupStatusTests
             Assert.Null(tier.Newest);
             Assert.Null(tier.Oldest);
             Assert.Equal(0, tier.Count);
+            Assert.Equal(0, tier.TotalBytes);
         });
         Assert.Empty(overview.Unrecognised);
+        Assert.Equal(0, overview.TotalBytes);
     }
 
     [Fact]
@@ -55,7 +57,7 @@ public class BackupStatusTests
     }
 
     [Fact]
-    public void A_tier_reports_its_newest_oldest_and_count()
+    public void A_tier_reports_its_newest_oldest_count_and_total()
     {
         var overview = BackupStatus.Summarise(
             [
@@ -71,6 +73,24 @@ public class BackupStatusTests
         Assert.Equal(200, daily.Newest?.Length);
         Assert.Equal(_now.AddDays(-29), daily.Oldest?.TakenAt);
         Assert.Equal(3, daily.Count);
+        Assert.Equal(450, daily.TotalBytes);
+    }
+
+    [Fact]
+    public void The_overall_total_counts_every_tier_and_unrecognised_blobs()
+    {
+        var overview = BackupStatus.Summarise(
+            [
+                Blob("hourly", _now.AddHours(-1), length: 10),
+                Blob("hourly", _now.AddHours(-2), length: 20),
+                Blob("daily", _now.AddDays(-1), length: 300),
+                new("stray.txt", 4000)
+            ],
+            _now);
+
+        Assert.Equal(30, Tier(overview, BackupTier.Hourly).TotalBytes);
+        Assert.Equal(300, Tier(overview, BackupTier.Daily).TotalBytes);
+        Assert.Equal(4330, overview.TotalBytes);
     }
 
     [Fact]
@@ -91,6 +111,7 @@ public class BackupStatusTests
 
         Assert.Equal(forwards.Tiers, backwards.Tiers);
         Assert.Equal(forwards.Unrecognised, backwards.Unrecognised);
+        Assert.Equal(forwards.TotalBytes, backwards.TotalBytes);
         Assert.Equal(["another/stray", "stray.txt"], forwards.Unrecognised);
     }
 

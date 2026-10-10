@@ -10,11 +10,13 @@ public enum BackupFreshness
 
 /// <param name="Newest">The most recent backup of the tier, or <c>null</c> when it has none.</param>
 /// <param name="Oldest">The oldest backup of the tier still kept, or <c>null</c> when it has none.</param>
-public record BackupTierStatus(BackupTier Tier, BackupFreshness Freshness, StoredBackup? Newest, StoredBackup? Oldest, int Count);
+/// <param name="TotalBytes">The size of every backup of the tier still kept.</param>
+public record BackupTierStatus(BackupTier Tier, BackupFreshness Freshness, StoredBackup? Newest, StoredBackup? Oldest, int Count, long TotalBytes);
 
 
 /// <param name="Unrecognised">Names that don't match the layout <c>deploy/backup.sh</c> writes, sorted.</param>
-public record BackupOverview(IReadOnlyList<BackupTierStatus> Tiers, IReadOnlyList<string> Unrecognised);
+/// <param name="TotalBytes">The size of every blob in the container, unrecognised ones included.</param>
+public record BackupOverview(IReadOnlyList<BackupTierStatus> Tiers, IReadOnlyList<string> Unrecognised, long TotalBytes);
 
 
 public static class BackupStatus
@@ -34,9 +36,12 @@ public static class BackupStatus
     {
         var backups = new List<StoredBackup>();
         var unrecognised = new List<string>();
+        var totalBytes = 0L;
 
         foreach (var blob in listed)
         {
+            totalBytes += blob.Length;
+
             if (StoredBackup.TryParse(blob, out var backup))
             {
                 backups.Add(backup);
@@ -51,7 +56,7 @@ public static class BackupStatus
             .Select(tier => SummariseTier(tier, backups.Where(x => x.Tier == tier).ToList(), now))
             .ToList();
 
-        return new BackupOverview(tiers, [.. unrecognised.Order(StringComparer.Ordinal)]);
+        return new BackupOverview(tiers, [.. unrecognised.Order(StringComparer.Ordinal)], totalBytes);
     }
 
 
@@ -59,7 +64,7 @@ public static class BackupStatus
     {
         if (backups.Count == 0)
         {
-            return new BackupTierStatus(tier, BackupFreshness.Missing, null, null, 0);
+            return new BackupTierStatus(tier, BackupFreshness.Missing, null, null, 0, 0);
         }
 
         var ordered = backups
@@ -72,6 +77,6 @@ public static class BackupStatus
             ? BackupFreshness.Ok
             : BackupFreshness.Late;
 
-        return new BackupTierStatus(tier, freshness, newest, ordered[0], ordered.Count);
+        return new BackupTierStatus(tier, freshness, newest, ordered[0], ordered.Count, ordered.Sum(x => x.Length));
     }
 }
