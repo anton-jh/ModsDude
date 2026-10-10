@@ -25,8 +25,10 @@
     </WindowChrome.WindowChrome>
 
     <!-- Margined by the code-behind while maximised: a window without a frame still gets maximised as if it
-         had one, so its outer edge hangs off every side of the screen by the frame's width. -->
-    <Grid x:Name="Root" RowDefinitions="auto *">
+         had one, so its outer edge hangs off every side of the screen by the frame's width.
+         Opaque, because the theme's backdrop extends the glass frame over the whole window, and Windows
+         draws its own caption buttons into it wherever the window is see-through. -->
+    <Grid x:Name="Root" RowDefinitions="auto *" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
 
     <shell:WindowTitleBar Grid.Row="0" />
 
