@@ -1,5 +1,3 @@
-using ModsDude.Client.Core.GameAdapters;
-using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Repos;
 
 namespace ModsDude.Client.Wpf.Shell.Navigation;
@@ -31,7 +29,7 @@ public sealed class ShellNavigationService : IShellNavigationService
         }
     }
 
-    public async Task<bool> GoToProfileModsAsync(Guid repoId, Guid profileId, ModTargetRef driftedTarget)
+    public async Task<bool> GoToAsync(Guid repoId, RepoDestination destination)
     {
         if (_shell is not MainPageViewModel shell)
         {
@@ -43,65 +41,7 @@ public sealed class ShellNavigationService : IShellNavigationService
             return false;
         }
 
-        if (await repoPage.TrySelectProfileAsync(profileId) is not ProfilePageViewModel profilePage)
-        {
-            return false;
-        }
-
-        return profilePage.TrySelectMods(driftedTarget);
-    }
-
-    public async Task<bool> GoToSavegamesAsync(Guid repoId, Guid savegameId)
-    {
-        if (_shell is not MainPageViewModel shell)
-        {
-            return false;
-        }
-
-        if (await shell.TrySelectRepoAsync(repoId) is not RepoPageViewModel repoPage)
-        {
-            return false;
-        }
-
-        // The saves list for a live savegame, the Archive with the row picked out for an archived
-        // one - an archived savegame has no row on the saves list, and the archive row is the
-        // savegame.
-        return await repoPage.TrySelectSavegameAsync(savegameId);
-    }
-
-    public async Task<bool> GoToProfileHistoryAsync(Guid repoId, Guid profileId, int? selectRevision = null)
-    {
-        if (_shell is not MainPageViewModel shell)
-        {
-            return false;
-        }
-
-        if (await shell.TrySelectRepoAsync(repoId) is not RepoPageViewModel repoPage)
-        {
-            return false;
-        }
-
-        if (await repoPage.TrySelectProfileAsync(profileId) is not ProfilePageViewModel profilePage)
-        {
-            return false;
-        }
-
-        return profilePage.TrySelectHistory(selectRevision);
-    }
-
-    public async Task<bool> GoToProfileAsync(Guid repoId, Guid profileId)
-    {
-        if (_shell is not MainPageViewModel shell)
-        {
-            return false;
-        }
-
-        if (await shell.TrySelectRepoAsync(repoId) is not RepoPageViewModel repoPage)
-        {
-            return false;
-        }
-
-        return await repoPage.TrySelectProfileAsync(profileId) is not null;
+        return await repoPage.TrySelectAsync(destination);
     }
 
     public void GoToJoinOrCreate() => _shell?.SelectJoinOrCreate();

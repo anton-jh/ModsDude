@@ -432,7 +432,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (await _navigation.GoToProfileModsAsync(repoId, profileId, target) is false)
+        if (await _navigation.GoToAsync(repoId, new RepoDestination.ProfileMods(profileId, target)) is false)
         {
             card?.ReportStatus("That profile could not be opened from here - pick it in the sidebar.");
         }
@@ -447,7 +447,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (await _navigation.GoToSavegamesAsync(repoId, savegameId) is false)
+        if (await _navigation.GoToAsync(repoId, new RepoDestination.Savegame(savegameId)) is false)
         {
             card?.ReportStatus("That save could not be opened from here - pick its repo in the sidebar.");
         }

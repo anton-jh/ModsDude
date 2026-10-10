@@ -66,6 +66,9 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Background" Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
                         </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

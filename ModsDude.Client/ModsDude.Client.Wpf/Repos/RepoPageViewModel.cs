@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
@@ -25,26 +26,21 @@ public partial class RepoPageViewModel
     : PageViewModel, INavigationHost, IDisposable
 {
     private readonly Repo _repo;
-    private readonly RepoAdminPageViewModel.Factory _repoAdminPageViewModelFactory;
     private readonly CreateProfilePageViewModel.Factory _createProfilePageViewModelFactory;
     private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
     private readonly IProfileStore _profileStore;
     private readonly IProfileService _profileService;
     private readonly ConnectGamePageViewModel.Factory _connectGamePageViewModelFactory;
-    private readonly RepoModsPageViewModel.Factory _repoModsPageViewModelFactory;
     private readonly GameSettingsPageViewModel.Factory _gameSettingsPageViewModelFactory;
+    private readonly ILogger<RepoPageViewModel> _logger;
+
     /// <summary>
-    /// The Saves entry, kept so a deep link can select it - a blocked prune names the savegame
-    /// snapshots holding a revision, and a link that could not open the list would be no link at all.
-    /// Null for a game with no savegames, where there is no entry to select.
+    /// Every section entry in the menu, kept so a deep link can select one. A section the adapter has
+    /// no capability for has no entry.
     /// </summary>
-    private readonly MenuItemViewModel? _savesMenuItem;
-    private readonly MenuItemViewModel _archiveMenuItem;
+    private readonly IReadOnlyDictionary<RepoSection, MenuItemViewModel> _sections;
     private readonly ISavegameStore _savegames;
     private readonly IProfileSyncStatusService _syncStatus;
-
-    /// <summary>The Overview entry, kept so the header's repo name can take the user back to it.</summary>
-    private readonly MenuItemViewModel _overviewMenuItem;
 
     /// <summary>
     /// Create profile, which is a page like any other but is reached from the "+" on the Profiles
@@ -86,95 +82,91 @@ public partial class RepoPageViewModel
         IProfileService profileService,
         IGameRepository gameRepository,
         INavigationLockService navigationLockService,
-        IModalService modalService)
+        IModalService modalService,
+        ILogger<RepoPageViewModel> logger)
     {
+        _logger = logger;
+
         // A game installed since the repo list was last read is picked up on opening the repo rather
         // than on the next refresh. Quietly where it is still not there: the overview says so.
         try
         {
             gameRepository.ConnectAutomatically(repo.Adapter);
         }
-        catch (UserFriendlyException)
+        catch (UserFriendlyException exception)
         {
+            _logger.LogInformation(exception, "Could not connect the game of repo {RepoId} on opening it.", repo.Id);
         }
 
         _repo = repo;
         _savegames = savegames;
         _syncStatus = syncStatus;
-        _repoAdminPageViewModelFactory = repoAdminPageViewModelFactory;
         _createProfilePageViewModelFactory = createProfilePageViewModelFactory;
         _profilePageViewModelFactory = profilePageViewModelFactory;
         _profileStore = profileStore;
         _profileService = profileService;
         _connectGamePageViewModelFactory = connectGamePageViewModelFactory;
-        _repoModsPageViewModelFactory = repoModsPageViewModelFactory;
         _gameSettingsPageViewModelFactory = gameSettingsPageViewModelFactory;
         NavManager = new(navigationLockService, modalService);
 
-        // Every entry whose page is gated end to end is closed here rather than left to fail at the
-        // server. Mods is absent from this list on purpose: a guest can read the catalog, and only
-        // the actions on it are refused - see RepoModsPageViewModel.
         var isGuest = repo.MembershipLevel < RepoMembershipLevel.Member;
-        var isNotAdmin = repo.MembershipLevel < RepoMembershipLevel.Admin;
 
         var overviewLinks = new RepoOverviewLinks(ConnectGame, ConfigureGame);
 
-        _overviewMenuItem = new MenuItemViewModel("Overview", () => repoOverviewPageViewModelFactory.Create(repo, overviewLinks))
-            .WithIcon(MenuIcons.Overview);
+        // The one-shot selections are read and cleared by the page they were set for, so they apply
+        // to the page a deep link opens and not to the next one somebody reaches through the menu.
+        PageViewModel CreateSectionPage(RepoSection section)
+        {
+            switch (section)
+            {
+                case RepoSection.Overview:
+                    return repoOverviewPageViewModelFactory.Create(repo, overviewLinks);
+                case RepoSection.Admin:
+                    return repoAdminPageViewModelFactory.Create(repo);
+                case RepoSection.Members:
+                    return repoMembersPageViewModelFactory.Create(repo);
+                case RepoSection.Mods:
+                    return repoModsPageViewModelFactory.Create(repo);
+                case RepoSection.Saves:
+                    var select = _selectSavegameOnce;
+                    _selectSavegameOnce = null;
+
+                    return repoSavegamesPageViewModelFactory.Create(repo, select);
+                case RepoSection.Archive:
+                    var highlight = _highlightInArchiveOnce;
+                    _highlightInArchiveOnce = null;
+
+                    var archive = repoArchivePageViewModelFactory.Create(repo);
+                    archive.HighlightOnArrival(highlight);
+
+                    return archive;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(section), section, null);
+            }
+        }
+
+        var sections = RepoSections.Of(repo);
+
+        _sections = sections.ToDictionary(
+            x => x.Section,
+            x =>
+            {
+                var item = new MenuItemViewModel(x.Title, () => CreateSectionPage(x.Section)).WithIcon(x.Icon);
+
+                return x.RestrictedReason is string reason ? item.Restrict(reason) : item;
+            });
+
+        MenuItems = [.. sections.Select(x => _sections[x.Section])];
 
         _connectGameItem = new MenuItemViewModel("Connect game", () => _connectGamePageViewModelFactory.Create(repo, NavManager.GoBackCommand))
-            .Under(_overviewMenuItem);
+            .Under(OverviewItem);
 
         // Falls back to Connect game rather than asserting: the game can be disconnected between the
         // click and the page being built, and the shell must not fall over on that race.
         _configureGameItem = new MenuItemViewModel("Configure game", () => ConnectedGame() is Game game
             ? _gameSettingsPageViewModelFactory.Create(_repo, game, NavManager.GoBackCommand)
             : _connectGamePageViewModelFactory.Create(_repo, NavManager.GoBackCommand))
-            .Under(_overviewMenuItem);
-
-        MenuItems = [
-            _overviewMenuItem,
-            new MenuItemViewModel("Admin", () => _repoAdminPageViewModelFactory.Create(_repo))
-                .WithIcon(MenuIcons.Admin)
-                .RestrictIf(isNotAdmin, "Only an admin can rename this repo, change its game settings or delete it."),
-            new MenuItemViewModel("Members", () => repoMembersPageViewModelFactory.Create(repo))
-                .WithIcon(MenuIcons.Members)
-                .RestrictIf(isGuest, "Guests cannot see who else is in a repo, or invite anybody to it. Ask an admin for a higher membership level."),
-            new MenuItemViewModel("Mods", () => _repoModsPageViewModelFactory.Create(repo))
-                .WithIcon(MenuIcons.Mods)
-        ];
-
-        // Saves is the sibling of Mods and sits next to it, and is *absent* rather than closed where
-        // the adapter has no savegames - exactly as Mods would be for an adapter with no mods. That is
-        // the distinction between a restriction and a capability: a level is something to ask an admin
-        // for, and a game that has no savegames is not.
-        if (repo.Adapter.CanSupportSavegames)
-        {
-            _savesMenuItem = new MenuItemViewModel("Saves", () =>
-            {
-                var select = _selectSavegameOnce;
-                _selectSavegameOnce = null;
-
-                return repoSavegamesPageViewModelFactory.Create(repo, select);
-            }).WithIcon(MenuIcons.Saves);
-
-            MenuItems.Add(_savesMenuItem);
-        }
-
-        // Open to everybody: a profile that quietly vanished from the sidebar has to be explainable
-        // to whoever noticed, and only an admin can move anything in or out of it anyway.
-        _archiveMenuItem = new MenuItemViewModel("Archive", () =>
-        {
-            var highlight = _highlightInArchiveOnce;
-            _highlightInArchiveOnce = null;
-
-            var page = repoArchivePageViewModelFactory.Create(repo);
-            page.HighlightOnArrival(highlight);
-
-            return page;
-        }).WithIcon(MenuIcons.Archive);
-
-        MenuItems.Add(_archiveMenuItem);
+            .Under(OverviewItem);
 
         // Not in the menu: it is an act on the list below it rather than a place, so it lives as a "+"
         // on that list's header. It is still an entry - selecting it is how the page opens and how the
@@ -191,7 +183,7 @@ public partial class RepoPageViewModel
         // that fixes that beats landing on an overview describing it - where there is anything to
         // do about it here. A game that connects by itself has no connect page, and the overview is
         // where it says it was not found.
-        NavManager.Selected = NeedsConnecting() ? _connectGameItem : _overviewMenuItem;
+        NavManager.Selected = NeedsConnecting() ? _connectGameItem : OverviewItem;
 
         _repo.Games.CollectionChanged += OnGamesChanged;
         _repo.PropertyChanged += OnRepoChanged;
@@ -274,7 +266,7 @@ public partial class RepoPageViewModel
     [RelayCommand]
     private void GoToOverview()
     {
-        NavManager.Selected = _overviewMenuItem;
+        NavManager.Selected = OverviewItem;
     }
 
     [RelayCommand]
@@ -300,49 +292,86 @@ public partial class RepoPageViewModel
         NavManager.Selected = _createProfileMenuItem;
     }
 
+    /// <returns>
+    /// False where the destination is absent or closed to this membership level, the profile is gone,
+    /// or navigation was refused.
+    /// </returns>
+    public async Task<bool> TrySelectAsync(RepoDestination destination)
+    {
+        switch (destination)
+        {
+            case RepoDestination.Section { Kind: RepoSection.Saves }:
+                return TrySelectSavegames(select: null);
+            case RepoDestination.Section { Kind: RepoSection.Archive }:
+                return TrySelectArchive(highlight: null);
+            case RepoDestination.Section section:
+                return _sections.GetValueOrDefault(section.Kind) is MenuItemViewModel item && TrySelect(item);
+            case RepoDestination.ConnectGame:
+                return NeedsConnecting() && TrySelect(_connectGameItem);
+            case RepoDestination.Savegame savegame:
+                return await TrySelectSavegameAsync(savegame.SavegameId);
+            case RepoDestination.Profile profile:
+                return await TrySelectProfileAsync(profile.ProfileId) is not null;
+            case RepoDestination.ProfileMods mods:
+                return await TrySelectProfileAsync(mods.ProfileId) is ProfilePageViewModel modsPage
+                    && modsPage.TrySelectMods(mods.ScanTarget);
+            case RepoDestination.ProfileHistory history:
+                return await TrySelectProfileAsync(history.ProfileId) is ProfilePageViewModel historyPage
+                    && historyPage.TrySelectHistory(history.Revision);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(destination), destination, null);
+        }
+    }
+
     /// <summary>
-    /// Selects the repo's Saves list.
+    /// Selects an entry unless it is closed to this membership level. A closed entry refuses the
+    /// click in the menu, and a deep link must not get past it either.
     /// </summary>
+    private bool TrySelect(MenuItemViewModel item)
+    {
+        if (item.IsAvailable is false)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(NavManager.Current, item) is false)
+        {
+            NavManager.Selected = item;
+        }
+
+        return ReferenceEquals(NavManager.Current, item);
+    }
+
     /// <param name="select">
     /// The savegame to arrive with selected. Set by a link about one savegame - a notice, a toast, a
     /// profile's history - which would otherwise land on whichever row happens to be first.
     /// </param>
     /// <returns>False where this repo has no savegames, or navigation was refused.</returns>
-    public bool TrySelectSavegames(Guid? select = null)
+    private bool TrySelectSavegames(Guid? select)
     {
-        if (_savesMenuItem is null)
+        if (_sections.GetValueOrDefault(RepoSection.Saves) is not MenuItemViewModel saves)
         {
             return false;
         }
 
-        // Read and cleared by the menu item's factory, so it applies to the page this call opens and
-        // not to the next one somebody reaches through the sidebar.
-        _selectSavegameOnce = select;
-
-        if (ReferenceEquals(NavManager.Current, _savesMenuItem) is false)
+        if (ReferenceEquals(NavManager.Current, saves))
         {
-            NavManager.Selected = _savesMenuItem;
-        }
-        else
-        {
-            // Already open, so selecting it again constructs nothing and the factory never runs. Tell
-            // the page the user is looking at instead.
-            _selectSavegameOnce = null;
-
+            // Already open, so selecting it again constructs nothing. Tell the page the user is
+            // looking at instead.
             if (NavManager.CurrentPage is RepoSavegamesPageViewModel page && select is Guid savegameId)
             {
                 page.Select(savegameId);
             }
+
+            return true;
         }
 
-        var selected = ReferenceEquals(NavManager.Current, _savesMenuItem);
+        _selectSavegameOnce = select;
 
-        if (selected is false)
-        {
-            // Refused, so nothing read the value and it must not be waiting for whoever opens Saves
-            // next.
-            _selectSavegameOnce = null;
-        }
+        var selected = TrySelect(saves);
+
+        // Refused, so nothing read the value and it must not be waiting for whoever opens Saves next.
+        _selectSavegameOnce = null;
 
         return selected;
     }
@@ -362,7 +391,7 @@ public partial class RepoPageViewModel
     /// so on a fresh window every savegame would look archived.
     /// </para>
     /// </remarks>
-    public async Task<bool> TrySelectSavegameAsync(Guid savegameId)
+    private async Task<bool> TrySelectSavegameAsync(Guid savegameId)
     {
         var archived = false;
 
@@ -372,27 +401,26 @@ public partial class RepoPageViewModel
 
             archived = _savegames.Archived(_repo.Id).Any(x => x.Id == savegameId);
         }
-        catch (Exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // A link that cannot be followed does nothing, which is what it did before. Falling
-            // through to the live list is the better guess of the two.
+            // Falling through to the live list is the better guess of the two.
+            _logger.LogInformation(exception, "Could not read the archived savegames of repo {RepoId} to find savegame {SavegameId}.", _repo.Id, savegameId);
         }
 
         return archived
             ? TrySelectArchive(savegameId)
-            : TrySelectSavegames(select: savegameId);
+            : TrySelectSavegames(savegameId);
     }
 
     /// <summary>
-    /// Selects a profile and hands back the page it opened, for a deep link from outside the sidebar.
-    /// Falls through to the archive for one that has been put away - see
-    /// <see cref="OpenArchivedProfileAsync"/>.
+    /// Selects a profile and hands back the page it opened. Falls through to the archive for one that
+    /// has been put away - see <see cref="OpenArchivedProfileAsync"/>.
     /// </summary>
     /// <returns>
     /// Null where the profile is gone entirely, or where the page in front of the user refused to be
     /// navigated away from.
     /// </returns>
-    public async Task<ProfilePageViewModel?> TrySelectProfileAsync(Guid profileId)
+    private async Task<ProfilePageViewModel?> TrySelectProfileAsync(Guid profileId)
     {
         // A repo opened a moment ago has its profile list still on the way, so a deep link arriving
         // first has to wait for it rather than concluding the profile does not exist.
@@ -403,38 +431,32 @@ public partial class RepoPageViewModel
 
         var entry = FindProfile(profileId) ?? await OpenArchivedProfileAsync(profileId);
 
-        if (entry is null)
+        if (entry is null || TrySelect(entry) is false)
         {
             return null;
-        }
-
-        if (ReferenceEquals(NavManager.Current, entry) is false)
-        {
-            NavManager.Selected = entry;
         }
 
         return NavManager.CurrentPage as ProfilePageViewModel;
     }
 
-    /// <summary>
-    /// Selects the repo's Archive, optionally with one row picked out.
-    /// </summary>
+    /// <param name="highlight">The row to pick out on arrival, or null for none.</param>
     /// <returns>False where navigation was refused.</returns>
-    public bool TrySelectArchive(Guid? highlight = null)
+    private bool TrySelectArchive(Guid? highlight)
     {
+        var archive = _sections[RepoSection.Archive];
+
+        if (ReferenceEquals(NavManager.Current, archive))
+        {
+            return true;
+        }
+
         _highlightInArchiveOnce = highlight;
 
-        if (ReferenceEquals(NavManager.Current, _archiveMenuItem) is false)
-        {
-            NavManager.Selected = _archiveMenuItem;
-        }
+        var selected = TrySelect(archive);
 
-        var selected = ReferenceEquals(NavManager.Current, _archiveMenuItem);
-
-        if (selected is false)
-        {
-            _highlightInArchiveOnce = null;
-        }
+        // Refused, so nothing read the value and it must not be waiting for whoever opens the
+        // Archive next.
+        _highlightInArchiveOnce = null;
 
         return selected;
     }
@@ -467,10 +489,12 @@ public partial class RepoPageViewModel
             archived = (await _profileService.GetArchivedProfiles(_repo.Id, CancellationToken.None))
                 .FirstOrDefault(x => x.Id == profileId);
         }
-        catch (Exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // A link that cannot be followed is a link that does nothing, which is what it did
-            // before. Nothing here is worth interrupting the user for.
+            // A link that cannot be followed does nothing. Nothing here is worth interrupting the
+            // user for.
+            _logger.LogInformation(exception, "Could not read the archived profiles of repo {RepoId} to open profile {ProfileId}.", _repo.Id, profileId);
+
             return null;
         }
 
@@ -544,6 +568,8 @@ public partial class RepoPageViewModel
             NavManager.Selected = profile;
         }
     }
+
+    private MenuItemViewModel OverviewItem => _sections[RepoSection.Overview];
 
     private ProfileItemViewModel? FindProfile(Guid profileId)
         => Profiles.OfType<ProfileItemViewModel>().FirstOrDefault(x => x.Id == profileId);
