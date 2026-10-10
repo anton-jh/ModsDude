@@ -3,86 +3,25 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:account="clr-namespace:ModsDude.Client.Wpf.Account"
              xmlns:friends="clr-namespace:ModsDude.Client.Wpf.Friends"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=friends:FriendActivityListViewModel, IsDesignTimeCreatable=False}"
              d:DesignWidth="640">
 
-    <!-- Who is on which profile, whoever is playing first, then the most recently active. -->
+    <!-- Which profiles others are on, the most recently active first. -->
     <StackPanel Orientation="Vertical">
 
         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                    TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                   Visibility="{Binding HasRows, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                   Visibility="{Binding HasGroups, Converter={StaticResource InverseBoolToVisibilityConverter}}"
                    Text="{Binding EmptyText}" />
 
-        <ItemsControl ItemsSource="{Binding Rows}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="{x:Type friends:FriendActivityRowViewModel}">
-                    <Grid Margin="0 0 0 12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
-                        <account:UserAvatar Grid.Column="0"
-                                          Width="32" Height="32"
-                                          VerticalAlignment="Top" Margin="0 2 12 0"
-                                          DataContext="{Binding Avatar}" />
-
-                        <StackPanel Grid.Column="1" Orientation="Vertical">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock FontWeight="SemiBold"
-                                           Text="{Binding Name}" />
-                                <TextBlock Margin="6 0 0 0" FontFamily="Consolas"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Visibility="{Binding HasTag, Converter={StaticResource BoolToVisibilityConverter}}"
-                                           Text="{Binding Tag}" />
-                                <TextBlock Margin="8 0 0 0"
-                                           TextTrimming="CharacterEllipsis"
-                                           Text="{Binding ProfileLine}" />
-                                <Border Margin="8 0 0 0"
-                                        Style="{StaticResource SuccessStatusChip}"
-                                        Visibility="{Binding IsPlaying, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="Playing" />
-                                </Border>
-                            </StackPanel>
-
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextTrimming="CharacterEllipsis"
-                                       Visibility="{Binding HasWhere, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       Text="{Binding Where}" />
-
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextTrimming="CharacterEllipsis"
-                                       Visibility="{Binding HasProfileDetail, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       Text="{Binding ProfileDetail}" />
-
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap"
-                                       Text="{Binding Summary}" />
-                        </StackPanel>
-
-                        <!-- The button where following would change something, and the
-                             reason in its place where it would not. -->
-                        <StackPanel Grid.Column="2" Orientation="Vertical" Margin="12 0 0 0"
-                                    VerticalAlignment="Center">
-                            <Button Style="{DynamicResource AccentButtonStyle}"
-                                    Content="{Binding FollowLabel}"
-                                    Command="{Binding DataContext.FollowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                    CommandParameter="{Binding}"
-                                    IsEnabled="{Binding IsIdle}"
-                                    Visibility="{Binding CanFollow, Converter={StaticResource BoolToVisibilityConverter}}" />
-                            <TextBlock MaxWidth="220" TextWrapping="Wrap" TextAlignment="Right"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Visibility="{Binding HasFollowBlocked, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       Text="{Binding FollowBlocked}" />
-                        </StackPanel>
-                    </Grid>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
+        <ItemsControl ItemsSource="{Binding Groups}">
+            <ItemsControl.ItemContainerStyle>
+                <Style TargetType="ContentPresenter">
+                    <Setter Property="Margin" Value="0 0 0 12" />
+                </Style>
+            </ItemsControl.ItemContainerStyle>
         </ItemsControl>
     </StackPanel>
 </UserControl>

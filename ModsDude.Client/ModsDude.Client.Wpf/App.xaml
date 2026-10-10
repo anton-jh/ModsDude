@@ -14,6 +14,7 @@
                 <ResourceDictionary Source="Shell/Sidebar/SidebarResources.xaml"/>
                 <ResourceDictionary Source="Account/AccountTemplates.xaml"/>
                 <ResourceDictionary Source="Home/HomeTemplates.xaml"/>
+                <ResourceDictionary Source="Friends/FriendsTemplates.xaml"/>
                 <ResourceDictionary Source="Repos/ReposTemplates.xaml"/>
                 <ResourceDictionary Source="Profiles/ProfilesTemplates.xaml"/>
                 <ResourceDictionary Source="Mods/ModsTemplates.xaml"/>

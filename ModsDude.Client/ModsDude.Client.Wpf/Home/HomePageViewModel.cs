@@ -6,7 +6,7 @@ using System.Collections.Specialized;
 
 namespace ModsDude.Client.Wpf.Home;
 
-/// <summary>Where the app opens: what friends are playing, with the button that joins them, over every repo.</summary>
+/// <summary>Where the app opens: every repo, with the profiles friends are on in it and the button that joins them.</summary>
 public sealed partial class HomePageViewModel : PageViewModel, IDisposable
 {
     private readonly IRepoStore _repos;
@@ -29,7 +29,7 @@ public sealed partial class HomePageViewModel : PageViewModel, IDisposable
     }
 
 
-    /// <summary>Every friend's game in every repo, whoever is playing first.</summary>
+    /// <summary>What friends are on in every repo, which the repo list splits by repo.</summary>
     public FriendActivityListViewModel Friends { get; }
 
     public HomeRepoListViewModel RepoList { get; }
