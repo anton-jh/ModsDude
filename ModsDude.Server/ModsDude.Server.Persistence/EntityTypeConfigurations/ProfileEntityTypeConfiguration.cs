@@ -28,5 +28,7 @@ internal class ProfileEntityTypeConfiguration : IEntityTypeConfiguration<Profile
         builder.HasIndex(x => new { x.RepoId, x.Name })
             .IsUnique()
             .HasFilter("\"ArchivedAt\" IS NULL");
+
+        builder.HasIndex(x => new { x.RepoId, x.CreateRequestId }).IsUnique();
     }
 }

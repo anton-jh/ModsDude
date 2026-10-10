@@ -235,9 +235,8 @@
 
                     <sidebar:SidebarHeader Grid.Row="1" Title="Profiles"
                                            AddCommand="{Binding CreateProfileCommand}"
-                                           IsAddSelected="{Binding IsCreateProfileSelected}"
-                                           IsAddEnabled="{Binding CreateProfileItem.IsAvailable}"
-                                           AddToolTip="{Binding CreateProfileItem.ToolTip}" />
+                                           IsAddEnabled="{Binding CanCreateProfiles}"
+                                           AddToolTip="{Binding CreateProfileToolTip}" />
 
                     <ListView Grid.Row="2"
                               ItemsSource="{Binding Path=Profiles}"

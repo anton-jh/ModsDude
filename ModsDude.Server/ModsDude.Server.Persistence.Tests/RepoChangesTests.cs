@@ -63,7 +63,7 @@ public class RepoChangesTests(DatabaseFixture fixture)
             await dbContext.SaveChangesAsync(CancellationToken.None);
         }
 
-        var other = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
+        var other = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
 
         using (var dbContext = fixture.CreateDbContext())
         {
@@ -165,7 +165,7 @@ public class RepoChangesTests(DatabaseFixture fixture)
     {
         var caller = await GivenAUser();
         var (repoId, profileId) = await GivenARepo(caller);
-        var other = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
+        var other = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
 
         using (var dbContext = fixture.CreateDbContext())
         {
@@ -265,7 +265,7 @@ public class RepoChangesTests(DatabaseFixture fixture)
             AdapterData = new AdapterData(new AdapterIdentifier("_test@1"), new AdapterConfiguration("{}"))
         };
 
-        var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
+        var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
         var revision = profile.CreateRevision([], [], admin, DateTime.UtcNow, origin: ProfileRevisionOrigin.Created);
 
         dbContext.Repos.Add(repo);

@@ -61,7 +61,7 @@ public class EntityVersionTests
     [Fact]
     public void A_profile_counts_renames_and_archiving_apart_from_its_ignored_mods()
     {
-        var profile = new Profile(new RepoId(Guid.NewGuid()), new ProfileName("Season 4"), _now);
+        var profile = new Profile(new RepoId(Guid.NewGuid()), new ProfileName("Season 4"), _now, new ProfileCreateRequestId(Guid.NewGuid()));
 
         profile.Rename(new ProfileName("Season 5"));
         profile.Rename(new ProfileName("Season 5"));

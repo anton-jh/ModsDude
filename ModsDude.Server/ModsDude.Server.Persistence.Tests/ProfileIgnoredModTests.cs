@@ -206,7 +206,7 @@ public class ProfileIgnoredModTests(DatabaseFixture fixture)
 
         dbContext.ModVersions.AddRange(pinnedVersion, CreateVersion(repo.Id, _noise));
 
-        var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
+        var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
 
         dbContext.Profiles.Add(profile);
         dbContext.ProfileRevisions.Add(profile.CreateRevision(
@@ -225,7 +225,7 @@ public class ProfileIgnoredModTests(DatabaseFixture fixture)
     {
         using var dbContext = fixture.CreateDbContext();
 
-        var profile = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
+        var profile = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
 
         dbContext.Profiles.Add(profile);
         dbContext.ProfileRevisions.Add(profile.CreateRevision([], [], _author, DateTime.UtcNow, origin: ProfileRevisionOrigin.Created));

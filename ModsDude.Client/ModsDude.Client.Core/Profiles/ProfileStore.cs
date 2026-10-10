@@ -84,15 +84,16 @@ public sealed class ProfileStore(
 
     public async Task<Profile> CreateAsync(
         Guid repoId,
+        Guid requestId,
         string name,
         CopyProfileRevisionRequest? copyFrom,
         CancellationToken cancellationToken)
     {
-        var request = new CreateProfileRequest { Name = name, CopyFrom = copyFrom };
+        var request = new CreateProfileRequest { RequestId = requestId, Name = name, CopyFrom = copyFrom };
 
         var created = await _loads.WriteAsync(
             repoId,
-            ct => NameTaken(() => profilesClient.CreateProfileV1Async(repoId, request, ct)),
+            ct => profilesClient.CreateProfileV1Async(repoId, request, ct),
             UpsertCreated,
             cancellationToken);
 
@@ -107,7 +108,7 @@ public sealed class ProfileStore(
         {
             await _loads.WriteAsync(
                 profile.RepoId,
-                ct => NameTaken(() => profilesClient.UpdateProfileV1Async(profile.RepoId, profile.Id, request, ct)),
+                ct => profilesClient.UpdateProfileV1Async(profile.RepoId, profile.Id, request, ct),
                 dto => Upsert(dto),
                 cancellationToken);
         }
@@ -146,7 +147,7 @@ public sealed class ProfileStore(
     {
         var restored = await _loads.WriteAsync(
             repoId,
-            ct => NameTaken(() => profilesClient.RestoreProfileV1Async(repoId, profileId, new RestoreRequest { Name = name }, ct)),
+            ct => profilesClient.RestoreProfileV1Async(repoId, profileId, new RestoreRequest { Name = name }, ct),
             UpsertCreated,
             cancellationToken);
 
@@ -314,16 +315,4 @@ public sealed class ProfileStore(
     /// <summary>The model a write just put in the list, which is gone only where the user changed meanwhile.</summary>
     private Profile Held(ProfileDto dto)
         => Find(dto.RepoId, dto.Id) ?? throw new OperationCanceledException("The user changed while the profile was being written.");
-
-    private static async Task<T> NameTaken<T>(Func<Task<T>> send)
-    {
-        try
-        {
-            return await send();
-        }
-        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type == ProblemType.NameTaken)
-        {
-            throw new UserFriendlyException("Name taken", null, exception);
-        }
-    }
 }

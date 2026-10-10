@@ -181,7 +181,7 @@ public class GameActivityQueryTests(DatabaseFixture fixture)
 
         repo.AddMember(memberUser, RepoMembershipLevel.Member);
 
-        var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
+        var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
         var revision = profile.CreateRevision([], [], admin, DateTime.UtcNow, origin: ProfileRevisionOrigin.Created);
 
         dbContext.Repos.Add(repo);

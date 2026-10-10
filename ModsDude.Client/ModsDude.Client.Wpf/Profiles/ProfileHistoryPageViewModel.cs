@@ -553,26 +553,42 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
             return;
         }
 
-        var modal = new ProfileSaveAsModalViewModel(revision.Number, $"{_profile.Name} (revision {revision.Number})");
-
-        await _modalService.Show(modal);
-
-        if (modal.Result is not string name)
-        {
-            return;
-        }
+        // One per profile the user means to create, so a retry after a lost answer finds the profile it made.
+        var requestId = Guid.NewGuid();
 
         IsWorking = true;
 
         try
         {
-            await _profileStore.CreateAsync(
-                _repo.Id,
-                name,
-                new CopyProfileRevisionRequest { ProfileId = _profile.Id, Revision = revision.Number },
-                cancellationToken);
+            var name = await NameModalViewModel.AskAsync(
+                _modalService,
+                "Name the new profile",
+                $"The new profile starts as a copy of revision {revision.Number}. Nothing about this profile changes.",
+                $"{_profile.Name} (revision {revision.Number})",
+                "Create it",
+                async name =>
+                {
+                    try
+                    {
+                        await _profileStore.CreateAsync(
+                            _repo.Id,
+                            requestId,
+                            name,
+                            new CopyProfileRevisionRequest { ProfileId = _profile.Id, Revision = revision.Number },
+                            cancellationToken);
 
-            _toasts.Show($"Created '{name}' from revision {revision.Number}. It is in the sidebar.");
+                        return null;
+                    }
+                    catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NameTaken)
+                    {
+                        return "That name is taken.";
+                    }
+                });
+
+            if (name is not null)
+            {
+                _toasts.Show($"Created '{name}' from revision {revision.Number}. It is in the sidebar.");
+            }
         }
         finally
         {

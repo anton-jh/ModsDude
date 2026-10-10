@@ -2,8 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared">
 
-    <DataTemplate DataType="{x:Type shared:RenameModalViewModel}">
-        <shared:RenameModal />
+    <DataTemplate DataType="{x:Type shared:NameModalViewModel}">
+        <shared:NameModal />
     </DataTemplate>
 
 </ResourceDictionary>

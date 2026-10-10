@@ -520,7 +520,6 @@ public partial class App : Application
         services.AddTransient<CreateRepoFormViewModel>();
         services.AddTransient<TrustCodeFormViewModel>();
         services.AddSingleton<RepoPageViewModel.Factory>();
-        services.AddSingleton<CreateProfilePageViewModel.Factory>();
         services.AddSingleton<ProfilePageViewModel.Factory>();
         services.AddSingleton<ProfileOverviewPageViewModel.Factory>();
         services.AddSingleton<ManageProfileViewModel.Factory>();

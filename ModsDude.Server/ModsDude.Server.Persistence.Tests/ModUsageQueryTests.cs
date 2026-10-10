@@ -168,7 +168,7 @@ public class ModUsageQueryTests(DatabaseFixture fixture)
 
         var profile = existing is ProfileId profileId
             ? (await dbContext.Profiles.GetAsync(repoId, profileId, CancellationToken.None))!
-            : new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
+            : new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
 
         var dependencies = new List<ModDependency>();
 

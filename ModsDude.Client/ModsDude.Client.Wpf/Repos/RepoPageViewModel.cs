@@ -14,6 +14,7 @@ using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Repos.Archive;
 using ModsDude.Client.Wpf.Repos.Members;
 using ModsDude.Client.Wpf.Savegames;
+using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Sidebar;
@@ -27,12 +28,12 @@ public partial class RepoPageViewModel
     : PageViewModel, INavigationHost, IDisposable
 {
     private readonly Repo _repo;
-    private readonly CreateProfilePageViewModel.Factory _createProfilePageViewModelFactory;
     private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
     private readonly IProfileStore _profileStore;
     private readonly IProfileService _profileService;
     private readonly ConnectGamePageViewModel.Factory _connectGamePageViewModelFactory;
     private readonly GameSettingsPageViewModel.Factory _gameSettingsPageViewModelFactory;
+    private readonly IModalService _modalService;
     private readonly ILogger<RepoPageViewModel> _logger;
 
     /// <summary>
@@ -43,12 +44,6 @@ public partial class RepoPageViewModel
     private readonly ISavegameStore _savegames;
     private readonly ISavegameBindingStore _bindings;
     private readonly IProfileSyncStatusService _syncStatus;
-
-    /// <summary>
-    /// Create profile, which is a page like any other but is reached from the "+" on the Profiles
-    /// header rather than from the menu - so it is held here, not in <see cref="MenuItems"/>.
-    /// </summary>
-    private readonly MenuItemViewModel _createProfileMenuItem;
 
     /// <summary>Which row the Archive should pick out on arrival. One-shot, like the others.</summary>
     private Guid? _highlightInArchiveOnce;
@@ -71,7 +66,6 @@ public partial class RepoPageViewModel
         RepoAdminPageViewModel.Factory repoAdminPageViewModelFactory,
         RepoOverviewPageViewModel.Factory repoOverviewPageViewModelFactory,
         RepoMembersPageViewModel.Factory repoMembersPageViewModelFactory,
-        CreateProfilePageViewModel.Factory createProfilePageViewModelFactory,
         ProfilePageViewModel.Factory profilePageViewModelFactory,
         GameSettingsPageViewModel.Factory gameSettingsPageViewModelFactory,
         ConnectGamePageViewModel.Factory connectGamePageViewModelFactory,
@@ -89,6 +83,7 @@ public partial class RepoPageViewModel
         ILogger<RepoPageViewModel> logger)
     {
         _logger = logger;
+        _modalService = modalService;
 
         // A game installed since the repo list was last read is picked up on opening the repo rather
         // than on the next refresh. Quietly where it is still not there: the overview says so.
@@ -105,15 +100,12 @@ public partial class RepoPageViewModel
         _savegames = savegames;
         _bindings = bindings;
         _syncStatus = syncStatus;
-        _createProfilePageViewModelFactory = createProfilePageViewModelFactory;
         _profilePageViewModelFactory = profilePageViewModelFactory;
         _profileStore = profileStore;
         _profileService = profileService;
         _connectGamePageViewModelFactory = connectGamePageViewModelFactory;
         _gameSettingsPageViewModelFactory = gameSettingsPageViewModelFactory;
         NavManager = new(navigationLockService, modalService);
-
-        var isGuest = repo.MembershipLevel < RepoMembershipLevel.Member;
 
         var overviewLinks = new RepoOverviewLinks(ConnectGame, ConfigureGame);
 
@@ -172,13 +164,6 @@ public partial class RepoPageViewModel
             : _connectGamePageViewModelFactory.Create(_repo, NavManager.GoBackCommand))
             .Under(OverviewItem);
 
-        // Not in the menu: it is an act on the list below it rather than a place, so it lives as a "+"
-        // on that list's header. It is still an entry - selecting it is how the page opens and how the
-        // header knows to draw the button as selected - and it keeps the membership rule it had.
-        _createProfileMenuItem = new MenuItemViewModel("Create profile", () => _createProfilePageViewModelFactory.Create(repo))
-            .WithIcon(MenuIcons.CreateProfile)
-            .RestrictIf(isGuest, "Guests cannot create profiles. Ask an admin for a higher membership level.");
-
         Profiles = [];
         _profileStore.ProfileCreated += OnProfileCreated;
         _profilesSynchronizer = new(_profileStore.Live(repo.Id), Profiles, MapProfileToVm, x => x.Title, NaturalOrder.Comparer);
@@ -236,13 +221,11 @@ public partial class RepoPageViewModel
     public bool ShowConnectGame => NeedsConnecting()
         && ReferenceEquals(NavManager.Current, _connectGameItem) is false;
 
-    /// <summary>Whether the Create profile page is showing, for the "+" to draw as selected.</summary>
-    public bool IsCreateProfileSelected => ReferenceEquals(NavManager.Selected, _createProfileMenuItem);
+    public bool CanCreateProfiles => _repo.MembershipLevel >= RepoMembershipLevel.Member;
 
-    /// <summary>
-    /// Carries the availability and the reason for the "+", so the membership rule stays where it was.
-    /// </summary>
-    public MenuItemViewModel CreateProfileItem => _createProfileMenuItem;
+    public string CreateProfileToolTip => CanCreateProfiles
+        ? "Create profile"
+        : "Guests cannot create profiles. Ask an admin for a higher membership level.";
 
 
     protected override void Init()
@@ -293,10 +276,37 @@ public partial class RepoPageViewModel
         }
     }
 
+    /// <summary>Asks for a name and creates an empty profile. <see cref="OnProfileCreated"/> opens it.</summary>
     [RelayCommand]
-    private void CreateProfile()
+    private async Task CreateProfile(CancellationToken cancellationToken)
     {
-        NavManager.Selected = _createProfileMenuItem;
+        if (CanCreateProfiles is false)
+        {
+            return;
+        }
+
+        // One per profile the user means to create, so a retry after a lost answer finds the profile it made.
+        var requestId = Guid.NewGuid();
+
+        await NameModalViewModel.AskAsync(
+            _modalService,
+            "Create profile",
+            "A new, empty mod list in this repo.",
+            "",
+            "Create it",
+            async name =>
+            {
+                try
+                {
+                    await _profileStore.CreateAsync(_repo.Id, requestId, name, copyFrom: null, cancellationToken);
+
+                    return null;
+                }
+                catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NameTaken)
+                {
+                    return "That name is taken.";
+                }
+            });
     }
 
     /// <returns>
@@ -565,7 +575,6 @@ public partial class RepoPageViewModel
         }
 
         OnPropertyChanged(nameof(ShowConnectGame));
-        OnPropertyChanged(nameof(IsCreateProfileSelected));
     }
 
     private void OnProfileCreated(Profile created)
@@ -632,6 +641,12 @@ public partial class RepoPageViewModel
         if (e.PropertyName == nameof(Repo.Name))
         {
             OnPropertyChanged(nameof(RepoName));
+        }
+
+        if (e.PropertyName == nameof(Repo.MembershipLevel))
+        {
+            OnPropertyChanged(nameof(CanCreateProfiles));
+            OnPropertyChanged(nameof(CreateProfileToolTip));
         }
     }
 

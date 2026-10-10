@@ -116,7 +116,7 @@ public class RepoDeletionTests(DatabaseFixture fixture)
         };
         var versions = new[] { CreateVersion(repo.Id, "1.0.0", 0), CreateVersion(repo.Id, "2.0.0", 1) };
 
-        var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
+        var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
         var revision = profile.CreateRevision(
             [new ModDependency { ModVersion = versions[0], Locked = false }],
             [],

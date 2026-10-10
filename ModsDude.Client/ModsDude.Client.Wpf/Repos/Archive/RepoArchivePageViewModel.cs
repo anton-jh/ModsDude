@@ -254,8 +254,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
     }
 
     /// <summary>
-    /// One restore, retried once under a new name if the first attempt hit the clash the archive
-    /// deferred.
+    /// One restore, asking for a new name if the first attempt hit the clash the archive deferred.
     /// </summary>
     private async Task RunAsync(Func<string?, Task> restore, ArchivedItemViewModel item, string what)
     {
@@ -269,21 +268,30 @@ public partial class RepoArchivePageViewModel : PageViewModel
             }
             catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NameTaken)
             {
-                if (await AskForNameAsync(item, what) is not string renamed)
+                var renamed = await NameModalViewModel.AskAsync(
+                    _modalService,
+                    "That name is taken",
+                    $"Something else in this repo is called '{item.Name}' now. Give this {what} another name to bring it back.",
+                    $"{item.Name} (restored)",
+                    "Restore it",
+                    async name =>
+                    {
+                        try
+                        {
+                            await restore(name);
+
+                            return null;
+                        }
+                        catch (ApiException<CustomProblemDetails> again) when (again.Result.Type is ProblemType.NameTaken)
+                        {
+                            return "That name is taken.";
+                        }
+                    });
+
+                if (renamed is null)
                 {
                     return;
                 }
-
-                await restore(renamed);
-            }
-            catch (Core.Exceptions.UserFriendlyException exception) when (exception.Message == "Name taken")
-            {
-                if (await AskForNameAsync(item, what) is not string renamed)
-                {
-                    return;
-                }
-
-                await restore(renamed);
             }
 
             await ReloadAsync();
@@ -300,19 +308,6 @@ public partial class RepoArchivePageViewModel : PageViewModel
         {
             IsWorking = false;
         }
-    }
-
-    private async Task<string?> AskForNameAsync(ArchivedItemViewModel item, string what)
-    {
-        var modal = new RenameModalViewModel(
-            "That name is taken",
-            $"Something else in this repo is called '{item.Name}' now. Give this {what} another name to bring it back.",
-            $"{item.Name} (restored)",
-            "Restore it");
-
-        await _modalService.Show(modal);
-
-        return modal.Result;
     }
 
     private async Task DeleteProfileAsync(ArchivedItemViewModel item)

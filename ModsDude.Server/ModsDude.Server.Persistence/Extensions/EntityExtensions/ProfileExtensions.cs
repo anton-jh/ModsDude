@@ -42,6 +42,11 @@ public static class ProfileExtensions
         return dbSet.AnyAsync(x => x.RepoId == repoId && x.ArchivedAt == null && x.Id != except && x.Name == name, cancellationToken);
     }
 
+    public static Task<Profile?> GetByCreateRequestIdAsync(this DbSet<Profile> dbSet, RepoId repoId, ProfileCreateRequestId requestId, CancellationToken cancellationToken)
+    {
+        return dbSet.FirstOrDefaultAsync(x => x.RepoId == repoId && x.CreateRequestId == requestId, cancellationToken);
+    }
+
     /// <summary>
     /// Whether any savegame in the repo follows this profile, or any savegame snapshot was played on
     /// one of its revisions. Either one makes the profile undeletable, and the delete endpoint

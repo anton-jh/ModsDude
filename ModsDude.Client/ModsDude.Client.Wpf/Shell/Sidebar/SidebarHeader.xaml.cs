@@ -38,21 +38,6 @@ public partial class SidebarHeader : UserControl
     }
 
 
-    /// <summary>Whether the page the "+" opens is the one showing.</summary>
-    public static readonly DependencyProperty IsAddSelectedProperty =
-        DependencyProperty.Register(
-            nameof(IsAddSelected),
-            typeof(bool),
-            typeof(SidebarHeader),
-            new PropertyMetadata(false));
-
-    public bool IsAddSelected
-    {
-        get => (bool)GetValue(IsAddSelectedProperty);
-        set => SetValue(IsAddSelectedProperty, value);
-    }
-
-
     /// <summary>Whether this account may use it; the reason it may not is <see cref="AddToolTip"/>.</summary>
     public static readonly DependencyProperty IsAddEnabledProperty =
         DependencyProperty.Register(

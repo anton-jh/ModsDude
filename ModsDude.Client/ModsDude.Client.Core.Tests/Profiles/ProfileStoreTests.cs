@@ -111,12 +111,26 @@ public class ProfileStoreTests
         harness.Store.ProfileCreated += x => announced = x;
 
         var read = harness.Store.RefreshAsync(_repoId, CancellationToken.None);
-        var created = await harness.Store.CreateAsync(_repoId, "New", null, CancellationToken.None);
+        var created = await harness.Store.CreateAsync(_repoId, Guid.NewGuid(), "New", null, CancellationToken.None);
         gate.SetResult();
         await read;
 
         Assert.Same(created, Assert.Single(harness.Store.Live(_repoId)));
         Assert.Same(created, announced);
+    }
+
+    /// <summary>A retry or a second click after the first create's answer was lost.</summary>
+    [Fact]
+    public async Task Creating_again_with_the_same_request_id_holds_one_profile()
+    {
+        var harness = new Harness();
+        var requestId = Guid.NewGuid();
+
+        var first = await harness.Store.CreateAsync(_repoId, requestId, "New", null, CancellationToken.None);
+        var second = await harness.Store.CreateAsync(_repoId, requestId, "New", null, CancellationToken.None);
+
+        Assert.Same(first, second);
+        Assert.Same(first, Assert.Single(harness.Store.Live(_repoId)));
     }
 
     [Fact]

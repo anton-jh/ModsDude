@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
@@ -22,12 +23,30 @@ public partial class ManageProfileViewModel(
 
     public bool IsValid => !string.IsNullOrWhiteSpace(Name);
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasError))]
+    private string? _error;
+
+    public bool HasError => Error is not null;
+
 
     [RelayCommand(CanExecute = nameof(IsValid))]
     private async Task SaveChanges(CancellationToken cancellationToken)
     {
+        Error = null;
+
+        try
+        {
+            await profileStore.RenameAsync(profile, Name, cancellationToken);
+        }
+        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NameTaken)
+        {
+            Error = "That name is taken.";
+
+            return;
+        }
+
         navigationLockService.ReleaseLock(this);
-        await profileStore.RenameAsync(profile, Name, cancellationToken);
     }
 
     /// <summary>

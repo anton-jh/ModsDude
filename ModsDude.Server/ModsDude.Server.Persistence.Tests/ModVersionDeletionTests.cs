@@ -150,7 +150,7 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
         using var dbContext = fixture.CreateDbContext();
 
         var version = await dbContext.ModVersions.GetAsync(repoId, _modId, new ModVersionId(versionId), CancellationToken.None);
-        var profile = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow);
+        var profile = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
 
         var revision = profile.CreateRevision(
             [new ModDependency { ModVersion = version!, Locked = false }],

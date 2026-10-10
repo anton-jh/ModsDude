@@ -22,6 +22,12 @@
                             Command="{Binding SaveChangesCommand}" />
                 </StackPanel>
 
+                <TextBlock Margin="0 8 0 0"
+                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                           TextWrapping="Wrap"
+                           Text="{Binding Error}"
+                           Visibility="{Binding HasError, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                 <Button Content="Archive profile" Margin="0 24 0 0"
                         HorizontalAlignment="Left"
                         ToolTip="Takes it out of the sidebar and frees its name. Everything else stays, and it can be brought back from the Archive."

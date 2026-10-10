@@ -25,11 +25,9 @@
                    FontWeight="SemiBold"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
-        <!-- Creating one of what the list below holds. It is a page like any other, so while that page
-             is open the button is drawn the way a selected row is: the sidebar always says where you are,
-             and this is the one place it would otherwise go quiet. The tooltip is the item's own, which
-             is the reason where the membership level does not allow it - and it shows on the disabled
-             button for the same reason the rows' tooltips do. -->
+        <!-- Creating one of what the list below holds. The tooltip is the reason where the membership
+             level does not allow it - and it shows on the disabled button for the same reason the rows'
+             tooltips do. -->
         <Border Grid.Column="1" Grid.Row="0"
                 Margin="8 0 16 4"
                 CornerRadius="4"
@@ -39,9 +37,6 @@
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding AddCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="{x:Null}">
                             <Setter Property="Visibility" Value="Collapsed" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsAddSelected, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
-                            <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>
@@ -58,9 +53,6 @@
                         <Style TargetType="TextBlock" BasedOn="{StaticResource CenteredGlyph}">
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsAddSelected, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
-                                    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-                                </DataTrigger>
                                 <DataTrigger Binding="{Binding IsAddEnabled, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="False">
                                     <Setter Property="Opacity" Value="0.4" />
                                 </DataTrigger>

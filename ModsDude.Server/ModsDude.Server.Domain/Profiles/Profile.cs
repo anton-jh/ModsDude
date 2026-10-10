@@ -16,11 +16,15 @@ namespace ModsDude.Server.Domain.Profiles;
 public class Profile(
     RepoId repoId,
     ProfileName name,
-    DateTime created)
+    DateTime created,
+    ProfileCreateRequestId createRequestId)
     : IArchivable
 {
     public ProfileId Id { get; init; } = new(Guid.NewGuid());
     public RepoId RepoId { get; } = repoId;
+
+    /// <summary>The request that created it, unique within the repo, so a repeat finds it instead of making another.</summary>
+    public ProfileCreateRequestId CreateRequestId { get; private set; } = createRequestId;
 
     public ProfileName Name { get; private set; } = name;
 
@@ -145,3 +149,4 @@ public class Profile(
 
 public readonly record struct ProfileId(Guid Value);
 public readonly record struct ProfileName(string Value);
+public readonly record struct ProfileCreateRequestId(Guid Value);

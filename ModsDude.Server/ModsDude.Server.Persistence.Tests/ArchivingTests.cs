@@ -32,7 +32,7 @@ public class ArchivingTests(DatabaseFixture fixture)
 
         Assert.False(await dbContext.Profiles.CheckNameIsTaken(repoId, new ProfileName("Season 4"), CancellationToken.None));
 
-        dbContext.Profiles.Add(new Profile(repoId, new ProfileName("Season 4"), DateTime.UtcNow));
+        dbContext.Profiles.Add(new Profile(repoId, new ProfileName("Season 4"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid())));
 
         // The index has to permit it too, not merely the check above.
         await dbContext.SaveChangesAsync(CancellationToken.None);
@@ -73,7 +73,7 @@ public class ArchivingTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        dbContext.Profiles.Add(new Profile(repoId, new ProfileName("Season 4"), DateTime.UtcNow));
+        dbContext.Profiles.Add(new Profile(repoId, new ProfileName("Season 4"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid())));
 
         await Assert.ThrowsAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(CancellationToken.None));
     }
@@ -296,7 +296,7 @@ public class ArchivingTests(DatabaseFixture fixture)
     {
         using var dbContext = fixture.CreateDbContext();
 
-        var profile = new Profile(repoId, new ProfileName(name), DateTime.UtcNow);
+        var profile = new Profile(repoId, new ProfileName(name), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
 
         dbContext.Profiles.Add(profile);
 

@@ -9,6 +9,7 @@ internal sealed class FakeProfilesServer : IProfilesClient
 {
     private TaskCompletionSource? _held;
     private (Guid RequestId, int AnsweredWith)? _lastRevisionRequest;
+    private readonly Dictionary<Guid, ProfileDto> _created = [];
 
     public List<ProfileDto> Profiles { get; } = [];
 
@@ -36,10 +37,17 @@ internal sealed class FakeProfilesServer : IProfilesClient
         return response;
     }
 
+    /// <summary>Answers a repeat of a request with the profile it made, as the server does.</summary>
     public Task<ProfileDto> CreateProfileV1Async(Guid repoId, CreateProfileRequest request, CancellationToken cancellationToken = default)
     {
+        if (_created.TryGetValue(request.RequestId, out var repeat))
+        {
+            return Task.FromResult(repeat with { });
+        }
+
         var created = new ProfileDto { Id = Guid.NewGuid(), RepoId = repoId, Name = request.Name, HeadRevision = 1 };
         Profiles.Add(created);
+        _created[request.RequestId] = created;
 
         return Task.FromResult(created with { });
     }

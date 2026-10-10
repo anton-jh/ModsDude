@@ -25,7 +25,6 @@ internal static class MenuIcons
     public const string Members = "\xE716";
     public const string Mods = "\xE8F1";
     public const string Saves = "\xE74E";
-    public const string CreateProfile = "\xE710";
     public const string Game = "\xE7FC";
 
     // Profile

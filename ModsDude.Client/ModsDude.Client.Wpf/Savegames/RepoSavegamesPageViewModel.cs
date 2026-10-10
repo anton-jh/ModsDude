@@ -426,14 +426,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// <para>
     /// <b>Nothing else moves with the name.</b> The snapshots, the claim log, whoever is holding it and
     /// which mod list it follows are all untouched - a savegame cannot be moved between profiles, so
-    /// there is no second field this modal could grow. The server's route says the same thing from
-    /// its end: it became a rename in Phase 9 and takes nothing but a name.
+    /// there is no second field this modal could grow.
     /// </para>
     /// <para>
     /// <b>The clash is the server's to find.</b> Names are unique per repo behind a filtered unique
     /// index, so checking here first would be a second copy of a rule that would still be racing
-    /// somebody else's rename. Losing that race re-opens the modal with what they typed rather than
-    /// an error they have to start over from.
+    /// somebody else's rename. Losing that race says so under the field, keeping what they typed.
     /// </para>
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanRenameSelected))]
@@ -444,62 +442,22 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             return;
         }
 
-        var title = $"Rename '{row.Name}'";
-        var message = "What everybody else in this repo will see it called. Its snapshots, its history and "
-            + "whoever is holding it are untouched, and so is the mod list it follows.";
-        var suggested = row.Name;
         var previous = row.Name;
 
         try
         {
-            // Until they give a free name or give up. A taken one is not an error to report and walk
-            // away from - the person is standing right here and is the one who knows what else it
-            // could be called.
-            while (await AskForNameAsync(title, message, suggested) is string name)
+            var name = await NameModalViewModel.AskAsync(
+                _modalService,
+                $"Rename '{row.Name}'",
+                "What everybody else in this repo will see it called. Its snapshots, its history and "
+                    + "whoever is holding it are untouched, and so is the mod list it follows.",
+                row.Name,
+                "Rename it",
+                name => SaveNameAsync(row, name));
+
+            if (name is not null && name != previous)
             {
-                if (name == row.Name)
-                {
-                    return;
-                }
-
-                IsWorking = true;
-
-                try
-                {
-                    await _store.WriteAsync(
-                        _repo.Id,
-                        token => _savegamesClient.UpdateSavegameV1Async(
-                            _repo.Id, row.Id, new UpdateSavegameRequest { Name = name, ExpectedVersion = row.Savegame.Version }, token),
-                        _lifetime);
-                }
-                catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NameTaken)
-                {
-                    title = "That name is taken";
-                    message = $"Something else in this repo is already called '{name}'. Pick another.";
-                    suggested = name;
-
-                    continue;
-                }
-                catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.SavegameChanged)
-                {
-                    // The store has read it again on the refusal, so the next attempt is made against what
-                    // somebody else just did.
-                    _errorReporter.Record(exception, "renaming a savegame");
-
-                    title = "Somebody else changed it";
-                    message = $"It is called '{row.Name}' now. Rename it again, or leave it.";
-                    suggested = name;
-
-                    continue;
-                }
-                finally
-                {
-                    IsWorking = false;
-                }
-
                 _toasts.Show($"'{previous}' is called '{name}' now.");
-
-                return;
             }
         }
         catch (OperationCanceledException)
@@ -516,13 +474,42 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     // reversible by doing it again.
     private bool CanRenameSelected() => IsMember && IsWorking is false && Selected is not null;
 
-    private async Task<string?> AskForNameAsync(string title, string message, string suggested)
+    /// <returns>Null once renamed, or what to show under the name.</returns>
+    private async Task<string?> SaveNameAsync(SavegameListItemViewModel row, string name)
     {
-        var modal = new RenameModalViewModel(title, message, suggested, "Rename it");
+        if (name == row.Name)
+        {
+            return null;
+        }
 
-        await _modalService.Show(modal);
+        IsWorking = true;
 
-        return modal.Result;
+        try
+        {
+            await _store.WriteAsync(
+                _repo.Id,
+                token => _savegamesClient.UpdateSavegameV1Async(
+                    _repo.Id, row.Id, new UpdateSavegameRequest { Name = name, ExpectedVersion = row.Savegame.Version }, token),
+                _lifetime);
+
+            return null;
+        }
+        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NameTaken)
+        {
+            return "That name is taken.";
+        }
+        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.SavegameChanged)
+        {
+            // The store has read it again on the refusal, so the next attempt is made against what
+            // somebody else just did.
+            _errorReporter.Record(exception, "renaming a savegame");
+
+            return $"Somebody else changed it. It is called '{row.Name}' now.";
+        }
+        finally
+        {
+            IsWorking = false;
+        }
     }
 
     /// <summary>

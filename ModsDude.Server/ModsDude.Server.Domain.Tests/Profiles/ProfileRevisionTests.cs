@@ -281,7 +281,7 @@ public class ProfileRevisionTests
 
 
     private static Profile CreateProfile()
-        => new(_repoId, new ProfileName("Test profile"), _now);
+        => new(_repoId, new ProfileName("Test profile"), _now, new ProfileCreateRequestId(Guid.NewGuid()));
 
     private static ModDependency Pin(ModId modId, string versionId, RepoId? repoId = null, bool locked = false)
         => new()

@@ -46,7 +46,8 @@ public interface IProfileStore : IUserScopedState, IProfileRevisions
     /// A revision of another profile in the repo to branch off, or <c>null</c> for an empty profile.
     /// The new profile's first revision pins exactly what that one pinned.
     /// </param>
-    Task<Profile> CreateAsync(Guid repoId, string name, CopyProfileRevisionRequest? copyFrom, CancellationToken cancellationToken);
+    /// <param name="requestId">Generated once per profile the user means to create, so a repeat returns the same profile.</param>
+    Task<Profile> CreateAsync(Guid repoId, Guid requestId, string name, CopyProfileRevisionRequest? copyFrom, CancellationToken cancellationToken);
 
     Task RenameAsync(Profile profile, string name, CancellationToken cancellationToken);
 

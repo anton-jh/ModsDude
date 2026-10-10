@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="ModsDude.Client.Wpf.Shared.RenameModal"
+﻿<UserControl x:Class="ModsDude.Client.Wpf.Shared.NameModal"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -6,7 +6,7 @@
              xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
              mc:Ignorable="d"
              Width="480"
-             d:DataContext="{d:DesignInstance Type=shared:RenameModalViewModel, IsDesignTimeCreatable=False}"
+             d:DataContext="{d:DesignInstance Type=shared:NameModalViewModel, IsDesignTimeCreatable=False}"
              Focusable="True">
 
     <Border CornerRadius="{StaticResource OverlayCornerRadius}"
@@ -29,9 +29,17 @@
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
-                <TextBox Margin="0 16 0 0"
+                <TextBox x:Name="NameBox"
+                         Margin="0 16 0 0"
                          Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         IsReadOnly="{Binding IsSaving}"
                          FontSize="14" />
+
+                <TextBlock Margin="0 8 0 0"
+                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                           TextWrapping="Wrap"
+                           Text="{Binding Error}"
+                           Visibility="{Binding HasError, Converter={StaticResource BoolToVisibilityConverter}}" />
             </StackPanel>
 
             <Border Grid.Row="1"
