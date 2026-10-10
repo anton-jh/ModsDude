@@ -464,7 +464,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     }
 
     private Task<bool> GoToSavegameAsync(Guid savegameId)
-        => _shellNavigation.GoToSavegamesAsync(_repo.Id, savegameId);
+        => _shellNavigation.GoToAsync(_repo.Id, new RepoDestination.Savegame(savegameId));
 
     private static string Describe(PruneProfileRevisionsResponse result)
     {

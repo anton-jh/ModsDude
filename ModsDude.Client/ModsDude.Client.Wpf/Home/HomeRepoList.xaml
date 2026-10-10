@@ -1,0 +1,240 @@
+<UserControl x:Class="ModsDude.Client.Wpf.Home.HomeRepoList"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:account="clr-namespace:ModsDude.Client.Wpf.Account"
+             xmlns:home="clr-namespace:ModsDude.Client.Wpf.Home"
+             xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=home:HomeRepoListViewModel, IsDesignTimeCreatable=False}"
+             d:DesignWidth="900">
+
+    <!-- One column layout for the header and every row, so the columns line up across games. Commands
+         inside a row bind through the nearest ItemsControl, whose data context is the row - which
+         also holds inside the picker's popup, a tree of its own. -->
+    <StackPanel Orientation="Vertical" Grid.IsSharedSizeScope="True">
+
+        <Grid Margin="0 0 0 8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="3*" />
+                <ColumnDefinition Width="Auto" SharedSizeGroup="HomeRepoPlaying" />
+                <ColumnDefinition Width="Auto" SharedSizeGroup="HomeRepoAction" />
+                <ColumnDefinition Width="Auto" SharedSizeGroup="HomeRepoShortcuts" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Style="{DynamicResource CaptionTextBlockStyle}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="Repo" />
+            <TextBlock Grid.Column="1" Style="{DynamicResource CaptionTextBlockStyle}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="This machine" />
+            <TextBlock Grid.Column="2" Style="{DynamicResource CaptionTextBlockStyle}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="Playing" />
+        </Grid>
+
+        <ItemsControl ItemsSource="{Binding Groups}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type home:HomeGameGroupViewModel}">
+                    <StackPanel Orientation="Vertical" Margin="0 8 0 4">
+
+                        <StackPanel Orientation="Horizontal" Margin="0 0 0 8">
+                            <TextBlock Style="{DynamicResource BodyStrongTextBlockStyle}" Text="{Binding State.Name}" />
+                            <Border Margin="8 0 0 0"
+                                    Style="{StaticResource SuccessStatusChip}"
+                                    Visibility="{Binding State.IsRunning, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="Running" />
+                            </Border>
+                            <Border Margin="8 0 0 0"
+                                    Style="{StaticResource StatusChip}"
+                                    Visibility="{Binding State.IsConnected, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                                <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="Not connected" />
+                            </Border>
+                        </StackPanel>
+
+                        <ItemsControl ItemsSource="{Binding Repos}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type home:HomeRepoRowViewModel}">
+                                    <Grid Margin="0 0 0 12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="3*" />
+                                            <ColumnDefinition Width="Auto" SharedSizeGroup="HomeRepoPlaying" />
+                                            <ColumnDefinition Width="Auto" SharedSizeGroup="HomeRepoAction" />
+                                            <ColumnDefinition Width="Auto" SharedSizeGroup="HomeRepoShortcuts" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- The repo: its name opens its overview. -->
+                                        <StackPanel Grid.Column="0" Orientation="Vertical" Margin="0 0 12 0">
+                                            <TextBlock TextTrimming="CharacterEllipsis"
+                                                       Style="{DynamicResource BodyStrongTextBlockStyle}"
+                                                       ToolTip="{Binding State.Name}">
+                                                <Hyperlink Style="{StaticResource TextLink}" Command="{Binding OpenOverviewCommand}">
+                                                    <Run Text="{Binding State.Name, Mode=OneWay}" />
+                                                </Hyperlink>
+                                            </TextBlock>
+                                            <StackPanel Orientation="Horizontal" Margin="0 4 0 0">
+                                                <Border Style="{StaticResource StatusChip}">
+                                                    <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="{Binding State.MembershipText}" />
+                                                </Border>
+                                                <TextBlock Margin="8 0 0 0" FontFamily="Consolas" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Visibility="{Binding State.HasTag, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                           Text="{Binding State.TagText}" />
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- This machine: the profile the game follows here, and what it holds. -->
+                                        <StackPanel Grid.Column="1" Orientation="Vertical" Margin="0 0 12 0">
+                                            <WrapPanel Orientation="Horizontal"
+                                                       Visibility="{Binding State.CanPickProfile, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <ToggleButton x:Name="PickerToggle"
+                                                              Margin="0 0 8 0"
+                                                              IsChecked="{Binding IsPickerOpen, Mode=TwoWay}"
+                                                              IsEnabled="{Binding State.IsIdle}"
+                                                              Command="{Binding OpenPickerCommand}"
+                                                              ToolTip="Put this game on a profile of this repo.">
+                                                    <TextBlock TextTrimming="CharacterEllipsis" MaxWidth="240">
+                                                        <Run Text="{Binding State.PickerLabel, Mode=OneWay}" /><Run Text="  ▾" />
+                                                    </TextBlock>
+                                                </ToggleButton>
+
+                                                <Popup IsOpen="{Binding IsChecked, ElementName=PickerToggle, Mode=TwoWay}"
+                                                       PlacementTarget="{Binding ElementName=PickerToggle}"
+                                                       Placement="Bottom"
+                                                       VerticalOffset="4"
+                                                       StaysOpen="False"
+                                                       AllowsTransparency="True">
+                                                    <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
+                                                            Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                                                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                                                            BorderThickness="1"
+                                                            Padding="4">
+                                                        <StackPanel Orientation="Vertical" Width="280">
+                                                            <TextBlock Padding="10 7"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                       Visibility="{Binding HasPickerEmptyText, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                       Text="{Binding PickerEmptyText}" />
+                                                            <ItemsControl ItemsSource="{Binding State.Profiles}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate DataType="{x:Type home:HomeProfileOption}">
+                                                                        <Button Style="{DynamicResource SubtleMenuButton}"
+                                                                                IsEnabled="{Binding IsPickable}"
+                                                                                Command="{Binding DataContext.PickProfileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                CommandParameter="{Binding}">
+                                                                            <Grid>
+                                                                                <Grid.ColumnDefinitions>
+                                                                                    <ColumnDefinition Width="24" />
+                                                                                    <ColumnDefinition Width="*" />
+                                                                                </Grid.ColumnDefinitions>
+                                                                                <TextBlock Grid.Column="0"
+                                                                                           FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                                                                           VerticalAlignment="Center"
+                                                                                           Visibility="{Binding IsFollowed, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                                           Text="&#xE73E;" />
+                                                                                <TextBlock Grid.Column="1" TextTrimming="CharacterEllipsis" Text="{Binding Name}" />
+                                                                            </Grid>
+                                                                        </Button>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Popup>
+
+                                                <Border Margin="0 0 8 0"
+                                                        DataContext="{Binding State}"
+                                                        Style="{StaticResource ProfileSyncChip}"
+                                                        Visibility="{Binding HasSyncState, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="{Binding SyncLabel}" />
+                                                </Border>
+                                                <Border Margin="0 0 8 0"
+                                                        Style="{StaticResource StatusChip}"
+                                                        Visibility="{Binding State.HasPin, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="{Binding State.PinText}" />
+                                                </Border>
+                                            </WrapPanel>
+
+                                            <ItemsControl ItemsSource="{Binding State.HeldSavegames}"
+                                                          Visibility="{Binding State.HasHeldSavegames, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type home:HomeHeldSavegame}">
+                                                        <Grid Margin="0 8 0 0">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0"
+                                                                       Margin="0 0 8 0"
+                                                                       VerticalAlignment="Center"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                       Text="Holding" />
+                                                            <TextBlock Grid.Column="1"
+                                                                       VerticalAlignment="Center"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       Text="{Binding Title}" />
+                                                            <Button Grid.Column="2"
+                                                                    Margin="12 0 0 0"
+                                                                    Content="Check in"
+                                                                    IsEnabled="{Binding CanCheckIn}"
+                                                                    Command="{Binding DataContext.CheckInCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <!-- Friends playing in this repo right now. -->
+                                        <ItemsControl Grid.Column="2"
+                                                      Margin="0 0 12 0"
+                                                      VerticalAlignment="Top"
+                                                      ItemsSource="{Binding State.Playing}"
+                                                      ToolTip="{Binding State.PlayingNames}"
+                                                      Visibility="{Binding State.HasPlaying, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type account:AvatarViewModel}">
+                                                    <account:UserAvatar Width="24" Height="24" Margin="0 0 4 0" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <Button Grid.Column="3"
+                                                Margin="0 0 12 0"
+                                                VerticalAlignment="Top"
+                                                Content="{Binding State.ActionLabel}"
+                                                IsEnabled="{Binding State.IsIdle}"
+                                                Command="{Binding RunActionCommand}"
+                                                Visibility="{Binding State.HasAction, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                        <!-- A way into each of the repo's pages, closed ones greyed with the reason. -->
+                                        <ItemsControl Grid.Column="4" VerticalAlignment="Top" ItemsSource="{Binding State.Shortcuts}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type repos:RepoSectionAccess}">
+                                                    <Button Style="{StaticResource SubtleIconButton}"
+                                                            Content="{Binding Icon}"
+                                                            ToolTip="{Binding ToolTip}"
+                                                            ToolTipService.ShowOnDisabled="True"
+                                                            IsEnabled="{Binding IsAvailable}"
+                                                            Command="{Binding DataContext.OpenSectionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                    </StackPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>

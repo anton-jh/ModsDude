@@ -34,16 +34,11 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Friends on the left, because joining one is what the page is for; this machine on the right. -->
-                <Grid Visibility="{Binding HasRepos, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="3*" />
-                        <ColumnDefinition Width="2*" />
-                    </Grid.ColumnDefinitions>
+                <!-- Friends first, because joining one is what the page is for; every repo under them. -->
+                <StackPanel Orientation="Vertical"
+                            Visibility="{Binding HasRepos, Converter={StaticResource BoolToVisibilityConverter}}">
 
-                    <Border Grid.Column="0"
-                            VerticalAlignment="Top"
-                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                             CornerRadius="4"
                             Padding="16">
                         <GroupBox Header="Friends" Padding="0 16 0 0">
@@ -51,94 +46,16 @@
                         </GroupBox>
                     </Border>
 
-                    <StackPanel Grid.Column="1" Margin="16 0 0 0" Orientation="Vertical">
+                    <Border Margin="0 16 0 0"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="4"
+                            Padding="16">
+                        <GroupBox Header="Repos" Padding="0 16 0 0">
+                            <home:HomeRepoList DataContext="{Binding RepoList}" />
+                        </GroupBox>
+                    </Border>
 
-                        <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                                CornerRadius="4"
-                                Padding="16">
-                            <GroupBox Header="Your games" Padding="0 16 0 0">
-                                <StackPanel Orientation="Vertical">
-                                    <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               Visibility="{Binding HasNoGames, Converter={StaticResource BoolToVisibilityConverter}}"
-                                               Text="No game is connected on this machine." />
-
-                                    <ItemsControl ItemsSource="{Binding Games}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate DataType="{x:Type home:HomeGameViewModel}">
-                                                <Button Margin="-10 0 -10 4"
-                                                        Style="{StaticResource SubtleMenuButton}"
-                                                        IsEnabled="{Binding HasProfile}"
-                                                        Command="{Binding DataContext.OpenGameCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                        CommandParameter="{Binding}">
-                                                    <StackPanel Orientation="Vertical">
-                                                        <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
-                                                        <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                                   TextTrimming="CharacterEllipsis">
-                                                            <Run Text="{Binding ProfileText, Mode=OneWay}" /><Run Text="{Binding RepoName, Mode=OneWay, StringFormat=' · {0}'}" />
-                                                        </TextBlock>
-                                                        <WrapPanel Margin="0 6 0 0" Orientation="Horizontal">
-                                                            <Border Margin="0 0 6 0"
-                                                                    Style="{StaticResource SuccessStatusChip}"
-                                                                    Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                                <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="Running" />
-                                                            </Border>
-                                                            <Border Margin="0 0 6 0"
-                                                                    Style="{StaticResource ProfileSyncChip}"
-                                                                    Visibility="{Binding HasSyncState, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                                <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="{Binding SyncLabel}" />
-                                                            </Border>
-                                                            <Border Margin="0 0 6 0"
-                                                                    Style="{StaticResource StatusChip}"
-                                                                    Visibility="{Binding IsHolding, Converter={StaticResource BoolToVisibilityConverter}}">
-                                                                <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="{Binding HoldingText}" />
-                                                            </Border>
-                                                        </WrapPanel>
-                                                    </StackPanel>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </GroupBox>
-                        </Border>
-
-                        <Border Margin="0 16 0 0"
-                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                                CornerRadius="4"
-                                Padding="16">
-                            <GroupBox Header="Your savegames" Padding="0 16 0 0">
-                                <StackPanel Orientation="Vertical">
-                                    <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               Visibility="{Binding HasNoSavegames, Converter={StaticResource BoolToVisibilityConverter}}"
-                                               Text="No savegame is checked out on this machine." />
-
-                                    <ItemsControl ItemsSource="{Binding Savegames}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate DataType="{x:Type home:HomeSavegameViewModel}">
-                                                <Grid Margin="0 0 0 12" ColumnDefinitions="* auto">
-                                                    <StackPanel Grid.Column="0" Orientation="Vertical">
-                                                        <TextBlock FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Text="{Binding Title}" />
-                                                        <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   Text="{Binding Where}" />
-                                                    </StackPanel>
-                                                    <Button Grid.Column="1"
-                                                            Margin="12 0 0 0"
-                                                            VerticalAlignment="Center"
-                                                            Content="Check in"
-                                                            IsEnabled="{Binding CanCheckIn}"
-                                                            Command="{Binding DataContext.CheckInCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                            CommandParameter="{Binding}" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </GroupBox>
-                        </Border>
-
-                    </StackPanel>
-                </Grid>
+                </StackPanel>
 
             </StackPanel>
         </ScrollViewer>

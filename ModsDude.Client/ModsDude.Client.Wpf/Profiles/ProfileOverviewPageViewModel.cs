@@ -267,7 +267,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
     private async Task OpenSavegameAsync(Guid savegameId)
     {
-        if (await _navigation.GoToSavegamesAsync(_repo.Id, savegameId) is false)
+        if (await _navigation.GoToAsync(_repo.Id, new RepoDestination.Savegame(savegameId)) is false)
         {
             SavegamesNote = "The repo's saves list could not be opened from here - pick it in the sidebar.";
         }

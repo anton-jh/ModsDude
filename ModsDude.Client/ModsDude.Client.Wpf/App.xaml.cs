@@ -541,6 +541,7 @@ public partial class App : Application
         services.AddSingleton<RepoOverviewPageViewModel.Factory>();
         services.AddSingleton<RepoMembersPageViewModel.Factory>();
         services.AddFactory<HomePageViewModel>();
+        services.AddSingleton<HomeRepoListViewModel.Factory>();
         services.AddFactory<JoinOrCreatePageViewModel>();
         services.AddTransient<JoinRepoFormViewModel>();
         services.AddTransient<CreateRepoFormViewModel>();

@@ -130,7 +130,7 @@ public sealed class SavegameProfileActivation(
 
         if (choice.Result)
         {
-            await shellNavigation.GoToProfileModsAsync(repo.Id, profile.Id, plan.TargetRef);
+            await shellNavigation.GoToAsync(repo.Id, new RepoDestination.ProfileMods(profile.Id, plan.TargetRef));
         }
     }
 }
