@@ -145,15 +145,10 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
 
                             <!-- A menu entry's own glyph, dimmed a step below the title on purpose - it is
                                  there to be found at a glance, not read. -->
                             <TextBlock Grid.Column="0"
-                                       Grid.RowSpan="2"
                                        Text="{Binding Path=Icon}"
                                        Margin="0 8"
                                        HorizontalAlignment="Center"
@@ -172,8 +167,17 @@
                                 </TextBlock.Style>
                             </TextBlock>
 
+                            <!-- Something here wants a look. Sits on the glyph's top-right corner, so the row
+                                 keeps its height; what it means is in the tooltip. -->
+                            <Ellipse Grid.Column="0"
+                                     Width="7" Height="7"
+                                     Margin="14 0 0 14"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center"
+                                     Fill="{DynamicResource AccentFillColorDefaultBrush}"
+                                     Visibility="{Binding HasAttention, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                             <ContentControl Grid.Column="0"
-                                            Grid.RowSpan="2"
                                             Width="28" Height="28"
                                             Margin="0 14"
                                             FontSize="13"
@@ -211,7 +215,6 @@
                             <!-- TagText carries its own leading space, so the row reads
                                  "Vanilla #1234" and the tooltip spells it the same way. -->
                             <TextBlock Grid.Column="2"
-                                       Grid.RowSpan="2"
                                        Text="{Binding Path=TagText}"
                                        Padding="0 8 12 8"
                                        FontFamily="Consolas"
@@ -227,17 +230,6 @@
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
-
-                            <!-- Under the title: the sidebar is too narrow for a chip beside it. -->
-                            <Border Grid.Row="1"
-                                    Grid.Column="1"
-                                    Grid.ColumnSpan="2"
-                                    Margin="0 -4 12 8"
-                                    HorizontalAlignment="Left"
-                                    Style="{StaticResource StatusChip}"
-                                    Visibility="{Binding HasBadge, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="{Binding Badge}" />
-                            </Border>
                         </Grid>
                     </Grid>
                 </DataTemplate>

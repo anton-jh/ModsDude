@@ -114,12 +114,16 @@ public partial class MenuItemViewModel
     /// </summary>
     public string TagText => Tag is null ? "" : $" #{Tag}";
 
-    /// <summary>A short state drawn as a chip under the title, or null for none.</summary>
+    /// <summary>
+    /// Why the entry wants a look, drawn as an accent dot on its glyph and spelled out in the tooltip.
+    /// Null for none.
+    /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasBadge))]
-    private string? _badge;
+    [NotifyPropertyChangedFor(nameof(HasAttention))]
+    [NotifyPropertyChangedFor(nameof(ToolTip))]
+    private string? _attention;
 
-    public bool HasBadge => Badge is not null;
+    public bool HasAttention => Attention is not null;
 
     /// <summary>
     /// Whether the entry names a thing somebody called something - a repo or a profile - rather than a
@@ -137,9 +141,10 @@ public partial class MenuItemViewModel
     /// <summary>
     /// One tooltip per row, so it does double duty: the reason when there is one, and otherwise the
     /// title, which the sidebar trims to its width and would otherwise leave unreadable. The tag
-    /// rides along with it, because a name long enough to be trimmed takes its tag with it.
+    /// rides along with it, because a name long enough to be trimmed takes its tag with it, and so does
+    /// what the attention dot means.
     /// </summary>
-    public string ToolTip => UnavailableReason ?? $"{Title}{TagText}";
+    public string ToolTip => UnavailableReason ?? (Attention is null ? $"{Title}{TagText}" : $"{Title}{TagText} - {Attention}");
 
     /// <summary>
     /// The menu entry a sub-page is opened from. The menus keep it highlighted while the sub-page is

@@ -167,7 +167,7 @@ public partial class RepoPageViewModel
         Profiles = [];
         _profileStore.ProfileCreated += OnProfileCreated;
         _profilesSynchronizer = new(_profileStore.Live(repo.Id), Profiles, MapProfileToVm, x => x.Title, NaturalOrder.Comparer);
-        UpdateSavesBadge();
+        UpdateSavesAttention();
 
         // A repo with nothing connected is a repo nothing works in, so being pushed at the one thing
         // that fixes that beats landing on an overview describing it - where there is anything to
@@ -632,7 +632,7 @@ public partial class RepoPageViewModel
             NavManager.GoBackCommand.Execute(null);
         }
 
-        UpdateSavesBadge();
+        UpdateSavesAttention();
         OnPropertyChanged(nameof(ShowConnectGame));
     }
 
@@ -664,15 +664,15 @@ public partial class RepoPageViewModel
 
 
     private void OnBindingsChanged(object? sender, EventArgs e)
-        => Application.Current?.Dispatcher.InvokeAsync(UpdateSavesBadge);
+        => Application.Current?.Dispatcher.InvokeAsync(UpdateSavesAttention);
 
     /// <summary>Marks Saves while a save from this repo is checked out into a slot of the connected game.</summary>
-    private void UpdateSavesBadge()
+    private void UpdateSavesAttention()
     {
         var held = ConnectedGame() is Game game
             && _bindings.GetBindings(game.Identity).Any(x => x.RepoId == _repo.Id);
 
-        _sections.GetValueOrDefault(RepoSection.Saves)?.Badge = held ? "Checked out" : null;
+        _sections.GetValueOrDefault(RepoSection.Saves)?.Attention = held ? "Checked out" : null;
     }
 
 
