@@ -1,7 +1,7 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Wpf.Account;
+using ModsDude.Client.Wpf.Friends;
 using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Repos;
 
@@ -44,6 +44,7 @@ public sealed record HomeHeldSavegame(Game Game, Guid SavegameId, string? Name)
 /// <param name="IsBusy">Whether an apply holds the game right now.</param>
 /// <param name="CanPickProfile">Whether the game is connected and its adapter has mods to put a profile's on.</param>
 /// <param name="ProfilesLoaded">Whether the repo's profiles have been read, so an empty picker means there are none.</param>
+/// <param name="Friends">The repo's profiles friends are on, the most recently active first.</param>
 public sealed record HomeRepoState(
     Guid RepoId,
     string Name,
@@ -59,8 +60,7 @@ public sealed record HomeRepoState(
     bool CanPickProfile,
     bool ProfilesLoaded,
     IReadOnlyList<HomeProfileOption> Profiles,
-    IReadOnlyList<AvatarViewModel> Playing,
-    string PlayingNames,
+    IReadOnlyList<FriendProfileGroupViewModel> Friends,
     IReadOnlyList<RepoSectionAccess> Shortcuts,
     IReadOnlyList<HomeHeldSavegame> HeldSavegames)
 {
@@ -104,7 +104,7 @@ public sealed record HomeRepoState(
 
     public bool HasProfiles => Profiles.Count > 0;
 
-    public bool HasPlaying => Playing.Count > 0;
+    public bool HasFriends => Friends.Count > 0;
 
     public bool HasHeldSavegames => HeldSavegames.Count > 0;
 }
