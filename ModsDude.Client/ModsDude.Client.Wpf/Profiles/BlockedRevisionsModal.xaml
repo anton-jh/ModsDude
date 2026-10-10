@@ -23,7 +23,6 @@
             <StackPanel Grid.Row="0" Margin="24 24 24 12">
                 <TextBlock Text="{Binding Title}"
                            TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            Style="{StaticResource TitleTextBlockStyle}" />
 
                 <TextBlock Text="{Binding Message}"
@@ -42,7 +41,6 @@
                                     Background="{DynamicResource ControlFillColorDefaultBrush}">
                                 <StackPanel>
                                     <TextBlock Text="{Binding Label}"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                Style="{DynamicResource BodyStrongTextBlockStyle}" />
 
                                     <TextBlock Text="{Binding Reason}"

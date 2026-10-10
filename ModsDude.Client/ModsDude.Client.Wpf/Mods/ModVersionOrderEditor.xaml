@@ -44,8 +44,7 @@
                                    Text="{Binding Version}"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"
-                                   TextWrapping="NoWrap"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                   TextWrapping="NoWrap" />
 
                         <TextBlock Grid.Column="2"
                                    Margin="8 0"

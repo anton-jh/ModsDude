@@ -1,6 +1,7 @@
-<Page x:Class="ModsDude.Client.Wpf.Profiles.ProfileModsPage"
+<shared:AppPage x:Class="ModsDude.Client.Wpf.Profiles.ProfileModsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       xmlns:profiles="clr-namespace:ModsDude.Client.Wpf.Profiles"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -106,4 +107,4 @@
 
         </Grid>
     </Border>
-</Page>
+</shared:AppPage>

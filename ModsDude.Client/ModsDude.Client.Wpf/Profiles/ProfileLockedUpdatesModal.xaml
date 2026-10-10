@@ -22,7 +22,6 @@
 
             <StackPanel Grid.Row="0" Margin="24 24 24 12">
                 <TextBlock Text="{Binding Title}"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            Style="{StaticResource TitleTextBlockStyle}" />
 
                 <TextBlock Text="{Binding Message}"
@@ -54,7 +53,6 @@
                                     <TextBlock Text="{Binding Name}"
                                                TextTrimming="CharacterEllipsis"
                                                TextWrapping="NoWrap"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                Style="{DynamicResource BodyStrongTextBlockStyle}" />
 
                                     <TextBlock Text="{Binding Consequence}"

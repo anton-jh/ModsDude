@@ -144,7 +144,6 @@
     <Style x:Key="FieldValue" TargetType="TextBlock">
         <Setter Property="Margin" Value="0 4 0 0" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
     </Style>
 
     <!-- See SplitButton. The chrome is drawn behind two bare buttons, once per half and split down the

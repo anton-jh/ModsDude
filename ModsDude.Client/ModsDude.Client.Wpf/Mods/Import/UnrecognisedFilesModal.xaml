@@ -26,7 +26,6 @@
                     <TextBlock Grid.Column="0"
                                Text="&#xE7BA;"
                                FontFamily="{StaticResource SymbolThemeFontFamily}"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                Style="{StaticResource TitleTextBlockStyle}"
                                Margin="0 0 12 0"
                                VerticalAlignment="Center" />
@@ -35,14 +34,12 @@
                                Text="{Binding Title}"
                                TextWrapping="Wrap"
                                VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                Style="{StaticResource TitleTextBlockStyle}" />
                 </Grid>
 
                 <TextBlock Text="{Binding Summary}"
                            Margin="0 16 0 8"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                           TextWrapping="Wrap" />
 
                 <!-- The first ten names; the view model says how many more there are, so a long list
                      cannot push the choice below off the modal. -->
@@ -54,8 +51,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding}"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                               TextTrimming="CharacterEllipsis" />
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -69,8 +65,7 @@
 
                 <TextBlock Text="Nothing is deleted. Where should they go?"
                            Margin="0 16 0 8"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                           TextWrapping="Wrap" />
 
                 <RadioButton GroupName="Destination"
                              Content="The Recycle Bin, where you can restore them"

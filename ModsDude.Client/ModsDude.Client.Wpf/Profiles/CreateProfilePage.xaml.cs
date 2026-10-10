@@ -1,8 +1,8 @@
-﻿using System.Windows.Controls;
+﻿using ModsDude.Client.Wpf.Shared;
 
 namespace ModsDude.Client.Wpf.Profiles;
 
-public partial class CreateProfilePage : Page
+public partial class CreateProfilePage : AppPage
 {
     public CreateProfilePage()
     {

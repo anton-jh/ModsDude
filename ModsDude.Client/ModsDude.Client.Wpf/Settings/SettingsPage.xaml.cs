@@ -1,7 +1,7 @@
-﻿using System.Windows.Controls;
+﻿using ModsDude.Client.Wpf.Shared;
 
 namespace ModsDude.Client.Wpf.Settings;
-public partial class SettingsPage : Page
+public partial class SettingsPage : AppPage
 {
     public SettingsPage()
     {

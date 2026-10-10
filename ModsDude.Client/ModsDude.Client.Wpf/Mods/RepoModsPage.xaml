@@ -1,6 +1,7 @@
-﻿<Page x:Class="ModsDude.Client.Wpf.Mods.RepoModsPage"
+﻿<shared:AppPage x:Class="ModsDude.Client.Wpf.Mods.RepoModsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
       xmlns:mods="clr-namespace:ModsDude.Client.Wpf.Mods"
       xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
@@ -40,7 +41,6 @@
             <TextBlock Grid.Row="2"
                        Margin="0 0 0 12"
                        HorizontalAlignment="Left"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                        Text="{Binding StatisticsText}"
                        Visibility="{Binding HasStatistics, Converter={StaticResource BoolToVisibilityConverter}}" />
 
@@ -189,8 +189,7 @@
 
                     <TextBlock Grid.Column="0"
                                VerticalAlignment="Center"
-                               Text="{Binding Selection.SelectedText}"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                               Text="{Binding Selection.SelectedText}" />
 
                     <TextBlock Grid.Column="1"
                                Margin="8 0 0 0"
@@ -220,4 +219,4 @@
             </Border>
         </Grid>
     </Border>
-</Page>
+</shared:AppPage>

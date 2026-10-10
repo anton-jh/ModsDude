@@ -24,7 +24,6 @@
 
                 <TextBlock Text="{Binding Current.Title}"
                            TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            Style="{StaticResource TitleTextBlockStyle}" />
 
                 <!-- The step itself, drawn by its own template in its feature's templates file. -->

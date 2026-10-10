@@ -1,8 +1,8 @@
-using System.Windows.Controls;
+using ModsDude.Client.Wpf.Shared;
 
 namespace ModsDude.Client.Wpf.Repos.Archive;
 
-public partial class ArchivePage : Page
+public partial class ArchivePage : AppPage
 {
     public ArchivePage()
     {

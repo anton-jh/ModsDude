@@ -26,7 +26,6 @@
                     <TextBlock Grid.Column="0"
                                Text="{Binding Icon, Converter={StaticResource IconKindToStringConverter}}"
                                FontFamily="{StaticResource SymbolThemeFontFamily}"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                Style="{StaticResource TitleTextBlockStyle}"
                                Margin="0 32 12 24"
                                VerticalAlignment="Center" />
@@ -35,7 +34,6 @@
                                Text="{Binding Title}"
                                TextWrapping="Wrap"
                                VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                Style="{StaticResource TitleTextBlockStyle}"
                                Margin="0 32 0 24" />
                 </Grid>
@@ -43,7 +41,6 @@
                 <!-- Wrapped: a modal is fixed width and some of what lands here is a sentence
                      rather than a label. -->
                 <TextBlock Text="{Binding Message}"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            TextWrapping="Wrap"
                            Margin="0 0 0 24" />
 

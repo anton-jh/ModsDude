@@ -1,6 +1,7 @@
-﻿<Page x:Class="ModsDude.Client.Wpf.Profiles.CreateProfilePage"
+﻿<shared:AppPage x:Class="ModsDude.Client.Wpf.Profiles.CreateProfilePage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
       xmlns:profiles="clr-namespace:ModsDude.Client.Wpf.Profiles"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
@@ -30,4 +31,4 @@
         </StackPanel>
 
     </Grid>
-</Page>
+</shared:AppPage>

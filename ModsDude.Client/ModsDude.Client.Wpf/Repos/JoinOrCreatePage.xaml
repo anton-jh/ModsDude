@@ -1,6 +1,7 @@
-<Page x:Class="ModsDude.Client.Wpf.Repos.JoinOrCreatePage"
+<shared:AppPage x:Class="ModsDude.Client.Wpf.Repos.JoinOrCreatePage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
       xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -37,4 +38,4 @@
             </StackPanel>
         </ScrollViewer>
     </Border>
-</Page>
+</shared:AppPage>

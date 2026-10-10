@@ -1,8 +1,8 @@
-using System.Windows.Controls;
+using ModsDude.Client.Wpf.Shared;
 
 namespace ModsDude.Client.Wpf.Account;
 
-public partial class AccountPage : Page
+public partial class AccountPage : AppPage
 {
     public AccountPage()
     {

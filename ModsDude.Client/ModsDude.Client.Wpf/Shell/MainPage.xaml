@@ -1,7 +1,8 @@
-<Page x:Class="ModsDude.Client.Wpf.Shell.MainPage"
+<shared:AppPage x:Class="ModsDude.Client.Wpf.Shell.MainPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:shell="clr-namespace:ModsDude.Client.Wpf.Shell"
       xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
@@ -65,4 +66,4 @@
 
         <Frame Grid.Column="1" Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
     </Grid>
-</Page>
+</shared:AppPage>

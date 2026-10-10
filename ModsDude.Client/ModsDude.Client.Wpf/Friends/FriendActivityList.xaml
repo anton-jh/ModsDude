@@ -35,14 +35,12 @@
                         <StackPanel Grid.Column="1" Orientation="Vertical">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                            Text="{Binding Name}" />
                                 <TextBlock Margin="6 0 0 0" FontFamily="Consolas"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Visibility="{Binding HasTag, Converter={StaticResource BoolToVisibilityConverter}}"
                                            Text="{Binding Tag}" />
                                 <TextBlock Margin="8 0 0 0"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                            TextTrimming="CharacterEllipsis"
                                            Text="{Binding ProfileLine}" />
                                 <Border Margin="8 0 0 0"

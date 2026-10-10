@@ -27,7 +27,6 @@
                        Text="{Binding Value}">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
-                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsProblem}" Value="True">
                                 <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />

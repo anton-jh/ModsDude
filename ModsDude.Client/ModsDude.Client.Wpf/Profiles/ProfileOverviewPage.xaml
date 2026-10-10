@@ -1,7 +1,8 @@
-<Page x:Class="ModsDude.Client.Wpf.Profiles.ProfileOverviewPage"
+<shared:AppPage x:Class="ModsDude.Client.Wpf.Profiles.ProfileOverviewPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       xmlns:games="clr-namespace:ModsDude.Client.Wpf.Games"
       xmlns:profiles="clr-namespace:ModsDude.Client.Wpf.Profiles"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -20,8 +21,7 @@
                         Padding="16">
                     <GroupBox Header="This profile" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
-                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       Text="{Binding RepoName}" />
+                            <TextBlock FontWeight="SemiBold" Text="{Binding RepoName}" />
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0 4 0 0"
                                        Text="{Binding ModSummary}" />
                         </StackPanel>
@@ -45,8 +45,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type games:GameOverviewViewModel}">
                                         <StackPanel Orientation="Vertical" Margin="0 0 0 16">
-                                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                       Text="{Binding Name}" />
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
 
                                             <TextBlock Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                                        Text="{Binding Problem}"
@@ -133,4 +132,4 @@
             </StackPanel>
         </ScrollViewer>
     </Border>
-</Page>
+</shared:AppPage>

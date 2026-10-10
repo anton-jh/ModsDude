@@ -1,8 +1,8 @@
+using ModsDude.Client.Wpf.Shared;
 using System.Windows;
-using System.Windows.Controls;
 
 namespace ModsDude.Client.Wpf.Repos;
-public partial class RepoOverviewPage : Page
+public partial class RepoOverviewPage : AppPage
 {
     public RepoOverviewPage()
     {

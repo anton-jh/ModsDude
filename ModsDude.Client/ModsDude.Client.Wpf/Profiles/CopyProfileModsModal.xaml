@@ -22,7 +22,6 @@
 
             <StackPanel Grid.Row="0" Margin="24 24 24 12">
                 <TextBlock Text="{Binding Title}"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            Style="{StaticResource TitleTextBlockStyle}" />
 
                 <TextBlock Text="{Binding Message}"
@@ -50,8 +49,7 @@
                             <DataTemplate>
                                 <TextBlock Text="{Binding Name}"
                                            Margin="4 6"
-                                           TextTrimming="CharacterEllipsis"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                           TextTrimming="CharacterEllipsis" />
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -81,7 +79,6 @@
                              IsChecked="{Binding Mode, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Add}">
                     <StackPanel>
                         <TextBlock Text="Add what is missing"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    Style="{DynamicResource BodyStrongTextBlockStyle}" />
                         <TextBlock Text="Brings in every mod this profile does not already hold, and leaves the ones it does at the versions they are pinned to."
                                    Margin="0 2 0 0"
@@ -95,7 +92,6 @@
                              IsChecked="{Binding Mode, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Replace}">
                     <StackPanel>
                         <TextBlock Text="Replace this list"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    Style="{DynamicResource BodyStrongTextBlockStyle}" />
                         <TextBlock Text="Makes this profile's list identical to the other one's, taking out anything the other profile does not hold. Not written until you save."
                                    Margin="0 2 0 0"

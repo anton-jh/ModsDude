@@ -22,7 +22,6 @@
 
             <StackPanel Grid.Row="0" Margin="24 24 24 16">
                 <TextBlock Text="Name the new profile"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            Style="{StaticResource TitleTextBlockStyle}" />
 
                 <TextBlock Text="{Binding Message}"

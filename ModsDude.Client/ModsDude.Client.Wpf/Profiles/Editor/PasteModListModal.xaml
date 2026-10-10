@@ -22,7 +22,6 @@
 
             <StackPanel Grid.Row="0" Margin="24 24 24 12">
                 <TextBlock Text="{Binding Title}"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            Style="{StaticResource TitleTextBlockStyle}" />
 
                 <TextBlock Text="{Binding Message}"
@@ -44,7 +43,6 @@
 
             <StackPanel Grid.Row="2" Margin="24 8 24 0">
                 <TextBlock Text="{Binding CountText}"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            Style="{DynamicResource BodyStrongTextBlockStyle}" />
 
                 <TextBlock Text="{Binding Hint}"

@@ -190,8 +190,7 @@
                                             <TextBlock Grid.Column="0"
                                                        Text="{Binding Headline}"
                                                        FontWeight="SemiBold"
-                                                       TextWrapping="Wrap"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                       TextWrapping="Wrap" />
 
                                             <!-- The whole card is the hit target for expanding, so a
                                                  collapsed one does not need aiming at. -->
@@ -482,8 +481,7 @@
                                ToolTip="{Binding Title}"
                                FontWeight="SemiBold"
                                TextTrimming="CharacterEllipsis"
-                               VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                               VerticalAlignment="Center" />
 
                     <!-- One task at a time, with the others an arrow away rather than a second bar
                          racing this one. Nothing pages itself: a task starting while somebody is

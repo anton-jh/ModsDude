@@ -22,7 +22,6 @@
 
             <StackPanel Grid.Row="0" Margin="24 24 24 12">
                 <TextBlock Text="{Binding Title}"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            Style="{StaticResource TitleTextBlockStyle}" />
 
                 <TextBlock Text="{Binding Message}"
@@ -50,8 +49,7 @@
                             <DataTemplate>
                                 <TextBlock Text="{Binding Name}"
                                            Margin="4 6"
-                                           TextTrimming="CharacterEllipsis"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                           TextTrimming="CharacterEllipsis" />
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>

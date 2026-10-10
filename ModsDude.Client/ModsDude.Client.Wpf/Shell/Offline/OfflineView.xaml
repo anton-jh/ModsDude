@@ -17,7 +17,6 @@
             <StackPanel Grid.Row="0" Orientation="Vertical" Margin="24 32 24 24">
 
                 <TextBlock Text="Offline"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            Style="{StaticResource TitleTextBlockStyle}"
                            Margin="0 0 0 24" />
 
@@ -28,8 +27,7 @@
                                Margin="0 0 24 8" />
                     <TextBlock Grid.Row="0" Grid.Column="1"
                                Text="Not answering"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                               FontWeight="SemiBold" />
 
                     <TextBlock Grid.Row="1" Grid.Column="0"
                                Text="Attempts"
@@ -37,8 +35,7 @@
                                Margin="0 0 24 8" />
                     <TextBlock Grid.Row="1" Grid.Column="1"
                                Text="{Binding Attempts}"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                               FontWeight="SemiBold" />
 
                     <TextBlock Grid.Row="2" Grid.Column="0"
                                Text="Next attempt"
@@ -46,8 +43,7 @@
                                Margin="0 0 24 0" />
                     <TextBlock Grid.Row="2" Grid.Column="1"
                                Text="{Binding NextAttempt}"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                               FontWeight="SemiBold" />
                 </Grid>
 
             </StackPanel>

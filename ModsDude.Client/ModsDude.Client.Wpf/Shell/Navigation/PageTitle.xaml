@@ -34,7 +34,6 @@
                    VerticalAlignment="Center"
                    Text="{Binding Text, RelativeSource={RelativeSource AncestorType=UserControl}}"
                    Style="{DynamicResource TitleTextBlockStyle}"
-                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                    TextTrimming="CharacterEllipsis" />
     </Grid>
 </UserControl>

@@ -90,7 +90,6 @@
                    TextTrimming="CharacterEllipsis">
             <TextBlock.Style>
                 <Style TargetType="TextBlock">
-                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />

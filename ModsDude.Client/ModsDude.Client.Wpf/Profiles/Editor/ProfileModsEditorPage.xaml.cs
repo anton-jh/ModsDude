@@ -1,10 +1,11 @@
+using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shared.Behaviors;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 
 namespace ModsDude.Client.Wpf.Profiles.Editor;
-public partial class ProfileModsEditorPage : Page
+public partial class ProfileModsEditorPage : AppPage
 {
     public ProfileModsEditorPage()
     {

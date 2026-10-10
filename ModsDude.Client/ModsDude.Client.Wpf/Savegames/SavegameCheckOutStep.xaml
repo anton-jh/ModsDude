@@ -24,7 +24,6 @@
 
             <TextBlock Margin="0 4 0 0"
                        TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                        Text="{Binding Mods.Text}" />
 
             <!-- Named rather than counted. This is the moment a map at the wrong version stops
@@ -77,7 +76,6 @@
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="{Binding Label}"
                                    TextTrimming="CharacterEllipsis"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    Style="{DynamicResource BodyStrongTextBlockStyle}" />
 
                         <TextBlock Margin="0 2 0 0"
@@ -182,7 +180,6 @@
                  compatibility mode it is the number that does not move. -->
             <TextBlock Margin="0 4 0 0"
                        TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                        Text="{Binding RunsOn}"
                        Visibility="{Binding HasRunsOn, Converter={StaticResource BoolToVisibilityConverter}}" />
 
@@ -192,7 +189,6 @@
                        Visibility="{Binding ShowRevisionNote, Converter={StaticResource BoolToVisibilityConverter}}">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
-                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding Revision.IsCaution}" Value="True">
                                 <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />

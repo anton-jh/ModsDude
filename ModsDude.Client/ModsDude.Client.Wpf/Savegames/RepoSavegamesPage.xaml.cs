@@ -1,8 +1,8 @@
-using System.Windows.Controls;
+using ModsDude.Client.Wpf.Shared;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
-public partial class RepoSavegamesPage : Page
+public partial class RepoSavegamesPage : AppPage
 {
     public RepoSavegamesPage()
     {

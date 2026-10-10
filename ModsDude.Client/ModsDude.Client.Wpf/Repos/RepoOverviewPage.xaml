@@ -1,7 +1,8 @@
-<Page x:Class="ModsDude.Client.Wpf.Repos.RepoOverviewPage"
+<shared:AppPage x:Class="ModsDude.Client.Wpf.Repos.RepoOverviewPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       xmlns:friends="clr-namespace:ModsDude.Client.Wpf.Friends"
       xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
       xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos"
@@ -23,8 +24,7 @@
                         Padding="16">
                     <GroupBox Header="This repo" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
-                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       Text="{Binding GameName}" />
+                            <TextBlock FontWeight="SemiBold" Text="{Binding GameName}" />
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0 4 0 0"
                                        Text="{Binding MembershipSummary}" />
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -51,8 +51,7 @@
 
                             <StackPanel Orientation="Vertical"
                                         Visibility="{Binding HasGame, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           Text="{Binding Game.Name}" />
+                                <TextBlock FontWeight="SemiBold" Text="{Binding Game.Name}" />
 
                                 <TextBlock Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                            Text="{Binding Game.Problem}"
@@ -176,4 +175,4 @@
             </StackPanel>
         </ScrollViewer>
     </Border>
-</Page>
+</shared:AppPage>

@@ -34,14 +34,12 @@
                                Text="{Binding Title}"
                                TextWrapping="Wrap"
                                VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                Style="{StaticResource TitleTextBlockStyle}" />
                 </Grid>
 
                 <TextBlock Text="{Binding Message}"
                            Margin="0 12 0 0"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                           TextWrapping="Wrap" />
 
                 <TextBlock Text="{Binding Advice}"
                            Margin="0 8 0 0"
@@ -63,7 +61,6 @@
                                             <TextBlock Grid.Column="0"
                                                        Text="{Binding Name}"
                                                        TextTrimming="CharacterEllipsis"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                        Style="{DynamicResource BodyStrongTextBlockStyle}" />
 
                                             <TextBlock Grid.Column="1"

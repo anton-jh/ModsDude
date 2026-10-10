@@ -33,7 +33,6 @@
                                Text="{Binding Title}"
                                TextWrapping="Wrap"
                                VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                Style="{StaticResource TitleTextBlockStyle}"
                                Margin="0 32 0 24" />
                 </Grid>

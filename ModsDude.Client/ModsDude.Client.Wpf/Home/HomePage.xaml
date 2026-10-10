@@ -1,7 +1,8 @@
-<Page x:Class="ModsDude.Client.Wpf.Home.HomePage"
+<shared:AppPage x:Class="ModsDude.Client.Wpf.Home.HomePage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
       xmlns:friends="clr-namespace:ModsDude.Client.Wpf.Friends"
       xmlns:home="clr-namespace:ModsDude.Client.Wpf.Home"
       xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
@@ -60,4 +61,4 @@
             </StackPanel>
         </ScrollViewer>
     </Border>
-</Page>
+</shared:AppPage>
