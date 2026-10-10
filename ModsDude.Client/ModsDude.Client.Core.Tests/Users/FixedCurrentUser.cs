@@ -11,7 +11,23 @@ public sealed class FixedCurrentUser(string id) : ICurrentUserStore
 
     public Task<CurrentUserDto> GetAsync(CancellationToken cancellationToken) => Task.FromResult(User!);
 
-    public Task RefreshAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public int Refreshes { get; private set; }
+
+    public bool FailNext { get; set; }
+
+    public Task RefreshAsync(CancellationToken cancellationToken)
+    {
+        Refreshes++;
+
+        if (FailNext)
+        {
+            FailNext = false;
+
+            throw new HttpRequestException("The connection dropped.");
+        }
+
+        return Task.CompletedTask;
+    }
 
     public Task<CurrentUserDto> WriteAsync(Func<CancellationToken, Task<CurrentUserDto>> send, CancellationToken cancellationToken)
         => send(cancellationToken);

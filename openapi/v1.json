@@ -533,6 +533,10 @@
               "$ref": "#/components/schemas/RepoChangesDto"
             },
             "type": "array"
+          },
+          "user": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -1010,7 +1014,7 @@
           "https://server.modsdude.com/api/problems/not-found",
           "https://server.modsdude.com/api/problems/mod-dependency-exists",
           "https://server.modsdude.com/api/problems/insufficient-repo-access",
-          "https://server.modsdude.com/api/problems/not-authorized",
+          "https://server.modsdude.com/api/problems/not-trusted",
           "https://server.modsdude.com/api/problems/not-authenticated",
           "https://server.modsdude.com/api/problems/cannot-kick-only-admin",
           "https://server.modsdude.com/api/problems/cannot-demote-only-admin",
@@ -1063,7 +1067,7 @@
           "NotFound",
           "ModDependencyExists",
           "InsufficientRepoAccess",
-          "NotAuthorized",
+          "NotTrusted",
           "NotAuthenticated",
           "CannotKickOnlyAdmin",
           "CannotDemoteOnlyAdmin",

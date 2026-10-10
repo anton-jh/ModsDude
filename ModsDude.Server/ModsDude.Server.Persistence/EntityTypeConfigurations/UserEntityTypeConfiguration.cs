@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Users;
+using ModsDude.Server.Persistence.Changes;
 
 namespace ModsDude.Server.Persistence.EntityTypeConfigurations;
 internal class UserEntityTypeConfiguration : IEntityTypeConfiguration<User>
@@ -17,6 +18,9 @@ internal class UserEntityTypeConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.DisplayName);
 
         builder.Property(x => x.AvatarHash).HasMaxLength(ModImageHash.Length);
+
+        // Counted by the database - see UserChanges.
+        builder.Property<long>(UserChanges.CounterColumn).ValueGeneratedOnAddOrUpdate().HasDefaultValue(0L);
 
         builder.HasMany(x => x.RepoMemberships).WithOne().HasForeignKey(x => x.UserId);
         builder.Navigation(x => x.RepoMemberships).AutoInclude();

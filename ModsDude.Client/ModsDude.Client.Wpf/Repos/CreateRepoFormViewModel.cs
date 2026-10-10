@@ -1,9 +1,12 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Account;
 using ModsDude.Client.Wpf.Games;
 using ModsDude.Client.Wpf.Shared;
@@ -19,8 +22,10 @@ public partial class CreateRepoFormViewModel(
     INavigationLockService navigationLockService,
     IFilePickerService filePickerService,
     IModalService modalService,
+    ICurrentUserStore currentUser,
     AccountViewModel account,
-    TrustCodeFormViewModel trustCode)
+    TrustCodeFormViewModel trustCode,
+    ILogger<CreateRepoFormViewModel> logger)
     : ObservableObject, IDisposable
 {
     public AccountViewModel Account { get; } = account;
@@ -62,11 +67,21 @@ public partial class CreateRepoFormViewModel(
 
         navigationLockService.ReleaseLock(this);
 
-        await repoStore.CreateRepo(
-            Name,
-            SelectedGameAdapter.Id.ToString(),
-            BaseSettingsEditor.ExtractResults(),
-            cancellationToken);
+        try
+        {
+            await repoStore.CreateRepo(
+                Name,
+                SelectedGameAdapter.Id.ToString(),
+                BaseSettingsEditor.ExtractResults(),
+                cancellationToken);
+        }
+        catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NotTrusted)
+        {
+            logger.LogInformation(exception, "Creating a repo was refused because the user is not trusted.");
+
+            // Trust was revoked since the user was last read. Reading it again swaps this form for the trust code box.
+            await currentUser.RefreshAsync(cancellationToken);
+        }
     }
 
     public void Dispose()

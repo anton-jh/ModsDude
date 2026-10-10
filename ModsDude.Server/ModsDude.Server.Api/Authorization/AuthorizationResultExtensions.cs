@@ -1,5 +1,6 @@
 ﻿using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
+using System.Diagnostics;
 
 namespace ModsDude.Server.Api.Authorization;
 
@@ -23,7 +24,8 @@ public static class AuthorizationResultExtensions
         var problem = result switch
         {
             AuthorizationResult.InsufficientRepoAccess res => Problems.InsufficientRepoAccess(res.Needed),
-            _ => Problems.NotAuthorized
+            AuthorizationResult.NotTrusted => Problems.NotTrusted,
+            _ => throw new UnreachableException()
         };
 
         return new Forbidden<CustomProblemDetails>(problem);

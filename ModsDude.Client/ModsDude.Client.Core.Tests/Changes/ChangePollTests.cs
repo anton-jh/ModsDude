@@ -24,7 +24,7 @@ namespace ModsDude.Client.Core.Tests.Changes;
 public class ChangePollTests
 {
     [Fact]
-    public async Task The_first_poll_reads_the_repo_list_and_every_loaded_store()
+    public async Task The_first_poll_reads_the_user_the_repo_list_and_every_loaded_store()
     {
         var harness = new Harness();
         await harness.LoadProfilesAsync();
@@ -32,6 +32,7 @@ public class ChangePollTests
 
         await harness.PollAsync();
 
+        Assert.Equal(1, harness.CurrentUser.Refreshes);
         Assert.Equal(1, harness.Repos.Refreshes);
         Assert.Equal(2, harness.ProfilesServer.Reads);
         Assert.Equal(2, harness.SavegameServer.ListReads);
@@ -65,6 +66,41 @@ public class ChangePollTests
         await harness.PollAsync();
 
         Assert.Equal(before with { Profiles = before.Profiles + 1 }, harness.Reads());
+    }
+
+    /// <summary>How trust granted or revoked from the admin dashboard reaches a running client.</summary>
+    [Fact]
+    public async Task Only_the_user_is_read_again_when_the_user_counter_moved()
+    {
+        var harness = new Harness();
+        await harness.LoadProfilesAsync();
+        await harness.LoadSavegamesAsync();
+        await harness.PollAsync();
+        var before = harness.Reads();
+
+        harness.Changes.User++;
+        await harness.PollAsync();
+
+        Assert.Equal(before with { User = before.User + 1 }, harness.Reads());
+    }
+
+    [Fact]
+    public async Task A_user_read_that_failed_is_tried_again_on_the_next_poll()
+    {
+        var harness = new Harness();
+        await harness.PollAsync();
+        var before = harness.Reads();
+
+        harness.Changes.User++;
+        harness.CurrentUser.FailNext = true;
+        await harness.PollAsync();
+        await harness.PollAsync();
+
+        Assert.Equal(before with { User = before.User + 2 }, harness.Reads());
+
+        await harness.PollAsync();
+
+        Assert.Equal(before with { User = before.User + 2 }, harness.Reads());
     }
 
     [Fact]
@@ -201,7 +237,7 @@ public class ChangePollTests
         harness.Poll.ClearUserState();
         await harness.PollAsync();
 
-        Assert.Equal(before with { Repos = before.Repos + 1, Profiles = before.Profiles + 1, Friends = before.Friends + 1 }, harness.Reads());
+        Assert.Equal(before with { User = before.User + 1, Repos = before.Repos + 1, Profiles = before.Profiles + 1, Friends = before.Friends + 1 }, harness.Reads());
     }
 
     [Fact]
@@ -218,7 +254,7 @@ public class ChangePollTests
 
         await harness.PollAsync();
 
-        Assert.Equal(before with { Repos = before.Repos + 1, Friends = before.Friends + 1 }, harness.Reads());
+        Assert.Equal(before with { User = before.User + 1, Repos = before.Repos + 1, Friends = before.Friends + 1 }, harness.Reads());
     }
 
     /// <summary>Offline the reconnect probe is what asks; a poll would only fail.</summary>
@@ -237,33 +273,29 @@ public class ChangePollTests
     }
 
     [Fact]
-    public async Task Reading_everything_again_reads_every_loaded_store_though_nothing_moved()
+    public async Task Reading_everything_again_reads_the_user_and_every_loaded_store_though_nothing_moved()
     {
         var harness = new Harness();
         await harness.LoadProfilesAsync();
         await harness.LoadSavegamesAsync();
         await harness.PollAsync();
         var before = harness.Reads();
+        var expected = before with
+        {
+            User = before.User + 1,
+            Repos = before.Repos + 1,
+            Profiles = before.Profiles + 1,
+            Savegames = before.Savegames + 1,
+            Friends = before.Friends + 1
+        };
 
         await harness.Poll.RereadAllAsync(CancellationToken.None);
 
-        Assert.Equal(before with
-        {
-            Repos = before.Repos + 1,
-            Profiles = before.Profiles + 1,
-            Savegames = before.Savegames + 1,
-            Friends = before.Friends + 1
-        }, harness.Reads());
+        Assert.Equal(expected, harness.Reads());
 
         await harness.PollAsync();
 
-        Assert.Equal(before with
-        {
-            Repos = before.Repos + 1,
-            Profiles = before.Profiles + 1,
-            Savegames = before.Savegames + 1,
-            Friends = before.Friends + 1
-        }, harness.Reads());
+        Assert.Equal(expected, harness.Reads());
     }
 
     [Fact]
@@ -286,7 +318,7 @@ public class ChangePollTests
     };
 
 
-    private sealed record ReadCounts(int Repos, int Profiles, int Savegames, int Mods, int Friends);
+    private sealed record ReadCounts(int User, int Repos, int Profiles, int Savegames, int Mods, int Friends);
 
     private sealed class Harness
     {
@@ -307,10 +339,10 @@ public class ChangePollTests
 
             _bindings = new SavegameBindingStore(_state);
 
-            var currentUser = new FixedCurrentUser("me");
+            CurrentUser = new FixedCurrentUser("me");
 
             ProfileStore = new ProfileStore(ProfilesServer, InlineStoreDispatcher.Instance, NullLogger<ProfileStore>.Instance);
-            SavegameStore = new SavegameStore(SavegameServer, currentUser, InlineStoreDispatcher.Instance, NullLogger<SavegameStore>.Instance);
+            SavegameStore = new SavegameStore(SavegameServer, CurrentUser, InlineStoreDispatcher.Instance, NullLogger<SavegameStore>.Instance);
             Changes.Add(RepoId);
 
             Poll = new ChangePoll(
@@ -323,7 +355,7 @@ public class ChangePollTests
                 new HeldSavegameClaims(_candidates, _bindings, SavegameStore),
                 _candidates,
                 Drift,
-                currentUser,
+                CurrentUser,
                 Connection,
                 NullLogger<ChangePoll>.Instance);
         }
@@ -337,6 +369,7 @@ public class ChangePollTests
         public FakeModStore Mods { get; } = new();
         public FakeFriends Friends { get; } = new();
         public FakeDriftMonitor Drift { get; } = new();
+        public FixedCurrentUser CurrentUser { get; }
         public ProfileStore ProfileStore { get; }
         public SavegameStore SavegameStore { get; }
         public ChangePoll Poll { get; }
@@ -347,7 +380,7 @@ public class ChangePollTests
 
         public Task PollAsync() => Poll.PollAsync(CancellationToken.None);
 
-        public ReadCounts Reads() => new(Repos.Refreshes, ProfilesServer.Reads, SavegameServer.ListReads, Mods.Reads, Friends.Refreshes);
+        public ReadCounts Reads() => new(CurrentUser.Refreshes, Repos.Refreshes, ProfilesServer.Reads, SavegameServer.ListReads, Mods.Reads, Friends.Refreshes);
 
         public Task LoadProfilesAsync() => ProfileStore.RefreshAsync(RepoId, CancellationToken.None);
 
@@ -396,13 +429,15 @@ public class ChangePollTests
 
         public int Reads { get; private set; }
 
+        public long User { get; set; }
+
         public async Task<GetChangesResponse> GetChangesV1Async(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             Reads++;
 
-            var answer = new GetChangesResponse { Repos = [.. _repos] };
+            var answer = new GetChangesResponse { User = User, Repos = [.. _repos] };
 
             if (_held is { } held)
             {

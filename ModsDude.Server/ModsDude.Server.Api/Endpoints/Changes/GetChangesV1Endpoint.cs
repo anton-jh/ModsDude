@@ -6,11 +6,12 @@ using ModsDude.Server.Persistence.DbContexts;
 namespace ModsDude.Server.Api.Endpoints.Changes;
 
 /// <summary>
-/// Where the change counters of each of the caller's repos stand. A client polls this one small read
-/// and reads again only the parts whose counters moved.
+/// Where the change counters of the caller and each of their repos stand. A client polls this one
+/// small read and reads again only the parts whose counters moved.
 /// </summary>
 /// <remarks>
-/// Scoped to the caller: only the live repos they are a member of, the same set as their repo list.
+/// Scoped to the caller: their own record, and only the live repos they are a member of, the same set
+/// as their repo list.
 /// </remarks>
 public class GetChangesV1Endpoint : IEndpoint
 {
@@ -26,15 +27,18 @@ public class GetChangesV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        var repos = await RepoChanges.ReadForAsync(dbContext, httpContext.User.GetUserId(), cancellationToken);
+        var userId = httpContext.User.GetUserId();
+        var user = await UserChanges.ReadForAsync(dbContext, userId, cancellationToken);
+        var repos = await RepoChanges.ReadForAsync(dbContext, userId, cancellationToken);
 
-        return TypedResults.Ok(new GetChangesResponse([.. repos.Select(x => new RepoChangesDto(
+        return TypedResults.Ok(new GetChangesResponse(user, [.. repos.Select(x => new RepoChangesDto(
             x.RepoId.Value, x.Repo, x.Profiles, x.Savegames, x.Mods, x.Members, x.Activity))]));
     }
 
 
+    /// <param name="User">The caller's own record, as <c>users/me</c> describes it.</param>
     /// <param name="Repos">Ordered by repo id.</param>
-    public record GetChangesResponse(IReadOnlyList<RepoChangesDto> Repos);
+    public record GetChangesResponse(long User, IReadOnlyList<RepoChangesDto> Repos);
 
     /// <param name="Repo">The repo's own row: name, settings, archiving.</param>
     /// <param name="Savegames">Savegames, their snapshots and their claims.</param>

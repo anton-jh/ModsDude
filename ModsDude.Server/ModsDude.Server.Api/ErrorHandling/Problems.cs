@@ -167,11 +167,11 @@ public static class Problems
         };
     }
 
-    public static CustomProblemDetails NotAuthorized => new()
+    public static CustomProblemDetails NotTrusted => new()
     {
-        Type = ProblemType.NotAuthorized,
-        Title = "Not authorized",
-        Detail = $"You are not authorized to perform this operation."
+        Type = ProblemType.NotTrusted,
+        Title = "Not trusted",
+        Detail = "The operation requires a trusted user."
     };
 
     /// <summary>
@@ -541,9 +541,9 @@ public static class Problems
         [JsonStringEnumMemberName(_typeBaseUri + "insufficient-repo-access")]
         InsufficientRepoAccess,
 
-        [EnumMember(Value = _typeBaseUri + "not-authorized")]
-        [JsonStringEnumMemberName(_typeBaseUri + "not-authorized")]
-        NotAuthorized,
+        [EnumMember(Value = _typeBaseUri + "not-trusted")]
+        [JsonStringEnumMemberName(_typeBaseUri + "not-trusted")]
+        NotTrusted,
 
         [EnumMember(Value = _typeBaseUri + "not-authenticated")]
         [JsonStringEnumMemberName(_typeBaseUri + "not-authenticated")]

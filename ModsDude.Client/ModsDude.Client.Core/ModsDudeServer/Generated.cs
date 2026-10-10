@@ -11770,6 +11770,9 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [Newtonsoft.Json.JsonProperty("repos", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Collections.Generic.ICollection<RepoChangesDto> Repos { get; set; } = default!;
 
+        [Newtonsoft.Json.JsonProperty("user", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public long User { get; set; } = default!;
+
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -12190,8 +12193,8 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/insufficient-repo-access")]
         InsufficientRepoAccess = 3,
 
-        [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/not-authorized")]
-        NotAuthorized = 4,
+        [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/not-trusted")]
+        NotTrusted = 4,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/not-authenticated")]
         NotAuthenticated = 5,

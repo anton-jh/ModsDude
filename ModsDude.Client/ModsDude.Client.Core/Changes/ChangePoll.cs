@@ -12,7 +12,8 @@ using ModsDude.Client.Core.Users;
 namespace ModsDude.Client.Core.Changes;
 
 /// <summary>
-/// Keeps every loaded store in step with the server from one small read of per-repo change counters.
+/// Keeps the current user and every loaded store in step with the server from one small read of
+/// change counters.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -47,7 +48,7 @@ public sealed class ChangePoll(
     : IChangePoll
 {
     private readonly Lock _lock = new();
-    private IReadOnlyDictionary<Guid, RepoChangesDto>? _seen;
+    private Counters? _seen;
     private int _generation;
 
 
@@ -60,7 +61,7 @@ public sealed class ChangePoll(
         }
 
         int generation;
-        IReadOnlyDictionary<Guid, RepoChangesDto>? seen;
+        Counters? seen;
 
         lock (_lock)
         {
@@ -68,12 +69,12 @@ public sealed class ChangePoll(
             seen = _seen;
         }
 
-        var answer = (await changesClient.GetChangesV1Async(cancellationToken)).Repos
-            .OrderBy(x => x.RepoId)
-            .ToList();
+        var response = await changesClient.GetChangesV1Async(cancellationToken);
+        var answer = new Counters(response.User, response.Repos.ToDictionary(x => x.RepoId));
 
         var poll = new Poll(seen, answer, logger, cancellationToken);
 
+        await RefreshUserAsync(poll);
         await RefreshReposAsync(poll);
         await RefreshProfilesAsync(poll);
         await RefreshModsAsync(poll);
@@ -90,7 +91,7 @@ public sealed class ChangePoll(
             // A poll that started before a user change or a reread says nothing about what came after.
             if (_generation == generation)
             {
-                _seen = answer.ToDictionary(x => x.RepoId);
+                _seen = answer;
             }
         }
     }
@@ -115,6 +116,14 @@ public sealed class ChangePoll(
         }
     }
 
+
+    private async Task RefreshUserAsync(Poll poll)
+    {
+        if (poll.UserMoved)
+        {
+            await poll.AttemptAsync(currentUser.RefreshAsync, "the current user");
+        }
+    }
 
     private async Task RefreshReposAsync(Poll poll)
     {
@@ -187,22 +196,28 @@ public sealed class ChangePoll(
     }
 
 
+    private sealed record Counters(long User, IReadOnlyDictionary<Guid, RepoChangesDto> Repos);
+
     private sealed class Poll(
-        IReadOnlyDictionary<Guid, RepoChangesDto>? seen,
-        IReadOnlyList<RepoChangesDto> answer,
+        Counters? seen,
+        Counters answer,
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        public IReadOnlyDictionary<Guid, RepoChangesDto>? Seen { get; } = seen;
-        public IReadOnlyList<RepoChangesDto> Answer { get; } = answer;
+        /// <summary>The repos' counters, ordered by repo id.</summary>
+        public IReadOnlyList<RepoChangesDto> Answer { get; } = [.. answer.Repos.Values.OrderBy(x => x.RepoId)];
+
         public bool Failed { get; private set; }
 
+        /// <remarks>The first poll counts as moved.</remarks>
+        public bool UserMoved => seen is null || seen.User != answer.User;
+
         /// <summary>A repo the last poll listed and this one does not: left, kicked from, archived or deleted.</summary>
-        public bool AnyRepoGone => Seen is not null && Seen.Keys.Any(x => Answer.All(repo => repo.RepoId != x));
+        public bool AnyRepoGone => seen is not null && seen.Repos.Keys.Any(x => answer.Repos.ContainsKey(x) is false);
 
         /// <remarks>A repo with no counters from the last poll - joined since, or the first poll - counts as moved.</remarks>
         public bool Moved(RepoChangesDto now, Func<RepoChangesDto, long> counter)
-            => Seen is null || Seen.TryGetValue(now.RepoId, out var before) is false || counter(before) != counter(now);
+            => seen is null || seen.Repos.TryGetValue(now.RepoId, out var before) is false || counter(before) != counter(now);
 
         /// <summary>One read, logged and remembered when it fails, so the rest of the poll still runs.</summary>
         public async Task AttemptAsync(Func<CancellationToken, Task> read, string what)
