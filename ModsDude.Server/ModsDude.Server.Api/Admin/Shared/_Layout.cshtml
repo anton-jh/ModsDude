@@ -494,6 +494,101 @@
         margin: 0;
         font-variant-numeric: tabular-nums;
     }
+
+    @@media (max-width: 48rem) {
+        .toolbar form {
+            max-width: 100%;
+        }
+
+        .toolbar input[type="text"] {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .facts {
+            grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+        }
+
+        .table-scroll {
+            overflow-x: visible;
+        }
+
+        table, tbody, tr, td {
+            display: block;
+        }
+
+        table, .row-details table {
+            width: 100%;
+            max-width: 36rem;
+            min-width: 0;
+        }
+
+        thead, .rows-header {
+            display: none;
+        }
+
+        tr {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--rule);
+        }
+
+        td, td.number {
+            padding: 0.125rem 0.5rem;
+            border-bottom: none;
+            text-align: right;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        td[data-label]::before {
+            content: attr(data-label);
+            float: left;
+            margin-right: 1rem;
+            color: var(--muted);
+        }
+
+        td:first-child {
+            font-weight: 600;
+            text-align: left;
+        }
+
+        td:first-child::before {
+            content: none;
+        }
+
+        td .toolbar {
+            justify-content: flex-end;
+        }
+
+        .row-details .scroll-list {
+            display: block;
+        }
+
+        .rows summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.125rem 1rem;
+        }
+
+        .rows summary > :first-child {
+            flex-basis: 100%;
+            font-weight: 600;
+        }
+
+        .rows summary > :not(:first-child) {
+            font-size: 0.75rem;
+        }
+
+        .rows summary > [data-label]:not(:first-child)::before {
+            content: attr(data-label) " ";
+            color: var(--muted);
+        }
+
+        .rows summary::before {
+            top: 0.5rem;
+            transform: none;
+        }
+    }
 </style>
 </head>
 <body>
@@ -539,6 +634,32 @@
 
         event.target.closest("[data-close-dialog]")?.closest("dialog").close();
     });
+
+    // Each cell carries its column's heading, which narrow screens show beside it instead of the header row.
+    function labelCells(headings, cells) {
+        [...cells].forEach((cell, index) => {
+            const heading = headings[index]?.textContent.trim();
+            if (heading) {
+                cell.dataset.label = heading;
+            }
+        });
+    }
+
+    for (const table of document.querySelectorAll("table")) {
+        const headings = table.tHead?.rows[0]?.cells ?? [];
+        for (const body of table.tBodies) {
+            for (const row of body.rows) {
+                labelCells(headings, row.cells);
+            }
+        }
+    }
+
+    for (const rows of document.querySelectorAll(".rows")) {
+        const headings = rows.querySelector(":scope > .rows-header").children;
+        for (const summary of rows.querySelectorAll(":scope > details > summary")) {
+            labelCells(headings, summary.children);
+        }
+    }
 
     // A search box narrows the list it names to the options whose text contains what was typed.
     document.addEventListener("input", event => {
