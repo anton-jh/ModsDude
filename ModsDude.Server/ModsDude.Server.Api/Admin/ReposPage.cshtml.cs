@@ -11,6 +11,8 @@ using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Invites;
 using ModsDude.Server.Persistence.Retention;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace ModsDude.Server.Api.Admin;
 
@@ -25,6 +27,7 @@ public class ReposPageModel(
 {
     private const string _repoGone = "That repo no longer exists.";
     private const string _repoChanged = "The repo changed. Check it again.";
+    private static readonly JsonSerializerOptions _indented = new() { WriteIndented = true };
 
 
     public StorageComparison? Storage { get; private set; }
@@ -126,6 +129,7 @@ public class ReposPageModel(
                     AdminFormat.Repo(repo.Id, repo.Name),
                     repo.Name.Value,
                     repo.AdapterData.Id.Value,
+                    BaseSettings(repo.Id, repo.AdapterData.Configuration),
                     repo.Created,
                     repo.ArchivedAt,
                     repo.MembersVersion,
@@ -464,6 +468,20 @@ public class ReposPageModel(
         new("30 days", 30 * 24)
     ];
 
+    /// <summary>The server never validates the configuration, so one that is not JSON is shown as stored.</summary>
+    private string BaseSettings(RepoId repoId, AdapterConfiguration configuration)
+    {
+        try
+        {
+            return JsonNode.Parse(configuration.Value)?.ToJsonString(_indented) ?? configuration.Value;
+        }
+        catch (JsonException ex)
+        {
+            logger.LogWarning(ex, "Base settings of repo {RepoId} are not JSON; showing them as stored.", repoId.Value);
+            return configuration.Value;
+        }
+    }
+
     public static string RowAnchor(Guid repoId) => $"repo-{repoId}";
 
     public static string Describe(PrunableHistory history) => history switch
@@ -484,7 +502,8 @@ public class ReposPageModel(
         Guid Id,
         string Name,
         string RawName,
-        string Game,
+        string Adapter,
+        string BaseSettings,
         DateTime Created,
         DateTime? ArchivedAt,
         int MembersVersion,

@@ -19,7 +19,7 @@
         <div class="rows" style="--columns: minmax(10rem, 2fr) minmax(6rem, 1fr) 5rem 5rem 6.5rem 6.5rem 6.5rem 6.5rem">
             <div class="rows-header">
                 <span>Repo</span>
-                <span>Game</span>
+                <span>Adapter</span>
                 <span class="number">Members</span>
                 <span class="number">Mods</span>
                 <span class="number">Mod size</span>
@@ -43,7 +43,7 @@
                                 <span class="status NoActiveAdmin">No active Admin</span>
                             }
                         </span>
-                        <span class="code">@repo.Game</span>
+                        <span class="code">@repo.Adapter</span>
                         <span class="number">@AdminFormat.Count(repo.Members.Count)</span>
                         <span class="number">@AdminFormat.Count(repo.ModCount)</span>
                         <span class="number">@AdminFormat.Bytes(repo.ModBytes)</span>
@@ -75,6 +75,8 @@
 
                         <h3>Repo</h3>
                         <div class="toolbar">
+                            <button type="button" data-open-dialog="base-settings-@repo.Id">Base settings</button>
+
                             <form method="post" asp-page-handler="Rename">
                                 <input type="hidden" name="repoId" value="@repo.Id">
                                 <input type="text" name="name" value="@repo.RawName" required aria-label="Name">
@@ -101,6 +103,16 @@
                                 </form>
                             }
                         </div>
+
+                        <dialog id="base-settings-@repo.Id" class="wide">
+                            <h2>Base settings of @repo.Name</h2>
+                            <div class="dialog-form">
+                                <textarea class="code" rows="16" readonly aria-label="Base settings">@repo.BaseSettings</textarea>
+                                <div class="dialog-actions">
+                                    <button type="button" data-close-dialog>Close</button>
+                                </div>
+                            </div>
+                        </dialog>
 
                         <h3>Members</h3>
                         @if (repo.Members.Count == 0)
