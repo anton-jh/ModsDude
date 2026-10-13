@@ -15,6 +15,7 @@ using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Sidebar;
+using ModsDude.Client.Wpf.Shell.Toasts;
 using ModsDude.Client.Wpf.Shell.Updates;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -55,6 +56,7 @@ public partial class SettingsPageViewModel
     private readonly IModImageCache _imageCache;
     private readonly INavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
+    private readonly IToastService _toasts;
     private readonly IFilePickerService _filePickerService;
     private readonly IBackgroundTaskReporter _backgroundTasks;
     private readonly TransferLimits _transferLimits;
@@ -71,6 +73,9 @@ public partial class SettingsPageViewModel
     private IReadOnlyDictionary<string, ContentStore> _configuredStores =
         new Dictionary<string, ContentStore>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The settings as last written, which every edit is compared against.</summary>
+    private ClientSettings _saved;
+
 
     public SettingsPageViewModel(
         IClientSettingsRepository settingsRepository,
@@ -79,6 +84,7 @@ public partial class SettingsPageViewModel
         IModImageCache imageCache,
         IFilePickerService filePickerService,
         IModalService modalService,
+        IToastService toasts,
         INavigationLockService navigationLockService,
         IBackgroundTaskReporter backgroundTasks,
         TransferLimits transferLimits,
@@ -92,6 +98,7 @@ public partial class SettingsPageViewModel
         _imageCache = imageCache;
         _filePickerService = filePickerService;
         _modalService = modalService;
+        _toasts = toasts;
         _navigationLockService = navigationLockService;
         _backgroundTasks = backgroundTasks;
         _transferLimits = transferLimits;
@@ -100,6 +107,7 @@ public partial class SettingsPageViewModel
         _updater.Changed += OnUpdaterChanged;
 
         var settings = settingsRepository.Snapshot();
+        _saved = settings;
 
         // A store on a disk with no mod folders on it serves nothing, so the disks with games on
         // them are what the page is about.
@@ -119,7 +127,7 @@ public partial class SettingsPageViewModel
             settings.ImageCache.Path,
             settings.ImageCache.MaxSizeBytes / (double)_bytesPerGigabyte,
             filePickerService);
-        ImageCache.Modified += OnStoreModified;
+        ImageCache.Modified += OnSettingEdited;
 
         // Straight into the fields, so loading the page does not count as an edit.
         _downloadLimit = DescribeLimit(settings.Transfers.DownloadBytesPerSecond);
@@ -156,10 +164,12 @@ public partial class SettingsPageViewModel
     public bool HasStores => Stores.Count > 0;
 
     /// <summary>
-    /// Whether the housekeeping buttons are live. Off while something is running, and off while
-    /// there are unsaved edits - see the remarks on this class for why the second one matters.
+    /// Whether what is on the page differs from what is saved. Recomputed on every edit, so changing a
+    /// value back counts as no change. Also turns off the housekeeping buttons - see the remarks on
+    /// this class for why that matters.
     /// </summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     [NotifyPropertyChangedFor(nameof(CanManage))]
     [NotifyPropertyChangedFor(nameof(ManagementBlockedReason))]
     [NotifyCanExecuteChangedFor(nameof(VerifyStoreCommand))]
@@ -307,7 +317,7 @@ public partial class SettingsPageViewModel
         : string.Empty;
 
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(HasUnsavedChanges))]
     public async Task SaveChanges(CancellationToken cancellationToken)
     {
         var errors = GetValidationErrors();
@@ -336,12 +346,12 @@ public partial class SettingsPageViewModel
                 settings.Stores[store.VolumeRoot] = new ContentStoreSettings()
                 {
                     Path = store.Path,
-                    MaxSizeBytes = (long)(store.MaxSizeGigabytes * _bytesPerGigabyte)
+                    MaxSizeBytes = ToBytes(store.MaxSizeGigabytes)
                 };
             }
 
             settings.ImageCache.Path = ImageCache.Path;
-            settings.ImageCache.MaxSizeBytes = (long)(ImageCache.MaxSizeGigabytes * _bytesPerGigabyte);
+            settings.ImageCache.MaxSizeBytes = ToBytes(ImageCache.MaxSizeGigabytes);
 
             settings.Transfers.DownloadBytesPerSecond = ParseLimit(DownloadLimit);
             settings.Transfers.UploadBytesPerSecond = ParseLimit(UploadLimit);
@@ -356,9 +366,11 @@ public partial class SettingsPageViewModel
         // Into the live limiters as well as the file, so a download already running slows down - or
         // speeds up - from its next read rather than from the next start of the app.
         _transferLimits.Apply(_settingsRepository.Read(x => x.Transfers));
-        _navigationLockService.ReleaseLock(this);
 
-        HasUnsavedChanges = false;
+        _saved = _settingsRepository.Snapshot();
+        OnSettingEdited();
+
+        _toasts.Show("Saved settings.");
 
         // A limit that has just come down is the third way a store ends up over it, and the only one
         // with a person watching. Before the measure, so what the rows then report is the size after
@@ -634,7 +646,12 @@ public partial class SettingsPageViewModel
             volume.ServingVolumeChanged -= OnServingVolumeChanged;
         }
 
-        ImageCache.Modified -= OnStoreModified;
+        ImageCache.Modified -= OnSettingEdited;
+
+        foreach (var store in _storesByVolume.Values)
+        {
+            store.Modified -= OnSettingEdited;
+        }
 
         _navigationLockService.ReleaseLock(this);
     }
@@ -760,8 +777,7 @@ public partial class SettingsPageViewModel
     private void OnServingVolumeChanged(object? sender, EventArgs e)
     {
         RefreshStores();
-        _navigationLockService.AcquireLock(this);
-        HasUnsavedChanges = true;
+        OnSettingEdited();
     }
 
     /// <summary>
@@ -800,7 +816,7 @@ public partial class SettingsPageViewModel
                     (configured?.MaxSizeBytes ?? ContentStoreSettings.DefaultMaxSizeBytes) / (double)_bytesPerGigabyte,
                     _filePickerService);
 
-                store.Modified += OnStoreModified;
+                store.Modified += OnSettingEdited;
                 _storesByVolume[volume] = store;
             }
 
@@ -815,10 +831,49 @@ public partial class SettingsPageViewModel
         OnPropertyChanged(nameof(HasStores));
     }
 
-    private void OnStoreModified(object? sender, EventArgs e)
+    private void OnSettingEdited(object? sender, EventArgs e)
     {
-        _navigationLockService.AcquireLock(this);
-        HasUnsavedChanges = true;
+        OnSettingEdited();
+    }
+
+    private void OnSettingEdited()
+    {
+        HasUnsavedChanges = DiffersFromSaved();
+    }
+
+    partial void OnHasUnsavedChangesChanged(bool value)
+    {
+        _navigationLockService.SetLock(this, value);
+    }
+
+    private bool DiffersFromSaved()
+    {
+        return ModFolderVolumes.Any(x => string.Equals(x.ServingVolume, _saved.GetServingVolume(x.VolumeRoot), StringComparison.OrdinalIgnoreCase) is false)
+            || Stores.Any(StoreDiffersFromSaved)
+            || ImageCache.Path != _saved.ImageCache.Path
+            || ToBytes(ImageCache.MaxSizeGigabytes) != _saved.ImageCache.MaxSizeBytes
+            || DownloadLimit.Trim() != DescribeLimit(_saved.Transfers.DownloadBytesPerSecond)
+            || UploadLimit.Trim() != DescribeLimit(_saved.Transfers.UploadBytesPerSecond)
+            || CloseToTray != _saved.Background.CloseToTray
+            || NotifyDrift != _saved.Notifications.Drift
+            || NotifyCheckInReminders != _saved.Notifications.CheckInReminders
+            || NotifyFinishedActions != _saved.Notifications.FinishedActions
+            || NotifyFriendActivity != _saved.Notifications.FriendActivity
+            || StartWithWindows != (_autostart.State is AutostartState.On);
+    }
+
+    /// <summary>Compared against what a store with no saved entry is given, which is what the row starts from.</summary>
+    private bool StoreDiffersFromSaved(ContentStoreViewModel store)
+    {
+        var saved = _saved.Stores.GetValueOrDefault(store.VolumeRoot);
+
+        return store.Path != (saved?.Path ?? ContentStoreSettings.GetDefaultPath(store.VolumeRoot))
+            || ToBytes(store.MaxSizeGigabytes) != (saved?.MaxSizeBytes ?? ContentStoreSettings.DefaultMaxSizeBytes);
+    }
+
+    private static long ToBytes(double gigabytes)
+    {
+        return (long)(gigabytes * _bytesPerGigabyte);
     }
 
     private List<string> GetValidationErrors()
@@ -882,21 +937,21 @@ public partial class SettingsPageViewModel
             : string.Empty;
     }
 
-    partial void OnDownloadLimitChanged(string value) => OnStoreModified(this, EventArgs.Empty);
+    partial void OnDownloadLimitChanged(string value) => OnSettingEdited();
 
-    partial void OnUploadLimitChanged(string value) => OnStoreModified(this, EventArgs.Empty);
+    partial void OnUploadLimitChanged(string value) => OnSettingEdited();
 
-    partial void OnCloseToTrayChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+    partial void OnCloseToTrayChanged(bool value) => OnSettingEdited();
 
-    partial void OnNotifyDriftChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+    partial void OnNotifyDriftChanged(bool value) => OnSettingEdited();
 
-    partial void OnNotifyCheckInRemindersChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+    partial void OnNotifyCheckInRemindersChanged(bool value) => OnSettingEdited();
 
-    partial void OnNotifyFinishedActionsChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+    partial void OnNotifyFinishedActionsChanged(bool value) => OnSettingEdited();
 
-    partial void OnNotifyFriendActivityChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+    partial void OnNotifyFriendActivityChanged(bool value) => OnSettingEdited();
 
-    partial void OnStartWithWindowsChanged(bool value) => OnStoreModified(this, EventArgs.Empty);
+    partial void OnStartWithWindowsChanged(bool value) => OnSettingEdited();
 
     /// <summary>
     /// Writes the start-with-Windows choice to the registry, if it is a change.

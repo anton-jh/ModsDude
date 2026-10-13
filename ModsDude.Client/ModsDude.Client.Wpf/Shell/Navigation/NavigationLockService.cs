@@ -23,6 +23,18 @@ public class NavigationLockService : INavigationLockService
         }
     }
 
+    public void SetLock(object owner, bool held)
+    {
+        if (held)
+        {
+            AcquireLock(owner);
+        }
+        else
+        {
+            ReleaseLock(owner);
+        }
+    }
+
     public bool HasLock()
     {
         return _owner is not null;
