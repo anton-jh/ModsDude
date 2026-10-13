@@ -7,12 +7,12 @@ namespace ModsDude.Client.Core.Sync;
 
 /// <summary>One mod the profile pins: the whole of what sync is trying to achieve, per mod.</summary>
 /// <param name="ContentHash">
-/// What the file must contain. The profile's dependencies carry it, so no sync has to pull the
+/// What the file must contain. The profile's pins carry it, so no sync has to pull the
 /// repo's full mod list to find out.
 /// </param>
 public sealed record DesiredMod(ModKey ModId, ModVersionKey VersionId, string ContentHash, bool Locked)
 {
-    /// <summary>For the plan preview. Falls back to the mod id, which is what the dependency carries.</summary>
+    /// <summary>For the plan preview. Falls back to the mod id, which is what the pin carries.</summary>
     public string? DisplayName { get; init; }
 
     /// <summary>
@@ -45,7 +45,7 @@ public sealed record RegisteredContent(IReadOnlySet<string> Hashes)
 
     /// <summary>
     /// What the repo calls each content, by hash - the mod's title as it was imported. The profile's
-    /// dependencies carry no names, and a file the manifest answers for is never opened to read one,
+    /// pins carry no names, and a file the manifest answers for is never opened to read one,
     /// so without this a plan names most of its mods by id.
     /// </summary>
     public IReadOnlyDictionary<string, string> Names { get; init; } = new Dictionary<string, string>();
@@ -208,7 +208,7 @@ public sealed record ModSyncPlan
     public string? ProfileName { get; init; }
 
     /// <summary>
-    /// Which revision of the profile this plan was built from - read with the dependencies, so it
+    /// Which revision of the profile this plan was built from - read with the pins, so it
     /// describes the list that was planned rather than whatever the profile is on by the time the
     /// plan runs. Recorded in the manifest.
     /// </summary>

@@ -193,7 +193,7 @@ public class DriftServiceTests
             fixture.Target,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
-            profileDependencies: [
+            profilePins: [
                 new DesiredMod(ModKey.From("fs25_a"), ModVersionKey.From("2.0.0"), HashOf("a newer build"), Locked: true)]);
 
         Assert.Equal(DriftStatus.Drifted, report.Status);
@@ -214,7 +214,7 @@ public class DriftServiceTests
             fixture.Target,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
-            profileDependencies: [
+            profilePins: [
                 new DesiredMod(ModKey.From("fs25_a"), ModVersionKey.From("1.0.0"), HashOf("one"), Locked: false)]);
 
         Assert.Equal(DriftStatus.InSync, report.Status);
@@ -227,7 +227,7 @@ public class DriftServiceTests
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_map.zip", "one", true, "Great Plains 16x"), ("fs25_a.zip", "two", false, "A Trailer"));
 
-        // What an in-game update-all does to a map. The profile's dependencies are not in hand here -
+        // What an in-game update-all does to a map. The profile's pins are not in hand here -
         // this is the startup path - so the lock comes off the manifest.
         fixture.Folder.WriteFile("fs25_map.zip", "the game updated this");
         fixture.Folder.WriteFile("fs25_a.zip", "and this");
@@ -281,7 +281,7 @@ public class DriftServiceTests
             fixture.Target,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
-            profileDependencies: [
+            profilePins: [
                 new DesiredMod(ModKey.From("fs25_map"), ModVersionKey.From("2.0.0"), HashOf("something else"), Locked: true)]);
 
         var locked = Assert.Single(report.LockedDrift);

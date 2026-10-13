@@ -86,10 +86,9 @@ public class CreateProfileV1Endpoint : IEndpoint
             pins = await dbContext.ProfileRevisions.GetPinsAsync(source.RepoId, source.Id, sourceRevision.Value, cancellationToken);
         }
 
-        var resolved = await ProfileRevisionWrites.ResolveAsync(dbContext, new RepoId(repoId), pins, cancellationToken);
-        if (resolved.Problem is not null)
+        if (await ProfileRevisionWrites.ValidatePinsAsync(dbContext, new RepoId(repoId), pins, cancellationToken) is CustomProblemDetails problem)
         {
-            return TypedResults.BadRequest(resolved.Problem);
+            return TypedResults.BadRequest(problem);
         }
 
         var now = timeService.Now();
@@ -98,7 +97,7 @@ public class CreateProfileV1Endpoint : IEndpoint
         // A profile is never without a revision: an empty mod list is revision 1 pinning nothing,
         // rather than a fourth state every reader would have to handle.
         var revision = profile.CreateRevision(
-            resolved.Dependencies!,
+            pins,
             [],
             userId,
             now,

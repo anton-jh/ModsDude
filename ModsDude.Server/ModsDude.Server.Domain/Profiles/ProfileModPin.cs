@@ -3,70 +3,32 @@ using ModsDude.Server.Domain.Mods;
 namespace ModsDude.Server.Domain.Profiles;
 
 /// <summary>
-/// One mod, pinned at one version, with the profile's own lock - a <see cref="ModDependency"/> with
-/// the version's whole record left behind.
+/// One mod, pinned by one revision at one version, with the profile's own lock.
 /// </summary>
 /// <remarks>
-/// This is the form a comparison works in. Diffing two revisions needs three fields per mod, and
-/// materializing two snapshots' worth of <see cref="ModVersion"/> entities - each dragging its owned
-/// attribute and image collections - to read them is exactly the cost a summary exists to avoid.
+/// Belongs to the revision's repo, so it holds IDs only. A revision stores its own copies of the pins
+/// it is given, which is what stamps <see cref="Added"/>.
 /// </remarks>
-/// <param name="Added">
-/// When the mod arrived at this version - see <see cref="ModDependency.Added"/>. Only filled in for pins
-/// read back from a stored revision, which is what lets the next revision carry it forward; a pin
-/// somebody asks for has no such date yet, and <see cref="ModDependency.ToPin"/> leaves it out so a
-/// comparison of what is pinned is never a comparison of when.
-/// </param>
-public readonly record struct ProfileModPin(ModId ModId, ModVersionId VersionId, bool Locked, DateTime? Added = null);
-
-
-/// <summary>
-/// What one revision did to the one before it, as three counts.
-/// </summary>
-/// <remarks>
-/// Counts rather than the changed mods themselves. The history list renders one line per revision,
-/// and a profile holds one to two thousand mods; what somebody scanning it wants is the shape of the
-/// change, and the two snapshots are still there for anybody who wants the rest.
-/// <para>
-/// A record rather than a struct because it is mapped as an EF complex property, the way
-/// <see cref="Repos.AdapterData"/> is - three columns on the revision's own row rather than a table
-/// of its own.
-/// </para>
-/// </remarks>
-public record ProfileRevisionChanges(int Added, int Changed, int Removed)
+public sealed class ProfileModPin
 {
-    public static ProfileRevisionChanges None { get; } = new(0, 0, 0);
-
-
-    public bool IsEmpty => Added is 0 && Changed is 0 && Removed is 0;
-
+    public required ModId ModId { get; init; }
+    public required ModVersionId VersionId { get; init; }
+    public required bool Locked { get; init; }
 
     /// <summary>
-    /// Keyed by mod, because a profile pins each mod exactly once - so a mod that moved version or
-    /// had its lock toggled is a change rather than a removal and an addition.
+    /// When this mod arrived in the profile at this version: the instant of the revision that first
+    /// pinned it, carried forward for as long as every revision after keeps pinning that same version.
+    /// A new version, or a mod taken out and put back, starts again. The lock is not part of it,
+    /// because toggling one moves no file.
     /// </summary>
-    public static ProfileRevisionChanges Between(IEnumerable<ProfileModPin> before, IEnumerable<ProfileModPin> after)
+    public DateTime Added { get; private set; }
+
+
+    internal ProfileModPin CopyAddedAt(DateTime added) => new()
     {
-        var previous = before.ToDictionary(x => x.ModId);
-        var desired = after.ToDictionary(x => x.ModId);
-
-        var added = 0;
-        var changed = 0;
-
-        foreach (var (modId, pin) in desired)
-        {
-            if (previous.TryGetValue(modId, out var existing) is false)
-            {
-                added++;
-            }
-            else if (existing.VersionId != pin.VersionId || existing.Locked != pin.Locked)
-            {
-                changed++;
-            }
-        }
-
-        var removed = previous.Keys.Count(x => desired.ContainsKey(x) is false);
-
-        return new ProfileRevisionChanges(added, changed, removed);
-    }
+        ModId = ModId,
+        VersionId = VersionId,
+        Locked = Locked,
+        Added = added
+    };
 }

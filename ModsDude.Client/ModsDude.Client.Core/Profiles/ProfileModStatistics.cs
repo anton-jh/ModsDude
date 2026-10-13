@@ -7,9 +7,9 @@ namespace ModsDude.Client.Core.Profiles;
 /// </summary>
 public sealed record ProfileModStatistics(int Revision, int ModCount, long Bytes)
 {
-    public static ProfileModStatistics From(GetModDependenciesResponse response)
+    public static ProfileModStatistics From(GetProfileModPinsResponse response)
     {
-        var list = response.Dependencies.ToList();
+        var list = response.Pins.ToList();
 
         return new ProfileModStatistics(response.Revision, list.Count, list.Sum(x => x.SizeBytes));
     }

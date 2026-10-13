@@ -24,7 +24,7 @@ namespace ModsDude.Client.Core.Sync;
 /// </para>
 /// </remarks>
 public sealed class ModSyncService(
-    IModDependenciesClient modDependenciesClient,
+    IProfileModPinsClient pinsClient,
     IModStore modStore,
     IFilesClient filesClient,
     IModFileDownloader downloader,
@@ -43,7 +43,7 @@ public sealed class ModSyncService(
     : IModSyncService
 {
     private readonly ModSyncPlanBuilder _planBuilder = new(
-        modDependenciesClient, modStore, storeProvider, manifestStore, heldSavegames, fileEditor, runningGuard, logger);
+        pinsClient, modStore, storeProvider, manifestStore, heldSavegames, fileEditor, runningGuard, logger);
 
     private readonly ModFetcher _fetcher = new(filesClient, downloader, logger);
 
@@ -71,7 +71,7 @@ public sealed class ModSyncService(
     public async Task<ModSyncResult> FetchAsync(ModFetchRequest request, IProgress<ModSyncProgress>? progress, CancellationToken cancellationToken)
     {
         var (desired, _) = await ModSyncPlanBuilder.GetDesiredAsync(
-            modDependenciesClient, request.RepoId, request.ProfileId, request.Revision, cancellationToken);
+            pinsClient, request.RepoId, request.ProfileId, request.Revision, cancellationToken);
 
         var servingStores = request.ModFolders
             .Select(storeProvider.GetStoreServing)

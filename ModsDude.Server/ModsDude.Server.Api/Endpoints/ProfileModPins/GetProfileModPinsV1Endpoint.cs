@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
@@ -8,7 +8,7 @@ using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
-namespace ModsDude.Server.Api.Endpoints.ModDependencies;
+namespace ModsDude.Server.Api.Endpoints.ProfileModPins;
 
 /// <summary>
 /// What a profile pins, at its current revision or at any older one.
@@ -26,18 +26,18 @@ namespace ModsDude.Server.Api.Endpoints.ModDependencies;
 /// that cannot be stale by the time it is used.
 /// </para>
 /// </remarks>
-public class GetModDependenciesV1Endpoint : IEndpoint
+public class GetProfileModPinsV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapGet("repos/{repoId:guid}/profiles/{profileId:guid}/modDependencies", GetAll)
-            .WithTags("ModDependencies")
+        return builder.MapGet("repos/{repoId:guid}/profiles/{profileId:guid}/pinnedMods", GetAll)
+            .WithTags("ProfileModPins")
             .RequireRepoLevel(RepoMembershipLevel.Guest);
     }
 
 
     /// <param name="revision">Which revision to read, or omitted for the profile's current one.</param>
-    private static async Task<Results<Ok<GetModDependenciesResponse>, BadRequest<CustomProblemDetails>>> GetAll(
+    private static async Task<Results<Ok<GetProfileModPinsResponse>, BadRequest<CustomProblemDetails>>> GetAll(
         Guid repoId, Guid profileId,
         int? revision,
         ApplicationDbContext dbContext,
@@ -57,15 +57,12 @@ public class GetModDependenciesV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{profileId}' has no revision {requested.Value}"));
         }
 
-        // Projected rather than materialized: a revision carries its dependencies as an owned
-        // collection and its versions would drag in their owned attribute and image collections for
-        // four columns.
-        var rows = await dbContext.ProfileRevisions.GetDependencyRowsAsync(
-            profile.RepoId, profile.Id, requested, cancellationToken);
+        var rows = await dbContext.ProfileRevisions.GetPinRowsAsync(
+            dbContext.ModVersions, profile.RepoId, profile.Id, requested, cancellationToken);
 
-        var dtos = rows.Select(x => new ModDependencyDto(x.ModId.Value, x.VersionId.Value, x.FileName, x.ContentHash, x.SizeBytes, x.Locked, x.Added));
+        var dtos = rows.Select(x => new ProfileModPinDto(x.ModId.Value, x.VersionId.Value, x.FileName, x.ContentHash, x.SizeBytes, x.Locked, x.Added));
 
-        return TypedResults.Ok(new GetModDependenciesResponse(requested.Value, requested == profile.HeadRevision, dtos));
+        return TypedResults.Ok(new GetProfileModPinsResponse(requested.Value, requested == profile.HeadRevision, dtos));
     }
 
 
@@ -74,5 +71,5 @@ public class GetModDependenciesV1Endpoint : IEndpoint
     /// Whether it is the profile's current revision. A client reading an older one is looking at
     /// history and has nothing to save.
     /// </param>
-    public record GetModDependenciesResponse(int Revision, bool IsHead, IEnumerable<ModDependencyDto> Dependencies);
+    public record GetProfileModPinsResponse(int Revision, bool IsHead, IEnumerable<ProfileModPinDto> Pins);
 }

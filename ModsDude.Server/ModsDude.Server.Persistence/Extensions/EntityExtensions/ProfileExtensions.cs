@@ -67,7 +67,7 @@ public static class ProfileExtensions
     /// History is what makes this strict, exactly as it is for a pinned mod version: a profile that
     /// has ever been played is a profile that cannot be deleted, because a snapshot still names the
     /// revision it was played on. See
-    /// <see cref="ProfileRevisionExtensions.CheckIfVersionIsDependedOn"/> for the same bargain one
+    /// <see cref="ProfileRevisionExtensions.IsVersionPinnedAsync"/> for the same bargain one
     /// aggregate down.
     /// </para>
     /// </remarks>

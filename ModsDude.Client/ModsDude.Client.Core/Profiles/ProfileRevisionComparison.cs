@@ -16,7 +16,7 @@ namespace ModsDude.Client.Core.Profiles;
 /// <para>
 /// <b>Computed on the client, out of two reads.</b> There is no diff endpoint, and adding one would
 /// have bought little: naming the mods needs their registered records, which the client resolves
-/// from a catalog walk that dwarfs the dependency rows either way. Keeping it here also keeps the
+/// from a catalog walk that dwarfs the pin rows either way. Keeping it here also keeps the
 /// property that there is exactly one route into a profile's mod list, and that it reads.
 /// </para>
 /// </remarks>

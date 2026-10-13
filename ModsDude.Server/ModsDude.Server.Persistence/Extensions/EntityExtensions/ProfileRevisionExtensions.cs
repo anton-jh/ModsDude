@@ -12,28 +12,24 @@ namespace ModsDude.Server.Persistence.Extensions.EntityExtensions;
 /// </summary>
 /// <remarks>
 /// All of it projects rather than materializes. A <see cref="ProfileRevision"/> entity carries its
-/// dependencies as an owned collection, which EF always loads with it - so loading one revision of a
+/// pins as an owned collection, which EF always loads with it - so loading one revision of a
 /// two-thousand-mod profile reads two thousand rows whether or not anything wanted them, and
 /// loading a history reads that again per revision. Nothing here loads a revision entity; the only
 /// one that is ever materialized is a new one, on its way in.
 /// </remarks>
 public static class ProfileRevisionExtensions
 {
-    /// <summary>
-    /// What a revision pins, in the lightweight form a comparison works in.
-    /// </summary>
-    public static async Task<List<ProfileModPin>> GetPinsAsync(
+    /// <summary>What a revision pins, untracked.</summary>
+    public static Task<List<ProfileModPin>> GetPinsAsync(
         this DbSet<ProfileRevision> dbSet,
         RepoId repoId, ProfileId profileId, RevisionNumber number,
         CancellationToken cancellationToken)
     {
-        var rows = await dbSet
+        return dbSet
+            .AsNoTracking()
             .Where(x => x.RepoId == repoId && x.ProfileId == profileId && x.Number == number)
-            .SelectMany(x => x.ModDependencies)
-            .Select(x => new { x.ModVersion.ModId, VersionId = x.ModVersion.Id, x.Locked, x.Added })
+            .SelectMany(x => x.Pins)
             .ToListAsync(cancellationToken);
-
-        return [.. rows.Select(x => new ProfileModPin(x.ModId, x.VersionId, x.Locked, x.Added))];
     }
 
     /// <summary>Which mods a revision pins, and nothing else about them.</summary>
@@ -44,39 +40,42 @@ public static class ProfileRevisionExtensions
     {
         var rows = await dbSet
             .Where(x => x.RepoId == repoId && x.ProfileId == profileId && x.Number == number)
-            .SelectMany(x => x.ModDependencies)
-            .Select(x => x.ModVersion.ModId)
+            .SelectMany(x => x.Pins)
+            .Select(x => x.ModId)
             .ToListAsync(cancellationToken);
 
         return [.. rows];
     }
 
     /// <summary>
-    /// The same set with each version's content hash, which is what sync reads: it works from a
-    /// profile's dependencies rather than from the repo's mod list, and without the hash here every
-    /// sync would have to pull the unpaged mod list to resolve it.
+    /// The same set with what sync needs of each version: it works from a profile's pins rather than
+    /// from the repo's mod list, and without these here every sync would have to pull the unpaged mod
+    /// list to resolve them.
     /// </summary>
-    public static async Task<List<ProfileModDependencyRow>> GetDependencyRowsAsync(
+    public static Task<List<ProfileModPinRow>> GetPinRowsAsync(
         this DbSet<ProfileRevision> dbSet,
+        DbSet<ModVersion> versions,
         RepoId repoId, ProfileId profileId, RevisionNumber number,
         CancellationToken cancellationToken)
     {
-        var rows = await dbSet
+        return dbSet
             .Where(x => x.RepoId == repoId && x.ProfileId == profileId && x.Number == number)
-            .SelectMany(x => x.ModDependencies)
-            .Select(x => new
-            {
-                x.ModVersion.ModId,
-                VersionId = x.ModVersion.Id,
-                x.ModVersion.FileName,
-                x.ModVersion.ContentHash,
-                x.ModVersion.SizeBytes,
-                x.Locked,
-                x.Added
-            })
+            .SelectMany(x => x.Pins)
+            .Join(
+                versions.Where(x => x.RepoId == repoId),
+                pin => new { pin.ModId, pin.VersionId },
+                version => new { version.ModId, VersionId = version.Id },
+                (pin, version) => new { Pin = pin, Version = version })
+            .OrderBy(x => x.Pin.ModId)
+            .Select(x => new ProfileModPinRow(
+                x.Pin.ModId,
+                x.Pin.VersionId,
+                x.Version.FileName,
+                x.Version.ContentHash,
+                x.Version.SizeBytes,
+                x.Pin.Locked,
+                x.Pin.Added))
             .ToListAsync(cancellationToken);
-
-        return [.. rows.Select(x => new ProfileModDependencyRow(x.ModId, x.VersionId, x.FileName, x.ContentHash, x.SizeBytes, x.Locked, x.Added))];
     }
 
     public static Task<bool> ExistsAsync(
@@ -165,29 +164,28 @@ public static class ProfileRevisionExtensions
     /// Whether any revision of any profile in the repo pins this exact version. Deleting one that is
     /// pinned would silently drop a mod out of somebody's profile - or rewrite what an old revision
     /// says was installed - so the delete endpoints refuse instead, and the
-    /// <see cref="ModDependency"/> foreign key is Restrict so the database refuses too.
+    /// pin foreign key is Restrict so the database refuses too.
     /// </summary>
     /// <remarks>
     /// History is what makes this strict. A version any profile has <em>ever</em> pinned stays
     /// pinned by the revision that pinned it, so in practice a version that has been used is a
-    /// version that cannot be deleted. That is the price of an old revision still meaning something:
-    /// see docs/02-domain-model.md#a-pinned-version-cannot-be-deleted-any-more.
+    /// version that cannot be deleted. That is the price of an old revision still meaning something.
     /// </remarks>
-    public static Task<bool> CheckIfVersionIsDependedOn(this DbSet<ProfileRevision> dbSet, RepoId repoId, ModId modId, ModVersionId modVersionId, CancellationToken cancellationToken)
+    public static Task<bool> IsVersionPinnedAsync(this DbSet<ProfileRevision> dbSet, RepoId repoId, ModId modId, ModVersionId modVersionId, CancellationToken cancellationToken)
     {
         return dbSet
             .Where(x => x.RepoId == repoId)
-            .SelectMany(x => x.ModDependencies)
-            .AnyAsync(x => x.ModVersion.ModId == modId && x.ModVersion.Id == modVersionId, cancellationToken);
+            .SelectMany(x => x.Pins)
+            .AnyAsync(x => x.ModId == modId && x.VersionId == modVersionId, cancellationToken);
     }
 
-    /// <inheritdoc cref="CheckIfVersionIsDependedOn"/>
-    public static Task<bool> CheckIfModIsDependedOn(this DbSet<ProfileRevision> dbSet, RepoId repoId, ModId modId, CancellationToken cancellationToken)
+    /// <inheritdoc cref="IsVersionPinnedAsync"/>
+    public static Task<bool> IsModPinnedAsync(this DbSet<ProfileRevision> dbSet, RepoId repoId, ModId modId, CancellationToken cancellationToken)
     {
         return dbSet
             .Where(x => x.RepoId == repoId)
-            .SelectMany(x => x.ModDependencies)
-            .AnyAsync(x => x.ModVersion.ModId == modId, cancellationToken);
+            .SelectMany(x => x.Pins)
+            .AnyAsync(x => x.ModId == modId, cancellationToken);
     }
 
     /// <summary>
@@ -248,7 +246,7 @@ public static class ProfileRevisionExtensions
     /// send somebody to a history page with nothing to look for.
     /// </para>
     /// <para>
-    /// Bounded, because a repo's dependency rows are its profile count times its revision count
+    /// Bounded, because a repo's pin rows are its profile count times its revision count
     /// times its profile sizes. The caller is drawing a list somebody reads, so the cap is generous
     /// enough to be the whole answer in every ordinary case and the response says when it was not.
     /// </para>
@@ -266,13 +264,13 @@ public static class ProfileRevisionExtensions
         var rows = await dbSet
             .Where(x => x.RepoId == repoId)
             .SelectMany(
-                x => x.ModDependencies,
-                (revision, dependency) => new
+                x => x.Pins,
+                (revision, pin) => new
                 {
                     revision.ProfileId,
                     revision.Number,
-                    dependency.ModVersion.ModId,
-                    VersionId = dependency.ModVersion.Id
+                    pin.ModId,
+                    pin.VersionId
                 })
             .Where(x => x.ModId == modId && (modVersionId == null || x.VersionId == modVersionId))
             .OrderBy(x => x.ProfileId).ThenBy(x => x.Number)
@@ -314,7 +312,7 @@ public static class ProfileRevisionExtensions
     /// <summary>
     /// How many of the repo's profiles pin each version, split by whether the pin is in the profile's
     /// newest revision or in an older one, for the versions at least one of them pins.
-    /// Ordered by <c>(ModId, VersionId)</c> and windowed, because a repo's dependency rows are its
+    /// Ordered by <c>(ModId, VersionId)</c> and windowed, because a repo's pin rows are its
     /// profile count times its revision count times its profile sizes - thousands of mods each - and
     /// nothing that renders a catalog may issue a query without a bound.
     /// </summary>
@@ -348,12 +346,12 @@ public static class ProfileRevisionExtensions
         return dbSet
             .Where(x => x.RepoId == repoId)
             .SelectMany(
-                x => x.ModDependencies,
-                (revision, dependency) => new
+                x => x.Pins,
+                (revision, pin) => new
                 {
                     revision.ProfileId,
-                    dependency.ModVersion.ModId,
-                    VersionId = dependency.ModVersion.Id,
+                    pin.ModId,
+                    pin.VersionId,
                     IsNewest = profiles.Any(profile => profile.RepoId == revision.RepoId
                         && profile.Id == revision.ProfileId
                         && profile.HeadRevision == revision.Number)
@@ -376,10 +374,7 @@ public static class ProfileRevisionExtensions
 
 
 /// <summary>One mod as a revision pins it, with the content hash sync needs to fetch the file.</summary>
-public record ProfileModDependencyRow(ModId ModId, ModVersionId VersionId, string FileName, string ContentHash, long SizeBytes, bool Locked, DateTime Added)
-{
-    public ProfileModPin ToPin() => new(ModId, VersionId, Locked);
-}
+public record ProfileModPinRow(ModId ModId, ModVersionId VersionId, string FileName, string ContentHash, long SizeBytes, bool Locked, DateTime Added);
 
 
 /// <summary>

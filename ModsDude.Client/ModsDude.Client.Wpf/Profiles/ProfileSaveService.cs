@@ -215,7 +215,7 @@ public sealed class ProfileSaveService(
     IModImportCoordinator imports,
     IProfileApplyService applyService,
     IProfilesClient profilesClient,
-    IModDependenciesClient dependenciesClient,
+    IProfileModPinsClient pinsClient,
     IGameRepository games,
     IProfileStore profileStore,
     IDriftMonitor driftMonitor,
@@ -572,7 +572,7 @@ public sealed class ProfileSaveService(
 
                 // Re-read only the number, so the retry is based on what the server is actually on
                 // rather than on what the refusal happened to mention.
-                var current = await dependenciesClient.GetModDependenciesV1Async(
+                var current = await pinsClient.GetProfileModPinsV1Async(
                     request.Repo.Id, request.ProfileId, null, cancellationToken);
 
                 basedOn = current.Revision;

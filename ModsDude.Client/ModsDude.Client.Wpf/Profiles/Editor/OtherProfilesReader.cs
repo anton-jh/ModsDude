@@ -8,7 +8,7 @@ namespace ModsDude.Client.Wpf.Profiles.Editor;
 /// <summary>The repo's other profiles, and what each pins now.</summary>
 public sealed class OtherProfilesReader(
     IProfileStore profileStore,
-    IModDependenciesClient dependenciesClient,
+    IProfileModPinsClient pinsClient,
     Guid repoId,
     Guid profileId)
 {
@@ -20,10 +20,10 @@ public sealed class OtherProfilesReader(
     }
 
     public async Task<IReadOnlyList<ProfileModPin>> ReadPinsAsync(Guid otherProfileId, CancellationToken cancellationToken)
-        => ToPins(await dependenciesClient.GetModDependenciesV1Async(repoId, otherProfileId, null, cancellationToken));
+        => ToPins(await pinsClient.GetProfileModPinsV1Async(repoId, otherProfileId, null, cancellationToken));
 
-    public static IReadOnlyList<ProfileModPin> ToPins(GetModDependenciesResponse response)
-        => [.. response.Dependencies.Select(x => new ProfileModPin(
+    public static IReadOnlyList<ProfileModPin> ToPins(GetProfileModPinsResponse response)
+        => [.. response.Pins.Select(x => new ProfileModPin(
             ModKey.From(x.ModId),
             ModVersionKey.From(x.ModVersionId),
             new ProfileModLock(false, x.Locked)))];

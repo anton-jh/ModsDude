@@ -137,8 +137,8 @@ internal static class RetentionHistories
         var versions = dbContext.ModVersions.AsNoTracking().Where(x => x.RepoId == repoId);
         var pins = dbContext.ProfileRevisions.AsNoTracking()
             .Where(x => x.RepoId == repoId)
-            .SelectMany(x => x.ModDependencies)
-            .Select(x => new { x.ModVersion.ModId, x.ModVersion.Id });
+            .SelectMany(x => x.Pins)
+            .Select(x => new { x.ModId, x.VersionId });
 
         if (only is not null)
         {
@@ -158,7 +158,7 @@ internal static class RetentionHistories
         // Every revision's pins, not only the heads': that is what the foreign key holds, and what
         // keeps an old revision - and any savegame played on it - reproducible.
         var pinned = (await pins.Distinct().ToListAsync(cancellationToken))
-            .Select(x => (x.ModId, x.Id))
+            .Select(x => (x.ModId, x.VersionId))
             .ToHashSet();
 
         return rows

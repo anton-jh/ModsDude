@@ -1,5 +1,4 @@
 using ModsDude.Server.Domain.Exceptions;
-using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Retention;
 using ModsDude.Server.Domain.Users;
@@ -16,7 +15,7 @@ namespace ModsDude.Server.Domain.Profiles;
 /// head. That is what makes an old revision read-only: not a flag somebody has to remember to check,
 /// but the absence of anything that could address it. Rolling back does not reopen one either; it
 /// copies an old snapshot forward as a new revision, so nothing that was ever true stops being
-/// recorded. See docs/02-domain-model.md#profile-revisions.
+/// recorded.
 /// </para>
 /// <para>
 /// A snapshot rather than a changeset. The mod list <em>is</em> the profile, so replaying a log to
@@ -35,7 +34,7 @@ public class ProfileRevision
     public const int MaximumLabelLength = 100;
 
 
-    private readonly HashSet<ModDependency> _modDependencies = [];
+    private readonly List<ProfileModPin> _pins = [];
 
 
     // ef
@@ -52,7 +51,7 @@ public class ProfileRevision
         RepoId repoId,
         ProfileId profileId,
         RevisionNumber number,
-        IReadOnlyCollection<ModDependency> modDependencies,
+        IReadOnlyCollection<ProfileModPin> pins,
         IReadOnlyCollection<ProfileModPin> previousPins,
         UserId createdBy,
         DateTime created,
@@ -66,36 +65,20 @@ public class ProfileRevision
             throw new DomainValidationException($"A revision label cannot be longer than {MaximumLabelLength} characters.");
         }
 
-        foreach (var dependency in modDependencies)
+        // Backed by a unique index: one mod at two versions is a list the sync engine cannot resolve.
+        var duplicate = pins.GroupBy(x => x.ModId).FirstOrDefault(x => x.Count() > 1);
+        if (duplicate is not null)
         {
-            if (dependency.ModVersion.RepoId != repoId)
-            {
-                throw new InvalidOperationException($"Cannot pin mod '{dependency.ModVersion.ModId.Value}'. The version belongs to another repo");
-            }
-
-            if (!_modDependencies.Add(dependency))
-            {
-                throw new InvalidOperationException($"Cannot pin mod '{dependency.ModVersion.ModId.Value}' twice");
-            }
+            throw new InvalidOperationException($"Cannot pin mod '{duplicate.Key.Value}' more than once in the same revision");
         }
 
-        // The set is keyed by reference, so the loop above catches only the same object twice. One
-        // mod at two versions is the rule that actually matters, and it is what the unique index
-        // underneath enforces.
-        if (_modDependencies.Select(x => x.ModVersion.ModId).Distinct().Count() != _modDependencies.Count)
-        {
-            throw new InvalidOperationException("Cannot pin one mod at two versions in the same revision");
-        }
-
-        StampAdded(previousPins, created);
+        _pins.AddRange(StampAdded(pins, previousPins, created));
 
         RepoId = repoId;
         ProfileId = profileId;
         Number = number;
-        // Computed after the checks above rather than handed in, so that a set with one mod pinned
-        // twice is refused for that rather than for what comparing it happens to do first.
-        Changes = ProfileRevisionChanges.Between(previousPins, ToPins());
-        ModCount = _modDependencies.Count;
+        Changes = ProfileRevisionChanges.Between(previousPins, _pins);
+        ModCount = _pins.Count;
         CreatedBy = createdBy;
         Created = created;
         Label = string.IsNullOrWhiteSpace(label) ? null : label.Trim();
@@ -109,7 +92,7 @@ public class ProfileRevision
     public ProfileId ProfileId { get; private set; }
     public RevisionNumber Number { get; private set; }
 
-    public IReadOnlySet<ModDependency> ModDependencies => _modDependencies;
+    public IReadOnlyList<ProfileModPin> Pins => _pins;
 
     /// <summary>
     /// How many mods this revision pins, denormalized so the history list does not count two
@@ -158,37 +141,23 @@ public class ProfileRevision
 
 
     /// <summary>
-    /// Gives every dependency its <see cref="ModDependency.Added"/>: the one it had in the previous
+    /// Copies each pin with its <see cref="ProfileModPin.Added"/>: the one it had in the previous
     /// revision if that pinned the same version of the same mod, and this revision's own instant for
-    /// anything else - a mod new to the list, or one that moved to another version.
+    /// anything else. Compared against the revision this one follows, whichever way it was made, so a
+    /// restore stamps only what it actually changed.
     /// </summary>
-    /// <remarks>
-    /// Compared against the revision this one follows, whichever way it was made. A restore therefore
-    /// stamps only what it actually changed, which is the honest answer to "when did this last change
-    /// in the list": the mods it puts back are the ones that moved, and the rest did not. A pin with no
-    /// date on it - from a caller with nothing to carry forward - is simply treated as new.
-    /// </remarks>
-    private void StampAdded(IReadOnlyCollection<ProfileModPin> previousPins, DateTime created)
+    private static IEnumerable<ProfileModPin> StampAdded(
+        IReadOnlyCollection<ProfileModPin> pins,
+        IReadOnlyCollection<ProfileModPin> previousPins,
+        DateTime created)
     {
-        var previous = previousPins
-            .Where(x => x.Added is not null)
-            .ToDictionary(x => x.ModId);
+        var previous = previousPins.ToDictionary(x => x.ModId);
 
-        foreach (var dependency in _modDependencies)
-        {
-            dependency.Added = previous.TryGetValue(dependency.ModVersion.ModId, out var pin)
-                && pin.VersionId == dependency.ModVersion.Id
-                ? pin.Added!.Value
-                : created;
-        }
+        return pins.Select(pin => pin.CopyAddedAt(
+            previous.TryGetValue(pin.ModId, out var before) && before.VersionId == pin.VersionId
+                ? before.Added
+                : created));
     }
-
-    /// <summary>
-    /// The lightweight form of what this revision pins - what a comparison needs, without the
-    /// versions themselves.
-    /// </summary>
-    public IReadOnlyList<ProfileModPin> ToPins()
-        => [.. _modDependencies.Select(x => x.ToPin())];
 }
 
 

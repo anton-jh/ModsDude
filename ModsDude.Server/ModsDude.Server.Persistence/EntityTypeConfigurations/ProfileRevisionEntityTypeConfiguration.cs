@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 
 namespace ModsDude.Server.Persistence.EntityTypeConfigurations;
@@ -23,58 +24,57 @@ internal class ProfileRevisionEntityTypeConfiguration : IEntityTypeConfiguration
 
         builder.ConfigureDeletionSchedule(x => x.DeletionScheduledFor, x => x.DeletionReason);
 
-        builder.OwnsMany(x => x.ModDependencies, modDependency =>
+        builder.OwnsMany(x => x.Pins, pin =>
         {
-            modDependency.WithOwner().HasForeignKey(
-                ModDependencyShadowProperties.RepoId,
-                ModDependencyShadowProperties.ProfileId,
-                ModDependencyShadowProperties.RevisionNumber);
+            pin.WithOwner().HasForeignKey(
+                ProfileModPinShadowProperties.RepoId,
+                ProfileModPinShadowProperties.ProfileId,
+                ProfileModPinShadowProperties.RevisionNumber);
+
+            pin.Property(x => x.VersionId).HasColumnName("ModVersionId");
 
             // Restrict, not the cascade EF would infer: deleting a version a revision pins would
             // otherwise rewrite history behind everyone's back, and the delete endpoints refuse
-            // exactly that case. Restrict makes the database enforce the same rule, so a dependency
-            // added between the endpoint's check and its commit fails loudly instead of being swept
-            // away. With history, this holds every version a profile has ever pinned - see
-            // docs/02-domain-model.md#a-pinned-version-cannot-be-deleted-any-more.
-            modDependency.HasOne(x => x.ModVersion).WithMany().HasForeignKey(
-                ModDependencyShadowProperties.RepoId,
-                ModDependencyShadowProperties.ModId,
-                ModDependencyShadowProperties.ModVersionId)
+            // exactly that case. Restrict makes the database enforce the same rule, so a pin added
+            // between the endpoint's check and its commit fails loudly instead of being swept away.
+            // Sharing the revision's RepoId column is what keeps a pin inside its revision's repo.
+            pin.HasOne<ModVersion>().WithMany().HasForeignKey(
+                ProfileModPinShadowProperties.RepoId,
+                nameof(ProfileModPin.ModId),
+                nameof(ProfileModPin.VersionId))
                 .OnDelete(DeleteBehavior.Restrict);
 
-            modDependency.HasKey(
-                ModDependencyShadowProperties.RepoId,
-                ModDependencyShadowProperties.ProfileId,
-                ModDependencyShadowProperties.RevisionNumber,
-                ModDependencyShadowProperties.ModId,
-                ModDependencyShadowProperties.ModVersionId);
+            pin.HasKey(
+                ProfileModPinShadowProperties.RepoId,
+                ProfileModPinShadowProperties.ProfileId,
+                ProfileModPinShadowProperties.RevisionNumber,
+                nameof(ProfileModPin.ModId),
+                nameof(ProfileModPin.VersionId));
 
             // Backs the one-version-per-mod rule that ProfileRevision's constructor enforces.
             // Without it a concurrent double-write pins one mod at two versions, which the sync
             // engine has no way to resolve.
-            modDependency.HasIndex(
-                ModDependencyShadowProperties.RepoId,
-                ModDependencyShadowProperties.ProfileId,
-                ModDependencyShadowProperties.RevisionNumber,
-                ModDependencyShadowProperties.ModId)
+            pin.HasIndex(
+                ProfileModPinShadowProperties.RepoId,
+                ProfileModPinShadowProperties.ProfileId,
+                ProfileModPinShadowProperties.RevisionNumber,
+                nameof(ProfileModPin.ModId))
                 .IsUnique();
 
             // Answers "does any revision anywhere in this repo still pin this version?", which is
             // what stands between a mod version and deletion. Without it that question scans every
-            // dependency row in the repo - profiles times revisions times thousands of mods.
-            modDependency.HasIndex(
-                ModDependencyShadowProperties.RepoId,
-                ModDependencyShadowProperties.ModId,
-                ModDependencyShadowProperties.ModVersionId);
+            // pin row in the repo - profiles times revisions times thousands of mods.
+            pin.HasIndex(
+                ProfileModPinShadowProperties.RepoId,
+                nameof(ProfileModPin.ModId),
+                nameof(ProfileModPin.VersionId));
         });
     }
 }
 
-internal static class ModDependencyShadowProperties
+internal static class ProfileModPinShadowProperties
 {
     public const string ProfileId = "ProfileId";
     public const string RepoId = "RepoId";
     public const string RevisionNumber = "RevisionNumber";
-    public const string ModId = "ModId";
-    public const string ModVersionId = "ModVersionId";
 }

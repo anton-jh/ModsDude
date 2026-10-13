@@ -101,7 +101,7 @@ public sealed record DriftedLockedMod(ModKey ModId, string DisplayName, string? 
 /// <param name="Changed">Names whose size or modification time no longer match - a mod was replaced or updated.</param>
 /// <param name="ProfileChangedMods">
 /// Mods the profile pins differently from what was applied - named, which needs the profile's
-/// current dependencies in hand. <see cref="ProfileHasMoved"/> answers the same question from two
+/// current pins in hand. <see cref="ProfileHasMoved"/> answers the same question from two
 /// integers when they are not.
 /// </param>
 public sealed record DriftReport(
@@ -143,7 +143,7 @@ public sealed record DriftReport(
     /// <summary>
     /// Somebody has saved the profile since this folder was made to match it. Two integers rather
     /// than a mod-by-mod comparison, which is what lets the startup check say it at all: naming the
-    /// mods needs the profile's dependencies, and the cheap check deliberately talks to no server.
+    /// mods needs the profile's pins, and the cheap check deliberately talks to no server.
     /// </summary>
     /// <remarks>
     /// A save that changes nothing mints no revision, so a moved number always means a different
@@ -238,7 +238,7 @@ public sealed class DriftService(
         ActiveProfile? activeProfile,
         string? modFolder,
         bool profileRepoIsGone = false,
-        IReadOnlyCollection<DesiredMod>? profileDependencies = null,
+        IReadOnlyCollection<DesiredMod>? profilePins = null,
         int? currentRevision = null,
         IReadOnlyList<Savegames.SavegameDrift>? savegameDrift = null)
     {
@@ -306,7 +306,7 @@ public sealed class DriftService(
         }
 
         var (added, removed, changed) = CompareFolder(manifest, listing, modFolder);
-        var (profileChanged, locked) = CompareProfile(manifest, profileDependencies);
+        var (profileChanged, locked) = CompareProfile(manifest, profilePins);
 
         foreach (var file in managedFiles.FindOutOfLine(manifest) ?? [])
         {
@@ -340,7 +340,7 @@ public sealed class DriftService(
 
     /// <summary>
     /// The locked mods behind the changed and removed file names. The manifest carries the lock, so
-    /// this needs neither the profile's current dependencies nor a single archive opened - which is
+    /// this needs neither the profile's current pins nor a single archive opened - which is
     /// what lets the startup check say "your map moved" rather than "3 files differ".
     /// </summary>
     private static List<DriftedLockedMod> NameLockedFiles(
@@ -470,9 +470,9 @@ public sealed class DriftService(
     /// </summary>
     private static (List<ModKey> Changed, List<DriftedLockedMod> Locked) CompareProfile(
         SyncManifest manifest,
-        IReadOnlyCollection<DesiredMod>? dependencies)
+        IReadOnlyCollection<DesiredMod>? pins)
     {
-        if (dependencies is null)
+        if (pins is null)
         {
             return ([], []);
         }
@@ -481,18 +481,18 @@ public sealed class DriftService(
         var changed = new List<ModKey>();
         var locked = new List<DriftedLockedMod>();
 
-        foreach (var dependency in dependencies)
+        foreach (var pin in pins)
         {
-            if (applied.Remove(dependency.ModId, out var entry) is false ||
-                ModContentHasher.Matches(entry.ContentHash, dependency.ContentHash) is false)
+            if (applied.Remove(pin.ModId, out var entry) is false ||
+                ModContentHasher.Matches(entry.ContentHash, pin.ContentHash) is false)
             {
-                changed.Add(dependency.ModId);
+                changed.Add(pin.ModId);
 
-                if (dependency.Locked)
+                if (pin.Locked)
                 {
                     locked.Add(new DriftedLockedMod(
-                        dependency.ModId,
-                        dependency.DisplayName ?? entry?.DisplayName ?? dependency.ModId.Value,
+                        pin.ModId,
+                        pin.DisplayName ?? entry?.DisplayName ?? pin.ModId.Value,
                         entry?.VersionId,
                         LockedDriftReason.ProfileMoved));
                 }

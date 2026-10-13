@@ -73,8 +73,8 @@ public class RetentionUpkeep(ApplicationDbContext dbContext, ITimeService timeSe
             // of them will have anything scheduled - so the question is which few to look at.
             var pinned = dbContext.ProfileRevisions
                 .Where(x => x.RepoId == repoId && x.ProfileId == profileId && x.Number == revision)
-                .SelectMany(x => x.ModDependencies)
-                .Select(x => x.ModVersion.ModId);
+                .SelectMany(x => x.Pins)
+                .Select(x => x.ModId);
 
             var affected = await dbContext.ModVersions
                 .Where(x => x.RepoId == repoId && x.DeletionScheduledFor != null && pinned.Contains(x.ModId))

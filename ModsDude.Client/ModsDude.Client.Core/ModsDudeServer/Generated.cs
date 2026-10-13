@@ -8021,17 +8021,17 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial interface IModDependenciesClient
+    public partial interface IProfileModPinsClient
     {
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<GetModDependenciesResponse> GetModDependenciesV1Async(System.Guid repoId, System.Guid profileId, int? revision = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<GetProfileModPinsResponse> GetProfileModPinsV1Async(System.Guid repoId, System.Guid profileId, int? revision = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class ModDependenciesClient : ModsDudeClientBase, IModDependenciesClient
+    public partial class ProfileModPinsClient : ModsDudeClientBase, IProfileModPinsClient
     {
         #pragma warning disable 8618
         private string _baseUrl;
@@ -8042,7 +8042,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         private Newtonsoft.Json.JsonSerializerSettings _instanceSettings;
 
     #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-        public ModDependenciesClient(ClientConfiguration configuration, System.Net.Http.HttpClient httpClient) : base(configuration)
+        public ProfileModPinsClient(ClientConfiguration configuration, System.Net.Http.HttpClient httpClient) : base(configuration)
     #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         {
             BaseUrl = "/";
@@ -8080,7 +8080,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<GetModDependenciesResponse> GetModDependenciesV1Async(System.Guid repoId, System.Guid profileId, int? revision = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<GetProfileModPinsResponse> GetProfileModPinsV1Async(System.Guid repoId, System.Guid profileId, int? revision = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (repoId == null)
                 throw new System.ArgumentNullException("repoId");
@@ -8099,12 +8099,12 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                     if (!string.IsNullOrEmpty(_baseUrl)) urlBuilder_.Append(_baseUrl);
-                    // Operation Path: "api/v1/repos/{repoId}/profiles/{profileId}/modDependencies"
+                    // Operation Path: "api/v1/repos/{repoId}/profiles/{profileId}/pinnedMods"
                     urlBuilder_.Append("api/v1/repos/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(repoId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/profiles/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(profileId, System.Globalization.CultureInfo.InvariantCulture)));
-                    urlBuilder_.Append("/modDependencies");
+                    urlBuilder_.Append("/pinnedMods");
                     urlBuilder_.Append('?');
                     if (revision != null)
                     {
@@ -8137,7 +8137,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
                         var status_ = (int)response_.StatusCode;
                         if (status_ == 200)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<GetModDependenciesResponse>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<GetProfileModPinsResponse>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -11779,21 +11779,6 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial record GetModDependenciesResponse
-    {
-
-        [Newtonsoft.Json.JsonProperty("dependencies", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public System.Collections.Generic.ICollection<ModDependencyDto> Dependencies { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("isHead", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public bool IsHead { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("revision", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public int Revision { get; set; } = default!;
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial record GetModUsageResponse
     {
 
@@ -11829,6 +11814,21 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [Newtonsoft.Json.JsonProperty("sequence", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public long Sequence { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial record GetProfileModPinsResponse
+    {
+
+        [Newtonsoft.Json.JsonProperty("isHead", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public bool IsHead { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("pins", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Collections.Generic.ICollection<ProfileModPinDto> Pins { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("revision", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public int Revision { get; set; } = default!;
 
     }
 
@@ -11922,33 +11922,6 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [Newtonsoft.Json.JsonProperty("value", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public string? Value { get; set; } = default!;
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial record ModDependencyDto
-    {
-
-        [Newtonsoft.Json.JsonProperty("added", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public System.DateTime Added { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("contentHash", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public string ContentHash { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("fileName", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public string FileName { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("locked", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public bool Locked { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("modId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public string ModId { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("modVersionId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public string ModVersionId { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("sizeBytes", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public long SizeBytes { get; set; } = default!;
 
     }
 
@@ -12190,8 +12163,8 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/not-found")]
         NotFound = 1,
 
-        [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/mod-dependency-exists")]
-        ModDependencyExists = 2,
+        [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/mod-pinned-twice")]
+        ModPinnedTwice = 2,
 
         [System.Runtime.Serialization.EnumMember(Value = @"https://server.modsdude.com/api/problems/insufficient-repo-access")]
         InsufficientRepoAccess = 3,
@@ -12387,6 +12360,33 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         [Newtonsoft.Json.JsonProperty("version", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public int Version { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial record ProfileModPinDto
+    {
+
+        [Newtonsoft.Json.JsonProperty("added", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.DateTime Added { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("contentHash", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string ContentHash { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("fileName", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string FileName { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("locked", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public bool Locked { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("modId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string ModId { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("modVersionId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string ModVersionId { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("sizeBytes", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public long SizeBytes { get; set; } = default!;
 
     }
 

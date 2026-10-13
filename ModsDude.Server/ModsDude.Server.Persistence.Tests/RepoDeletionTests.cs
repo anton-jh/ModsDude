@@ -118,7 +118,7 @@ public class RepoDeletionTests(DatabaseFixture fixture)
 
         var profile = new Profile(repo.Id, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
         var revision = profile.CreateRevision(
-            [new ModDependency { ModVersion = versions[0], Locked = false }],
+            [new ProfileModPin { ModId = versions[0].ModId, VersionId = versions[0].Id, Locked = false }],
             [],
             _author,
             DateTime.UtcNow);
@@ -143,11 +143,10 @@ public class RepoDeletionTests(DatabaseFixture fixture)
         using var dbContext = fixture.CreateDbContext();
 
         var profile = (await dbContext.Profiles.GetAsync(repoId, profileId, CancellationToken.None))!;
-        var version = await dbContext.ModVersions.GetAsync(repoId, _modId, new ModVersionId(versionId), CancellationToken.None);
         var previous = await dbContext.ProfileRevisions.GetPinsAsync(repoId, profileId, profile.HeadRevision, CancellationToken.None);
 
         var revision = profile.CreateRevision(
-            [new ModDependency { ModVersion = version!, Locked = false }],
+            [new ProfileModPin { ModId = _modId, VersionId = new ModVersionId(versionId), Locked = false }],
             previous,
             _author,
             DateTime.UtcNow);

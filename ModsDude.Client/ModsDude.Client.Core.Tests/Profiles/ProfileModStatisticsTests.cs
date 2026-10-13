@@ -8,7 +8,7 @@ public class ProfileModStatisticsTests
     [Fact]
     public void A_profile_adds_up_its_mods_and_their_sizes()
     {
-        var statistics = ProfileModStatistics.From(Revision(4, Dependency("a", 100), Dependency("b", 250)));
+        var statistics = ProfileModStatistics.From(Revision(4, Pin("a", 100), Pin("b", 250)));
 
         Assert.Equal(new ProfileModStatistics(4, 2, 350), statistics);
     }
@@ -20,14 +20,14 @@ public class ProfileModStatisticsTests
     }
 
 
-    private static GetModDependenciesResponse Revision(int number, params ModDependencyDto[] dependencies) => new()
+    private static GetProfileModPinsResponse Revision(int number, params ProfileModPinDto[] pins) => new()
     {
         Revision = number,
         IsHead = true,
-        Dependencies = [.. dependencies]
+        Pins = [.. pins]
     };
 
-    private static ModDependencyDto Dependency(string modId, long sizeBytes) => new()
+    private static ProfileModPinDto Pin(string modId, long sizeBytes) => new()
     {
         ModId = modId,
         ModVersionId = "1.0.0",

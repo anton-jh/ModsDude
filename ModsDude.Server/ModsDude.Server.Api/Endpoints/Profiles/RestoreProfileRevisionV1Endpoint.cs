@@ -90,18 +90,17 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
         var pins = await dbContext.ProfileRevisions.GetPinsAsync(profile.RepoId, profile.Id, source, cancellationToken);
         var headPins = await dbContext.ProfileRevisions.GetPinsAsync(profile.RepoId, profile.Id, profile.HeadRevision, cancellationToken);
 
-        var resolved = await ProfileRevisionWrites.ResolveAsync(dbContext, profile.RepoId, pins, cancellationToken);
-        if (resolved.Problem is not null)
+        if (await ProfileRevisionWrites.ValidatePinsAsync(dbContext, profile.RepoId, pins, cancellationToken) is CustomProblemDetails problem)
         {
             // A version an old revision pins cannot have been deleted - the foreign key sees to that
             // - so this is unreachable in practice and reported rather than assumed away.
-            return TypedResults.BadRequest(resolved.Problem);
+            return TypedResults.BadRequest(problem);
         }
 
         var now = timeService.Now();
 
         var revision = profile.CreateRevision(
-            resolved.Dependencies!,
+            pins,
             headPins,
             userId,
             now,

@@ -14,7 +14,7 @@ namespace ModsDude.Client.Core.Sync;
 
 /// <summary>Works out what an apply would do to one mod folder, without changing anything.</summary>
 internal sealed class ModSyncPlanBuilder(
-    IModDependenciesClient modDependenciesClient,
+    IProfileModPinsClient pinsClient,
     IModStore modStore,
     IContentStoreProvider storeProvider,
     ISyncManifestStore manifestStore,
@@ -378,22 +378,22 @@ internal sealed class ModSyncPlanBuilder(
     /// </remarks>
     private Task<(IReadOnlyList<DesiredMod> Mods, int Revision)> GetDesiredAsync(
         ModSyncRequest request, int? revision, CancellationToken cancellationToken)
-        => GetDesiredAsync(modDependenciesClient, request.RepoId, request.ProfileId, revision, cancellationToken);
+        => GetDesiredAsync(pinsClient, request.RepoId, request.ProfileId, revision, cancellationToken);
 
     /// <inheritdoc cref="GetDesiredAsync(ModSyncRequest, int?, CancellationToken)"/>
     internal static async Task<(IReadOnlyList<DesiredMod> Mods, int Revision)> GetDesiredAsync(
-        IModDependenciesClient modDependenciesClient,
+        IProfileModPinsClient pinsClient,
         Guid repoId,
         Guid profileId,
         int? revision,
         CancellationToken cancellationToken)
     {
-        var response = await modDependenciesClient.GetModDependenciesV1Async(repoId, profileId, revision, cancellationToken);
+        var response = await pinsClient.GetProfileModPinsV1Async(repoId, profileId, revision, cancellationToken);
 
         // Normalized where the ids enter the client, as everywhere else, and the file name checked
         // in the same breath: it came off somebody else's disk and is about to be interpolated into
         // a path here, so it is validated against the id it arrived with rather than trusted.
-        return ([.. response.Dependencies.Select(x =>
+        return ([.. response.Pins.Select(x =>
         {
             var modId = ModKey.From(x.ModId);
 

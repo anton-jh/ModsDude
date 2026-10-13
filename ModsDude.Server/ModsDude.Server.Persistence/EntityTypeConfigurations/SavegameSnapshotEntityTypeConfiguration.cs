@@ -28,7 +28,7 @@ internal class SavegameSnapshotEntityTypeConfiguration : IEntityTypeConfiguratio
         // against, and deleting that revision would leave the save claiming to be reproducible
         // against a list nobody can read any more. The consequence to accept knowingly is that a
         // profile that has been played can no longer be deleted - the same bargain as
-        // ModDependency -> ModVersion one aggregate down, which
+        // ProfileModPin -> ModVersion one aggregate down, which
         // ProfileRevisionEntityTypeConfiguration makes for the same reason. The delete endpoints
         // should report it the way CheckIfSnapshotIsDependedOn reports its own, so this fires only
         // for a snapshot checked in between the check and the commit.

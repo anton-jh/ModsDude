@@ -210,7 +210,7 @@ public class ProfileIgnoredModTests(DatabaseFixture fixture)
 
         dbContext.Profiles.Add(profile);
         dbContext.ProfileRevisions.Add(profile.CreateRevision(
-            [new ModDependency { ModVersion = pinnedVersion, Locked = false }],
+            [new ProfileModPin { ModId = pinnedVersion.ModId, VersionId = pinnedVersion.Id, Locked = false }],
             [],
             _author,
             DateTime.UtcNow,
@@ -243,17 +243,11 @@ public class ProfileIgnoredModTests(DatabaseFixture fixture)
         var profile = (await dbContext.Profiles.GetAsync(repoId, profileId, CancellationToken.None))!;
         var previous = await dbContext.ProfileRevisions.GetPinsAsync(repoId, profileId, profile.HeadRevision, CancellationToken.None);
 
-        var dependencies = new List<ModDependency>();
+        var pins = modIds
+            .Select(x => new ProfileModPin { ModId = x, VersionId = new ModVersionId("1.0.0"), Locked = false })
+            .ToList();
 
-        foreach (var modId in modIds)
-        {
-            var version = await dbContext.ModVersions.GetAsync(repoId, modId, new ModVersionId("1.0.0"), CancellationToken.None);
-
-            dependencies.Add(new ModDependency { ModVersion = version!, Locked = false });
-        }
-
-        var revision = profile.CreateRevision(dependencies, previous, _author, DateTime.UtcNow);
-        var pins = dependencies.Select(x => x.ToPin()).ToList();
+        var revision = profile.CreateRevision(pins, previous, _author, DateTime.UtcNow);
 
         dbContext.ProfileRevisions.Add(revision);
         await dbContext.ReleasePinnedAsync(profile, pins, CancellationToken.None);

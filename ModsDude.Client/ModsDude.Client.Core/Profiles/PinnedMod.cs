@@ -13,7 +13,7 @@ namespace ModsDude.Client.Core.Profiles;
 /// It still carries a whole <see cref="CatalogModVersion"/> so the reader gets the same list row as
 /// everywhere else: the icon, the description and the details dialog all come off that record, and
 /// a registered version answers every one of them without a scan.
-/// There is no unresolved form of this. A <c>ModDependency</c> cannot name a version the repo does
+/// There is no unresolved form of this. A server pin cannot name a version the repo does
 /// not hold - the foreign key onto <c>ModVersions</c> is required and <c>Restrict</c>, so the
 /// version cannot be deleted out from under it - so every pin resolves to a registered record.
 /// </remarks>

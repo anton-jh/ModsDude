@@ -170,20 +170,15 @@ public class ModUsageQueryTests(DatabaseFixture fixture)
             ? (await dbContext.Profiles.GetAsync(repoId, profileId, CancellationToken.None))!
             : new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
 
-        var dependencies = new List<ModDependency>();
-
-        foreach (var (modId, versionId) in pinned)
-        {
-            var version = await dbContext.ModVersions.GetAsync(repoId, new ModId(modId), new ModVersionId(versionId), CancellationToken.None);
-
-            dependencies.Add(new ModDependency { ModVersion = version!, Locked = false });
-        }
+        var pins = pinned
+            .Select(x => new ProfileModPin { ModId = new ModId(x.ModId), VersionId = new ModVersionId(x.VersionId), Locked = false })
+            .ToList();
 
         var previous = existing is null
             ? []
             : await dbContext.ProfileRevisions.GetPinsAsync(repoId, profile.Id, profile.HeadRevision, CancellationToken.None);
 
-        var revision = profile.CreateRevision(dependencies, previous, _author, DateTime.UtcNow);
+        var revision = profile.CreateRevision(pins, previous, _author, DateTime.UtcNow);
 
         if (existing is null)
         {

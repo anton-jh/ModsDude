@@ -43,7 +43,7 @@ public class ModVersion
 
     /// <summary>
     /// The mod itself is version-sensitive, as determined by the adapter from the mod file at
-    /// registration. The per-profile override lives on ModDependency.
+    /// registration. The per-profile override is <see cref="Profiles.ProfileModPin.Locked"/>.
     /// </summary>
     public required bool Locked { get; set; }
 

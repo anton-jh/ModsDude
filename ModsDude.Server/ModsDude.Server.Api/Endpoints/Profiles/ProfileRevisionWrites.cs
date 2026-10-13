@@ -26,16 +26,10 @@ internal static class ProfileRevisionWrites
 
 
     /// <summary>
-    /// Turns a request's pins into dependencies, which means resolving each one to the registered
-    /// version behind it - a dependency can only ever name a version the repo already holds.
+    /// Why a set of pins cannot become a revision, or <c>null</c> where it can. A pin can only ever
+    /// name a version the repo already holds.
     /// </summary>
-    /// <remarks>
-    /// The versions are materialized rather than projected, because a dependency's foreign key is a
-    /// navigation to a tracked entity and EF cannot be handed a key on its own. That is the one
-    /// place a save reads whole <see cref="ModVersion"/> rows, and it is why it happens once per
-    /// save rather than once per mod.
-    /// </remarks>
-    public static async Task<ResolvedPins> ResolveAsync(
+    public static async Task<CustomProblemDetails?> ValidatePinsAsync(
         ApplicationDbContext dbContext,
         RepoId repoId,
         IReadOnlyList<ProfileModPin> pins,
@@ -43,7 +37,7 @@ internal static class ProfileRevisionWrites
     {
         if (pins.Count > MaximumMods)
         {
-            return new ResolvedPins(null, Problems.BatchTooLarge(pins.Count, MaximumMods));
+            return Problems.BatchTooLarge(pins.Count, MaximumMods);
         }
 
         var duplicate = pins
@@ -52,40 +46,21 @@ internal static class ProfileRevisionWrites
 
         if (duplicate is not null)
         {
-            return new ResolvedPins(null, Problems.ModPinnedTwice(duplicate.Key));
+            return Problems.ModPinnedTwice(duplicate.Key);
         }
 
-        if (pins.Count == 0)
-        {
-            return new ResolvedPins([], null);
-        }
-
-        var versions = await dbContext.ModVersions.GetVersionsAsync(
+        var existing = await dbContext.ModVersions.GetExistingKeysAsync(
             repoId,
             [.. pins.Select(x => x.ModId).Distinct()],
             [.. pins.Select(x => x.VersionId).Distinct()],
             cancellationToken);
 
-        var byKey = versions.ToDictionary(x => (x.ModId, x.Id));
+        var missing = pins.FirstOrDefault(x => existing.Contains((x.ModId, x.VersionId)) is false);
 
-        var dependencies = new List<ModDependency>(pins.Count);
-
-        foreach (var pin in pins)
-        {
-            if (byKey.TryGetValue((pin.ModId, pin.VersionId), out var version) is false)
-            {
-                return new ResolvedPins(null, Problems.NotFound.With(
-                    x => x.Detail = $"No version '{pin.VersionId.Value}' of mod '{pin.ModId.Value}' is registered in repo '{repoId.Value}'"));
-            }
-
-            dependencies.Add(new ModDependency
-            {
-                ModVersion = version,
-                Locked = pin.Locked
-            });
-        }
-
-        return new ResolvedPins(dependencies, null);
+        return missing is null
+            ? null
+            : Problems.NotFound.With(
+                x => x.Detail = $"No version '{missing.VersionId.Value}' of mod '{missing.ModId.Value}' is registered in repo '{repoId.Value}'");
     }
 
     /// <summary>
@@ -162,8 +137,4 @@ internal static class ProfileRevisionWrites
                 $"Revision {original.AnsweredWith.Value} of profile '{original.ProfileId.Value}', which this request was answered with, has since been deleted."))
             : TypedResults.Ok(revision);
     }
-
-
-    /// <summary>Either the dependencies to snapshot, or the reason there are none.</summary>
-    public record ResolvedPins(IReadOnlyList<ModDependency>? Dependencies, CustomProblemDetails? Problem);
 }

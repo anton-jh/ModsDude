@@ -10,7 +10,7 @@ namespace ModsDude.Server.Persistence.Tests;
 /// <summary>
 /// What the delete endpoints ask the database before removing a version, and what the database does
 /// if they were somehow not asked. Both are provider questions: the usage query reaches a mod
-/// version through a profile's owned dependency collection, and the refusal is a foreign key
+/// version through a profile's owned pin collection, and the refusal is a foreign key
 /// declared Restrict rather than the cascade EF would otherwise infer.
 /// </summary>
 [Collection(nameof(DatabaseCollection))]
@@ -22,25 +22,25 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
 
 
     [Fact]
-    public async Task A_version_a_profile_pins_is_reported_as_depended_on()
+    public async Task A_version_a_profile_pins_is_reported_as_pinned()
     {
         var repoId = await GivenAModWithVersions("1.0.0", "2.0.0");
         await GivenAProfilePinning(repoId, "1.0.0");
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.True(await dbContext.ProfileRevisions.CheckIfVersionIsDependedOn(repoId, _modId, new ModVersionId("1.0.0"), CancellationToken.None));
+        Assert.True(await dbContext.ProfileRevisions.IsVersionPinnedAsync(repoId, _modId, new ModVersionId("1.0.0"), CancellationToken.None));
     }
 
     [Fact]
-    public async Task A_version_no_profile_pins_is_not_reported_as_depended_on()
+    public async Task A_version_no_profile_pins_is_not_reported_as_pinned()
     {
         var repoId = await GivenAModWithVersions("1.0.0", "2.0.0");
         await GivenAProfilePinning(repoId, "1.0.0");
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.False(await dbContext.ProfileRevisions.CheckIfVersionIsDependedOn(repoId, _modId, new ModVersionId("2.0.0"), CancellationToken.None));
+        Assert.False(await dbContext.ProfileRevisions.IsVersionPinnedAsync(repoId, _modId, new ModVersionId("2.0.0"), CancellationToken.None));
     }
 
     /// <summary>
@@ -50,7 +50,7 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
     /// the endpoint's back.
     /// </summary>
     [Fact]
-    public async Task A_version_only_an_older_revision_pins_is_still_reported_as_depended_on()
+    public async Task A_version_only_an_older_revision_pins_is_still_reported_as_pinned()
     {
         var repoId = await GivenAModWithVersions("1.0.0", "2.0.0");
         var profileId = await GivenAProfilePinning(repoId, "1.0.0");
@@ -59,32 +59,32 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.True(await dbContext.ProfileRevisions.CheckIfVersionIsDependedOn(repoId, _modId, new ModVersionId("1.0.0"), CancellationToken.None));
+        Assert.True(await dbContext.ProfileRevisions.IsVersionPinnedAsync(repoId, _modId, new ModVersionId("1.0.0"), CancellationToken.None));
     }
 
     [Fact]
-    public async Task A_mod_is_reported_as_depended_on_whichever_of_its_versions_is_pinned()
+    public async Task A_mod_is_reported_as_pinned_whichever_of_its_versions_is_pinned()
     {
         var repoId = await GivenAModWithVersions("1.0.0", "2.0.0");
         await GivenAProfilePinning(repoId, "2.0.0");
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.True(await dbContext.ProfileRevisions.CheckIfModIsDependedOn(repoId, _modId, CancellationToken.None));
+        Assert.True(await dbContext.ProfileRevisions.IsModPinnedAsync(repoId, _modId, CancellationToken.None));
     }
 
     [Fact]
-    public async Task A_mod_nothing_pins_is_not_reported_as_depended_on()
+    public async Task A_mod_nothing_pins_is_not_reported_as_pinned()
     {
         var repoId = await GivenAModWithVersions("1.0.0");
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.False(await dbContext.ProfileRevisions.CheckIfModIsDependedOn(repoId, _modId, CancellationToken.None));
+        Assert.False(await dbContext.ProfileRevisions.IsModPinnedAsync(repoId, _modId, CancellationToken.None));
     }
 
     /// <summary>
-    /// The endpoints refuse this case themselves; the constraint is what stops a dependency added
+    /// The endpoints refuse this case themselves; the constraint is what stops a pin added
     /// between that check and the commit from being swept away without anyone asking.
     /// </summary>
     [Fact]
@@ -97,6 +97,30 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
 
         var version = await dbContext.ModVersions.GetAsync(repoId, _modId, new ModVersionId("1.0.0"), CancellationToken.None);
         dbContext.ModVersions.Remove(version!);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(CancellationToken.None));
+    }
+
+    /// <summary>
+    /// A pin holds only IDs, and its foreign key reuses the revision's repo column, so a version
+    /// registered in another repo is no version at all as far as the database is concerned.
+    /// </summary>
+    [Fact]
+    public async Task Pinning_a_version_from_another_repo_is_refused_by_the_database()
+    {
+        await GivenAModWithVersions("1.0.0");
+        var repoId = await GivenAModWithVersions();
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var profile = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
+
+        dbContext.Profiles.Add(profile);
+        dbContext.ProfileRevisions.Add(profile.CreateRevision(
+            [new ProfileModPin { ModId = _modId, VersionId = new ModVersionId("1.0.0"), Locked = false }],
+            [],
+            _author,
+            DateTime.UtcNow));
 
         await Assert.ThrowsAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(CancellationToken.None));
     }
@@ -149,11 +173,10 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
     {
         using var dbContext = fixture.CreateDbContext();
 
-        var version = await dbContext.ModVersions.GetAsync(repoId, _modId, new ModVersionId(versionId), CancellationToken.None);
         var profile = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
 
         var revision = profile.CreateRevision(
-            [new ModDependency { ModVersion = version!, Locked = false }],
+            [new ProfileModPin { ModId = _modId, VersionId = new ModVersionId(versionId), Locked = false }],
             [],
             _author,
             DateTime.UtcNow);
@@ -172,11 +195,10 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
         using var dbContext = fixture.CreateDbContext();
 
         var profile = (await dbContext.Profiles.GetAsync(repoId, profileId, CancellationToken.None))!;
-        var version = await dbContext.ModVersions.GetAsync(repoId, _modId, new ModVersionId(versionId), CancellationToken.None);
         var previous = await dbContext.ProfileRevisions.GetPinsAsync(repoId, profileId, profile.HeadRevision, CancellationToken.None);
 
         var revision = profile.CreateRevision(
-            [new ModDependency { ModVersion = version!, Locked = false }],
+            [new ProfileModPin { ModId = _modId, VersionId = new ModVersionId(versionId), Locked = false }],
             previous,
             _author,
             DateTime.UtcNow);

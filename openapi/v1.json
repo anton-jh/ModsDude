@@ -545,25 +545,6 @@
         },
         "type": "object"
       },
-      "GetModDependenciesResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "dependencies": {
-            "items": {
-              "$ref": "#/components/schemas/ModDependencyDto"
-            },
-            "type": "array"
-          },
-          "isHead": {
-            "type": "boolean"
-          },
-          "revision": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
       "GetModUsageResponse": {
         "additionalProperties": false,
         "properties": {
@@ -612,6 +593,25 @@
           },
           "sequence": {
             "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "GetProfileModPinsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "isHead": {
+            "type": "boolean"
+          },
+          "pins": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileModPinDto"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -724,35 +724,6 @@
           "value": {
             "nullable": true,
             "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "ModDependencyDto": {
-        "additionalProperties": false,
-        "properties": {
-          "added": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "contentHash": {
-            "type": "string"
-          },
-          "fileName": {
-            "type": "string"
-          },
-          "locked": {
-            "type": "boolean"
-          },
-          "modId": {
-            "type": "string"
-          },
-          "modVersionId": {
-            "type": "string"
-          },
-          "sizeBytes": {
-            "format": "int64",
-            "type": "integer"
           }
         },
         "type": "object"
@@ -1016,7 +987,7 @@
         "enum": [
           "https://server.modsdude.com/api/problems/name-taken",
           "https://server.modsdude.com/api/problems/not-found",
-          "https://server.modsdude.com/api/problems/mod-dependency-exists",
+          "https://server.modsdude.com/api/problems/mod-pinned-twice",
           "https://server.modsdude.com/api/problems/insufficient-repo-access",
           "https://server.modsdude.com/api/problems/not-trusted",
           "https://server.modsdude.com/api/problems/not-authenticated",
@@ -1069,7 +1040,7 @@
         "x-enumNames": [
           "NameTaken",
           "NotFound",
-          "ModDependencyExists",
+          "ModPinnedTwice",
           "InsufficientRepoAccess",
           "NotTrusted",
           "NotAuthenticated",
@@ -1183,6 +1154,35 @@
           },
           "version": {
             "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ProfileModPinDto": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "modId": {
+            "type": "string"
+          },
+          "modVersionId": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "format": "int64",
             "type": "integer"
           }
         },
@@ -5692,9 +5692,9 @@
         ]
       }
     },
-    "/api/v1/repos/{repoId}/profiles/{profileId}/modDependencies": {
+    "/api/v1/repos/{repoId}/profiles/{profileId}/pinnedMods": {
       "get": {
-        "operationId": "GetModDependenciesV1",
+        "operationId": "GetProfileModPinsV1",
         "parameters": [
           {
             "in": "path",
@@ -5732,7 +5732,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GetModDependenciesResponse"
+                  "$ref": "#/components/schemas/GetProfileModPinsResponse"
                 }
               }
             },
@@ -5785,7 +5785,7 @@
           }
         ],
         "tags": [
-          "ModDependencies"
+          "ProfileModPins"
         ]
       }
     },

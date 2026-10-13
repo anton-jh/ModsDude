@@ -13,12 +13,12 @@ using System.Text;
 namespace ModsDude.Client.Core.Tests.Sync;
 
 /// <summary>
-/// Just enough of the three endpoints sync reads: the profile's dependencies, the repo's registered
+/// Just enough of the three endpoints sync reads: the profile's pins, the repo's registered
 /// content, and a download link per mod version. Blob storage is a dictionary keyed by the link.
 /// </summary>
-internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFilesClient
+internal sealed class FakeSyncServer : IProfileModPinsClient, IModsClient, IFilesClient
 {
-    private readonly List<ModDependencyDto> _dependencies = [];
+    private readonly List<ProfileModPinDto> _pins = [];
     private readonly List<ModDto> _registered = [];
     private readonly Dictionary<string, byte[]> _blobs = [];
     private readonly Dictionary<Guid, List<ModDto>> _otherRepos = [];
@@ -47,7 +47,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     {
         Register(modId, version, content, locked, fileName, title);
 
-        _dependencies.Add(new ModDependencyDto
+        _pins.Add(new ProfileModPinDto
         {
             ModId = modId,
             ModVersionId = version,
@@ -64,9 +64,9 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
     /// </summary>
     public void Rename(string modId, string fileName)
     {
-        foreach (var dependency in _dependencies.Where(x => x.ModId == modId))
+        foreach (var pin in _pins.Where(x => x.ModId == modId))
         {
-            dependency.FileName = fileName;
+            pin.FileName = fileName;
         }
 
         foreach (var version in _registered.Where(x => x.ModId == modId))
@@ -77,7 +77,7 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
 
     /// <summary>Takes a mod out of the profile, leaving it registered - what switching profiles looks like.</summary>
     public void Unpin(string modId)
-        => _dependencies.RemoveAll(x => x.ModId == modId);
+        => _pins.RemoveAll(x => x.ModId == modId);
 
     /// <summary>Registers a version without pinning it - what the repo can reproduce but does not want here.</summary>
     public void Register(string modId, string version, string content, bool locked = false, string? fileName = null, string? title = null)
@@ -136,19 +136,19 @@ internal sealed class FakeSyncServer : IModDependenciesClient, IModsClient, IFil
 
 
     /// <summary>
-    /// The mod list at one revision. The dependencies are the same whichever is asked for - sync
+    /// The mod list at one revision. The pins are the same whichever is asked for - sync
     /// reads a list and not a history - but the number is answered back exactly as the real endpoint
     /// does, so a client that hardcodes head cannot pass by accident.
     /// </summary>
-    public Task<GetModDependenciesResponse> GetModDependenciesV1Async(Guid repoId, Guid profileId, int? revision = null, CancellationToken cancellationToken = default)
+    public Task<GetProfileModPinsResponse> GetProfileModPinsV1Async(Guid repoId, Guid profileId, int? revision = null, CancellationToken cancellationToken = default)
     {
         RevisionsRequested.Add(revision);
 
-        return Task.FromResult(new GetModDependenciesResponse
+        return Task.FromResult(new GetProfileModPinsResponse
         {
             Revision = revision ?? HeadRevision,
             IsHead = (revision ?? HeadRevision) == HeadRevision,
-            Dependencies = [.. _dependencies]
+            Pins = [.. _pins]
         });
     }
 

@@ -42,8 +42,8 @@ public static class ProfileModListDiff
 
     /// <summary>
     /// The adapter's flag is deliberately not compared. It belongs to the mod version rather than to
-    /// the dependency, and there is no request field that could carry it - a client that thought it
-    /// had changed would write a dependency update that says nothing.
+    /// the pin, and there is no request field that could carry it - a client that thought it
+    /// had changed would write a pin update that says nothing.
     /// </summary>
     private static bool Differs(ProfileModPin existing, ProfileModPin desired)
     {

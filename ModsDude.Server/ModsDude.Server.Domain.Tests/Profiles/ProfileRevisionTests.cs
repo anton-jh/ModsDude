@@ -1,4 +1,4 @@
-﻿using ModsDude.Server.Domain.Exceptions;
+using ModsDude.Server.Domain.Exceptions;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
@@ -9,11 +9,11 @@ namespace ModsDude.Server.Domain.Tests.Profiles;
 public class ProfileRevisionTests
 {
     private static readonly RepoId _repoId = new(Guid.NewGuid());
-    private static readonly RepoId _otherRepoId = new(Guid.NewGuid());
     private static readonly ModId _modId = new("FS25_TestMod");
     private static readonly ModId _otherModId = new("FS25_OtherMod");
     private static readonly UserId _author = new("author");
     private static readonly DateTime _now = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime _earlier = _now.AddDays(-30);
 
 
     [Fact]
@@ -45,12 +45,30 @@ public class ProfileRevisionTests
     {
         var profile = CreateProfile();
 
-        var revision = profile.CreateRevision([Pin(_modId, "1.0.0"), Pin(_otherModId, "2.0.0")], [], _author, _now);
+        var revision = profile.CreateRevision([Pin(_modId, "1.0.0", locked: true), Pin(_otherModId, "2.0.0")], [], _author, _now);
 
         Assert.Equal(2, revision.ModCount);
         Assert.Equal(
-            [(_otherModId, new ModVersionId("2.0.0")), (_modId, new ModVersionId("1.0.0"))],
-            revision.ToPins().OrderBy(x => x.ModId.Value).Select(x => (x.ModId, x.VersionId)));
+            [(_otherModId, new ModVersionId("2.0.0"), false), (_modId, new ModVersionId("1.0.0"), true)],
+            revision.Pins.OrderBy(x => x.ModId.Value).Select(x => (x.ModId, x.VersionId, x.Locked)));
+    }
+
+    /// <summary>
+    /// The revision stamps its own copies, so a caller's pins - which the save endpoint goes on using
+    /// after the revision is made - are never changed, and no pin is shared between two revisions.
+    /// </summary>
+    [Fact]
+    public void A_revision_copies_the_pins_it_is_given()
+    {
+        var profile = CreateProfile();
+        var pin = Pin(_modId, "1.0.0");
+
+        var first = profile.CreateRevision([pin], [], _author, _earlier);
+        var second = profile.CreateRevision(first.Pins, first.Pins, _author, _now);
+
+        Assert.NotSame(pin, Assert.Single(first.Pins));
+        Assert.Equal(default, pin.Added);
+        Assert.NotSame(Assert.Single(first.Pins), Assert.Single(second.Pins));
     }
 
     [Fact]
@@ -63,12 +81,12 @@ public class ProfileRevisionTests
     }
 
     [Fact]
-    public void A_revision_cannot_pin_a_version_from_another_repo()
+    public void A_revision_cannot_pin_one_mod_twice_at_the_same_version()
     {
         var profile = CreateProfile();
 
         Assert.Throws<InvalidOperationException>(
-            () => profile.CreateRevision([Pin(_modId, "1.0.0", _otherRepoId)], [], _author, _now));
+            () => profile.CreateRevision([Pin(_modId, "1.0.0"), Pin(_modId, "1.0.0")], [], _author, _now));
     }
 
     /// <summary>
@@ -110,18 +128,20 @@ public class ProfileRevisionTests
     {
         var profile = CreateProfile();
 
-        profile.CreateRevision([Pin(_modId, "1.0.0")], [], _author, _now, origin: ProfileRevisionOrigin.Created);
+        var first = profile.CreateRevision([Pin(_modId, "1.0.0")], [], _author, _now, origin: ProfileRevisionOrigin.Created);
+        var second = profile.CreateRevision([Pin(_modId, "2.0.0")], first.Pins, _author, _now);
 
         var restored = profile.CreateRevision(
-            [Pin(_modId, "1.0.0")],
-            [new ProfileModPin(_modId, new ModVersionId("2.0.0"), false)],
+            first.Pins,
+            second.Pins,
             _author,
             _now,
             origin: ProfileRevisionOrigin.Restored,
-            sourceRevision: new RevisionNumber(1));
+            sourceRevision: first.Number);
 
         Assert.Equal(ProfileRevisionOrigin.Restored, restored.Origin);
-        Assert.Equal(new RevisionNumber(1), restored.SourceRevision);
+        Assert.Equal(first.Number, restored.SourceRevision);
+        Assert.Equal(new ProfileRevisionChanges(0, 1, 0), restored.Changes);
     }
 
 
@@ -132,22 +152,18 @@ public class ProfileRevisionTests
 
         var revision = profile.CreateRevision([Pin(_modId, "1.0.0")], [], _author, _now);
 
-        Assert.Equal(_now, Assert.Single(revision.ModDependencies).Added);
+        Assert.Equal(_now, Assert.Single(revision.Pins).Added);
     }
 
     [Fact]
     public void A_mod_pinned_at_the_same_version_keeps_the_date_it_arrived()
     {
         var profile = CreateProfile();
-        var earlier = _now.AddDays(-30);
 
-        var revision = profile.CreateRevision(
-            [Pin(_modId, "1.0.0")],
-            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false, earlier)],
-            _author,
-            _now);
+        var first = profile.CreateRevision([Pin(_modId, "1.0.0")], [], _author, _earlier);
+        var revision = profile.CreateRevision([Pin(_modId, "1.0.0")], first.Pins, _author, _now);
 
-        Assert.Equal(earlier, Assert.Single(revision.ModDependencies).Added);
+        Assert.Equal(_earlier, Assert.Single(revision.Pins).Added);
     }
 
     /// <summary>
@@ -158,15 +174,11 @@ public class ProfileRevisionTests
     public void Toggling_the_lock_does_not_move_the_date()
     {
         var profile = CreateProfile();
-        var earlier = _now.AddDays(-30);
 
-        var revision = profile.CreateRevision(
-            [Pin(_modId, "1.0.0", locked: true)],
-            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false, earlier)],
-            _author,
-            _now);
+        var first = profile.CreateRevision([Pin(_modId, "1.0.0")], [], _author, _earlier);
+        var revision = profile.CreateRevision([Pin(_modId, "1.0.0", locked: true)], first.Pins, _author, _now);
 
-        Assert.Equal(earlier, Assert.Single(revision.ModDependencies).Added);
+        Assert.Equal(_earlier, Assert.Single(revision.Pins).Added);
     }
 
     [Fact]
@@ -174,52 +186,24 @@ public class ProfileRevisionTests
     {
         var profile = CreateProfile();
 
-        var revision = profile.CreateRevision(
-            [Pin(_modId, "2.0.0")],
-            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false, _now.AddDays(-30))],
-            _author,
-            _now);
+        var first = profile.CreateRevision([Pin(_modId, "1.0.0")], [], _author, _earlier);
+        var revision = profile.CreateRevision([Pin(_modId, "2.0.0")], first.Pins, _author, _now);
 
-        Assert.Equal(_now, Assert.Single(revision.ModDependencies).Added);
+        Assert.Equal(_now, Assert.Single(revision.Pins).Added);
     }
 
     [Fact]
     public void Only_the_mods_that_changed_get_a_new_date()
     {
         var profile = CreateProfile();
-        var earlier = _now.AddDays(-30);
 
-        var revision = profile.CreateRevision(
-            [Pin(_modId, "1.0.0"), Pin(_otherModId, "3.0.0")],
-            [
-                new ProfileModPin(_modId, new ModVersionId("1.0.0"), false, earlier),
-                new ProfileModPin(_otherModId, new ModVersionId("2.0.0"), false, earlier)
-            ],
-            _author,
-            _now);
+        var first = profile.CreateRevision([Pin(_modId, "1.0.0"), Pin(_otherModId, "2.0.0")], [], _author, _earlier);
+        var revision = profile.CreateRevision([Pin(_modId, "1.0.0"), Pin(_otherModId, "3.0.0")], first.Pins, _author, _now);
 
-        var dates = revision.ModDependencies.ToDictionary(x => x.ModVersion.ModId, x => x.Added);
+        var dates = revision.Pins.ToDictionary(x => x.ModId, x => x.Added);
 
-        Assert.Equal(earlier, dates[_modId]);
+        Assert.Equal(_earlier, dates[_modId]);
         Assert.Equal(_now, dates[_otherModId]);
-    }
-
-    /// <summary>
-    /// A pin read from nowhere - a caller with nothing to carry forward - is treated as new rather
-    /// than as a reason to fail, which is what lets a branched profile start every date afresh.
-    /// </summary>
-    [Fact]
-    public void A_previous_pin_with_no_date_carries_nothing_forward()
-    {
-        var profile = CreateProfile();
-
-        var revision = profile.CreateRevision(
-            [Pin(_modId, "1.0.0")],
-            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false)],
-            _author,
-            _now);
-
-        Assert.Equal(_now, Assert.Single(revision.ModDependencies).Added);
     }
 
 
@@ -228,7 +212,7 @@ public class ProfileRevisionTests
     {
         var changes = ProfileRevisionChanges.Between(
             [],
-            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false)]);
+            [Pin(_modId, "1.0.0")]);
 
         Assert.Equal(new ProfileRevisionChanges(1, 0, 0), changes);
     }
@@ -237,8 +221,8 @@ public class ProfileRevisionTests
     public void A_mod_that_moved_version_is_a_change_rather_than_an_addition_and_a_removal()
     {
         var changes = ProfileRevisionChanges.Between(
-            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false)],
-            [new ProfileModPin(_modId, new ModVersionId("2.0.0"), false)]);
+            [Pin(_modId, "1.0.0")],
+            [Pin(_modId, "2.0.0")]);
 
         Assert.Equal(new ProfileRevisionChanges(0, 1, 0), changes);
     }
@@ -251,8 +235,8 @@ public class ProfileRevisionTests
     public void A_mod_whose_lock_was_toggled_is_a_change()
     {
         var changes = ProfileRevisionChanges.Between(
-            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false)],
-            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), true)]);
+            [Pin(_modId, "1.0.0")],
+            [Pin(_modId, "1.0.0", locked: true)]);
 
         Assert.Equal(new ProfileRevisionChanges(0, 1, 0), changes);
     }
@@ -261,7 +245,7 @@ public class ProfileRevisionTests
     public void A_mod_the_new_revision_does_not_pin_is_a_removal()
     {
         var changes = ProfileRevisionChanges.Between(
-            [new ProfileModPin(_modId, new ModVersionId("1.0.0"), false)],
+            [Pin(_modId, "1.0.0")],
             []);
 
         Assert.Equal(new ProfileRevisionChanges(0, 0, 1), changes);
@@ -272,8 +256,8 @@ public class ProfileRevisionTests
     {
         var pins = new[]
         {
-            new ProfileModPin(_modId, new ModVersionId("1.0.0"), true),
-            new ProfileModPin(_otherModId, new ModVersionId("3.0.0"), false)
+            Pin(_modId, "1.0.0", locked: true),
+            Pin(_otherModId, "3.0.0")
         };
 
         Assert.True(ProfileRevisionChanges.Between(pins, pins.Reverse()).IsEmpty);
@@ -283,27 +267,10 @@ public class ProfileRevisionTests
     private static Profile CreateProfile()
         => new(_repoId, new ProfileName("Test profile"), _now, new ProfileCreateRequestId(Guid.NewGuid()));
 
-    private static ModDependency Pin(ModId modId, string versionId, RepoId? repoId = null, bool locked = false)
-        => new()
-        {
-            ModVersion = CreateVersion(repoId ?? _repoId, modId, versionId),
-            Locked = locked
-        };
-
-    private static ModVersion CreateVersion(RepoId repoId, ModId modId, string versionId) => new()
+    private static ProfileModPin Pin(ModId modId, string versionId, bool locked = false) => new()
     {
-        RepoId = repoId,
         ModId = modId,
-        Id = new ModVersionId(versionId),
-        SequenceNumber = 0,
-        DisplayName = versionId,
-        Description = "",
-        FileName = $"{modId.Value}.zip",
-        ContentHash = versionId,
-        SizeBytes = 1024,
-        Locked = false,
-        Attributes = [],
-        Created = _now,
-        Updated = _now
+        VersionId = new ModVersionId(versionId),
+        Locked = locked
     };
 }

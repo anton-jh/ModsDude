@@ -9,7 +9,7 @@ namespace ModsDude.Server.Persistence.Tests;
 
 /// <summary>
 /// What a profile's history costs to read and what the database will let it hold. Provider
-/// questions: the dependencies are an owned collection of an entity that is itself keyed by three
+/// questions: the pins are an owned collection of an entity that is itself keyed by three
 /// columns, the reads project out of it without materializing a revision, and the rule that one
 /// revision pins each mod once is a unique index rather than anything the model can enforce across
 /// two contexts.
@@ -87,22 +87,23 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// Sync reads a profile's dependencies rather than the repo's mod list, so the hash has to come
-    /// back with them - through two levels of projection, from a revision into its owned collection
-    /// and out to the version it names.
+    /// Sync reads a profile's pins rather than the repo's mod list, so the hash has to come
+    /// back with them - joined from a revision's owned collection to the version each pin names.
     /// </summary>
     [Fact]
-    public async Task Dependency_rows_carry_the_content_hash_of_the_version_they_name()
+    public async Task Pin_rows_carry_what_sync_needs_of_the_version_they_name()
     {
         var repoId = await GivenARepoWithAMod("1.0.0");
         var profileId = await GivenAProfilePinning(repoId, "1.0.0", locked: true);
 
         using var dbContext = fixture.CreateDbContext();
 
-        var rows = await dbContext.ProfileRevisions.GetDependencyRowsAsync(repoId, profileId, new RevisionNumber(1), CancellationToken.None);
+        var rows = await dbContext.ProfileRevisions.GetPinRowsAsync(dbContext.ModVersions, repoId, profileId, new RevisionNumber(1), CancellationToken.None);
         var row = Assert.Single(rows);
 
         Assert.Equal("1.0.0", row.ContentHash);
+        Assert.Equal($"{_modId.Value}.zip", row.FileName);
+        Assert.Equal(1024, row.SizeBytes);
         Assert.True(row.Locked);
     }
 
@@ -232,24 +233,34 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// What every save runs to turn a request's pins into dependencies. Two <c>IN</c> lists over
-    /// value-object ids, which over-selects on purpose - so this checks both that it translates and
-    /// that the caller is right to match the pairs itself.
+    /// What every save runs to check that its pins name registered versions. Two <c>IN</c> lists over
+    /// value-object ids, so this checks that it translates.
     /// </summary>
     [Fact]
-    public async Task The_versions_a_save_names_are_read_in_one_query()
+    public async Task The_versions_a_save_names_are_checked_in_one_query()
     {
         var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
 
         using var dbContext = fixture.CreateDbContext();
 
-        var versions = await dbContext.ModVersions.GetVersionsAsync(
+        var keys = await dbContext.ModVersions.GetExistingKeysAsync(
             repoId,
             [_modId],
-            [new ModVersionId("1.0.0")],
+            [new ModVersionId("1.0.0"), new ModVersionId("3.0.0")],
             CancellationToken.None);
 
-        Assert.Equal("1.0.0", Assert.Single(versions).Id.Value);
+        Assert.Equal((_modId, new ModVersionId("1.0.0")), Assert.Single(keys));
+    }
+
+    [Fact]
+    public async Task Versions_of_another_repo_do_not_exist_for_a_save()
+    {
+        await GivenARepoWithAMod("1.0.0");
+        var repoId = await GivenARepoWithAMod();
+
+        using var dbContext = fixture.CreateDbContext();
+
+        Assert.Empty(await dbContext.ModVersions.GetExistingKeysAsync(repoId, [_modId], [new ModVersionId("1.0.0")], CancellationToken.None));
     }
 
     [Fact]
@@ -259,7 +270,7 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        Assert.Empty(await dbContext.ModVersions.GetVersionsAsync(repoId, [], [], CancellationToken.None));
+        Assert.Empty(await dbContext.ModVersions.GetExistingKeysAsync(repoId, [], [], CancellationToken.None));
     }
 
     [Fact]
@@ -346,11 +357,11 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// The point of pruning: a version nothing pins any more can be deleted, and the dependency rows
+    /// The point of pruning: a version nothing pins any more can be deleted, and the pin rows
     /// have to actually go for the foreign key to agree.
     /// </summary>
     [Fact]
-    public async Task Pruning_a_revision_takes_its_dependencies_with_it()
+    public async Task Pruning_a_revision_takes_its_pins_with_it()
     {
         var repoId = await GivenARepoWithAMod("1.0.0", "2.0.0");
         var profileId = await GivenAProfilePinning(repoId, "1.0.0");
@@ -371,7 +382,7 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
             Assert.Empty(dependents);
 
             // And the version it was holding is now deletable, which is the whole reason to prune.
-            Assert.False(await dbContext.ProfileRevisions.CheckIfVersionIsDependedOn(
+            Assert.False(await dbContext.ProfileRevisions.IsVersionPinnedAsync(
                 repoId, _modId, new ModVersionId("1.0.0"), CancellationToken.None));
         }
     }
@@ -418,7 +429,7 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// The date rides on the dependency row and is read back off it: written by the revision that
+    /// The date rides on the pin row and is read back off it: written by the revision that
     /// first pinned the version, carried by every revision after that keeps it, and started again by
     /// the one that moves it. The carry is decided from what <see cref="ProfileRevisionExtensions.GetPinsAsync"/>
     /// returns, which is why it is asserted through the database rather than the domain.
@@ -435,10 +446,10 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        var rows = await dbContext.ProfileRevisions.GetDependencyRowsAsync(repoId, profileId, new RevisionNumber(2), CancellationToken.None);
+        var rows = await dbContext.ProfileRevisions.GetPinRowsAsync(dbContext.ModVersions, repoId, profileId, new RevisionNumber(2), CancellationToken.None);
         Assert.Equal(first, Assert.Single(rows).Added);
 
-        rows = await dbContext.ProfileRevisions.GetDependencyRowsAsync(repoId, profileId, new RevisionNumber(3), CancellationToken.None);
+        rows = await dbContext.ProfileRevisions.GetPinRowsAsync(dbContext.ModVersions, repoId, profileId, new RevisionNumber(3), CancellationToken.None);
         Assert.Equal(first.AddDays(2), Assert.Single(rows).Added);
     }
 
@@ -466,11 +477,10 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
     {
         using var dbContext = fixture.CreateDbContext();
 
-        var version = await dbContext.ModVersions.GetAsync(repoId, _modId, new ModVersionId(versionId), CancellationToken.None);
         var profile = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
 
         var revision = profile.CreateRevision(
-            [new ModDependency { ModVersion = version!, Locked = locked }],
+            [Pin(versionId, locked)],
             [],
             _author,
             at ?? DateTime.UtcNow,
@@ -489,11 +499,10 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
         using var dbContext = fixture.CreateDbContext();
 
         var profile = (await dbContext.Profiles.GetAsync(repoId, profileId, CancellationToken.None))!;
-        var version = await dbContext.ModVersions.GetAsync(repoId, _modId, new ModVersionId(versionId), CancellationToken.None);
         var previous = await dbContext.ProfileRevisions.GetPinsAsync(repoId, profileId, profile.HeadRevision, CancellationToken.None);
 
         var revision = profile.CreateRevision(
-            [new ModDependency { ModVersion = version!, Locked = false }],
+            [Pin(versionId)],
             previous,
             _author,
             at ?? DateTime.UtcNow,
@@ -513,17 +522,8 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
         var pins = await dbContext.ProfileRevisions.GetPinsAsync(repoId, profileId, source, CancellationToken.None);
         var previous = await dbContext.ProfileRevisions.GetPinsAsync(repoId, profileId, profile.HeadRevision, CancellationToken.None);
 
-        var dependencies = new List<ModDependency>();
-
-        foreach (var pin in pins)
-        {
-            var version = await dbContext.ModVersions.GetAsync(repoId, pin.ModId, pin.VersionId, CancellationToken.None);
-
-            dependencies.Add(new ModDependency { ModVersion = version!, Locked = pin.Locked });
-        }
-
         var revision = profile.CreateRevision(
-            dependencies,
+            pins,
             previous,
             _author,
             DateTime.UtcNow,
@@ -534,6 +534,13 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
 
         await dbContext.SaveChangesAsync(CancellationToken.None);
     }
+
+    private static ProfileModPin Pin(string versionId, bool locked = false) => new()
+    {
+        ModId = _modId,
+        VersionId = new ModVersionId(versionId),
+        Locked = locked
+    };
 
     private static ModVersion CreateVersion(RepoId repoId, string versionId, int sequenceNumber) => new()
     {

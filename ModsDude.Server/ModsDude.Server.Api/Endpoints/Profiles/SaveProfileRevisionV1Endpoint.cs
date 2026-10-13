@@ -93,13 +93,17 @@ public class SaveProfileRevisionV1Endpoint : IEndpoint
         }
 
         var pins = request.Mods
-            .Select(x => new ProfileModPin(new ModId(x.ModId), new ModVersionId(x.VersionId), x.Locked))
+            .Select(x => new ProfileModPin
+            {
+                ModId = new ModId(x.ModId),
+                VersionId = new ModVersionId(x.VersionId),
+                Locked = x.Locked
+            })
             .ToList();
 
-        var resolved = await ProfileRevisionWrites.ResolveAsync(dbContext, profile.RepoId, pins, cancellationToken);
-        if (resolved.Problem is not null)
+        if (await ProfileRevisionWrites.ValidatePinsAsync(dbContext, profile.RepoId, pins, cancellationToken) is CustomProblemDetails problem)
         {
-            return TypedResults.BadRequest(resolved.Problem);
+            return TypedResults.BadRequest(problem);
         }
 
         var headPins = await dbContext.ProfileRevisions.GetPinsAsync(profile.RepoId, profile.Id, profile.HeadRevision, cancellationToken);
@@ -113,7 +117,7 @@ public class SaveProfileRevisionV1Endpoint : IEndpoint
         var revision = changes.IsEmpty
             ? null
             : profile.CreateRevision(
-                resolved.Dependencies!,
+                pins,
                 headPins,
                 userId,
                 now,

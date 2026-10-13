@@ -703,12 +703,11 @@ public class RetentionSweeperTests(DatabaseFixture fixture)
     {
         using var dbContext = fixture.CreateDbContext();
 
-        var version = await dbContext.ModVersions.GetAsync(repoId, _modId, new ModVersionId(versionId), CancellationToken.None);
         var profile = new Profile(repoId, new ProfileName($"profile-{Guid.NewGuid()}"), DateTime.UtcNow, new ProfileCreateRequestId(Guid.NewGuid()));
 
         dbContext.Profiles.Add(profile);
         dbContext.ProfileRevisions.Add(profile.CreateRevision(
-            [new ModDependency { ModVersion = version!, Locked = false }],
+            [new ProfileModPin { ModId = _modId, VersionId = new ModVersionId(versionId), Locked = false }],
             [],
             _author,
             DateTime.UtcNow));

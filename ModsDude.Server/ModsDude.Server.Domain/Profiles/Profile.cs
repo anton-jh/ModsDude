@@ -9,7 +9,7 @@ namespace ModsDude.Server.Domain.Profiles;
 /// </summary>
 /// <remarks>
 /// The head is a scalar rather than a collection, and there is no navigation to the revisions at
-/// all. A profile's history is hundreds of thousands of dependency rows at the volumes this targets,
+/// all. A profile's history is hundreds of thousands of pin rows at the volumes this targets,
 /// and every load of a profile - to rename it, to delete it, to check a name - would drag it in.
 /// Revisions are queried through their own set; this row only ever says which one is current.
 /// </remarks>
@@ -104,20 +104,17 @@ public class Profile(
 
 
     /// <summary>
-    /// Snapshots <paramref name="modDependencies"/> as the profile's new head.
+    /// Snapshots <paramref name="pins"/> as the profile's new head.
     /// </summary>
-    /// <param name="previousPins">
-    /// What the current head pins, for the summary. The caller has it as a projection rather than as
-    /// entities, which is the point - a save must not materialize the snapshot it is replacing.
-    /// </param>
+    /// <param name="previousPins">What the current head pins, for the summary and the added dates.</param>
     /// <remarks>
     /// The one way a profile's mod list ever changes, and the same call behind all three of the
     /// things that change it: saving, restoring an older revision, and copying one into a profile
-    /// branched off this one. They differ only in where the dependencies came from, which is what
+    /// branched off this one. They differ only in where the pins came from, which is what
     /// <paramref name="origin"/> records.
     /// </remarks>
     public ProfileRevision CreateRevision(
-        IReadOnlyCollection<ModDependency> modDependencies,
+        IReadOnlyCollection<ProfileModPin> pins,
         IReadOnlyCollection<ProfileModPin> previousPins,
         UserId createdBy,
         DateTime now,
@@ -132,7 +129,7 @@ public class Profile(
             RepoId,
             Id,
             number,
-            modDependencies,
+            pins,
             previousPins,
             createdBy,
             now,

@@ -30,7 +30,7 @@ public static class ServiceCollectionExtensions
         AddClient<ITrustCodesClient>(services, (configuration, http) => new TrustCodesClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IMembersClient>(services, (configuration, http) => new MembersClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IProfilesClient>(services, (configuration, http) => new ProfilesClient(configuration, http) { BaseUrl = serverBaseUrl });
-        AddClient<IModDependenciesClient>(services, (configuration, http) => new ModDependenciesClient(configuration, http) { BaseUrl = serverBaseUrl });
+        AddClient<IProfileModPinsClient>(services, (configuration, http) => new ProfileModPinsClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IModsClient>(services, (configuration, http) => new ModsClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<ISavegamesClient>(services, (configuration, http) => new SavegamesClient(configuration, http) { BaseUrl = serverBaseUrl });
         AddClient<IFilesClient>(services, (configuration, http) => new FilesClient(configuration, http) { BaseUrl = serverBaseUrl });

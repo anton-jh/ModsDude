@@ -33,7 +33,7 @@ public static class Problems
 
     public static CustomProblemDetails ModPinnedTwice(ModId modId) => new()
     {
-        Type = ProblemType.ModDependencyExists,
+        Type = ProblemType.ModPinnedTwice,
         Title = "A mod is pinned twice",
         Detail = $"The mod list pins mod '{modId.Value}' more than once. A profile pins each mod at exactly one version."
     };
@@ -533,9 +533,9 @@ public static class Problems
         [JsonStringEnumMemberName(_typeBaseUri + "not-found")]
         NotFound,
 
-        [EnumMember(Value = _typeBaseUri + "mod-dependency-exists")]
-        [JsonStringEnumMemberName(_typeBaseUri + "mod-dependency-exists")]
-        ModDependencyExists,
+        [EnumMember(Value = _typeBaseUri + "mod-pinned-twice")]
+        [JsonStringEnumMemberName(_typeBaseUri + "mod-pinned-twice")]
+        ModPinnedTwice,
 
         [EnumMember(Value = _typeBaseUri + "insufficient-repo-access")]
         [JsonStringEnumMemberName(_typeBaseUri + "insufficient-repo-access")]

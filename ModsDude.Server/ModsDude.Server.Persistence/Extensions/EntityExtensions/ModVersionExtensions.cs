@@ -34,16 +34,15 @@ public static class ModVersionExtensions
     }
 
     /// <summary>
-    /// The named versions, tracked, so that a revision's dependencies can be built out of them.
+    /// Which of the named <c>(ModId, VersionId)</c> pairs the repo holds, read as keys only.
     /// </summary>
     /// <remarks>
     /// Two <c>IN</c> lists rather than one per pair, because a strongly-typed id has no tuple
     /// comparison the provider can translate. That over-selects - a version of a requested mod that
     /// happens to share a version id with another requested mod comes back too - so the caller
-    /// matches the pairs itself. The surplus is bounded by the request, which is what makes it
-    /// acceptable at a couple of thousand mods a save.
+    /// matches the pairs itself. The surplus is bounded by the request.
     /// </remarks>
-    public static Task<List<ModVersion>> GetVersionsAsync(
+    public static async Task<HashSet<(ModId ModId, ModVersionId VersionId)>> GetExistingKeysAsync(
         this DbSet<ModVersion> dbSet,
         RepoId repoId,
         IReadOnlyCollection<ModId> modIds,
@@ -52,41 +51,15 @@ public static class ModVersionExtensions
     {
         if (modIds.Count == 0)
         {
-            return Task.FromResult(new List<ModVersion>());
-        }
-
-        return dbSet
-            .Where(x => x.RepoId == repoId && modIds.Contains(x.ModId) && versionIds.Contains(x.Id))
-            .ToListAsync(cancellationToken);
-    }
-
-    /// <summary>
-    /// The newest version of each of the named mods, tracked, so that a dependency can be pointed at
-    /// one. What a batch upgrade needs: it reads one row per mod rather than the whole sibling set of
-    /// each, which for a profile holding two thousand mods is the difference between a query and a
-    /// materialization of the repo.
-    /// </summary>
-    /// <remarks>
-    /// Expressed as "no sibling sits after it" rather than as a grouped maximum, because a grouped
-    /// maximum projects and a dependency can only be moved to an entity.
-    /// </remarks>
-    public static async Task<Dictionary<ModId, ModVersion>> GetLatestVersionOfEachAsync(
-        this DbSet<ModVersion> dbSet,
-        RepoId repoId,
-        IReadOnlyCollection<ModId> modIds,
-        CancellationToken cancellationToken)
-    {
-        if (modIds.Count == 0)
-        {
             return [];
         }
 
-        var latest = await dbSet
-            .Where(x => x.RepoId == repoId && modIds.Contains(x.ModId))
-            .Where(x => !dbSet.Any(y => y.RepoId == x.RepoId && y.ModId == x.ModId && y.SequenceNumber > x.SequenceNumber))
+        var rows = await dbSet
+            .Where(x => x.RepoId == repoId && modIds.Contains(x.ModId) && versionIds.Contains(x.Id))
+            .Select(x => new { x.ModId, x.Id })
             .ToListAsync(cancellationToken);
 
-        return latest.ToDictionary(x => x.ModId);
+        return [.. rows.Select(x => (x.ModId, x.Id))];
     }
 
     public static async Task<Dictionary<RepoId, long>> GetRegisteredBytesPerRepoAsync(this DbSet<ModVersion> dbSet, CancellationToken cancellationToken)

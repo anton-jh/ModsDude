@@ -1034,7 +1034,7 @@ namespace ModsDude.Server.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.OwnsMany("ModsDude.Server.Domain.Profiles.ModDependency", "ModDependencies", b1 =>
+                    b.OwnsMany("ModsDude.Server.Domain.Profiles.ProfileModPin", "Pins", b1 =>
                         {
                             b1.Property<Guid>("RepoId")
                                 .HasColumnType("uuid");
@@ -1048,8 +1048,9 @@ namespace ModsDude.Server.Persistence.Migrations
                             b1.Property<string>("ModId")
                                 .HasColumnType("text");
 
-                            b1.Property<string>("ModVersionId")
-                                .HasColumnType("text");
+                            b1.Property<string>("VersionId")
+                                .HasColumnType("text")
+                                .HasColumnName("ModVersionId");
 
                             b1.Property<DateTime>("Added")
                                 .HasColumnType("timestamp with time zone");
@@ -1057,28 +1058,26 @@ namespace ModsDude.Server.Persistence.Migrations
                             b1.Property<bool>("Locked")
                                 .HasColumnType("boolean");
 
-                            b1.HasKey("RepoId", "ProfileId", "RevisionNumber", "ModId", "ModVersionId");
+                            b1.HasKey("RepoId", "ProfileId", "RevisionNumber", "ModId", "VersionId");
 
-                            b1.HasIndex("RepoId", "ModId", "ModVersionId");
+                            b1.HasIndex("RepoId", "ModId", "VersionId");
 
                             b1.HasIndex("RepoId", "ProfileId", "RevisionNumber", "ModId")
                                 .IsUnique();
 
-                            b1.ToTable("ModDependency");
+                            b1.ToTable("ProfileModPin");
 
-                            b1.HasOne("ModsDude.Server.Domain.Mods.ModVersion", "ModVersion")
+                            b1.HasOne("ModsDude.Server.Domain.Mods.ModVersion", null)
                                 .WithMany()
-                                .HasForeignKey("RepoId", "ModId", "ModVersionId")
+                                .HasForeignKey("RepoId", "ModId", "VersionId")
                                 .OnDelete(DeleteBehavior.Restrict)
                                 .IsRequired();
 
                             b1.WithOwner()
                                 .HasForeignKey("RepoId", "ProfileId", "RevisionNumber");
-
-                            b1.Navigation("ModVersion");
                         });
 
-                    b.Navigation("ModDependencies");
+                    b.Navigation("Pins");
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Profiles.ProfileRevisionRequest", b =>

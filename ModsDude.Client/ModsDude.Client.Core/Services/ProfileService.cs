@@ -7,7 +7,7 @@ using ModsDude.Client.Core.Profiles;
 namespace ModsDude.Client.Core.Services;
 public class ProfileService(
     IProfilesClient profileClient,
-    IModDependenciesClient modDependencyClient,
+    IProfileModPinsClient pinsClient,
     IModStore modStore)
     : IProfileService
 {
@@ -30,7 +30,7 @@ public class ProfileService(
 
     public async Task<ProfileModStatistics> GetModStatistics(Guid repoId, Guid profileId, CancellationToken cancellationToken)
     {
-        var response = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, null, cancellationToken);
+        var response = await pinsClient.GetProfileModPinsV1Async(repoId, profileId, null, cancellationToken);
 
         return ProfileModStatistics.From(response);
     }
@@ -51,26 +51,26 @@ public class ProfileService(
 
     public async Task<IReadOnlyList<PinnedMod>> GetPinnedMods(Guid repoId, Guid profileId, int? revision, CancellationToken cancellationToken)
     {
-        var response = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, revision, cancellationToken);
-        var dependencies = response.Dependencies;
+        var response = await pinsClient.GetProfileModPinsV1Async(repoId, profileId, revision, cancellationToken);
+        var pins = response.Pins;
 
-        if (dependencies.Count == 0)
+        if (pins.Count == 0)
         {
             return [];
         }
 
         var registered = await GetRegisteredVersions(repoId, cancellationToken);
 
-        return Resolve(dependencies, registered);
+        return Resolve(pins, registered);
     }
 
     public async Task<ProfileRevisionComparison> CompareRevisions(
         Guid repoId, Guid profileId, int from, int to, CancellationToken cancellationToken)
     {
-        var before = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, from, cancellationToken);
-        var after = await modDependencyClient.GetModDependenciesV1Async(repoId, profileId, to, cancellationToken);
+        var before = await pinsClient.GetProfileModPinsV1Async(repoId, profileId, from, cancellationToken);
+        var after = await pinsClient.GetProfileModPinsV1Async(repoId, profileId, to, cancellationToken);
 
-        if (before.Dependencies.Count == 0 && after.Dependencies.Count == 0)
+        if (before.Pins.Count == 0 && after.Pins.Count == 0)
         {
             return new ProfileRevisionComparison(from, to, []);
         }
@@ -80,32 +80,32 @@ public class ProfileService(
         return ProfileRevisionComparison.Between(
             from,
             to,
-            Resolve(before.Dependencies, registered),
-            Resolve(after.Dependencies, registered));
+            Resolve(before.Pins, registered),
+            Resolve(after.Pins, registered));
     }
 
     private static IReadOnlyList<PinnedMod> Resolve(
-        ICollection<ModDependencyDto> dependencies,
+        ICollection<ProfileModPinDto> pins,
         Dictionary<(ModKey, ModVersionKey), ModDto> registered)
     {
         return
         [
-            .. dependencies
-                .Select(dependency =>
+            .. pins
+                .Select(pin =>
                 {
-                    var modId = ModKey.From(dependency.ModId);
-                    var versionId = ModVersionKey.From(dependency.ModVersionId);
+                    var modId = ModKey.From(pin.ModId);
+                    var versionId = ModVersionKey.From(pin.ModVersionId);
 
-                    // The adapter's flag lives on the version, the user's on the dependency.
+                    // The adapter's flag lives on the version, the user's on the pin.
                     return registered.TryGetValue((modId, versionId), out var version)
                         ? new PinnedMod(
                             CatalogModVersion.FromRegistered(version),
-                            new ProfileModLock(version.Locked, dependency.Locked))
+                            new ProfileModLock(version.Locked, pin.Locked))
                         : null;
                 })
-                // A miss cannot mean "pinned at a version the repo lost": the dependency's foreign
+                // A miss cannot mean "pinned at a version the repo lost": the pin's foreign
                 // key onto ModVersions is required and Restrict, so that version could not have been
-                // deleted while this dependency named it. What it does mean is that these are two
+                // deleted while this pin named it. What it does mean is that these are two
                 // reads and the mod list is the later one - somebody unpinned the mod and then
                 // deleted the version in between. The pin is gone, so the row is too, which is what
                 // a refresh would show anyway.

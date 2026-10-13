@@ -47,7 +47,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly ModCatalog _catalog;
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly IProfileSaveService _saveService;
-    private readonly IModDependenciesClient _dependenciesClient;
+    private readonly IProfileModPinsClient _pinsClient;
     private readonly IProfilesClient _profilesClient;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
@@ -90,7 +90,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         ModCatalog.Factory catalogFactory,
         ModListItemViewModel.Factory itemFactory,
         IProfileSaveService saveService,
-        IModDependenciesClient dependenciesClient,
+        IProfileModPinsClient pinsClient,
         IProfilesClient profilesClient,
         IProfileStore profileStore,
         IModalService modalService,
@@ -110,7 +110,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _profile = profile;
         _itemFactory = itemFactory;
         _saveService = saveService;
-        _dependenciesClient = dependenciesClient;
+        _pinsClient = pinsClient;
         _profilesClient = profilesClient;
         _modalService = modalService;
         _errorReporter = errorReporter;
@@ -127,7 +127,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         _catalog = catalogFactory.Create(repo);
         _catalogView = ProfileEditorCatalog.Empty(repo.Adapter.VersionComparer);
-        _otherProfiles = new OtherProfilesReader(profileStore, dependenciesClient, repo.Id, profile.Id);
+        _otherProfiles = new OtherProfilesReader(profileStore, pinsClient, repo.Id, profile.Id);
 
         Sources = new EditorSourcesViewModel(
             _catalog, _otherProfiles, filePickerService, modalService, errorReporter,
@@ -1231,7 +1231,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            var modListRead = _dependenciesClient.GetModDependenciesV1Async(_repo.Id, _profile.Id, null, _cancellation.Token);
+            var modListRead = _pinsClient.GetProfileModPinsV1Async(_repo.Id, _profile.Id, null, _cancellation.Token);
             var ignoredRead = _profilesClient.GetProfileIgnoredModsV1Async(_repo.Id, _profile.Id, _cancellation.Token);
 
             var modList = await modListRead;
@@ -1242,7 +1242,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 _basedOn = modList.Revision;
                 _ignoredVersion = ignored.Version;
                 _markedRun = null;
-                _savedDates = modList.Dependencies.ToDictionary(
+                _savedDates = modList.Pins.ToDictionary(
                     x => ModKey.From(x.ModId),
                     x => new SavedPinDate(ModVersionKey.From(x.ModVersionId), x.Added));
 
