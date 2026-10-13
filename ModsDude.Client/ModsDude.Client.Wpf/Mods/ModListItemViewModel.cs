@@ -12,7 +12,6 @@ using ModsDude.Client.Wpf.Mods.Imaging;
 using ModsDude.Client.Wpf.Mods.Import;
 using ModsDude.Client.Wpf.Profiles.Editor;
 using ModsDude.Client.Wpf.Shared.Behaviors;
-using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Notices;
 using System.Text.RegularExpressions;

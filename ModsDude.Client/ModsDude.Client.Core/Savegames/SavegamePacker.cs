@@ -406,6 +406,14 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     private static string ToArchivePath(string relativePath)
         => relativePath.Replace(Path.DirectorySeparatorChar, '/');
 
+    /// <summary>What unpacking the archive writes. Read from its central directory, so nothing is decompressed.</summary>
+    internal static long MeasureUnpacked(string archivePath)
+    {
+        using var archive = ZipFile.OpenRead(archivePath);
+
+        return archive.Entries.Sum(x => x.Length);
+    }
+
     internal static string GetTemporaryArchivePath()
         => Path.Combine(Path.GetTempPath(), "modsdude", "savegames", $"{Guid.NewGuid():N}.zip");
 

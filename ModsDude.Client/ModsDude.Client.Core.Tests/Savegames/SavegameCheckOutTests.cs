@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Disks;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.GameProcesses;
@@ -53,6 +54,35 @@ public class SavegameCheckOutTests
     /// slot is no longer the head. Refused before anything is claimed or written, rather than writing
     /// the older snapshot under a claim on the newer one.
     /// </summary>
+    [Fact]
+    public async Task Checking_out_a_save_whose_download_does_not_fit_leaves_the_slot_alone()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        harness.DiskSpace.Available = 0;
+
+        await Assert.ThrowsAsync<NotEnoughDiskSpaceException>(
+            () => harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None));
+
+        Assert.False(File.Exists(Path.Combine(harness.SlotPath(_slot1), "careerSavegame.xml")));
+        Assert.Null(harness.Bindings.GetBinding(harness.Game.Identity, harness.Server.SavegameId));
+    }
+
+    [Fact]
+    public async Task Checking_out_a_save_that_only_fits_while_packed_leaves_the_slot_alone()
+    {
+        using var harness = new SavegameHarness();
+        var unpacked = new string('x', 100_000);
+        await harness.SeedHeadAsync(unpacked);
+        harness.DiskSpace.Available = unpacked.Length / 2 + DiskSpaceGuard.ReserveBytes;
+
+        await Assert.ThrowsAsync<NotEnoughDiskSpaceException>(
+            () => harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None));
+
+        Assert.False(File.Exists(Path.Combine(harness.SlotPath(_slot1), "careerSavegame.xml")));
+        Assert.Null(harness.Bindings.GetBinding(harness.Game.Identity, harness.Server.SavegameId));
+    }
+
     [Fact]
     public async Task Checking_out_after_the_head_moved_is_refused_and_touches_nothing()
     {

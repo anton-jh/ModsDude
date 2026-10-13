@@ -1,8 +1,10 @@
 using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.Disks;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameProcesses;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
@@ -249,6 +251,10 @@ public sealed class ProfileApplyService(
 
             return result.Completed ? null : DescribeFailures(result.Failures, downloading: true);
         }
+        catch (NotEnoughDiskSpaceException exception)
+        {
+            return exception.UserMessage;
+        }
         catch (OperationCanceledException) when (stop.IsCancellationRequested && cancellationToken.IsCancellationRequested is false)
         {
             return "The download was stopped.";
@@ -261,19 +267,33 @@ public sealed class ProfileApplyService(
     private static string DescribeFailures(IReadOnlyList<ModSyncFailure> failures, bool downloading = false)
     {
         var missing = failures.Count(x => x.MissingOnServer);
-        var other = failures.Count - missing;
+        var outOfSpace = failures.Count(x => x.OutOfDiskSpace);
+        var other = failures.Count - missing - outOfSpace;
 
-        var missingText = missing == 1 ? "1 mod is missing from the server" : $"{missing} mods are missing from the server";
-        var otherText = downloading
-            ? other == 1 ? "1 mod could not be downloaded" : $"{other} mods could not be downloaded"
-            : other == 1 ? "1 change could not be applied" : $"{other} changes could not be applied";
+        var parts = new List<string>();
 
-        return (missing, other) switch
+        if (missing > 0)
         {
-            (0, _) => $"{otherText}.",
-            (_, 0) => $"{missingText}.",
-            _ => $"{missingText}, and {otherText}."
-        };
+            parts.Add(missing == 1 ? "1 mod is missing from the server" : $"{missing} mods are missing from the server");
+        }
+
+        if (outOfSpace > 0)
+        {
+            parts.Add("the disk ran out of space");
+        }
+
+        if (other > 0)
+        {
+            parts.Add(downloading
+                ? other == 1 ? "1 mod could not be downloaded" : $"{other} mods could not be downloaded"
+                : other == 1 ? "1 change could not be applied" : $"{other} changes could not be applied");
+        }
+
+        var sentence = parts.Count == 1
+            ? parts[0]
+            : $"{string.Join(", ", parts[..^1])}, and {parts[^1]}";
+
+        return $"{char.ToUpperInvariant(sentence[0])}{sentence[1..]}.";
     }
 
     public Task<ProfileApplyOutcome> ActivateAsync(
@@ -506,6 +526,17 @@ public sealed class ProfileApplyService(
                 game,
                 ProfileApplyStatus.Unavailable,
                 $"'{game.Name}' was left as it is, and will keep showing as drifted until it can be applied. {attempt.Describe()}"));
+        }
+
+        // Before the confirmation, and like the savegame refusal it leaves the activation unrecorded:
+        // nothing about the game changes until there is room for it.
+        try
+        {
+            syncService.EnsureRoomFor(plans);
+        }
+        catch (NotEnoughDiskSpaceException exception)
+        {
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Refused, exception.UserMessage);
         }
 
         // Once, across every folder. Declining is one answer about one gesture, which is what stops
@@ -743,6 +774,11 @@ public sealed class ProfileApplyService(
         {
             // Started between the confirmation and the work. Nothing was touched.
             return new ProfileApplyOutcome(game, ProfileApplyStatus.Unavailable, exception.UserMessage);
+        }
+        catch (NotEnoughDiskSpaceException exception)
+        {
+            // Filled up between the confirmation and the work. Nothing was touched.
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Unavailable, $"{where}: {exception.UserMessage}");
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

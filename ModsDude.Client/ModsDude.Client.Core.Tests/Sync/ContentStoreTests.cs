@@ -98,7 +98,7 @@ public class ContentStoreTests
         var declared = HashOf(Bytes("something else entirely"));
 
         await Assert.ThrowsAsync<ContentVerificationException>(
-            () => store.IngestFileAsync(path, declared, removeSource: true, CancellationToken.None));
+            () => store.IngestFileAsync(path, declared, CancellationToken.None));
 
         // A mod-folder file is a file the user could have replaced with anything, so a failed check
         // must leave it where it is rather than consuming it.
@@ -107,7 +107,7 @@ public class ContentStoreTests
     }
 
     [Fact]
-    public async Task Ingesting_a_file_with_removeSource_moves_it()
+    public async Task Ingesting_a_file_moves_it()
     {
         using var root = new TempDirectory("store-move");
         var store = new ContentStore("C:\\", root.CreateSubdirectory("store"), _oneGigabyte);
@@ -115,7 +115,7 @@ public class ContentStoreTests
         var path = root.WriteFile("mods/fs25_a.zip", "uninstalled mod");
         var hash = HashOf(Bytes("uninstalled mod"));
 
-        await store.IngestFileAsync(path, hash, removeSource: true, CancellationToken.None);
+        await store.IngestFileAsync(path, hash, CancellationToken.None);
 
         Assert.False(File.Exists(path));
         Assert.True(store.Contains(hash));

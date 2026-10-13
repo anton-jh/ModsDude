@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.Disks;
 using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Mods;
@@ -36,6 +37,7 @@ public sealed class ModSyncService(
     IResourceLeases leases,
     IGameFileEditor fileEditor,
     IGameRunningGuard runningGuard,
+    IDiskSpaceGuard diskSpaceGuard,
     TimeProvider timeProvider,
     ILogger<ModSyncService> logger)
     : IModSyncService
@@ -47,7 +49,7 @@ public sealed class ModSyncService(
 
     private readonly ModSyncExecutor _executor = new(
         new ModFetcher(filesClient, downloader, logger), storeProvider, manifestStore, recycleBin, modFolders, playAttribution, leases,
-        fileEditor, runningGuard, timeProvider, logger);
+        fileEditor, runningGuard, diskSpaceGuard, timeProvider, logger);
 
 
     public event Action<string>? ModFolderChanged
@@ -59,6 +61,9 @@ public sealed class ModSyncService(
 
     public Task<ModSyncPlan> PlanAsync(ModSyncRequest request, CancellationToken cancellationToken, IProgress<ModSyncProgress>? progress = null)
         => _planBuilder.PlanAsync(request, cancellationToken, progress);
+
+    public void EnsureRoomFor(IReadOnlyList<ModSyncPlan> plans)
+        => diskSpaceGuard.EnsureRoomFor(ModSyncSpaceNeeds.For(plans));
 
     public Task<ModSyncResult> ExecuteAsync(ModSyncPlan plan, IProgress<ModSyncProgress>? progress, CancellationToken cancellationToken)
         => _executor.ExecuteAsync(plan, progress, cancellationToken);
@@ -87,6 +92,8 @@ public sealed class ModSyncService(
         using var lease = await leases.AcquireSharedAsync(
             allStores.Select(ResourceKeys.Store), "Downloading a profile's mods", cancellationToken);
 
+        diskSpaceGuard.EnsureRoomFor(FetchNeeds(servingStores, desired));
+
         foreach (var store in servingStores)
         {
             var failures = await _fetcher.FetchAsync(
@@ -105,6 +112,22 @@ public sealed class ModSyncService(
         }
 
         return new ModSyncResult(true, []);
+    }
+
+    /// <summary>Each store fills every address it does not hold yet, distinct by content.</summary>
+    private static DiskSpaceNeeds FetchNeeds(IReadOnlyList<ContentStore> stores, IReadOnlyList<DesiredMod> desired)
+    {
+        var needs = new DiskSpaceNeeds();
+
+        foreach (var store in stores)
+        {
+            foreach (var mod in desired.DistinctBy(x => x.ContentHash, StringComparer.OrdinalIgnoreCase).Where(x => store.Contains(x.ContentHash) is false))
+            {
+                needs.Add(store.RootPath, mod.SizeBytes);
+            }
+        }
+
+        return needs;
     }
 
     public async Task RecordAlreadyMatchedAsync(ModSyncPlan plan)

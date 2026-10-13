@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace ModsDude.Client.Wpf.Shared;
+namespace ModsDude.Client.Core.Helpers;
 
 /// <summary>
 /// A byte count in the units somebody thinks in. One implementation, because a savegame and a

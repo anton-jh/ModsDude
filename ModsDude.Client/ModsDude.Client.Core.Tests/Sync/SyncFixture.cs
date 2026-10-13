@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.Disks;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Tests.Disks;
 using ModsDude.Client.Core.Tests.GameProcesses;
 using ModsDude.Client.Core.Tests.Stores;
 
@@ -67,6 +69,7 @@ internal sealed class SyncFixture : IDisposable
             Leases,
             fileEditor,
             Guard,
+            new DiskSpaceGuard(DiskSpace),
             TimeProvider.System,
             NullLogger<ModSyncService>.Instance);
     }
@@ -87,6 +90,7 @@ internal sealed class SyncFixture : IDisposable
     /// </summary>
     public ResourceLeases Leases { get; } = new();
     public FakeGameRunningGuard Guard { get; } = new();
+    public FakeDiskSpace DiskSpace { get; } = new();
 
     public ModSyncService Service { get; }
     public ContentStore ServingStore { get; }

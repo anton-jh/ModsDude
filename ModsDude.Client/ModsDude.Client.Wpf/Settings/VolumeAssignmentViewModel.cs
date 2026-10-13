@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Shared;
 

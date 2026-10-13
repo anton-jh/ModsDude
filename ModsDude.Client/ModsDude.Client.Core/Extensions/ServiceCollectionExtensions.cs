@@ -43,6 +43,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IModSyncService, ModSyncService>();
         services.AddSingleton<GameFiles.IGameFileEditor, GameFiles.GameFileEditor>();
         services.AddSingleton<GameProcesses.IGameRunningGuard, GameProcesses.GameRunningGuard>();
+        services.AddSingleton<Disks.IDiskSpace, Disks.DiskSpace>();
+        services.AddSingleton<Disks.IDiskSpaceGuard, Disks.DiskSpaceGuard>();
         services.AddSingleton<IContentStoreMaintenance, ContentStoreMaintenance>();
         services.AddSingleton<IContentStoreTidier, ContentStoreTidier>();
         services.AddSingleton<Savegames.ISavegamePacker, Savegames.SavegamePacker>();

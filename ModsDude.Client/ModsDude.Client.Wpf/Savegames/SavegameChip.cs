@@ -1,5 +1,5 @@
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Wpf.Shared;
 using System.Globalization;
 
 namespace ModsDude.Client.Wpf.Savegames;

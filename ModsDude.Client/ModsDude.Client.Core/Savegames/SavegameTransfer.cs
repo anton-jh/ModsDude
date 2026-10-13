@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Disks;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
@@ -15,6 +16,7 @@ public sealed class SavegameTransfer(
     IModFileUploader uploader,
     ISavegamePacker packer,
     ISavegameRecycler recycler,
+    IDiskSpaceGuard diskSpaceGuard,
     ILogger<SavegameTransfer> logger)
     : ISavegameTransfer
 {
@@ -46,11 +48,17 @@ public sealed class SavegameTransfer(
         try
         {
             using (var download = await downloader.OpenAsync(link.Link, null, ct))
-            await using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous))
             {
+                // An unknown length goes unchecked, and a disk that fills fails the write instead - still
+                // before the slot is touched.
+                var length = download.Length ?? 0;
+
+                diskSpaceGuard.EnsureRoomFor(DiskSpaceNeeds.For(archivePath, length));
+
+                await using var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous);
+
                 // Counted as written rather than through the downloader's own progress, which runs
                 // ahead of what the reader has been handed.
-                var length = download.Length ?? 0;
                 var received = 0L;
 
                 progress?.Report(new SavegameProgress(SavegameStage.Downloading, 0, length));
@@ -82,6 +90,8 @@ public sealed class SavegameTransfer(
                         $"Expected content hash '{contentHash}' but the downloaded blob hashes to '{actual}'. Nothing has been written into the slot.");
                 }
             }
+
+            diskSpaceGuard.EnsureRoomFor(DiskSpaceNeeds.For(adapter.GetSlotPath(target, slot), SavegamePacker.MeasureUnpacked(archivePath)));
 
             return await packer.UnpackAsync(archivePath, adapter, target, slot, ct, progress) is string displaced
                 ? recycler.PutAway(displaced)

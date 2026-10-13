@@ -19,7 +19,15 @@ public interface IModSyncService
     /// <exception cref="GameProcesses.GameRunningException">The game is running.</exception>
     Task<ModSyncPlan> PlanAsync(ModSyncRequest request, CancellationToken cancellationToken, IProgress<ModSyncProgress>? progress = null);
 
+    /// <summary>
+    /// Refuses plans that would not fit on disk, before anything is asked or touched. Executing checks
+    /// again, against the space left by then.
+    /// </summary>
+    /// <exception cref="Disks.NotEnoughDiskSpaceException">A volume they write to would fill up.</exception>
+    void EnsureRoomFor(IReadOnlyList<ModSyncPlan> plans);
+
     /// <exception cref="GameProcesses.GameRunningException">The game is running.</exception>
+    /// <exception cref="Disks.NotEnoughDiskSpaceException">A volume the plan writes to would fill up. Nothing was touched.</exception>
     Task<ModSyncResult> ExecuteAsync(ModSyncPlan plan, IProgress<ModSyncProgress>? progress, CancellationToken cancellationToken);
 
     /// <summary>
@@ -28,6 +36,7 @@ public interface IModSyncService
     /// anything has changed. The activation still plans and fetches as ever, and finds them there.
     /// </summary>
     /// <returns>Completed where every store holds every mod; the failures otherwise.</returns>
+    /// <exception cref="Disks.NotEnoughDiskSpaceException">A store's volume would fill up. Nothing was fetched.</exception>
     Task<ModSyncResult> FetchAsync(ModFetchRequest request, IProgress<ModSyncProgress>? progress, CancellationToken cancellationToken);
 
     /// <summary>

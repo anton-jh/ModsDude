@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.Disks;
 using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Helpers;
@@ -19,6 +20,7 @@ internal sealed class ModSyncExecutor(
     IResourceLeases leases,
     IGameFileEditor fileEditor,
     IGameRunningGuard runningGuard,
+    IDiskSpaceGuard diskSpaceGuard,
     TimeProvider time,
     ILogger logger)
 {
@@ -58,6 +60,10 @@ internal sealed class ModSyncExecutor(
             $"Applying to {plan.ModFolder}",
             cancellationToken))
         {
+            // Against the space left now rather than when the plan was confirmed, and before the
+            // fetch: a full disk found part way through costs the downloads before it.
+            diskSpaceGuard.EnsureRoomFor(ModSyncSpaceNeeds.For([plan]));
+
             failures.AddRange(await fetcher.FetchAsync(
                 plan.RepoId,
                 plan.ServingStore,
@@ -240,7 +246,7 @@ internal sealed class ModSyncExecutor(
             return;
         }
 
-        await plan.ServingStore.IngestFileAsync(path, hash, removeSource: true, cancellationToken);
+        await plan.ServingStore.IngestFileAsync(path, hash, cancellationToken);
     }
 
     private QuarantinedFile Quarantine(ModSyncPlan plan, ModSyncItem item, DateTimeOffset runStartedAt)
@@ -428,29 +434,34 @@ internal sealed class ModSyncExecutor(
             return;
         }
 
-        File.Copy(blob, destination, overwrite: false);
-
         // A copied file inherits the blob's read-only-ness and timestamps on some paths; make sure
         // the game sees an ordinary, writable file of its own.
-        var info = new FileInfo(destination) { IsReadOnly = false };
-        info.LastWriteTimeUtc = time.GetUtcNow().UtcDateTime;
+        CopyIntoPlace(blob, destination, overwrite: false, staged =>
+        {
+            staged.IsReadOnly = false;
+            staged.LastWriteTimeUtc = time.GetUtcNow().UtcDateTime;
+        });
     }
 
     /// <summary>
     /// Gives a hardlinked file data of its own, so nothing written to it afterwards reaches the store.
+    /// The link being replaced is the store blob's other name, so no bytes are lost with it.
     /// </summary>
-    /// <remarks>
-    /// Copied beside it and moved over it, so the name holds the complete file throughout. The link
-    /// being replaced is the store blob's other name, so no bytes are lost with it.
-    /// </remarks>
-    private void ReplaceWithCopy(string path)
+    private void ReplaceWithCopy(string path) => CopyIntoPlace(path, path, overwrite: true);
+
+    /// <summary>
+    /// Copied beside the destination and renamed onto it, so the name only ever holds a complete file:
+    /// a disk filling up or a kill part way leaves the staging file, never a short mod.
+    /// </summary>
+    private void CopyIntoPlace(string source, string destination, bool overwrite, Action<FileInfo>? prepare = null)
     {
-        var staging = Path.Combine(Path.GetDirectoryName(path)!, $"{Guid.NewGuid():N}.unlinking");
+        var staging = Path.Combine(Path.GetDirectoryName(destination)!, $"{Guid.NewGuid():N}.modsdude-copy");
 
         try
         {
-            File.Copy(path, staging);
-            File.Move(staging, path, overwrite: true);
+            File.Copy(source, staging);
+            prepare?.Invoke(new FileInfo(staging));
+            File.Move(staging, destination, overwrite);
         }
         catch
         {

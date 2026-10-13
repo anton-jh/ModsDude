@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Disks;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.Models;
@@ -342,6 +343,8 @@ public sealed record ModSyncFailure(string Subject, string Message)
 
     /// <summary>The repo has the version but the server has no file for it, so trying again cannot help.</summary>
     public bool MissingOnServer { get; init; }
+
+    public bool OutOfDiskSpace => Exception is not null && DiskFull.Is(Exception);
 }
 
 /// <param name="Completed">

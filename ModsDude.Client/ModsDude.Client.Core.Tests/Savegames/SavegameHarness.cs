@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Connectivity;
+using ModsDude.Client.Core.Disks;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameFiles;
 using ModsDude.Client.Core.Models;
@@ -7,6 +8,7 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Tests.Disks;
 using ModsDude.Client.Core.Tests.GameProcesses;
 using ModsDude.Client.Core.Tests.Stores;
 using ModsDude.Client.Core.Tests.Sync;
@@ -72,7 +74,7 @@ internal sealed class SavegameHarness : IDisposable
         {
             RetryDelays = [TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero]
         };
-        var transfer = new SavegameTransfer(Server, new FakeSavegameDownloader(Server), Uploader, packer, recycler, NullLogger<SavegameTransfer>.Instance);
+        var transfer = new SavegameTransfer(Server, new FakeSavegameDownloader(Server), Uploader, packer, recycler, new DiskSpaceGuard(DiskSpace), NullLogger<SavegameTransfer>.Instance);
         var renamer = new SavegameRenamer(new GameFileEditor(RecycleBin, NullLogger<GameFileEditor>.Instance), NullLogger<SavegameRenamer>.Instance);
 
         Slots = new SavegameSlots(adapters, Bindings, packer, NullLogger<SavegameSlots>.Instance);
@@ -101,6 +103,7 @@ internal sealed class SavegameHarness : IDisposable
     public FakeSavegameSightings Sightings { get; } = new();
     public SavegameStore SavegameStore { get; }
     public FakeGameRunningGuard Guard { get; } = new();
+    public FakeDiskSpace DiskSpace { get; } = new();
     public FakeGameState State { get; } = new();
     public FakeSavegameAdapter Adapter { get; }
     public SavegameBindingStore Bindings { get; }

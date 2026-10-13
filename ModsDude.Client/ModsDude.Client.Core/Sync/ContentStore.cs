@@ -160,19 +160,17 @@ public sealed class ContentStore
     }
 
     /// <summary>
-    /// Takes a file that is already on disk into the store - the uninstall path, where the bytes are
-    /// in a mod folder, and the cross-store path, where they are on another disk.
+    /// Moves a mod-folder file that is being uninstalled into the store.
     /// </summary>
-    /// <param name="removeSource">
-    /// True to move rather than copy. Used when the source is a mod-folder file being uninstalled,
-    /// which is on its way out either way.
-    /// </param>
     /// <remarks>
     /// Hashed before it lands, exactly like a download. A mod-folder file is a file the user could
     /// have replaced with anything, so taking its word for what it contains would put unverified
-    /// bytes at a verified address - which is the one thing the store cannot allow.
+    /// bytes at a verified address - which is the one thing the store cannot allow. Moved through the
+    /// temporary folder for the same reason: across volumes the move is a copy, and one cut short must
+    /// never sit at the address. On the same volume both moves are renames, which is what makes
+    /// uninstalling from a hardlink-served disk free.
     /// </remarks>
-    public async Task<long> IngestFileAsync(string sourcePath, string expectedHash, bool removeSource, CancellationToken cancellationToken)
+    public async Task<long> IngestFileAsync(string sourcePath, string expectedHash, CancellationToken cancellationToken)
     {
         EnsureMarked();
 
@@ -189,28 +187,23 @@ public sealed class ContentStore
         {
             // Somebody put it there while this was hashing. The address decides the content, so
             // there is nothing to reconcile - and overwriting would break every hardlink into it.
-            if (removeSource)
-            {
-                File.Delete(sourcePath);
-            }
+            File.Delete(sourcePath);
 
             return new FileInfo(blobPath).Length;
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(blobPath)!);
-
         var length = new FileInfo(sourcePath).Length;
+        var temporaryPath = CreateTemporaryPath();
 
-        if (removeSource)
+        try
         {
-            // Move handles the cross-volume case by copying and deleting, and on the same volume it
-            // is a directory operation - which is what makes uninstalling from a hardlink-served
-            // disk free.
-            File.Move(sourcePath, blobPath);
+            File.Move(sourcePath, temporaryPath);
+
+            Place(temporaryPath, expectedHash);
         }
-        else
+        finally
         {
-            File.Copy(sourcePath, blobPath);
+            FileSystemHelper.TryDeleteFile(temporaryPath, Log);
         }
 
         return length;

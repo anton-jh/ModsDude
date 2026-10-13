@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModVersions;
@@ -7,7 +8,6 @@ using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.Profiles.Editor;
 using ModsDude.Client.Wpf.Profiles;
-using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
 using System.Collections.Concurrent;
