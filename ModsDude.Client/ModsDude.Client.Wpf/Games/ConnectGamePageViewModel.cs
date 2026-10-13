@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
+using System.ComponentModel;
 
 namespace ModsDude.Client.Wpf.Games;
 
@@ -43,7 +44,7 @@ public partial class ConnectGamePageViewModel
         GameName = _repo.Adapter.GameDisplayName;
 
         LocalSettingsEditor = new DynamicFormViewModel(false, repo.Adapter.GetLocalSettingsTemplate(), filePickerService);
-        LocalSettingsEditor.Modified += OnLocalSettingsModified;
+        LocalSettingsEditor.PropertyChanged += OnLocalSettingsChanged;
     }
 
 
@@ -83,7 +84,7 @@ public partial class ConnectGamePageViewModel
         }
         catch
         {
-            _navigationLockService.AcquireLock(this);
+            _navigationLockService.SetLock(this, LocalSettingsEditor.HasChanges);
 
             throw;
         }
@@ -91,16 +92,24 @@ public partial class ConnectGamePageViewModel
 
     public void Dispose()
     {
-        _navigationLockService.Dispose();
-        LocalSettingsEditor.Modified -= OnLocalSettingsModified;
+        _navigationLockService.ReleaseLock(this);
+        LocalSettingsEditor.PropertyChanged -= OnLocalSettingsChanged;
         LocalSettingsEditor.Dispose();
     }
 
 
-    private void OnLocalSettingsModified(object? sender, EventArgs e)
+    private void OnLocalSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
-        OnPropertyChanged(nameof(IsValid));
-        _navigationLockService.AcquireLock(this);
+        switch (e.PropertyName)
+        {
+            case nameof(DynamicFormViewModel.IsValid):
+                OnPropertyChanged(nameof(IsValid));
+                break;
+
+            case nameof(DynamicFormViewModel.HasChanges):
+                _navigationLockService.SetLock(this, LocalSettingsEditor.HasChanges);
+                break;
+        }
     }
 
     /// <summary>

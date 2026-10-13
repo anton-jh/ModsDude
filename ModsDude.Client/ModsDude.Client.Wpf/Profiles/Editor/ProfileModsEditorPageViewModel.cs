@@ -322,14 +322,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         OnPropertyChanged(nameof(RedoTooltip));
         OnSaveBlockChanged();
 
-        if (HasUnsavedChanges)
-        {
-            _navigationLock.AcquireLock(this);
-        }
-        else
-        {
-            _navigationLock.ReleaseLock(this);
-        }
+        _navigationLock.SetLock(this, HasUnsavedChanges);
 
         NotifyCommands();
     }

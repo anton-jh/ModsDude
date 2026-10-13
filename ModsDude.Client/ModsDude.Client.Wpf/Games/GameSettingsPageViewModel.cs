@@ -5,6 +5,8 @@ using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
+using ModsDude.Client.Wpf.Shell.Toasts;
+using System.ComponentModel;
 
 namespace ModsDude.Client.Wpf.Games;
 
@@ -19,6 +21,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     private readonly INavigationLockService _navigationLockService;
     private readonly Game _subject;
     private readonly IModalService _modalService;
+    private readonly IToastService _toasts;
 
 
     public GameSettingsPageViewModel(
@@ -28,6 +31,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         IGameRepository gameRepository,
         IFilePickerService filePickerService,
         IModalService modalService,
+        IToastService toasts,
         INavigationLockService navigationLockService)
     {
         _repo = repo;
@@ -35,14 +39,14 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         BackCommand = back;
         _gameRepository = gameRepository;
         _modalService = modalService;
+        _toasts = toasts;
         _navigationLockService = navigationLockService;
         GameName = subject.Name;
         RepoName = repo.Name;
 
         LocalSettingsEditor = new DynamicFormViewModel(true, subject.GetLocalSettings(repo.Adapter), filePickerService);
 
-        LocalSettingsEditor.Modified += OnLocalSettingsModified;
-        LocalSettingsEditor.IsValidChanged += OnLocalSettingsIsValidChanged;
+        LocalSettingsEditor.PropertyChanged += OnLocalSettingsChanged;
     }
 
 
@@ -65,7 +69,10 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     public IAsyncRelayCommand BackCommand { get; }
 
 
-    [RelayCommand]
+    public bool HasChanges => LocalSettingsEditor.HasChanges;
+
+
+    [RelayCommand(CanExecute = nameof(HasChanges))]
     public async Task SaveChanges()
     {
         if (!IsValid)
@@ -77,29 +84,35 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         }
 
         _gameRepository.Update(_subject, _repo.Adapter, LocalSettingsEditor.ExtractResults());
+        LocalSettingsEditor.MarkSaved();
 
-        _navigationLockService.ReleaseLock(this);
+        _toasts.Show($"Saved the settings for {GameName}.");
 
         await BackCommand.ExecuteAsync(null);
     }
 
     public void Dispose()
     {
-        _navigationLockService.Dispose();
-        LocalSettingsEditor.Modified -= OnLocalSettingsModified;
-        LocalSettingsEditor.IsValidChanged -= OnLocalSettingsIsValidChanged;
+        _navigationLockService.ReleaseLock(this);
+        LocalSettingsEditor.PropertyChanged -= OnLocalSettingsChanged;
         LocalSettingsEditor.Dispose();
     }
 
 
-    private void OnLocalSettingsModified(object? sender, EventArgs e)
+    private void OnLocalSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
-        _navigationLockService.AcquireLock(this);
-    }
+        switch (e.PropertyName)
+        {
+            case nameof(DynamicFormViewModel.IsValid):
+                OnPropertyChanged(nameof(IsValid));
+                break;
 
-    private void OnLocalSettingsIsValidChanged(object? sender, EventArgs e)
-    {
-        OnPropertyChanged(nameof(IsValid));
+            case nameof(DynamicFormViewModel.HasChanges):
+                OnPropertyChanged(nameof(HasChanges));
+                SaveChangesCommand.NotifyCanExecuteChanged();
+                _navigationLockService.SetLock(this, HasChanges);
+                break;
+        }
     }
 
     /// <summary>

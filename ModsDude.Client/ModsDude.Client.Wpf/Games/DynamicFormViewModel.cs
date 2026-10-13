@@ -12,7 +12,6 @@ public partial class DynamicFormViewModel
 {
     private readonly DynamicForm _form;
     private readonly IFilePickerService _filePickerService;
-    private bool? _oldIsValid = null;
 
 
     public DynamicFormViewModel(
@@ -38,8 +37,7 @@ public partial class DynamicFormViewModel
 
     public bool IsValid => _form.Validate().Length == 0;
 
-    public event EventHandler? Modified;
-    public event EventHandler? IsValidChanged;
+    public bool HasChanges => Fields.Any(x => x.IsChanged);
 
 
     public List<string> GetValidationErrors()
@@ -59,6 +57,16 @@ public partial class DynamicFormViewModel
         }
 
         return obj;
+    }
+
+    public void MarkSaved()
+    {
+        foreach (var field in Fields)
+        {
+            field.MarkSaved();
+        }
+
+        OnPropertyChanged(nameof(HasChanges));
     }
 
     public void Dispose()
@@ -117,26 +125,20 @@ public partial class DynamicFormViewModel
 
     private void OnFieldModified(object? sender, PropertyChangedEventArgs? e)
     {
-        if (e?.PropertyName != "Value")
+        if (e?.PropertyName != nameof(DynamicFormFieldViewModel.Value))
         {
             return;
         }
 
-        var valid = IsValid;
-        if (valid != _oldIsValid)
-        {
-            _oldIsValid = valid;
-            OnPropertyChanged(nameof(IsValid));
-            IsValidChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        Modified?.Invoke(this, EventArgs.Empty);
+        OnPropertyChanged(nameof(IsValid));
+        OnPropertyChanged(nameof(HasChanges));
     }
 }
 
 public abstract partial class DynamicFormFieldViewModel : ObservableObject
 {
     private readonly DynamicForm _form;
+    private object? _savedValue;
 
 
     public DynamicFormFieldViewModel(
@@ -146,6 +148,7 @@ public abstract partial class DynamicFormFieldViewModel : ObservableObject
         _form = form;
         Property = property;
         Value = property.GetValue(form);
+        _savedValue = Value;
     }
 
 
@@ -154,7 +157,20 @@ public abstract partial class DynamicFormFieldViewModel : ObservableObject
     [ObservableProperty]
     protected object? _value;
 
+    public bool IsChanged => Equals(Normalize(Value), Normalize(_savedValue)) is false;
+
     public abstract object? GetValue();
+
+    public void MarkSaved()
+    {
+        _savedValue = Value;
+    }
+
+    /// <summary>An emptied text box gives an empty string where the form held null; both mean no value.</summary>
+    private static object? Normalize(object? value)
+    {
+        return value is string { Length: 0 } ? null : value;
+    }
 
 
     partial void OnValueChanged(object? value)

@@ -6,6 +6,7 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
+using ModsDude.Client.Wpf.Shell.Toasts;
 
 namespace ModsDude.Client.Wpf.Profiles;
 
@@ -14,14 +15,16 @@ public partial class ManageProfileViewModel(
     Profile profile,
     IProfileStore profileStore,
     INavigationLockService navigationLockService,
-    IModalService modalService)
+    IModalService modalService,
+    IToastService toasts)
     : ObservableObject, IDisposable
 {
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SaveChangesCommand))]
     private string _name = profile.Name;
 
-    public bool IsValid => !string.IsNullOrWhiteSpace(Name);
+    public bool HasChanges => Name != profile.Name;
+
+    public bool CanSave => HasChanges && string.IsNullOrWhiteSpace(Name) is false;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
@@ -30,7 +33,7 @@ public partial class ManageProfileViewModel(
     public bool HasError => Error is not null;
 
 
-    [RelayCommand(CanExecute = nameof(IsValid))]
+    [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task SaveChanges(CancellationToken cancellationToken)
     {
         Error = null;
@@ -46,7 +49,9 @@ public partial class ManageProfileViewModel(
             return;
         }
 
-        navigationLockService.ReleaseLock(this);
+        OnHasChangesChanged();
+
+        toasts.Show($"Renamed the profile to {profile.Name}.");
     }
 
     /// <summary>
@@ -76,7 +81,15 @@ public partial class ManageProfileViewModel(
 
     partial void OnNameChanged(string value)
     {
-        navigationLockService.AcquireLock(this);
+        OnHasChangesChanged();
+    }
+
+    private void OnHasChangesChanged()
+    {
+        OnPropertyChanged(nameof(HasChanges));
+        OnPropertyChanged(nameof(CanSave));
+        SaveChangesCommand.NotifyCanExecuteChanged();
+        navigationLockService.SetLock(this, HasChanges);
     }
 
 

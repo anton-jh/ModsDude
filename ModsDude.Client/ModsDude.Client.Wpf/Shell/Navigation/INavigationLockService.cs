@@ -9,6 +9,9 @@ public interface INavigationLockService : IDisposable
 
     void ReleaseLock(object owner);
 
+    /// <summary>Acquires the lock for <paramref name="owner"/> while <paramref name="held"/>, releases it otherwise.</summary>
+    void SetLock(object owner, bool held);
+
     bool HasLock();
 
     void Clear();

@@ -11,6 +11,7 @@ using ModsDude.Client.Wpf.Account;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Sidebar;
+using ModsDude.Client.Wpf.Shell.Toasts;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -31,6 +32,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     private readonly INavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
+    private readonly IToastService _toasts;
     private readonly IUserAvatarFactory _avatarFactory;
     private readonly TimeProvider _time;
 
@@ -48,6 +50,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         INavigationLockService navigationLockService,
         IModalService modalService,
         IErrorReporter errorReporter,
+        IToastService toasts,
         IUserAvatarFactory avatarFactory,
         TimeProvider time)
     {
@@ -59,6 +62,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         _navigationLockService = navigationLockService;
         _modalService = modalService;
         _errorReporter = errorReporter;
+        _toasts = toasts;
         _avatarFactory = avatarFactory;
         _time = time;
 
@@ -134,12 +138,14 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     public async Task SaveLevels(CancellationToken cancellationToken)
     {
         var pending = Members.Where(x => x.HasPendingLevelChange).ToList();
+        var saved = 0;
 
         foreach (var member in pending)
         {
             try
             {
                 await _membershipService.UpdateMembership(_repo.Id, member.UserId, member.Level, cancellationToken);
+                saved++;
             }
             catch (Exception ex)
             {
@@ -151,6 +157,11 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         }
 
         await ReloadMembers(cancellationToken);
+
+        if (saved == pending.Count)
+        {
+            _toasts.Show(saved == 1 ? "Saved 1 level change." : $"Saved {saved} level changes.");
+        }
     }
 
     [RelayCommand(CanExecute = nameof(HasPendingLevelChanges))]
@@ -206,14 +217,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     /// </summary>
     partial void OnHasPendingLevelChangesChanged(bool value)
     {
-        if (value)
-        {
-            _navigationLockService.AcquireLock(this);
-        }
-        else
-        {
-            _navigationLockService.ReleaseLock(this);
-        }
+        _navigationLockService.SetLock(this, value);
     }
 
 
