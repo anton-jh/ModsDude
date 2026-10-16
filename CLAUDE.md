@@ -22,6 +22,7 @@ These rules override default behaviour.
   - Why: design choices made without discussion have been wrong and had to be redone.
   - Trivial, unambiguous edits can just be done.
 - Write plans as terse bullets, one fact each, grouped under short phase headings. No paragraphs. Open questions go only in a short list at the end.
+- Number every question to the user (1., 2., ...), in plans and anywhere else, so answers can refer to them by number.
 - Plans include the refactoring and cleanup the change calls for (see "Changing existing code"), even if that grows the change.
 - Never add a NuGet package without asking first. Propose it in the plan.
 - When unsure mid-task (an ambiguous requirement, or a design choice the plan doesn't cover), stop and ask. Never guess.
