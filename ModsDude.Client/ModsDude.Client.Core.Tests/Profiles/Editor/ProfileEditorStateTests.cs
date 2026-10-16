@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Profiles.Editor;
@@ -94,6 +95,27 @@ public class ProfileEditorStateTests
         Assert.Empty(Compute(Inputs(draft, catalog) with { PinnedFilter = PinnedModFilter.Updates }).PinnedShown);
         Assert.Empty(Compute(Inputs(draft, catalog) with { PinnedFilter = PinnedModFilter.Locked }).PinnedShown);
         Assert.False(Compute(Inputs(draft, catalog)).Updates.HasAny);
+    }
+
+    [Fact]
+    public void The_updates_count_is_what_the_updates_filter_shows_whatever_the_search()
+    {
+        var draft = Draft(Pin("free", "1.0"), Pin("locked", "1.0", locked: true), Pin("unsettled", "1.0"), Pin("current", "1.0"), Pin("taken", "1.0"))
+            .Remove([Mod("taken")]);
+
+        var inputs = Inputs(draft,
+            Registered("free", "1.0", 0), Registered("free", "2.0", 1),
+            Registered("locked", "1.0", 0), Registered("locked", "2.0", 1),
+            Registered("unsettled", "1.0", 0), Local("unsettled", "hurr durr"),
+            Registered("current", "1.0", 0),
+            Registered("taken", "1.0", 0), Registered("taken", "2.0", 1));
+
+        var filtered = Compute(inputs with { PinnedFilter = PinnedModFilter.Updates });
+        var searched = Compute(inputs with { Search = ModSearchQuery.Parse("current", []) });
+
+        Assert.Equal(["free", "locked", "unsettled"], filtered.PinnedShown.Shown());
+        Assert.Equal(3, filtered.UpdatesFilterCount);
+        Assert.Equal(3, searched.UpdatesFilterCount);
     }
 
     [Fact]

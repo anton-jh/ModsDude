@@ -45,6 +45,7 @@ public sealed class ProfileModsEditorSummary
             ? $"{Mods(state.PendingCount)} will be imported when you save · {state.DownloadCount} downloaded first"
             : $"{Mods(state.PendingCount)} will be imported when you save";
 
+        UpdatesFilterCount = state.UpdatesFilterCount;
         UpdateCountText = updates.Count == 0
             ? "No updates"
             : string.Join(" · ", new[]
@@ -87,6 +88,7 @@ public sealed class ProfileModsEditorSummary
     public bool HasPending { get; }
     public string PendingText { get; }
 
+    public int UpdatesFilterCount { get; }
     public string UpdateCountText { get; }
     public string ApplyUpdatesText { get; }
     public bool HasRepoOnlyUpdates { get; }

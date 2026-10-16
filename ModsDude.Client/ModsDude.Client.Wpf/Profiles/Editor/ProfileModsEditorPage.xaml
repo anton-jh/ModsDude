@@ -610,6 +610,7 @@
                                              IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Changes}" />
                                 <RadioButton Style="{StaticResource FilterChip}"
                                              Content="Updates"
+                                             shared:FilterChip.Count="{Binding Summary.UpdatesFilterCount}"
                                              ToolTip="Mods with a newer version - in the repo, in a folder being read, or online"
                                              IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Updates}" />
                                 <RadioButton Style="{StaticResource FilterChip}"

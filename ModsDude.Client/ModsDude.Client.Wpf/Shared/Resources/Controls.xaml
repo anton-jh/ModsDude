@@ -451,18 +451,31 @@
                             BorderThickness="1"
                             Padding="{TemplateBinding Padding}"
                             CornerRadius="14">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <ContentPresenter VerticalAlignment="Center" />
+                            <TextBlock x:Name="Count"
+                                       Margin="6 0 0 0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                       Text="{Binding (shared:FilterChip.Count), RelativeSource={RelativeSource TemplatedParent}}" />
+                        </StackPanel>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="shared:FilterChip.Count" Value="0">
+                            <Setter TargetName="Count" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Background" Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
                             <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                            <Setter TargetName="Count" Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                            <Setter TargetName="Count" Property="Opacity" Value="0.7" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                            <Setter TargetName="Count" Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
                             <Setter TargetName="Background" Property="Opacity" Value="0.5" />
                         </Trigger>
                     </ControlTemplate.Triggers>

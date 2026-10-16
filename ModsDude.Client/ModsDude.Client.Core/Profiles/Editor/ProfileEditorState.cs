@@ -42,6 +42,9 @@ public sealed record ProfileEditorState
     public int TakenOutCount => Pinned.Count(x => x.IsTakenOut);
     public int PendingCount => Pinned.Count(x => x.IsPending);
 
+    /// <summary>Every pin the Updates filter would show, whatever the search.</summary>
+    public int UpdatesFilterCount => Pinned.Count(x => x.ShowsUnderUpdates);
+
     /// <summary>How many pins a save will download first.</summary>
     public int DownloadCount => Pinned.Count(x => x.IsPending && x.Version.Download is not null);
 
@@ -291,8 +294,7 @@ public sealed record ProfileEditorState
         {
             PinnedModFilter.Result => row.IsTakenOut is false,
             PinnedModFilter.Changes => row.Touch is not ProfileModTouch.None,
-            PinnedModFilter.Updates => row.IsTakenOut is false
-                && (row.Update is not null || row.HasUnsettledVersion),
+            PinnedModFilter.Updates => row.ShowsUnderUpdates,
             PinnedModFilter.Locked => row.IsTakenOut is false && row.Lock.IsLocked,
             PinnedModFilter.NotInSources => row.IsTakenOut is false && row.NotInSources,
             _ => true

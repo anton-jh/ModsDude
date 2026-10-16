@@ -88,6 +88,8 @@ public sealed record PinnedModRow(
 
     public bool IsPending => Pin is not null && Version.IsOnServer is false;
 
+    public bool ShowsUnderUpdates => IsTakenOut is false && (Update is not null || HasUnsettledVersion);
+
     /// <summary>Pins a download whose file turned out to be something else, so a save will ask what to do instead.</summary>
     public bool IsBrokenDownload => Pin is not null && Version.Download is { IsBroken: true };
 }
