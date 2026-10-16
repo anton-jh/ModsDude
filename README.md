@@ -33,6 +33,7 @@ ModsDude.Client/
   ModsDude.Client.Core.Tests
 openapi/v1.json                 The API's OpenAPI document, checked in
 scripts/openapi.ps1             Regenerates or verifies openapi/v1.json
+scripts/ship.ps1                Ships develop by fast-forwarding main to it
 deploy/                         The production server: compose.yml, Caddy, deploy scripts
 .github/workflows/ci.yml        Tests on every push; ships from main
 ```
@@ -434,6 +435,15 @@ A new major version can't read the old one's data:
 
 Work happens on `develop`. `main` is the release branch: it moves forward only to ship what is on
 `develop`.
+
+To ship:
+
+```bash
+pwsh scripts/ship.ps1
+```
+
+It lists the commits and new migrations going out, refuses unless CI passed for `origin/develop`, asks,
+and fast-forwards `main` to it. `-WhatIf` only shows what would ship; `-Confirm:$false` skips the question.
 
 `.github/workflows/ci.yml` runs on every push and pull request:
 

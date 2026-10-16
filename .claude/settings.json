@@ -12,7 +12,9 @@
       "PowerShell(git push *:main)",
       "PowerShell(git push *:main *)",
       "PowerShell(git push *refs/heads/main)",
-      "PowerShell(git push *refs/heads/main *)"
+      "PowerShell(git push *refs/heads/main *)",
+      "Bash(*ship.ps1*)",
+      "PowerShell(*ship.ps1*)"
     ]
   }
 }
