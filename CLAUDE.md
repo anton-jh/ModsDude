@@ -49,11 +49,13 @@ A change is done only when all of these hold:
 
 ## Git
 
-- `develop` is the working branch. Commit on the current branch and push to `develop`. Never create a branch unless asked, or unless a PR is requested.
+- `develop` is the working branch. Commit on the current branch. Never create a branch unless asked, or unless a PR is requested.
   - Why: solo project; an unrequested branch turns one commit into a commit, a merge and a branch deletion.
 - Never commit to, merge into or push `main`. Every push to `main` deploys the API and releases the client; the user ships.
 - PRs target `develop`.
-- Commit and push after each task once it meets the definition of done.
+- Commit after each task once it meets the definition of done.
+- Never push unless explicitly asked.
+  - Why: the user decides when commits leave the machine.
 - Commit messages: imperative subject line, then a few terse bullets. No prose paragraphs.
 
 ## Generated API client
