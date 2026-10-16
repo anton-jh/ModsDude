@@ -37,6 +37,9 @@
     <DataTemplate DataType="{x:Type editor:ModSourceConflictModalViewModel}">
         <editor:ModSourceConflictModal />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type editor:ModDownloadMismatchModalViewModel}">
+        <editor:ModDownloadMismatchModal />
+    </DataTemplate>
     <DataTemplate DataType="{x:Type editor:PasteModListModalViewModel}">
         <editor:PasteModListModal />
     </DataTemplate>

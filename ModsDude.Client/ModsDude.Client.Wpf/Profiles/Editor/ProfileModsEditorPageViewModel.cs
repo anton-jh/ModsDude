@@ -8,6 +8,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Profiles.Editor;
+using ModsDude.Client.Core.RemoteSources;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Mods;
@@ -60,6 +61,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly IResourceLeases _leases;
     private readonly IToastService _toasts;
     private readonly TimeProvider _time;
+    private readonly IRemoteDownloadNotes _downloadNotes;
     private readonly ActiveProfile _activeProfile;
     private readonly CancellationTokenSource _cancellation = new();
     private readonly List<Game> _watchedGames = [];
@@ -72,6 +74,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly Dictionary<ModKey, AvailableModRowViewModel> _availableRows = [];
     private readonly Dictionary<ModKey, PinnedModRowViewModel> _pinnedRows = [];
 
+    /// <summary>The catalog as last read, before the remote sources' answers are placed on it.</summary>
+    private ProfileEditorCatalog _catalogRead;
+
+    /// <summary><see cref="_catalogRead"/> with the remote sources' answers placed on it. What the page shows.</summary>
     private ProfileEditorCatalog _catalogView;
     private ProfileEditorState _state;
     private IReadOnlyDictionary<ModKey, SavedPinDate> _savedDates = new Dictionary<ModKey, SavedPinDate>();
@@ -104,6 +110,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         NoticeCenterViewModel notices,
         IResourceLeases leases,
         IToastService toasts,
+        IRemoteDownloadNotes downloadNotes,
         TimeProvider time)
     {
         _repo = repo;
@@ -123,23 +130,21 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _leases = leases;
         _toasts = toasts;
         _time = time;
+        _downloadNotes = downloadNotes;
         _activeProfile = new ActiveProfile(repo.Id, profile.Id);
 
         _catalog = catalogFactory.Create(repo);
-        _catalogView = ProfileEditorCatalog.Empty(repo.Adapter.VersionComparer);
+        _catalogRead = ProfileEditorCatalog.Empty(repo.Adapter.VersionComparer);
+        _catalogView = _catalogRead;
         _otherProfiles = new OtherProfilesReader(profileStore, pinsClient, repo.Id, profile.Id);
 
         Sources = new EditorSourcesViewModel(
-            _catalog, _otherProfiles, filePickerService, modalService, errorReporter,
+            _catalog,
+            repo.Adapter.GetBaseCapabilityAdapterFactory<IRemoteModSourcesAdapter>()?.Invoke().Sources ?? [],
+            _otherProfiles, filePickerService, modalService, errorReporter,
             () => _history.Current, CommitAsync, RecomposeAsync, _cancellation.Token);
 
-        RemoteUpdates = new RemoteUpdatesViewModel(
-            repo.Adapter.GetBaseCapabilityAdapterFactory<IRemoteUpdatesAdapter>()?.Invoke().Providers ?? [],
-            errorReporter,
-            _cancellation.Token);
-
-        RemoteUpdates.Changed += Refresh;
-        RemoteUpdates.DownloadsWanted += () => _ = Sources.EnableDownloadsAsync();
+        Sources.RemoteChanged += ShowRemote;
 
         _state = ProfileEditorState.Compute(Inputs());
         _summary = Summarize();
@@ -174,8 +179,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     public string ProfileName { get; }
 
     public EditorSourcesViewModel Sources { get; }
-
-    public RemoteUpdatesViewModel RemoteUpdates { get; }
 
     public BulkObservableCollection<AvailableModRowViewModel> AvailableRows { get; } = [];
     public BulkObservableCollection<PinnedModRowViewModel> PinnedRows { get; } = [];
@@ -284,7 +287,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     {
         IncludeRegistered = Sources.IncludeRegistered,
         ProfileSources = Sources.EnabledProfiles,
-        RemoteUpdates = RemoteUpdates.Answers(),
         AvailableChoices = _availableChoices,
         SavedDates = _savedDates,
         Search = _searchQuery,
@@ -304,11 +306,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         Sync(AvailableRows, _availableRows, _state.Available, _state.AvailableShown, x => x.ModId,
             x => Watched(new AvailableModRowViewModel(_repo.Id, x, _itemFactory, OnVersionPicked), AvailableSelection),
-            (row, x) => row.Update(x, RemoteUpdates.Show(x.RemoteUpdate), pickable));
+            (row, x) => row.Update(x, pickable));
 
         Sync(PinnedRows, _pinnedRows, _state.Pinned, _state.PinnedShown, x => x.ModId,
             x => Watched(new PinnedModRowViewModel(_repo.Id, x, _itemFactory, OnVersionPicked, OnLockToggled), PinnedSelection),
-            (row, x) => row.Update(x, RemoteUpdates.Show(x.RemoteUpdate), pickable));
+            (row, x) => row.Update(x, pickable));
 
         StampMarks();
 
@@ -331,7 +333,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         Draft,
         _state,
         ShowIgnored,
-        RemoteUpdates.Name,
         ApplyTarget is not null);
 
     /// <summary>Records an edit of the draft as one step, then shows it.</summary>
@@ -382,17 +383,21 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                     return;
                 }
 
-                _catalogView = catalogView;
+                _catalogRead = catalogView;
 
                 SearchCompleter.SetCatalogValues(snapshot.Known.SelectMany(x => x.Attributes));
 
-                RemoteUpdates.LookUp(catalogView.Index.Keys);
-                Refresh();
-                Sources.RebuildChips(catalogView);
+                ShowRemote();
+
+                Sources.LookUpRemote([.. catalogView.Index.Keys]);
             });
         }
         catch (OperationCanceledException)
         {
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "reading the mod list's sources");
         }
         finally
         {
@@ -401,6 +406,15 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
                 IsLoading = false;
             }
         }
+    }
+
+    /// <summary>Places the remote sources' answers on the catalog as last read, and shows the result.</summary>
+    private void ShowRemote()
+    {
+        _catalogView = _catalogRead.WithRemote(Sources.RemoteAnswers(), _downloadNotes.Find);
+
+        Refresh();
+        Sources.RebuildChips(_catalogView);
     }
 
     /// <summary>

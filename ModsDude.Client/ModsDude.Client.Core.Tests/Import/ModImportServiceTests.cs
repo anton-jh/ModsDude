@@ -4,6 +4,7 @@ using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Tests.RemoteSources;
 using ModsDude.Client.Core.Tests.Stores;
 using ModsDude.Client.Core.Tests.Sync;
 using System.Text;
@@ -40,6 +41,8 @@ public class ModImportServiceTests : IDisposable
             _imagery,
             _recycleBin,
             new FakeStoreProvider(_store),
+            new FakeRemoteModDownloader(_temp),
+            new InMemoryRemoteDownloadNotes(),
             NullLogger<ModImportService>.Instance);
     }
 

@@ -10,7 +10,6 @@ public sealed class ProfileModsEditorSummary
         ProfileDraft draft,
         ProfileEditorState state,
         bool showIgnored,
-        string remoteName,
         bool hasApplyTarget)
     {
         var updates = state.Updates;
@@ -42,26 +41,18 @@ public sealed class ProfileModsEditorSummary
         }.OfType<string>());
 
         HasPending = state.PendingCount > 0;
-        PendingText = $"{Mods(state.PendingCount)} will be imported when you save";
+        PendingText = state.DownloadCount > 0
+            ? $"{Mods(state.PendingCount)} will be imported when you save · {state.DownloadCount} downloaded first"
+            : $"{Mods(state.PendingCount)} will be imported when you save";
 
-        UpdateCountText = updates.Count switch
-        {
-            0 when state.RemoteUpdateCount + state.RemoteLockedUpdateCount > 0 => "No updates here",
-            0 => "No updates",
-            _ when updates.PendingCount > 0
-                => $"{Plural(updates.Count, "update")} available · {updates.PendingCount} will be imported when you save",
-            _ => $"{Plural(updates.Count, "update")} available"
-        };
-
-        HasRemoteUpdates = state.RemoteUpdateCount + state.RemoteLockedUpdateCount > 0;
-        RemoteUpdatesText = (state.RemoteUpdateCount, state.RemoteLockedUpdateCount) switch
-        {
-            (0, var locked) => $"{locked} locked on {remoteName}",
-            (var free, 0) => updates.Count > 0 ? $"{free} more on {remoteName}" : $"{free} on {remoteName}",
-            var (free, locked) => updates.Count > 0
-                ? $"{free} more on {remoteName} · {locked} locked"
-                : $"{free} on {remoteName} · {locked} locked"
-        };
+        UpdateCountText = updates.Count == 0
+            ? "No updates"
+            : string.Join(" · ", new[]
+            {
+                $"{Plural(updates.Count, "update")} available",
+                updates.PendingCount > 0 ? $"{updates.PendingCount} imported on save" : null,
+                updates.DownloadCount > 0 ? DescribeDownloads(updates) : null
+            }.OfType<string>());
 
         ApplyUpdatesText = updates.Available.Count == 0 ? "Update all" : $"Update {Mods(updates.Available.Count)}";
         HasRepoOnlyUpdates = updates.FreeCount > 0 && updates.FreeCount < updates.Available.Count;
@@ -97,8 +88,6 @@ public sealed class ProfileModsEditorSummary
     public string PendingText { get; }
 
     public string UpdateCountText { get; }
-    public bool HasRemoteUpdates { get; }
-    public string RemoteUpdatesText { get; }
     public string ApplyUpdatesText { get; }
     public bool HasRepoOnlyUpdates { get; }
     public string UpdateRepoOnlyText { get; }
@@ -114,6 +103,11 @@ public sealed class ProfileModsEditorSummary
     public static string Mods(int count) => Plural(count, "mod");
 
     public static string Plural(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
+
+    private static string DescribeDownloads(Core.Profiles.ProfileModUpdatePlan updates)
+        => updates.DownloadSources is [var source]
+            ? $"{updates.DownloadCount} downloaded from {source}"
+            : $"{updates.DownloadCount} downloaded";
 
     /// <summary>"412 mods" when nothing is hidden, "42 of 412 mods" when something is.</summary>
     private static string Describe(int shown, int total) => shown == total ? Mods(total) : $"{shown} of {Mods(total)}";

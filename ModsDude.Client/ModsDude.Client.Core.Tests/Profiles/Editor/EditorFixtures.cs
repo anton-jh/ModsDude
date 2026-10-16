@@ -2,6 +2,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Profiles.Editor;
+using ModsDude.Client.Core.RemoteSources;
 using ModsDude.Client.Core.Services;
 using static ModsDude.Client.Core.Tests.Keys;
 
@@ -41,6 +42,10 @@ internal static class EditorFixtures
 
     public static ProfileEditorInputs Inputs(ProfileDraft draft, params CatalogModVersion[] visible)
         => new(draft, Catalog(visible), Now);
+
+    /// <summary>The same catalog, with a remote source's answers placed on it.</summary>
+    public static ProfileEditorInputs WithRemote(this ProfileEditorInputs inputs, params RemoteSourceAnswers[] answers)
+        => inputs with { Catalog = inputs.Catalog.WithRemote(answers, _ => null) };
 
     public static ProfileDraft Draft(params ProfileModPin[] saved) => new(saved, []);
 

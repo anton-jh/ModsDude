@@ -48,7 +48,7 @@ public sealed class ModImportRowProgress(IReadOnlyDictionary<ModVersionIdentity,
             return;
         }
 
-        if (value.Phase is ModImportPhase.Uploading && row.IsUploading)
+        if (value.Phase is ModImportPhase.Downloading or ModImportPhase.Uploading && row.ImportPhase == value.Phase)
         {
             var percent = value.TotalBytes > 0
                 ? (int)(value.BytesTransferred * 100 / value.TotalBytes)

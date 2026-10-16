@@ -36,24 +36,22 @@ public sealed record ProfileEditorState
 
     public required ProfileModUpdatePlan Updates { get; init; }
 
-    /// <summary>How many pinned mods have a newer version online, locked ones apart.</summary>
-    public required int RemoteUpdateCount { get; init; }
-    public required int RemoteLockedUpdateCount { get; init; }
-
     public required int UnsettledCount { get; init; }
 
     public int ResultCount => Pinned.Count(x => x.IsTakenOut is false);
     public int TakenOutCount => Pinned.Count(x => x.IsTakenOut);
     public int PendingCount => Pinned.Count(x => x.IsPending);
 
+    /// <summary>How many pins a save will download first.</summary>
+    public int DownloadCount => Pinned.Count(x => x.IsPending && x.Version.Download is not null);
+
 
     public static ProfileEditorState Compute(ProfileEditorInputs inputs)
     {
         var offered = OfferedVersions(inputs);
-        var remoteUpdates = FindRemoteUpdates(inputs);
 
-        var available = AvailableRows(inputs, offered, remoteUpdates);
-        var (pinned, updates) = PinnedRows(inputs, offered, remoteUpdates);
+        var available = AvailableRows(inputs, offered);
+        var (pinned, updates) = PinnedRows(inputs, offered);
 
         var availableShown = available
             .Where(x => IsShown(inputs, x))
@@ -74,14 +72,15 @@ public sealed record ProfileEditorState
             Pinned = pinned,
             PinnedShown = pinnedShown,
             Updates = updates,
-            RemoteUpdateCount = pinned.Count(x => x.Pin is not null && x.RemoteUpdate is not null && x.Lock.IsLocked is false),
-            RemoteLockedUpdateCount = pinned.Count(x => x.Pin is not null && x.RemoteUpdate is not null && x.Lock.IsLocked),
             UnsettledCount = pinned.Count(x => x.HasUnsettledVersion)
         };
     }
 
 
-    /// <summary>What the enabled sources offer, by mod: what they hold, and what the enabled profiles pin.</summary>
+    /// <summary>
+    /// What the enabled sources offer, by mod: what they hold, what the enabled remote sources offer, and
+    /// what the enabled profiles pin.
+    /// </summary>
     private static Dictionary<ModKey, HashSet<ModVersionKey>> OfferedVersions(ProfileEditorInputs inputs)
     {
         var offered = new Dictionary<ModKey, HashSet<ModVersionKey>>();
@@ -98,7 +97,7 @@ public sealed record ProfileEditorState
 
         foreach (var version in inputs.Catalog.Visible)
         {
-            if (version.IsLocal || (inputs.IncludeRegistered && version.IsOnServer))
+            if (version.IsLocal || version.Download is not null || (inputs.IncludeRegistered && version.IsOnServer))
             {
                 Offer(version.ModId, version.VersionId);
             }
@@ -112,26 +111,9 @@ public sealed record ProfileEditorState
         return offered;
     }
 
-    /// <summary>The newer version each mod has somewhere online. The first provider to have one wins.</summary>
-    private static Dictionary<ModKey, RemoteUpdate> FindRemoteUpdates(ProfileEditorInputs inputs)
-    {
-        var updates = new Dictionary<ModKey, RemoteUpdate>();
-
-        foreach (var provider in inputs.RemoteUpdates)
-        {
-            foreach (var (modId, version) in RemoteUpdates.Newer(provider.Versions, inputs.Catalog.Index, inputs.Catalog.Comparer))
-            {
-                updates.TryAdd(modId, new RemoteUpdate(version, provider.ProviderName));
-            }
-        }
-
-        return updates;
-    }
-
     private static List<AvailableModRow> AvailableRows(
         ProfileEditorInputs inputs,
-        Dictionary<ModKey, HashSet<ModVersionKey>> offered,
-        Dictionary<ModKey, RemoteUpdate> remoteUpdates)
+        Dictionary<ModKey, HashSet<ModVersionKey>> offered)
     {
         var catalog = inputs.Catalog;
         var draft = inputs.Draft;
@@ -169,10 +151,7 @@ public sealed record ProfileEditorState
                 set?.CouldNotCompareToNewest(selected.VersionId) ?? false,
                 draft.Ignored.Contains(modId),
                 inputs.ProfileSources.Any(x => x.Locks(selected.Identity)),
-                nameSources && selected.FoundIn.Count > 0
-                    ? string.Join(", ", selected.FoundIn.Select(x => x.Source.Name).Distinct())
-                    : null,
-                remoteUpdates.GetValueOrDefault(modId),
+                DescribeSources(selected, nameSources),
                 inputs.AvailableSort.Caption(key, inputs.Now, ModListDateWording.ImportedToRepo),
                 inputs.AvailableSort.Describe(key, ModListDateWording.ImportedToRepo)));
         }
@@ -182,8 +161,7 @@ public sealed record ProfileEditorState
 
     private static (List<PinnedModRow> Rows, ProfileModUpdatePlan Updates) PinnedRows(
         ProfileEditorInputs inputs,
-        Dictionary<ModKey, HashSet<ModVersionKey>> offered,
-        Dictionary<ModKey, RemoteUpdate> remoteUpdates)
+        Dictionary<ModKey, HashSet<ModVersionKey>> offered)
     {
         var catalog = inputs.Catalog;
         var draft = inputs.Draft;
@@ -233,7 +211,6 @@ public sealed record ProfileEditorState
                 ProfileModTouches.Classify(saved, pin),
                 ProfileModTouches.Describe(saved, pin),
                 pin is null ? null : updatesByMod.GetValueOrDefault(modId),
-                pin is null ? null : remoteUpdates.GetValueOrDefault(modId),
                 unsettled,
                 offered.ContainsKey(modId) is false,
                 added,
@@ -271,6 +248,22 @@ public sealed record ProfileEditorState
         return ordered;
     }
 
+    /// <summary>
+    /// The folders a version was found in, where more than one is enabled, or the remote source that
+    /// offers it.
+    /// </summary>
+    private static string? DescribeSources(CatalogModVersion version, bool nameFolders)
+    {
+        if (version.Download is RemoteOffer offer)
+        {
+            return offer.SourceName;
+        }
+
+        return nameFolders && version.FoundIn.Count > 0
+            ? string.Join(", ", version.FoundIn.Select(x => x.Source.Name).Distinct())
+            : null;
+    }
+
     private static List<ProfileModVersionOption> Options(ModVersionSet? set, List<CatalogModVersion> ordered)
         => [.. Enumerable.Reverse(ordered).Select(x => new ProfileModVersionOption(x, set?.CouldNotCompareToNewest(x.VersionId) ?? false))];
 
@@ -299,7 +292,7 @@ public sealed record ProfileEditorState
             PinnedModFilter.Result => row.IsTakenOut is false,
             PinnedModFilter.Changes => row.Touch is not ProfileModTouch.None,
             PinnedModFilter.Updates => row.IsTakenOut is false
-                && (row.Update is not null || row.RemoteUpdate is not null || row.HasUnsettledVersion),
+                && (row.Update is not null || row.HasUnsettledVersion),
             PinnedModFilter.Locked => row.IsTakenOut is false && row.Lock.IsLocked,
             PinnedModFilter.NotInSources => row.IsTakenOut is false && row.NotInSources,
             _ => true

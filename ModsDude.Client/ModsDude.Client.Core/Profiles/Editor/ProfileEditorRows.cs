@@ -1,4 +1,3 @@
-using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.Profiles.Editor;
@@ -7,17 +6,32 @@ namespace ModsDude.Client.Core.Profiles.Editor;
 /// <param name="CouldNotCompare">The ordering could not place this version against the repo's newest.</param>
 public sealed record ProfileModVersionOption(CatalogModVersion Version, bool CouldNotCompare = false)
 {
-    public string Label => Version.IsOnServer ? Version.VersionId.Value : $"{Version.VersionId.Value}*";
+    public string Label => Version switch
+    {
+        { IsOnServer: true } => Version.VersionId.Value,
+        { Download: RemoteOffer offer } => $"{Version.VersionId.Value} · {offer.SourceName}",
+        _ => $"{Version.VersionId.Value}*"
+    };
 
-    public string? Note => Version.IsOnServer
-        ? null
-        : CouldNotCompare
-            ? "Imports on save. The order between this and what the repo holds is not settled, so importing will ask which comes first."
-            : "Imports on save.";
+    public string? Note
+    {
+        get
+        {
+            if (Version.IsOnServer)
+            {
+                return null;
+            }
+
+            var action = Version.Download is RemoteOffer offer
+                ? $"Downloads from {offer.SourceName} and imports on save."
+                : "Imports on save.";
+
+            return CouldNotCompare
+                ? $"{action} The order between this and what the repo holds is not settled, so importing will ask which comes first."
+                : action;
+        }
+    }
 }
-
-
-public sealed record RemoteUpdate(RemoteModVersion Version, string ProviderName);
 
 
 public enum AvailableModStatus
@@ -33,7 +47,7 @@ public enum AvailableModStatus
 /// <summary>A mod the profile neither holds nor held when the editor opened.</summary>
 /// <param name="Options">Newest first.</param>
 /// <param name="LockedBySource">Whether an enabled profile source that offers this version locks it.</param>
-/// <param name="Sources">The enabled folders the version was found in, where more than one is enabled.</param>
+/// <param name="Sources">Where the version comes from, where that needs saying.</param>
 public sealed record AvailableModRow(
     ModKey ModId,
     CatalogModVersion Version,
@@ -43,7 +57,6 @@ public sealed record AvailableModRow(
     bool IsIgnored,
     bool LockedBySource,
     string? Sources,
-    RemoteUpdate? RemoteUpdate,
     string? SortCaption,
     string? SortTooltip);
 
@@ -65,7 +78,6 @@ public sealed record PinnedModRow(
     ProfileModTouch Touch,
     string? TouchTooltip,
     ProfileModUpdate? Update,
-    RemoteUpdate? RemoteUpdate,
     bool HasUnsettledVersion,
     bool NotInSources,
     DateTimeOffset? Added,
@@ -75,4 +87,7 @@ public sealed record PinnedModRow(
     public bool IsTakenOut => Pin is null;
 
     public bool IsPending => Pin is not null && Version.IsOnServer is false;
+
+    /// <summary>Pins a download whose file turned out to be something else, so a save will ask what to do instead.</summary>
+    public bool IsBrokenDownload => Pin is not null && Version.Download is { IsBroken: true };
 }

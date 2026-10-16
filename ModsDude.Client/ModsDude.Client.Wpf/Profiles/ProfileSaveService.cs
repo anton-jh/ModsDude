@@ -323,12 +323,14 @@ public sealed class ProfileSaveService(
 
         if (ProfileModListDiff.Compute(request.Original, request.Desired).IsEmpty)
         {
-            return await SaveIgnoredOnlyAsync(run, cancellationToken);
+            return await SaveIgnoredOnlyAsync(run, request, cancellationToken);
         }
 
         run.Strip?.Report(request.Pending.Count == 0
             ? "Writing the revision"
-            : $"Importing {request.Pending.Count} mods");
+            : request.Pending.Any(x => x.Download is not null)
+                ? $"Downloading and importing {request.Pending.Count} mods"
+                : $"Importing {request.Pending.Count} mods");
 
         var import = await ImportAsync(run, cancellationToken);
 
@@ -340,7 +342,19 @@ public sealed class ProfileSaveService(
             return new ProfileSaveOutcome(ProfileSaveStatus.ImportFailed, refusal);
         }
 
-        var unfinished = request.Pending.Count(x => import.Imported.Contains(x.Identity) is false);
+        if (import.Unanswered > 0)
+        {
+            if (import.Problems is not null)
+            {
+                await OnUiThreadAsync(() => modalService.Value.Show(import.Problems));
+            }
+
+            return new ProfileSaveOutcome(
+                ProfileSaveStatus.Stopped,
+                "Save stopped. Anything already registered stayed registered.");
+        }
+
+        var unfinished = request.Pending.Count(x => import.Settled.Contains(x.Identity) is false);
 
         if (unfinished > 0)
         {
@@ -352,6 +366,18 @@ public sealed class ProfileSaveService(
             return new ProfileSaveOutcome(
                 ProfileSaveStatus.ImportFailed,
                 $"{unfinished} could not be imported, so nothing was saved.");
+        }
+
+        // What the user decided about downloads that held something else changes what is pinned.
+        request = request with { Desired = Decide(request, import.Decisions) };
+
+        if (ProfileModListDiff.Compute(request.Original, request.Desired).IsEmpty)
+        {
+            var ignoredOnly = await SaveIgnoredOnlyAsync(run, request, cancellationToken);
+
+            return ignoredOnly.Succeeded && Describe(import.Decisions, request.Names) is string decided
+                ? ignoredOnly with { Message = request.IgnoredChanged ? $"{ignoredOnly.Message} {decided}" : $"Nothing to save. {decided}" }
+                : ignoredOnly;
         }
 
         run.Strip?.Report("Writing the revision");
@@ -379,13 +405,13 @@ public sealed class ProfileSaveService(
         // Only now, and only because the revision is written: the ignore list is not atomic with it,
         // and a list saved beside a mod list that was not would be half a save. A failure here does
         // not undo the revision - it is said, beside what did save.
-        var ignoredNote = await WriteIgnoredAsync(run, cancellationToken);
+        var ignoredNote = await WriteIgnoredAsync(run, request, cancellationToken);
 
         var applied = await ApplyAsync(request, cancellationToken);
 
         return new ProfileSaveOutcome(
             ProfileSaveStatus.Saved,
-            ignoredNote is null ? Describe(changes) : $"{Describe(changes)} {ignoredNote}")
+            string.Join(" ", new[] { Describe(changes), Describe(import.Decisions, request.Names), ignoredNote }.OfType<string>()))
         {
             Revision = revision,
             Changes = changes,
@@ -401,11 +427,9 @@ public sealed class ProfileSaveService(
     /// no apply and no drift check - nothing a folder was built from has moved, so there is nothing to
     /// bring back into line.
     /// </summary>
-    private async Task<ProfileSaveOutcome> SaveIgnoredOnlyAsync(ProfileSaveRun run, CancellationToken cancellationToken)
+    private async Task<ProfileSaveOutcome> SaveIgnoredOnlyAsync(ProfileSaveRun run, ProfileSaveRequest request, CancellationToken cancellationToken)
     {
-        var request = run.Request;
-
-        var failure = await WriteIgnoredAsync(run, cancellationToken);
+        var failure = await WriteIgnoredAsync(run, request, cancellationToken);
 
         if (failure is not null)
         {
@@ -437,10 +461,8 @@ public sealed class ProfileSaveService(
     /// The whole list rather than a change to it: the list belongs to one profile and is saved the way
     /// the mod list is, as what the page showed. See <c>ProfileIgnoredMod</c>.
     /// </remarks>
-    private async Task<string?> WriteIgnoredAsync(ProfileSaveRun run, CancellationToken cancellationToken)
+    private async Task<string?> WriteIgnoredAsync(ProfileSaveRun run, ProfileSaveRequest request, CancellationToken cancellationToken)
     {
-        var request = run.Request;
-
         if (request.IgnoredChanged is false)
         {
             return null;
@@ -491,7 +513,7 @@ public sealed class ProfileSaveService(
 
         if (request.Pending.Count == 0)
         {
-            return new PendingImport([], null, [], null);
+            return new PendingImport([], [], 0, null, [], null);
         }
 
         var outcome = await imports.RunAsync(
@@ -504,7 +526,7 @@ public sealed class ProfileSaveService(
 
         if (outcome is { Refusal: string refusal })
         {
-            return new PendingImport([], null, [], refusal);
+            return new PendingImport([], [], 0, null, [], refusal);
         }
 
         var result = outcome.Result ?? ModImportResult.Empty;
@@ -520,7 +542,48 @@ public sealed class ProfileSaveService(
             id => request.Names.GetValueOrDefault(id, id.ModId.Value),
             "Nothing was saved.")));
 
-        return new PendingImport([.. result.Succeeded.Select(x => x.Identity)], problems, result.Superseded, null);
+        return new PendingImport(
+            [.. result.Items.Where(x => x.IsSettled).Select(x => x.Identity)],
+            [.. result.Items.Where(x => x.Status is ModImportStatus.Replaced or ModImportStatus.LeftOut)],
+            result.Items.Count(x => x.Status is ModImportStatus.DownloadMismatch),
+            problems,
+            result.Superseded,
+            null);
+    }
+
+    /// <summary>
+    /// The pins to write once the user has said what to do about downloads that held something else:
+    /// the version imported in place of the one picked, or what the profile held before.
+    /// </summary>
+    private static IReadOnlyList<ProfileModPin> Decide(ProfileSaveRequest request, IReadOnlyList<ModImportItemResult> decisions)
+    {
+        var desired = request.Desired.ToDictionary(x => x.ModId);
+        var original = request.Original.ToDictionary(x => x.ModId);
+
+        foreach (var decision in decisions)
+        {
+            var modId = decision.Identity.ModId;
+
+            if (desired.TryGetValue(modId, out var pin) is false || pin.VersionId != decision.Identity.VersionId)
+            {
+                continue;
+            }
+
+            if (decision is { Status: ModImportStatus.Replaced, ReplacedBy: ModVersionIdentity held })
+            {
+                desired[modId] = pin with { VersionId = held.VersionId };
+            }
+            else if (original.TryGetValue(modId, out var saved))
+            {
+                desired[modId] = saved;
+            }
+            else
+            {
+                desired.Remove(modId);
+            }
+        }
+
+        return [.. request.Desired.Select(x => desired.GetValueOrDefault(x.ModId)).OfType<ProfileModPin>()];
     }
 
     /// <summary>
@@ -690,6 +753,36 @@ public sealed class ProfileSaveService(
         }
     }
 
+    private static string? Describe(IReadOnlyList<ModImportItemResult> decisions, IReadOnlyDictionary<ModVersionIdentity, string> names)
+    {
+        var replaced = decisions.Where(x => x.Status is ModImportStatus.Replaced).ToList();
+        var leftOut = decisions.Where(x => x.Status is ModImportStatus.LeftOut).ToList();
+
+        string Name(ModVersionIdentity identity) => names.GetValueOrDefault(identity, identity.ModId.Value);
+
+        var parts = new List<string>();
+
+        if (replaced is [{ ReplacedBy: ModVersionIdentity held } single])
+        {
+            parts.Add($"{Name(single.Identity)} is at {held.VersionId} instead of {single.Identity.VersionId}.");
+        }
+        else if (replaced.Count > 1)
+        {
+            parts.Add($"{replaced.Count} mods are at other versions than picked.");
+        }
+
+        if (leftOut is [var one])
+        {
+            parts.Add($"{Name(one.Identity)} was left out.");
+        }
+        else if (leftOut.Count > 1)
+        {
+            parts.Add($"{leftOut.Count} mods were left out.");
+        }
+
+        return parts.Count == 0 ? null : string.Join(" ", parts);
+    }
+
     private static string Describe(ProfileModListChanges changes)
     {
         if (changes.IsEmpty)
@@ -725,7 +818,12 @@ public sealed class ProfileSaveService(
         => Application.Current.Dispatcher.InvokeAsync(work).Task.Unwrap();
 
 
-    /// <param name="Imported">What the repo holds now, which is what the save is allowed to pin.</param>
+    /// <param name="Settled">
+    /// The pending versions the repo holds now, or that the user decided about - which is what the save
+    /// may go ahead with.
+    /// </param>
+    /// <param name="Decisions">What the user decided about downloads that held something else.</param>
+    /// <param name="Unanswered">How many of those were left unanswered, which stops the save.</param>
     /// <param name="Problems">The modal for what did not make it, or null when everything did.</param>
     /// <param name="Superseded">
     /// Copies the user chose against where two sources disagreed. Held until the save commits: here
@@ -734,7 +832,9 @@ public sealed class ProfileSaveService(
     /// </param>
     /// <param name="Refusal">Why the import never started, in a sentence. Null whenever it did.</param>
     private sealed record PendingImport(
-        HashSet<ModVersionIdentity> Imported,
+        HashSet<ModVersionIdentity> Settled,
+        IReadOnlyList<ModImportItemResult> Decisions,
+        int Unanswered,
         ErrorModalViewModel? Problems,
         IReadOnlyList<ModSupersededFile> Superseded,
         string? Refusal);

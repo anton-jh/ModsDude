@@ -59,6 +59,47 @@ public record CatalogModVersion(
     }
 
 
+    /// <summary>A version only this machine has, read from its file wherever it was found.</summary>
+    public static CatalogModVersion FromLocal(LocalMod mod, IReadOnlyList<ModOccurrence> occurrences)
+    {
+        return new CatalogModVersion(
+            mod.Id,
+            mod.Version,
+            mod.Name,
+            mod.Description,
+            IsLocal: occurrences.Count > 0,
+            IsOnServer: false,
+            Locked: mod.Locked)
+        {
+            Author = mod.Author,
+            Attributes = mod.Attributes,
+            Icon = mod.Icon,
+            Images = mod.Images,
+            FoundIn = occurrences
+        };
+    }
+
+    /// <summary>
+    /// A version a remote source offers. Nothing is known of it but what the source says, until a
+    /// save downloads it.
+    /// </summary>
+    public static CatalogModVersion FromRemote(RemoteOffer offer)
+    {
+        return new CatalogModVersion(
+            offer.Version.ModId,
+            offer.Version.VersionId,
+            offer.Version.Title,
+            string.Empty,
+            IsLocal: false,
+            IsOnServer: false,
+            Locked: false)
+        {
+            Author = offer.Version.Author,
+            Download = offer
+        };
+    }
+
+
     /// <summary>What the registering client's adapter tagged a registered version with.</summary>
     public static IReadOnlyList<ModAttribute> ReadAttributes(ModDto dto)
         => [.. dto.Attributes.Select(x => new ModAttribute(x.Key, x.Value))];
@@ -97,6 +138,9 @@ public record CatalogModVersion(
     /// store is never an image source. See docs/09-mod-catalog.md#registration-decides-where-imagery-comes-from.
     /// </remarks>
     public IReadOnlyList<ModImageReference> ServerImages { get; init; } = [];
+
+    /// <summary>Where a save downloads this version from, for a version a remote source offers.</summary>
+    public RemoteOffer? Download { get; init; }
 
     /// <summary>Every source this version turned up in. Empty for a version only the repo has.</summary>
     public IReadOnlyList<ModOccurrence> FoundIn { get; init; } = [];

@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
@@ -99,13 +100,17 @@ public sealed class ModImportCoordinator(
         // stop it, which is the half that was missing.
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var task = backgroundTasks.Begin(title, cancel: cancellation.Cancel);
-        task.DeclareTransfers(TransferDirection.Upload);
+        task.DeclareTransfers(versions.Any(x => x.Download is not null)
+            ? TransferDirection.Upload | TransferDirection.Download
+            : TransferDirection.Upload);
 
         var request = new ModImportRequest(repo.Id, versions, repo.Adapter.VersionComparer)
         {
             Progress = new StripProgress(task, names, versions.Count, progress),
             ResolveArbitration = ResolveArbitrationAsync,
             ResolveSourceConflicts = ResolveSourceConflictsAsync,
+            ResolveDownloadMismatches = ResolveDownloadMismatchesAsync,
+            ModAdapter = repo.Adapter.GetBaseCapabilityAdapterFactory<IBaseModAdapter>()?.Invoke(),
 
             // So the import leaves the store warm: what is uploaded from a folder the game does not
             // read is copied into the store these folders are served by, and the first sync after the
@@ -175,6 +180,25 @@ public sealed class ModImportCoordinator(
         return await OnUiThreadAsync(async () =>
         {
             var modal = new ModSourceConflictModalViewModel(conflicts);
+
+            await modalService.Value.Show(modal);
+
+            return modal.Result;
+        });
+    }
+
+    /// <summary>
+    /// Asked once per import, after everything else has finished, and only where a download held
+    /// something other than the version picked.
+    /// </summary>
+    /// <inheritdoc cref="ResolveArbitrationAsync" path="/remarks"/>
+    private async Task<IReadOnlyDictionary<ModVersionIdentity, ModDownloadMismatchAnswer>?> ResolveDownloadMismatchesAsync(
+        IReadOnlyList<ModDownloadMismatch> mismatches,
+        CancellationToken cancellationToken)
+    {
+        return await OnUiThreadAsync(async () =>
+        {
+            var modal = new ModDownloadMismatchModalViewModel(mismatches);
 
             await modalService.Value.Show(modal);
 

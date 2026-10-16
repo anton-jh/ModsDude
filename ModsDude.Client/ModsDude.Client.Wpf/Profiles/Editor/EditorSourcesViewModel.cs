@@ -1,8 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles.Editor;
+using ModsDude.Client.Core.RemoteSources;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -13,28 +15,69 @@ using System.Collections.ObjectModel;
 namespace ModsDude.Client.Wpf.Profiles.Editor;
 
 /// <summary>
-/// Where the profile mod editor's versions come from: the repo, the game's folders, Downloads, folders
-/// added for the session, and other profiles - as a row of chips.
+/// Where the profile mod editor's versions come from: the repo, the game's remote sources, the game's
+/// folders, Downloads, folders added for the session, and other profiles - as a row of chips.
 /// </summary>
 /// <remarks>
 /// Which sources are loaded is part of the editor's undo history, so it is read from the page and
-/// changed through it. Whether a loaded source is switched on is not, and lives here.
+/// changed through it. Whether a loaded source is switched on is not, and lives here. Remote sources
+/// are always loaded and start switched on.
 /// </remarks>
-public sealed partial class EditorSourcesViewModel(
-    ModCatalog catalog,
-    OtherProfilesReader otherProfiles,
-    IFilePickerService filePickerService,
-    IModalService modalService,
-    IErrorReporter errorReporter,
-    Func<ProfileEditorSnapshot> current,
-    Func<ProfileEditorSnapshot, string, Task> commit,
-    Func<Task> recompose,
-    CancellationToken cancellation) : ObservableObject
+public sealed partial class EditorSourcesViewModel : ObservableObject
 {
+    private readonly ModCatalog _catalog;
+    private readonly OtherProfilesReader _otherProfiles;
+    private readonly IFilePickerService _filePickerService;
+    private readonly IModalService _modalService;
+    private readonly IErrorReporter _errorReporter;
+    private readonly Func<ProfileEditorSnapshot> _current;
+    private readonly Func<ProfileEditorSnapshot, string, Task> _commit;
+    private readonly Func<Task> _recompose;
+    private readonly CancellationToken _cancellation;
+
     private readonly HashSet<ModSourceId> _standby = [];
     private readonly Dictionary<ModSourceId, ProfileModSource> _profiles = [];
+    private readonly IReadOnlyList<RemoteSourceLookup> _remote;
 
     private ProfileEditorCatalog? _view;
+
+
+    public EditorSourcesViewModel(
+        ModCatalog catalog,
+        IReadOnlyList<IRemoteModSource> remoteSources,
+        OtherProfilesReader otherProfiles,
+        IFilePickerService filePickerService,
+        IModalService modalService,
+        IErrorReporter errorReporter,
+        Func<ProfileEditorSnapshot> current,
+        Func<ProfileEditorSnapshot, string, Task> commit,
+        Func<Task> recompose,
+        CancellationToken cancellation)
+    {
+        _catalog = catalog;
+        _otherProfiles = otherProfiles;
+        _filePickerService = filePickerService;
+        _modalService = modalService;
+        _errorReporter = errorReporter;
+        _current = current;
+        _commit = commit;
+        _recompose = recompose;
+        _cancellation = cancellation;
+
+        _remote = [.. remoteSources.Select(x => new RemoteSourceLookup(x, errorReporter, cancellation))];
+
+        foreach (var lookup in _remote)
+        {
+            lookup.Changed += () => RemoteChanged?.Invoke();
+        }
+    }
+
+
+    /// <summary>
+    /// Raised on the UI thread when a remote source answers or is switched on or off. Nothing on disk
+    /// or in the catalog changed, so the page only places the answers again.
+    /// </summary>
+    public event Action? RemoteChanged;
 
 
     public ObservableCollection<ModSourceViewModel> Chips { get; } = [];
@@ -46,22 +89,37 @@ public sealed partial class EditorSourcesViewModel(
     [ObservableProperty]
     private bool _hasEnabledSources = true;
 
-    private bool HasEnabledFolders => catalog.GetSources().Any(x => IsEnabled(x.Id));
+    private bool HasEnabledFolders => _catalog.GetSources().Any(x => IsEnabled(x.Id));
 
     public IReadOnlyList<ProfileModSource> EnabledProfiles => [.. _profiles.Values.Where(x => IsEnabled(x.Source.Id))];
 
-    private ImmutableHashSet<ModSourceId> Loaded => current().Loaded;
+    /// <summary>What every remote source has answered, in the adapter's order.</summary>
+    public IReadOnlyList<RemoteSourceAnswers> RemoteAnswers()
+        => [.. _remote.Select(x => x.Answers(_standby.Contains(x.Id) is false))];
+
+    private bool HasEnabledRemote => _remote.Any(x => _standby.Contains(x.Id) is false);
+
+    private ImmutableHashSet<ModSourceId> Loaded => _current().Loaded;
 
 
     /// <summary>Tells the catalog which of its sources are enabled, on standby or unloaded.</summary>
     public void ApplyToCatalog()
     {
-        foreach (var source in catalog.GetSources())
+        foreach (var source in _catalog.GetSources())
         {
-            catalog.SetState(source.Id, StateOf(source.Id));
+            _catalog.SetState(source.Id, StateOf(source.Id));
         }
 
-        HasEnabledSources = IncludeRegistered || HasEnabledFolders || _profiles.Keys.Any(IsEnabled);
+        HasEnabledSources = IncludeRegistered || HasEnabledRemote || HasEnabledFolders || _profiles.Keys.Any(IsEnabled);
+    }
+
+    /// <summary>Asks every remote source about whichever of <paramref name="mods"/> it has not been asked about.</summary>
+    public void LookUpRemote(IReadOnlyCollection<ModKey> mods)
+    {
+        foreach (var lookup in _remote)
+        {
+            lookup.LookUp(mods);
+        }
     }
 
     public void RebuildChips(ProfileEditorCatalog view)
@@ -78,9 +136,24 @@ public sealed partial class EditorSourcesViewModel(
                 null),
             OnChipToggled));
 
+        foreach (var lookup in _remote)
+        {
+            var enabled = _standby.Contains(lookup.Id) is false;
+
+            Chips.Add(new ModSourceViewModel(
+                new ModSourceStatus(
+                    lookup.AsSource,
+                    enabled,
+                    view.Visible.Count(x => x.Download?.SourceId == lookup.Id),
+                    lookup.Error),
+                OnChipToggled,
+                hasCount: enabled,
+                detail: lookup.Status));
+        }
+
         var scanned = view.Snapshot.Sources.ToDictionary(x => x.Source.Id);
 
-        foreach (var source in catalog.GetSources())
+        foreach (var source in _catalog.GetSources())
         {
             var loaded = Loaded.Contains(source.Id);
 
@@ -123,37 +196,37 @@ public sealed partial class EditorSourcesViewModel(
 
         if (Loaded.Contains(id) is false)
         {
-            catalog.Rescan(id);
+            _catalog.Rescan(id);
         }
 
         return Loaded.Add(id);
     }
 
-    /// <summary>Switches Downloads on, loading it if it is not.</summary>
-    public Task EnableDownloadsAsync()
-        => IsEnabled(ModSourceId.Downloads) ? Task.CompletedTask : LoadAsync(ModSourceId.Downloads, "Downloads");
-
-
     [RelayCommand]
     private Task RescanAll()
     {
-        catalog.RescanAll();
+        _catalog.RescanAll();
 
-        return recompose();
+        foreach (var lookup in _remote)
+        {
+            lookup.CheckAgain();
+        }
+
+        return _recompose();
     }
 
     /// <summary>Adds a folder for this session only. Nothing about it is written to disk.</summary>
     [RelayCommand]
     private Task AddFolder()
     {
-        if (filePickerService.PickFolder(null) is not string path)
+        if (_filePickerService.PickFolder(null) is not string path)
         {
             return Task.CompletedTask;
         }
 
-        var source = catalog.AddAdHocSource(path);
+        var source = _catalog.AddAdHocSource(path);
 
-        catalog.Rescan(source.Id);
+        _catalog.Rescan(source.Id);
 
         return LoadAsync(source.Id, source.Name);
     }
@@ -167,13 +240,13 @@ public sealed partial class EditorSourcesViewModel(
     {
         try
         {
-            var others = (await otherProfiles.ListAsync(cancellation))
+            var others = (await _otherProfiles.ListAsync(_cancellation))
                 .Where(x => Loaded.Contains(ModSourceId.ForProfile(x.Id)) is false)
                 .ToList();
 
             var modal = new PickProfileSourceModalViewModel(others);
 
-            await modalService.Show(modal);
+            await _modalService.Show(modal);
 
             if (modal.Result is not Profile picked)
             {
@@ -185,7 +258,7 @@ public sealed partial class EditorSourcesViewModel(
             _profiles[id] = new ProfileModSource(
                 picked.Id,
                 new ModSource(id, picked.Name, "Another profile in this repo.", ModSourceKind.Profile),
-                await otherProfiles.ReadPinsAsync(picked.Id, cancellation));
+                await _otherProfiles.ReadPinsAsync(picked.Id, _cancellation));
 
             await LoadAsync(id, picked.Name);
         }
@@ -194,7 +267,7 @@ public sealed partial class EditorSourcesViewModel(
         }
         catch (Exception exception)
         {
-            await errorReporter.ShowAsync(exception, "reading another profile's mod list as a source");
+            await _errorReporter.ShowAsync(exception, "reading another profile's mod list as a source");
         }
     }
 
@@ -210,7 +283,7 @@ public sealed partial class EditorSourcesViewModel(
             return;
         }
 
-        var snapshot = current();
+        var snapshot = _current();
         var dependent = _view?.PinsOnlyIn(snapshot.Draft, chip.Source.Id) ?? [];
 
         if (dependent.Count > 0)
@@ -223,7 +296,7 @@ public sealed partial class EditorSourcesViewModel(
                 "Unload",
                 "Keep it");
 
-            await modalService.Show(confirmation);
+            await _modalService.Show(confirmation);
 
             if (confirmation.Result is false)
             {
@@ -231,7 +304,7 @@ public sealed partial class EditorSourcesViewModel(
             }
         }
 
-        await commit(
+        await _commit(
             new ProfileEditorSnapshot(snapshot.Draft.Remove(dependent), snapshot.Loaded.Remove(chip.Source.Id)),
             $"Unloaded {chip.Name}");
     }
@@ -244,7 +317,21 @@ public sealed partial class EditorSourcesViewModel(
         if (chip.IsRepo)
         {
             IncludeRegistered = enabled;
-            _ = recompose();
+            _ = _recompose();
+        }
+        else if (chip.IsRemote)
+        {
+            if (enabled)
+            {
+                _standby.Remove(id);
+            }
+            else
+            {
+                _standby.Add(id);
+            }
+
+            ApplyToCatalog();
+            RemoteChanged?.Invoke();
         }
         else if (Loaded.Contains(id))
         {
@@ -257,11 +344,11 @@ public sealed partial class EditorSourcesViewModel(
                 _standby.Add(id);
             }
 
-            _ = recompose();
+            _ = _recompose();
         }
         else if (enabled)
         {
-            catalog.Rescan(id);
+            _catalog.Rescan(id);
             _ = LoadAsync(id, chip.Name);
         }
     }
@@ -271,8 +358,8 @@ public sealed partial class EditorSourcesViewModel(
         _standby.Remove(id);
 
         return Loaded.Contains(id)
-            ? recompose()
-            : commit(current() with { Loaded = Loaded.Add(id) }, $"Loaded {name}");
+            ? _recompose()
+            : _commit(_current() with { Loaded = Loaded.Add(id) }, $"Loaded {name}");
     }
 
     private ModSourceState StateOf(ModSourceId id)

@@ -57,12 +57,19 @@ public enum ModSourceKind
     /// <see cref="Services.ModCatalog"/> never sees it.
     /// </para>
     /// <para>
-    /// It does read the network, which no other source does. The rule it must not break is that
+    /// It reads the network. The rule it must not break is that
     /// <em>navigating</em> touches nothing, and enabling a chip is not navigating - so it is
     /// view-scoped like an ad-hoc folder, added by picking a profile and gone when the page is.
     /// </para>
     /// </remarks>
     Profile,
+
+    /// <summary>
+    /// A place outside this machine that offers versions, such as ModHub. Composed by the profile
+    /// editor from the adapter's remote sources and never scanned. Its versions are downloaded when
+    /// a save imports them.
+    /// </summary>
+    Remote,
 }
 
 /// <summary>
@@ -116,6 +123,9 @@ public readonly record struct ModSourceId
     /// is discriminator enough.
     /// </summary>
     public static ModSourceId ForProfile(Guid profileId) => new($"profile:{profileId:N}");
+
+    /// <summary>One of the repo adapter's remote sources, keyed as the adapter keys it.</summary>
+    public static ModSourceId ForRemote(string key) => new($"remote:{key}");
 
     public static ModSourceId Parse(string s) => string.IsNullOrWhiteSpace(s)
         ? throw new FormatException("A mod source id cannot be empty.")

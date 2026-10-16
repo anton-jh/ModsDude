@@ -814,6 +814,10 @@
       "ModHubModDto": {
         "additionalProperties": false,
         "properties": {
+          "author": {
+            "nullable": true,
+            "type": "string"
+          },
           "downloadUrl": {
             "nullable": true,
             "type": "string"
@@ -826,9 +830,6 @@
             "type": "integer"
           },
           "name": {
-            "type": "string"
-          },
-          "pageUrl": {
             "type": "string"
           },
           "title": {

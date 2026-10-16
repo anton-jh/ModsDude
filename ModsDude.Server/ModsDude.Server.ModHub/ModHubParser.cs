@@ -92,7 +92,16 @@ public static partial class ModHubParser
             Size: Optional(fields, "Size"),
             DownloadUrl: document.QuerySelectorAll("a[href*='/modHub/storage/']")
                 .Select(x => x.GetAttribute("href"))
-                .FirstOrDefault(x => x?.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) is true));
+                .FirstOrDefault(IsDownloadUrl));
+    }
+
+    /// <summary>An https link to a zip on Giants' own hosts. Clients download from it, so nothing else is kept.</summary>
+    public static bool IsDownloadUrl(string? href)
+    {
+        return Uri.TryCreate(href, UriKind.Absolute, out var uri)
+            && uri.Scheme == Uri.UriSchemeHttps
+            && uri.Host.EndsWith(".giants-software.com", StringComparison.OrdinalIgnoreCase)
+            && uri.AbsolutePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
     }
 
 

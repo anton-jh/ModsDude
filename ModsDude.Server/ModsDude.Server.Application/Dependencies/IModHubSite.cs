@@ -18,9 +18,6 @@ public interface IModHubSite
 
     /// <summary>A mod's page, or null where ModHub says it has no such mod.</summary>
     Task<ModHubModDetails?> GetMod(string game, int modHubId, CancellationToken cancellationToken);
-
-    /// <summary>The page a person opens to see and download the mod.</summary>
-    string GetModPageUrl(string game, int modHubId);
 }
 
 public class ModHubUnavailableException(string message, Exception? innerException = null)

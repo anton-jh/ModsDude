@@ -86,6 +86,22 @@ public class ModHubParserTests
         Assert.Equal("https://cdn27.giants-software.com/modHub/storage/00303378/FS25_autoTurnOffTurnLights.zip", mod.DownloadUrl);
     }
 
+    [Theory]
+    [InlineData("http://cdn27.giants-software.com/modHub/storage/00303378/FS25_autoTurnOffTurnLights.zip")]
+    [InlineData("https://cdn27.example.com/modHub/storage/00303378/FS25_autoTurnOffTurnLights.zip")]
+    [InlineData("https://giants-software.com.example.com/modHub/storage/00303378/FS25_autoTurnOffTurnLights.zip")]
+    [InlineData("/modHub/storage/00303378/FS25_autoTurnOffTurnLights.zip")]
+    public void A_download_link_that_is_not_https_on_giants_hosts_is_dropped(string href)
+    {
+        var html = Fixture("mod-found.html").Replace(
+            "https://cdn27.giants-software.com/modHub/storage/00303378/FS25_autoTurnOffTurnLights.zip", href);
+
+        var mod = ModHubParser.ParseModPage(html);
+
+        Assert.NotNull(mod);
+        Assert.Null(mod.DownloadUrl);
+    }
+
     [Fact]
     public void ModHubs_not_found_page_is_no_mod()
     {

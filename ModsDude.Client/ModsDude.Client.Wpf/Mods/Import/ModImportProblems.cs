@@ -48,7 +48,8 @@ public static class ModImportProblems
         Func<ModVersionIdentity, string> nameOf,
         string? consequence = null)
     {
-        var problems = result.Unfinished;
+        // A download the user dismissed the question about is their decision, not a problem.
+        var problems = result.Unfinished.Where(x => x.Status is not ModImportStatus.DownloadMismatch).ToList();
 
         if (problems.Count == 0)
         {
@@ -68,7 +69,7 @@ public static class ModImportProblems
         // the only one the reader may not have been expecting.
         var groups = problems
             .GroupBy(x => x.Status)
-            .OrderBy(x => x.Key is ModImportStatus.Failed ? 0 : 1)
+            .OrderBy(x => x.Key is ModImportStatus.Failed or ModImportStatus.DownloadFailed ? 0 : 1)
             .ThenBy(x => x.Key);
 
         foreach (var group in groups)
@@ -97,6 +98,9 @@ public static class ModImportProblems
         ModImportStatus.ContentMismatch => "Not imported: the repo already stores a different file under this version.",
         ModImportStatus.NeedsArbitration => "Not imported: this mod's version order was never settled.",
         ModImportStatus.NoLocalFile => "Not imported: there is no local file to upload.",
+        ModImportStatus.DownloadFailed => "Not imported: the download failed.",
+        ModImportStatus.DownloadMismatch => "Not imported: the download held something else.",
+        ModImportStatus.LeftOut => "Left out: the download held something else.",
         ModImportStatus.Failed => "This mod could not be imported.",
         _ => "This mod was not imported."
     };
@@ -112,6 +116,7 @@ public static class ModImportProblems
         ModImportStatus.ContentMismatch => "The repo already stores a different file for these:",
         ModImportStatus.NeedsArbitration => "Their version order was never settled:",
         ModImportStatus.NoLocalFile => "No local file to upload for these:",
+        ModImportStatus.DownloadFailed => "Downloading went wrong; worth another go:",
         _ => "Uploading or registering went wrong; worth another go:"
     };
 

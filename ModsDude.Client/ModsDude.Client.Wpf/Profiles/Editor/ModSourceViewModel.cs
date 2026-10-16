@@ -35,15 +35,18 @@ public partial class ModSourceViewModel : ObservableObject
 
 
     /// <param name="canUnload">Whether the chip carries a ✕ that unloads what the source supplied.</param>
+    /// <param name="detail">A remote source's state, for the tooltip.</param>
     public ModSourceViewModel(
         ModSourceStatus status,
         Action<ModSourceViewModel, bool> onEnabledChanged,
         bool hasCount = true,
-        bool canUnload = false)
+        bool canUnload = false,
+        string? detail = null)
     {
         _onEnabledChanged = onEnabledChanged;
 
         Source = status.Source;
+        Detail = detail;
         Error = status.Error;
         ModCount = status.ModCount;
         HasCount = hasCount;
@@ -76,6 +79,11 @@ public partial class ModSourceViewModel : ObservableObject
     /// </summary>
     public bool IsProfile => Source.Kind is ModSourceKind.Profile;
 
+    /// <summary>Whether this chip is a remote source, whose versions a save downloads.</summary>
+    public bool IsRemote => Source.Kind is ModSourceKind.Remote;
+
+    public string? Detail { get; }
+
     public string? Error { get; }
     public int ModCount { get; }
     public bool HasCount { get; }
@@ -102,6 +110,7 @@ public partial class ModSourceViewModel : ObservableObject
                 ModSourceKind.Game => $"A mod folder this game reaches.\n{Path}",
                 ModSourceKind.Downloads => $"The system Downloads folder.\n{Path}",
                 ModSourceKind.Profile => $"What this profile pins. {Path}",
+                ModSourceKind.Remote => $"Newer versions {Name} has of mods here. Downloaded when you save.\n{Detail}",
                 _ => $"Added for this session only.\n{Path}"
             };
 

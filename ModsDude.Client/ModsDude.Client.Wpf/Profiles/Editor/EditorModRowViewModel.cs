@@ -100,7 +100,6 @@ public abstract partial class EditorModRowViewModel : ObservableObject, ISelecta
     protected void Show(
         CatalogModVersion version,
         IReadOnlyList<ProfileModVersionOption> versions,
-        RemoteUpdateViewModel? remoteUpdate,
         string? sortCaption,
         string? sortTooltip)
     {
@@ -124,11 +123,6 @@ public abstract partial class EditorModRowViewModel : ObservableObject, ISelecta
         }
 
         OnPropertyChanged(nameof(CurrentVersion));
-
-        if (Item.RemoteUpdate?.Version != remoteUpdate?.Version || Item.RemoteUpdate?.Text != remoteUpdate?.Text)
-        {
-            Item.RemoteUpdate = remoteUpdate;
-        }
 
         SortCaption = sortCaption;
         SortTooltip = sortTooltip;
@@ -191,13 +185,13 @@ public sealed partial class AvailableModRowViewModel : EditorModRowViewModel
         : "Ignore this mod in this profile. It is hidden from this list until you show ignored mods.";
 
 
-    public void Update(AvailableModRow state, RemoteUpdateViewModel? remoteUpdate, bool pickable)
+    public void Update(AvailableModRow state, bool pickable)
     {
         State = state;
         IsPickable = pickable;
         IsIgnored = state.IsIgnored;
 
-        Show(state.Version, state.Options, remoteUpdate, state.SortCaption, state.SortTooltip);
+        Show(state.Version, state.Options, state.SortCaption, state.SortTooltip);
         Configure(Item);
     }
 
@@ -301,12 +295,12 @@ public sealed partial class PinnedModRowViewModel : EditorModRowViewModel
     }
 
 
-    public void Update(PinnedModRow state, RemoteUpdateViewModel? remoteUpdate, bool pickable)
+    public void Update(PinnedModRow state, bool pickable)
     {
         State = state;
         IsPickable = pickable;
 
-        Show(state.Version, state.Options, remoteUpdate, state.SortCaption, state.SortTooltip);
+        Show(state.Version, state.Options, state.SortCaption, state.SortTooltip);
         Configure(Item);
 
         OnPropertyChanged(nameof(IsTakenOut));
@@ -336,7 +330,13 @@ public sealed partial class PinnedModRowViewModel : EditorModRowViewModel
 
         item.IsPickable = IsPickable;
         item.ShowAdapterLock = false;
-        item.Status = State.IsPending ? ModDisplayStatus.ImportsOnSave : ModDisplayStatus.None;
+        item.Status = State switch
+        {
+            { IsPending: true, Version.Download: not null } => ModDisplayStatus.DownloadsOnSave,
+            { IsPending: true } => ModDisplayStatus.ImportsOnSave,
+            _ => ModDisplayStatus.None
+        };
+        item.IsBrokenDownload = State.IsBrokenDownload;
         item.Touch = State.Touch;
         item.TouchTooltip = State.TouchTooltip;
         item.IsStruckOut = State.IsTakenOut;

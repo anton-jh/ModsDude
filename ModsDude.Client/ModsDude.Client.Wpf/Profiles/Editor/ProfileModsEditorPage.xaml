@@ -385,7 +385,7 @@
                                     Margin="0 0 6 6"
                                     Content="&#xE72C;"
                                     FontFamily="{DynamicResource SymbolThemeFontFamily}"
-                                    ToolTip="Rescan every folder"
+                                    ToolTip="Rescan every folder and look up every remote source again"
                                     Command="{Binding Sources.RescanAllCommand}" />
                         </WrapPanel>
 
@@ -632,7 +632,7 @@
                                 Padding="12 8"
                                 CornerRadius="4"
                                 Background="{DynamicResource ControlFillColorSecondaryBrush}">
-                            <Grid ColumnDefinitions="auto * auto" RowDefinitions="auto auto">
+                            <Grid ColumnDefinitions="auto * auto">
                                 <TextBlock Grid.Column="0"
                                            VerticalAlignment="Center"
                                            Text="{Binding Summary.UpdateCountText}" />
@@ -651,14 +651,6 @@
                                             Content="{Binding Summary.UnsettledText}"
                                             ToolTip="Their order relative to what the repo holds is not settled. Importing one will ask which comes first."
                                             Visibility="{Binding Summary.HasUnsettled, Converter={StaticResource BoolToVisibilityConverter}}"
-                                            Command="{Binding ShowUpdatesCommand}" />
-                                    <Button Padding="6 2"
-                                            Margin="8 0 0 0"
-                                            Style="{DynamicResource SubtleMenuButton}"
-                                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                            Content="{Binding Summary.RemoteUpdatesText}"
-                                            ToolTip="Newer versions online, each linked from its mod's row. Download one, rescan, and it can be updated to like any other."
-                                            Visibility="{Binding Summary.HasRemoteUpdates, Converter={StaticResource BoolToVisibilityConverter}}"
                                             Command="{Binding ShowUpdatesCommand}" />
                                 </StackPanel>
 
@@ -679,37 +671,6 @@
                                         </StackPanel>
                                     </Button>
                                 </shared:SplitButton>
-
-                                <!-- Where the online updates come from, and how current they are. -->
-                                <ItemsControl Grid.Row="1" Grid.ColumnSpan="3"
-                                              Margin="0 6 0 0"
-                                              ItemsSource="{Binding RemoteUpdates.Providers}"
-                                              Visibility="{Binding RemoteUpdates.HasProviders, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type editor:RemoteUpdateProviderViewModel}">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock VerticalAlignment="Center" Text="{Binding StatusText}">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding HasFailed}" Value="True">
-                                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                                <Button Margin="8 0 0 0"
-                                                        Padding="6 2"
-                                                        Style="{DynamicResource SubtleMenuButton}"
-                                                        Content="Check again"
-                                                        ToolTip="Forget what it answered and look everything up again"
-                                                        Command="{Binding CheckAgainCommand}" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
                             </Grid>
                         </Border>
 

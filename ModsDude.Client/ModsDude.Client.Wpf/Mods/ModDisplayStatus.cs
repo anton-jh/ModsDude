@@ -25,7 +25,10 @@ public enum ModDisplayStatus
     AlreadyInRepo,
 
     /// <summary>A version the draft pins and the repo does not hold: a save uploads it first.</summary>
-    ImportsOnSave
+    ImportsOnSave,
+
+    /// <summary>A version the draft pins that a remote source offers: a save downloads and uploads it first.</summary>
+    DownloadsOnSave
 }
 
 public static class ModDisplayStatusExtensions

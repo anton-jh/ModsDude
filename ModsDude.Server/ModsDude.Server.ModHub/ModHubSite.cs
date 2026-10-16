@@ -27,14 +27,9 @@ internal sealed class ModHubSite(IHttpClientFactory httpClientFactory, IOptions<
 
     public async Task<ModHubModDetails?> GetMod(string game, int modHubId, CancellationToken cancellationToken)
     {
-        var html = await GetAsync(ModPagePath(game, modHubId), cancellationToken);
+        var html = await GetAsync($"mod.php?mod_id={modHubId}&title={Uri.EscapeDataString(game)}", cancellationToken);
 
         return ModHubParser.ParseModPage(html);
-    }
-
-    public string GetModPageUrl(string game, int modHubId)
-    {
-        return new Uri(new Uri(options.Value.BaseUrl), ModPagePath(game, modHubId)).ToString();
     }
 
     public void Dispose()
@@ -42,11 +37,6 @@ internal sealed class ModHubSite(IHttpClientFactory httpClientFactory, IOptions<
         _turn.Dispose();
     }
 
-
-    private static string ModPagePath(string game, int modHubId)
-    {
-        return $"mod.php?mod_id={modHubId}&title={Uri.EscapeDataString(game)}";
-    }
 
     private async Task<string> GetAsync(string path, CancellationToken cancellationToken)
     {

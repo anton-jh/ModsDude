@@ -539,8 +539,7 @@ public sealed class ModCatalog : IDisposable
         {
             if (registeredIdentities.Contains(identity) is false)
             {
-                // No usage: a version the repo does not hold has no dependency that could name it.
-                versions.Add(Create(identity, null, mod, occurrences.GetValueOrDefault(identity), null));
+                versions.Add(CatalogModVersion.FromLocal(mod, occurrences.GetValueOrDefault(identity) ?? []));
             }
         }
 
@@ -549,41 +548,35 @@ public sealed class ModCatalog : IDisposable
 
     private static CatalogModVersion Create(
         ModVersionIdentity identity,
-        ModDto? dto,
+        ModDto dto,
         LocalMod? local,
         List<ModOccurrence>? occurrences,
         ModUsage? usage)
     {
-        // The registered record is the shared truth, so it wins where both exist - two members
-        // looking at the same registered version should read the same thing. That extends to
-        // imagery: the archive's images are carried for a version nobody has registered and for
-        // deriving what a registered one is missing, but what a registered version renders is
-        // whatever the repo points at.
+        // The registered record is the shared truth, so it wins over the archive: two members looking
+        // at the same registered version read the same name, lock and imagery. The archive still
+        // supplies its own images, which are what missing derivatives are generated from.
         return new CatalogModVersion(
             identity.ModId,
             identity.VersionId,
-            dto?.DisplayName ?? local?.Name ?? identity.ModId.Value,
-            dto?.Description ?? local?.Description ?? string.Empty,
+            dto.DisplayName,
+            dto.Description,
             IsLocal: occurrences is { Count: > 0 },
-            IsOnServer: dto is not null,
-            // An unregistered version answers from its own archive, which is what lets a row show
-            // the lock before anything is imported and what registration then sends. A registered
-            // one answers from the repo, so two members reading the same version read the same
-            // lock state even where only one of them holds the file.
-            Locked: dto?.Locked ?? local?.Locked ?? false)
+            IsOnServer: true,
+            Locked: dto.Locked)
         {
             Author = local?.Author,
-            Attributes = dto is null ? local?.Attributes ?? [] : CatalogModVersion.ReadAttributes(dto),
+            Attributes = CatalogModVersion.ReadAttributes(dto),
             Icon = local?.Icon,
             Images = local?.Images ?? [],
-            ServerImages = dto is null ? [] : [.. dto.Images.Select(ModImageReference.FromDto)],
+            ServerImages = [.. dto.Images.Select(ModImageReference.FromDto)],
             FoundIn = occurrences ?? [],
-            ContentHash = dto?.ContentHash,
-            SizeBytes = dto?.SizeBytes,
-            SequenceNumber = dto?.SequenceNumber,
-            Registered = dto?.Created,
-            DeletionScheduledFor = dto?.DeletionScheduledFor,
-            DeletionReason = dto?.DeletionReason,
+            ContentHash = dto.ContentHash,
+            SizeBytes = dto.SizeBytes,
+            SequenceNumber = dto.SequenceNumber,
+            Registered = dto.Created,
+            DeletionScheduledFor = dto.DeletionScheduledFor,
+            DeletionReason = dto.DeletionReason,
             Usage = usage
         };
     }

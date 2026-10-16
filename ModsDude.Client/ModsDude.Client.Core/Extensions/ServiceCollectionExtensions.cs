@@ -23,6 +23,14 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IModFileUploader, BlockBlobModFileUploader>();
         services.AddHttpClient<IModFileDownloader, HttpModFileDownloader>();
 
+        // Talks to third parties' CDNs: names itself, and follows no redirect without checking it first.
+        services.AddHttpClient(RemoteSources.RemoteModDownloader.HttpClientName, client =>
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                    $"ModsDude/{Builds.BuildNumber.Current} (+https://github.com/anton-jh/modsdude)"))
+            .ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddSingleton<RemoteSources.IRemoteModDownloader, RemoteSources.RemoteModDownloader>();
+        services.AddSingleton<RemoteSources.IRemoteDownloadNotes, RemoteSources.RemoteDownloadNotes>();
+
         // One per process, so every transfer in a direction shares its limit. Read from settings once;
         // the settings page applies a change to this same object rather than to a copy.
         services.AddSingleton(sp => Transfers.TransferLimits.From(

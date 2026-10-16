@@ -207,6 +207,9 @@ public partial class App : Application
         _storeTidier = _serviceProvider.GetRequiredService<IContentStoreTidier>();
         _storeTidier.Request();
 
+        // Whatever a run that crashed or was killed left behind. Nothing is downloading yet.
+        _serviceProvider.GetRequiredService<Core.RemoteSources.IRemoteModDownloader>().Sweep();
+
         return new StartedApp(window, background);
     }
 

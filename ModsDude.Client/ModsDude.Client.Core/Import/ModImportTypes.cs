@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModVersions;
 
@@ -34,10 +35,25 @@ public sealed record ModImportRequest(
     public ModSourceConflictResolver? ResolveSourceConflicts { get; init; }
 
     /// <summary>
+    /// Asked once, after everything else has finished, for every download that held something other
+    /// than the version offered. Null - or a null answer - leaves those versions unanswered.
+    /// </summary>
+    public ModDownloadMismatchResolver? ResolveDownloadMismatches { get; init; }
+
+    /// <summary>Reads what a download holds. Without it, versions a remote source offers cannot be imported.</summary>
+    public IBaseModAdapter? ModAdapter { get; init; }
+
+    /// <summary>
     /// How many mods run their link, upload and register in parallel. Network-bound, so a fixed
     /// handful rather than the processor count the folder scan uses.
     /// </summary>
     public int MaxConcurrentMods { get; init; } = 5;
+
+    /// <summary>
+    /// How many versions a remote source offers are downloaded or importing at once. Each holds its
+    /// slot until its file is imported and deleted, which also bounds the download folder.
+    /// </summary>
+    public int MaxConcurrentDownloads { get; init; } = 10;
 
     /// <summary>
     /// How many times a mod may lose the placement race before its remaining versions are reported
@@ -91,9 +107,37 @@ public delegate Task<IReadOnlyDictionary<ModVersionIdentity, string>?> ModSource
     CancellationToken cancellationToken);
 
 
+/// <summary>A download that held something other than the version it was offered as.</summary>
+/// <param name="Offered">The version picked, as the remote source offered it.</param>
+/// <param name="Held">What the file read as, or null where it was not a mod.</param>
+public sealed record ModDownloadMismatch(CatalogModVersion Offered, LocalMod? Held)
+{
+    /// <summary>Whether the file is the same mod, so it can be imported and pinned instead.</summary>
+    public bool CanUseHeld => Held is not null && Held.Id == Offered.ModId;
+}
+
+public enum ModDownloadMismatchAnswer
+{
+    /// <summary>Import the version the file holds, and pin that instead.</summary>
+    UseHeld,
+
+    /// <summary>Import nothing for this mod.</summary>
+    LeaveOut
+}
+
+/// <returns>
+/// What to do per offered version. Versions left out of the answer are left out; a null answer, which
+/// is what dismissing produces, leaves every one of them unanswered.
+/// </returns>
+public delegate Task<IReadOnlyDictionary<ModVersionIdentity, ModDownloadMismatchAnswer>?> ModDownloadMismatchResolver(
+    IReadOnlyList<ModDownloadMismatch> mismatches,
+    CancellationToken cancellationToken);
+
+
 public enum ModImportPhase
 {
     Queued,
+    Downloading,
     Linking,
     Uploading,
     Registering,
@@ -112,7 +156,7 @@ public enum ModImportPhase
     Skipped
 }
 
-/// <param name="TotalBytes">The archive's size, so a row can show a proportion. Zero outside upload.</param>
+/// <param name="TotalBytes">The archive's size, so a row can show a proportion. Zero outside download and upload.</param>
 public sealed record ModImportProgress(ModVersionIdentity Identity, ModImportPhase Phase)
 {
     public long BytesTransferred { get; init; }
@@ -152,6 +196,21 @@ public enum ModImportStatus
     /// <summary>Selected without a local file to upload.</summary>
     NoLocalFile,
 
+    /// <summary>A remote source's file could not be downloaded.</summary>
+    DownloadFailed,
+
+    /// <summary>The download held something else, and nothing said what to do about it.</summary>
+    DownloadMismatch,
+
+    /// <summary>
+    /// The download held another version of the mod, and that version was imported instead. See
+    /// <see cref="ModImportItemResult.ReplacedBy"/>.
+    /// </summary>
+    Replaced,
+
+    /// <summary>The download held something else, and the user chose to leave the mod out.</summary>
+    LeftOut,
+
     Failed
 }
 
@@ -165,7 +224,13 @@ public sealed record ModImportItemResult(ModVersionIdentity Identity, ModImportS
 
     public Exception? Exception { get; init; }
 
+    /// <summary>The version imported in this one's place. Only for <see cref="ModImportStatus.Replaced"/>.</summary>
+    public ModVersionIdentity? ReplacedBy { get; init; }
+
     public bool IsSuccess => Status is ModImportStatus.Registered or ModImportStatus.AlreadyRegistered;
+
+    /// <summary>Imported, or decided by the user: nothing about it is left to report as a problem.</summary>
+    public bool IsSettled => IsSuccess || Status is ModImportStatus.Replaced or ModImportStatus.LeftOut;
 }
 
 /// <summary>
@@ -212,7 +277,5 @@ public sealed record ModImportResult(IReadOnlyList<ModImportItemResult> Items)
 
     public IReadOnlyList<ModImportItemResult> Succeeded => [.. Items.Where(x => x.IsSuccess)];
 
-    public IReadOnlyList<ModImportItemResult> Unfinished => [.. Items.Where(x => !x.IsSuccess)];
-
-    public bool AnythingFailed => Items.Any(x => !x.IsSuccess);
+    public IReadOnlyList<ModImportItemResult> Unfinished => [.. Items.Where(x => !x.IsSettled)];
 }

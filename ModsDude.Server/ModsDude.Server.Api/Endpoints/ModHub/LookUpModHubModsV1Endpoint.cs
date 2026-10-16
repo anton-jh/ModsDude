@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Options;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain.ModHub;
 using ModsDude.Server.ModHub;
 using ModsDude.Server.Persistence.DbContexts;
@@ -52,15 +51,14 @@ public class LookUpModHubModsV1Endpoint : IEndpoint
     /// <param name="Name">The requested name this answers, exactly as it was sent.</param>
     /// <param name="FileName">The file name as ModHub gives it.</param>
     /// <param name="Version">ModHub's version string, unparsed.</param>
-    /// <param name="PageUrl">The mod's page on ModHub, for a person to open.</param>
-    /// <param name="DownloadUrl">The archive on ModHub's CDN, where the page links one.</param>
+    /// <param name="DownloadUrl">The archive on ModHub's CDN: https on Giants' own hosts, or null.</param>
     public record ModHubModDto(
         string Name,
         int ModHubId,
         string FileName,
         string Title,
+        string? Author,
         string Version,
-        string PageUrl,
         string? DownloadUrl);
 
 
@@ -68,7 +66,6 @@ public class LookUpModHubModsV1Endpoint : IEndpoint
         string game,
         LookUpModHubModsRequest request,
         ApplicationDbContext dbContext,
-        IModHubSite site,
         IOptions<ModHubOptions> options,
         CancellationToken cancellationToken)
     {
@@ -96,8 +93,8 @@ public class LookUpModHubModsV1Endpoint : IEndpoint
                 mod.ModHubId,
                 mod.FileName,
                 mod.Title,
+                mod.Author,
                 mod.Version,
-                site.GetModPageUrl(game, mod.ModHubId),
                 mod.DownloadUrl)))
             .ToList();
 

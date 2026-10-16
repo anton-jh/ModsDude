@@ -122,13 +122,20 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [NotifyPropertyChangedFor(nameof(SecondaryChipTooltip))]
     private bool _orderNotSettled;
 
+    /// <summary>An earlier download of this version held something else. Set by the profile editor.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSecondaryChip))]
+    [NotifyPropertyChangedFor(nameof(SecondaryChipText))]
+    [NotifyPropertyChangedFor(nameof(SecondaryChipTooltip))]
+    private bool _isBrokenDownload;
+
     /// <summary>
     /// The small chip beside the main status one, which a source conflict already used alone. Both
     /// mean "this row will ask you something at save", so they share the slot rather than each
     /// costing the row a column of its own; a conflict is the more urgent of the two and wins when a
     /// version somehow manages to be both.
     /// </summary>
-    public bool HasSecondaryChip => HasSourceConflict || OrderNotSettled;
+    public bool HasSecondaryChip => HasSourceConflict || IsBrokenDownload || OrderNotSettled;
 
     /// <summary>
     /// "New?" rather than a word about ordering - the reader does not need to know a comparer
@@ -136,10 +143,12 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     /// mark is the point: the row is an invitation, not a warning, which is also why it never
     /// replaces the main chip's plain "New".
     /// </summary>
-    public string SecondaryChipText => HasSourceConflict ? "Conflict" : OrderNotSettled ? "New?" : string.Empty;
+    public string SecondaryChipText => HasSourceConflict ? "Conflict" : IsBrokenDownload ? "Other file" : OrderNotSettled ? "New?" : string.Empty;
 
     public string? SecondaryChipTooltip => HasSourceConflict
         ? SourceConflictTooltip
+        : IsBrokenDownload
+            ? "An earlier download of this version held something else. Saving will ask what to do."
         : OrderNotSettled
             ? "Nothing settled whether this version comes before or after what the repo already holds. "
                 + "Importing it will ask which."
@@ -206,18 +215,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [NotifyPropertyChangedFor(nameof(HasActions))]
     private ModRowActions? _actions;
 
-    /// <summary>
-    /// A newer version of this mod that is online, or null. Set by the profile editor; every other
-    /// list leaves it alone.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasRemoteUpdate))]
-    private RemoteUpdateViewModel? _remoteUpdate;
-
-
     public bool HasStatus => Status is not ModDisplayStatus.None;
-
-    public bool HasRemoteUpdate => RemoteUpdate is not null;
 
     /// <summary>
     /// What the profile editor's draft has done to this mod, which is a different thing from
@@ -326,6 +324,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         ModDisplayStatus.NewVersion => "New version",
         ModDisplayStatus.AlreadyInRepo => "In repo",
         ModDisplayStatus.ImportsOnSave => "*Imports on save",
+        ModDisplayStatus.DownloadsOnSave => "*Downloads on save",
         _ => string.Empty
     };
 
@@ -350,7 +349,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [NotifyPropertyChangedFor(nameof(HasImportState))]
     [NotifyPropertyChangedFor(nameof(HasImportProblem))]
     [NotifyPropertyChangedFor(nameof(ImportProblemTooltip))]
-    [NotifyPropertyChangedFor(nameof(IsUploading))]
+    [NotifyPropertyChangedFor(nameof(IsTransferring))]
     private ModImportPhase? _importPhase;
 
     [ObservableProperty]
@@ -362,7 +361,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [NotifyPropertyChangedFor(nameof(ImportProblemTooltip))]
     private ModImportStatus? _importOutcome;
 
-    /// <summary>Zero to one, and only while uploading - the one phase whose length is knowable.</summary>
+    /// <summary>Zero to one, and only while downloading or uploading - the phases whose length is knowable.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ImportStateText))]
     [NotifyPropertyChangedFor(nameof(ChipText))]
@@ -376,8 +375,8 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     /// </summary>
     public ModImportRowState ImportState => ImportOutcome switch
     {
-        ModImportStatus.Registered or ModImportStatus.AlreadyRegistered => ModImportRowState.Succeeded,
-        ModImportStatus.Failed => ModImportRowState.Failed,
+        ModImportStatus.Registered or ModImportStatus.AlreadyRegistered or ModImportStatus.Replaced => ModImportRowState.Succeeded,
+        ModImportStatus.Failed or ModImportStatus.DownloadFailed => ModImportRowState.Failed,
         not null => ModImportRowState.Skipped,
         null => ImportPhase is null ? ModImportRowState.None : ModImportRowState.Running
     };
@@ -400,7 +399,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         ? ModImportProblems.DescribeRow(ImportOutcome)
         : null;
 
-    public bool IsUploading => ImportPhase is ModImportPhase.Uploading;
+    public bool IsTransferring => ImportPhase is ModImportPhase.Uploading or ModImportPhase.Downloading;
 
     public string ImportStateText => ImportOutcome switch
     {
@@ -410,10 +409,15 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         ModImportStatus.ContentMismatch => "Different file stored",
         ModImportStatus.NeedsArbitration => "Order not settled",
         ModImportStatus.NoLocalFile => "No local file",
+        ModImportStatus.DownloadFailed => "Download failed",
+        ModImportStatus.DownloadMismatch => "Different download",
+        ModImportStatus.Replaced => "Imported another version",
+        ModImportStatus.LeftOut => "Left out",
         ModImportStatus.Failed => "Failed",
         _ => ImportPhase switch
         {
             ModImportPhase.Queued => "Queued",
+            ModImportPhase.Downloading => ImportProgress > 0 ? $"Downloading {ImportProgress:P0}" : "Downloading",
             ModImportPhase.Linking => "Preparing",
             ModImportPhase.Uploading => $"Uploading {ImportProgress:P0}",
             ModImportPhase.Registering => "Registering",
@@ -455,13 +459,13 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         ImportOutcome = result.Status;
         ImportPhase = null;
 
-        if (result.IsSuccess || alreadyKnown)
+        if (result.IsSettled || alreadyKnown)
         {
             return;
         }
 
         _logger.Log(
-            result.Status is ModImportStatus.Failed ? LogLevel.Error : LogLevel.Information,
+            result.Status is ModImportStatus.Failed or ModImportStatus.DownloadFailed ? LogLevel.Error : LogLevel.Information,
             result.Exception,
             "Import of {ModId} {VersionId} ended as {Status}: {Message}",
             Mod.ModId.Value, Mod.VersionId.Value, result.Status, result.Message ?? "no message");

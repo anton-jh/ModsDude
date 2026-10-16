@@ -99,7 +99,8 @@ public static class ProfileModUpdates
             {
                 return new ProfileModUpdate(pin.ModId, pin.VersionId, candidate.VersionId, pin.Lock)
                 {
-                    ImportsOnSave = candidate.IsOnServer is false
+                    ImportsOnSave = candidate.IsOnServer is false,
+                    DownloadsFrom = candidate.IsOnServer ? null : candidate.Download?.SourceName
                 };
             }
         }
@@ -117,6 +118,9 @@ public sealed record ProfileModUpdate(ModKey ModId, ModVersionKey From, ModVersi
     /// the two kinds cost differently and the band says the split rather than one total.
     /// </summary>
     public bool ImportsOnSave { get; init; }
+
+    /// <summary>The remote source a save downloads the version from first, or null where it is already here.</summary>
+    public string? DownloadsFrom { get; init; }
 }
 
 /// <param name="Available">Unlocked, so "apply all updates" moves them.</param>
@@ -135,6 +139,13 @@ public sealed record ProfileModUpdatePlan(
 
     /// <summary>Of those, how many a save would have to import first.</summary>
     public int PendingCount => Available.Count(x => x.ImportsOnSave) + Skipped.Count(x => x.ImportsOnSave);
+
+    /// <summary>Of those, how many a save would have to download first.</summary>
+    public int DownloadCount => Available.Count(x => x.DownloadsFrom is not null) + Skipped.Count(x => x.DownloadsFrom is not null);
+
+    /// <summary>Where those downloads come from, in name order.</summary>
+    public IReadOnlyList<string> DownloadSources
+        => [.. Available.Concat(Skipped).Select(x => x.DownloadsFrom).OfType<string>().Distinct().Order(StringComparer.Ordinal)];
 
     /// <summary>What <em>Update all</em> would move without uploading anything.</summary>
     public int FreeCount => Available.Count(x => x.ImportsOnSave is false);

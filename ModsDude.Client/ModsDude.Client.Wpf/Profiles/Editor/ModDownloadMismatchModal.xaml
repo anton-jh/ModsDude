@@ -1,0 +1,102 @@
+<UserControl x:Class="ModsDude.Client.Wpf.Profiles.Editor.ModDownloadMismatchModal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:editor="clr-namespace:ModsDude.Client.Wpf.Profiles.Editor"
+             mc:Ignorable="d"
+             Width="600" MaxHeight="700"
+             d:DataContext="{d:DesignInstance Type=editor:ModDownloadMismatchModalViewModel, IsDesignTimeCreatable=False}"
+             Focusable="True">
+
+    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="1">
+
+        <Border.Effect>
+            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
+        </Border.Effect>
+
+        <Grid RowDefinitions="auto * auto">
+
+            <StackPanel Grid.Row="0" Margin="24 24 24 12">
+                <TextBlock Text="{Binding Title}"
+                           TextWrapping="Wrap"
+                           Style="{StaticResource TitleTextBlockStyle}" />
+
+                <TextBlock Text="{Binding Message}"
+                           Margin="0 12 0 0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" Margin="24 0" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Mods}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type editor:ModDownloadMismatchItemViewModel}">
+                            <StackPanel Margin="0 0 0 20">
+
+                                <TextBlock Text="{Binding Name}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
+
+                                <Grid Margin="0 6 0 6" ColumnDefinitions="auto *" RowDefinitions="auto auto">
+                                    <TextBlock Grid.Row="0" Grid.Column="0"
+                                               Text="Picked"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1"
+                                               Margin="12 0 0 0"
+                                               Text="{Binding Picked}" />
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0"
+                                               Text="Downloaded"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1"
+                                               Margin="12 0 0 0"
+                                               Text="{Binding Held}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                                </Grid>
+
+                                <!-- No GroupName: the two share this panel, and a group name would be
+                                     shared with every other mod on the modal. -->
+                                <StackPanel>
+                                    <RadioButton Margin="0 2"
+                                                 Content="{Binding UseHeldText}"
+                                                 IsChecked="{Binding UseHeld, Mode=TwoWay}"
+                                                 Visibility="{Binding CanUseHeld, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <RadioButton Margin="0 2"
+                                                 Content="Leave out"
+                                                 IsChecked="{Binding LeaveOut, Mode=TwoWay}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <Border Grid.Row="2"
+                    Margin="0 16 0 0"
+                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+
+                <Grid ColumnDefinitions="* *" Margin="24 16 24 20">
+                    <Button Grid.Column="0"
+                            Margin="0 0 4 0"
+                            Style="{DynamicResource AccentButtonStyle}"
+                            Content="Continue"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding ConfirmCommand}" />
+
+                    <Button Grid.Column="1"
+                            Margin="4 0 0 0"
+                            Content="Stop"
+                            ToolTip="Stops here. Anything already imported stays in the repo."
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding StopCommand}" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+
+</UserControl>
