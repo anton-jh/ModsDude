@@ -7,7 +7,8 @@ it, so everyone runs the same mods at the same versions. Savegames are shared th
 The server stores metadata and hands out short-lived links to blob storage. Everything game-specific lives
 in client-side game adapters.
 
-> **Alpha.** One developer, no users. Data, the API and client state formats change without migrations.
+> **Beta.** Releases carry users' data forward: the database, blobs and the client's local state. The API
+> changes freely, because the API and the client of one build ship together.
 
 - [Repository layout](#repository-layout)
 - [Cloud setup](#cloud-setup)
@@ -430,6 +431,9 @@ A new major version can't read the old one's data:
 4. Deploy, then restore the dump as when moving.
 
 ## CI and releases
+
+Work happens on `develop`. `main` is the release branch: it moves forward only to ship what is on
+`develop`.
 
 `.github/workflows/ci.yml` runs on every push and pull request:
 

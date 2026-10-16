@@ -4,10 +4,13 @@ These rules override default behaviour.
 
 ## Project stage
 
-- ModsDude is in alpha: one developer, no users. Existing data is test data.
-- Never build backfills, data migrations for old rows, re-publish logic or backwards-compatibility paths unless asked. Just change behaviour going forward.
-- Break the API and client state file formats freely; the API stays at v1. Regenerate the client in the same change. No version bumps, deprecation shims or format migrations.
-  - Flag in the summary when a change means local state, the database or a cache must be cleared.
+- ModsDude is in beta: one developer, real users. Data in production and on users' machines is real.
+- Never break users' data without asking first. Users' data is the database, blobs, client settings and state files, the content store, and the mod folders and savegames ModsDude manages.
+  - A change to how existing data is stored or read ships with the data migration, backfill or format upgrade that carries it forward.
+  - When existing data can't be carried forward, stop and ask before building the change.
+  - Say in the summary how existing data is carried forward.
+- Break the API freely; the API stays at v1. Regenerate the client in the same change. No version bumps or deprecation shims.
+  - Why: the API and the client of one build ship together, and each refuses to talk to any other build.
 - Treat everything in `docs/` as out of date. Don't rely on it and don't update it; it will be removed or overhauled.
 
 ## Priorities
@@ -46,9 +49,11 @@ A change is done only when all of these hold:
 
 ## Git
 
-- Commit on the current branch, `main` included. Never create a branch unless asked, or unless a PR is requested.
+- `develop` is the working branch. Commit on the current branch and push to `develop`. Never create a branch unless asked, or unless a PR is requested.
   - Why: solo project; an unrequested branch turns one commit into a commit, a merge and a branch deletion.
-- Commit after each task once it meets the definition of done.
+- Never commit to, merge into or push `main`. Every push to `main` deploys the API and releases the client; the user ships.
+- PRs target `develop`.
+- Commit and push after each task once it meets the definition of done.
 - Commit messages: imperative subject line, then a few terse bullets. No prose paragraphs.
 
 ## Generated API client
