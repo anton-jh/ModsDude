@@ -30,6 +30,8 @@
     <PackageReference Include="Microsoft.Identity.Web" Version="4.0.1" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="NSwag.AspNetCore" Version="14.6.2" />
+    <!-- Pinned past the vulnerable 9.0.0 that Microsoft.Identity.Web.TokenCache pulls in. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
   <ItemGroup>
