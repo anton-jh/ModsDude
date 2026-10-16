@@ -128,6 +128,37 @@ public class RemoteModDownloaderTests : IDisposable
     }
 
     [Fact]
+    public async Task Every_request_carries_the_sources_referrer_redirect_hops_included()
+    {
+        _source.DownloadReferrer = new Uri("https://hub.example.com/");
+
+        var offer = Offer("FS25_Plough");
+        var target = new Uri("https://mirror.example.com/FS25_Plough.zip");
+
+        _cdn.Redirect(offer.Version.DownloadUrl, target);
+        _cdn.Serve(target, _archive);
+
+        using var run = _downloader.BeginRun();
+        await run.DownloadAsync(offer, null, CancellationToken.None);
+
+        Assert.Equal(3, _cdn.Referrers.Count);
+        Assert.All(_cdn.Referrers, x => Assert.Equal(_source.DownloadReferrer, x));
+    }
+
+    [Fact]
+    public async Task A_source_without_a_referrer_sends_none()
+    {
+        var offer = Offer("FS25_Plough");
+        _cdn.Serve(offer.Version.DownloadUrl, _archive);
+
+        using var run = _downloader.BeginRun();
+        await run.DownloadAsync(offer, null, CancellationToken.None);
+
+        Assert.NotEmpty(_cdn.Referrers);
+        Assert.All(_cdn.Referrers, Assert.Null);
+    }
+
+    [Fact]
     public async Task A_page_answered_instead_of_the_archive_is_refused()
     {
         var offer = Offer("FS25_Plough");
@@ -296,6 +327,7 @@ public class RemoteModDownloaderTests : IDisposable
         private readonly Dictionary<Uri, Func<HttpRequestMessage, HttpResponseMessage>> _answers = [];
         private readonly Lock _lock = new();
         private readonly List<Uri> _requests = [];
+        private readonly List<Uri?> _referrers = [];
 
 
         public IReadOnlyList<Uri> Requests
@@ -305,6 +337,17 @@ public class RemoteModDownloaderTests : IDisposable
                 lock (_lock)
                 {
                     return [.. _requests];
+                }
+            }
+        }
+
+        public IReadOnlyList<Uri?> Referrers
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return [.. _referrers];
                 }
             }
         }
@@ -349,6 +392,7 @@ public class RemoteModDownloaderTests : IDisposable
             lock (_lock)
             {
                 _requests.Add(request.RequestUri!);
+                _referrers.Add(request.Headers.Referrer);
             }
 
             return Task.FromResult(_answers.TryGetValue(request.RequestUri!, out var answer)

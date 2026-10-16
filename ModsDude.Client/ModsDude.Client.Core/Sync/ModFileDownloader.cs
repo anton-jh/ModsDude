@@ -180,7 +180,7 @@ public sealed class HttpModFileDownloader : IModFileDownloader
         var detail = await response.Content.ReadAsStringAsync(cancellationToken);
 
         throw new HttpRequestException(
-            $"Failed to download the mod file: {(int)response.StatusCode} {response.ReasonPhrase}. {detail}",
+            $"Failed to download the mod file from {response.RequestMessage?.RequestUri?.Host}: {(int)response.StatusCode} {response.ReasonPhrase}. {detail}",
             null,
             response.StatusCode);
     }

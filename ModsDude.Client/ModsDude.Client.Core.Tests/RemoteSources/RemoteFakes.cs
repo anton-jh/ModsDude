@@ -14,6 +14,8 @@ internal sealed class FakeRemoteModSource(string key = "hub", string displayName
 
     public Func<Uri, bool> Allows { get; set; } = _ => true;
 
+    public Uri? DownloadReferrer { get; set; }
+
 
     public Task<RemoteModLookup> LookUpAsync(IReadOnlyCollection<ModKey> mods, CancellationToken cancellationToken)
         => Task.FromResult(new RemoteModLookup(DateTimeOffset.UnixEpoch, [.. Versions.Where(x => mods.Contains(x.ModId))]));

@@ -27,6 +27,9 @@ public interface IRemoteModSource
 
     /// <summary>Whether a download may be fetched from, or redirected to, this address.</summary>
     bool IsAllowedDownload(Uri uri);
+
+    /// <summary>Sent as the Referer of every download request, for a host that refuses requests without one.</summary>
+    Uri? DownloadReferrer { get; }
 }
 
 /// <param name="CurrentAsOf">

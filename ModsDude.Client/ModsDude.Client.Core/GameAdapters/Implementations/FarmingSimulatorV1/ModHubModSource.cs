@@ -22,6 +22,9 @@ public sealed class ModHubModSource(IModHubClient client, string game) : IRemote
     public string Key => "modhub";
     public string DisplayName => "ModHub";
 
+    /// <summary>The CDN answers 403 to a request whose Referer is not ModHub's site.</summary>
+    public Uri DownloadReferrer { get; } = new("https://www.farming-simulator.com/");
+
 
     public async Task<RemoteModLookup> LookUpAsync(IReadOnlyCollection<ModKey> mods, CancellationToken cancellationToken)
     {

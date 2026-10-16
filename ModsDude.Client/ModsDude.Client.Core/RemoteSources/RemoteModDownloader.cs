@@ -182,6 +182,7 @@ public sealed class RemoteModDownloader : IRemoteModDownloader
         try
         {
             using var client = _httpClientFactory.CreateClient(HttpClientName);
+            client.DefaultRequestHeaders.Referrer = offer.Source.DownloadReferrer;
 
             var (url, length) = await ProbeAsync(client, offer, cancellationToken);
 
