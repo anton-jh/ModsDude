@@ -9,6 +9,10 @@ namespace ModsDude.Server.Domain.Profiles;
 /// </summary>
 /// <remarks>
 /// <para>
+/// <b>Part of the profile's ignore list</b>, with the versions it dismisses - see
+/// <see cref="ProfileDismissedVersion"/>.
+/// </para>
+/// <para>
 /// <b>Not part of a revision.</b> What a revision records is what the profile pins, and ignoring a
 /// mod changes nothing about what the profile applies: it only hides a row from the list somebody
 /// picks mods out of. Versioning it would put a revision in the history for every triaged mod, and
@@ -27,7 +31,7 @@ namespace ModsDude.Server.Domain.Profiles;
 /// <para>
 /// <b>A pinned mod cannot also be ignored.</b> Held from both sides: writing the list refuses what the
 /// profile's head pins, and every write of a revision releases whatever it pins. See
-/// <c>ProfileIgnoredModExtensions</c>.
+/// <c>ProfileIgnoreListExtensions</c>.
 /// </para>
 /// </remarks>
 public class ProfileIgnoredMod(RepoId repoId, ProfileId profileId, ModId modId)

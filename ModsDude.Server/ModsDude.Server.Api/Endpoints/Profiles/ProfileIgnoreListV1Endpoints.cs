@@ -14,32 +14,32 @@ using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 namespace ModsDude.Server.Api.Endpoints.Profiles;
 
 /// <summary>
-/// The mods a profile ignores: read whole, replaced whole.
+/// A profile's ignore list - the mods it ignores and the versions it dismisses: read whole, replaced whole.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Ignoring is not a revision, and is written on its own.</b> It says nothing about what the
-/// profile applies - only which rows the editor's list leaves out until asked - so it neither appears
-/// in the history nor has to be atomic with a save. The editor writes it after the save that carried
-/// the mod list has succeeded, and not otherwise. See <see cref="ProfileIgnoredMod"/>.
+/// <b>Not a revision, and written on its own.</b> It says nothing about what the profile applies -
+/// only which rows and updates the editor offers - so it neither appears in the history nor has to be
+/// atomic with a save. The editor writes it after the save that carried the mod list has succeeded,
+/// and not otherwise. See <see cref="ProfileIgnoredMod"/> and <see cref="ProfileDismissedVersion"/>.
 /// </para>
 /// <para>
 /// <b>A pinned mod cannot also be ignored</b>, and only what the head pins counts. Writing a list that
 /// overlaps it is refused, and saving or restoring a revision releases whatever it newly pins, so the
-/// two never overlap however the writes interleave.
+/// two never overlap however the writes interleave. Dismissed versions have no such rule.
 /// </para>
 /// </remarks>
-public class GetProfileIgnoredModsV1Endpoint : IEndpoint
+public class GetProfileIgnoreListV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapGet("repos/{repoId:guid}/profiles/{profileId:guid}/ignoredMods", Get)
+        return builder.MapGet("repos/{repoId:guid}/profiles/{profileId:guid}/ignoreList", Get)
             .WithTags("Profiles")
             .RequireRepoLevel(RepoMembershipLevel.Guest);
     }
 
 
-    private static async Task<Results<Ok<ProfileIgnoredModsDto>, BadRequest<CustomProblemDetails>>> Get(
+    private static async Task<Results<Ok<ProfileIgnoreListDto>, BadRequest<CustomProblemDetails>>> Get(
         Guid repoId, Guid profileId,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
@@ -50,26 +50,26 @@ public class GetProfileIgnoredModsV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{profileId}' found in repo '{repoId}'"));
         }
 
-        var modIds = await dbContext.ProfileIgnoredMods.GetModIdsAsync(profile.RepoId, profile.Id, cancellationToken);
+        var list = await dbContext.GetIgnoreListAsync(profile.RepoId, profile.Id, cancellationToken);
 
-        return TypedResults.Ok(ProfileIgnoredModsDto.From(modIds, profile.IgnoredModsVersion));
+        return TypedResults.Ok(ProfileIgnoreListDto.From(list, profile.IgnoredVersion));
     }
 }
 
-/// <inheritdoc cref="GetProfileIgnoredModsV1Endpoint"/>
-public class SetProfileIgnoredModsV1Endpoint : IEndpoint
+/// <inheritdoc cref="GetProfileIgnoreListV1Endpoint"/>
+public class SetProfileIgnoreListV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
-        return builder.MapPut("repos/{repoId:guid}/profiles/{profileId:guid}/ignoredMods", Set)
+        return builder.MapPut("repos/{repoId:guid}/profiles/{profileId:guid}/ignoreList", Set)
             .WithTags("Profiles")
             .RequireRepoLevel(RepoMembershipLevel.Member);
     }
 
 
-    private static async Task<Results<Ok<ProfileIgnoredModsDto>, BadRequest<CustomProblemDetails>>> Set(
+    private static async Task<Results<Ok<ProfileIgnoreListDto>, BadRequest<CustomProblemDetails>>> Set(
         Guid repoId, Guid profileId,
-        SetProfileIgnoredModsRequest request,
+        SetProfileIgnoreListRequest request,
         ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
@@ -80,27 +80,32 @@ public class SetProfileIgnoredModsV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No profile '{profileId}' found in repo '{repoId}'"));
         }
 
-        var desired = request.ModIds.Select(x => new ModId(x)).Distinct().ToList();
+        var desired = new ProfileIgnoreList(
+            request.ModIds.Select(x => new ModId(x)).ToHashSet(),
+            request.DismissedVersions.Select(x => new DismissedVersion(new ModId(x.ModId), new ModVersionId(x.VersionId))).ToHashSet());
 
-        if (desired.Count > ProfileRevisionWrites.MaximumMods)
+        foreach (var count in new[] { desired.Mods.Count, desired.Versions.Count })
         {
-            return TypedResults.BadRequest(Problems.BatchTooLarge(desired.Count, ProfileRevisionWrites.MaximumMods));
+            if (count > ProfileRevisionWrites.MaximumMods)
+            {
+                return TypedResults.BadRequest(Problems.BatchTooLarge(count, ProfileRevisionWrites.MaximumMods));
+            }
         }
 
-        var current = await dbContext.ProfileIgnoredMods.GetModIdsAsync(profile.RepoId, profile.Id, cancellationToken);
+        var current = await dbContext.GetIgnoreListAsync(profile.RepoId, profile.Id, cancellationToken);
 
         // Already so: a repeat of this request - a retry, a second click - is answered as the first was.
-        if (current.ToHashSet().SetEquals(desired))
+        if (current.IsSameAs(desired))
         {
-            return TypedResults.Ok(ProfileIgnoredModsDto.From(current, profile.IgnoredModsVersion));
+            return TypedResults.Ok(ProfileIgnoreListDto.From(current, profile.IgnoredVersion));
         }
 
-        if (profile.IgnoredModsVersion != request.ExpectedVersion)
+        if (profile.IgnoredVersion != request.ExpectedVersion)
         {
             return TypedResults.BadRequest(Problems.ProfileChanged);
         }
 
-        var overlap = await dbContext.FindPinnedAsync(profile, desired, cancellationToken);
+        var overlap = await dbContext.FindPinnedAsync(profile, desired.Mods, cancellationToken);
 
         if (overlap.Count > 0)
         {
@@ -109,8 +114,8 @@ public class SetProfileIgnoredModsV1Endpoint : IEndpoint
 
         try
         {
-            await dbContext.ReplaceIgnoredAsync(profile, desired, cancellationToken);
-            profile.NoteIgnoredModsReplaced();
+            await dbContext.ReplaceIgnoreListAsync(profile, desired, cancellationToken);
+            profile.NoteIgnoredReplaced();
 
             await unitOfWork.CommitAsync(cancellationToken);
         }
@@ -120,11 +125,12 @@ public class SetProfileIgnoredModsV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.ProfileChanged);
         }
 
-        return TypedResults.Ok(ProfileIgnoredModsDto.From(desired, profile.IgnoredModsVersion));
+        return TypedResults.Ok(ProfileIgnoreListDto.From(desired, profile.IgnoredVersion));
     }
 
 
-    /// <param name="ModIds">Everything the profile should ignore. Anything absent stops being ignored.</param>
+    /// <param name="ModIds">Every mod the profile should ignore. Anything absent stops being ignored.</param>
+    /// <param name="DismissedVersions">Every version it should not be offered as an update. Anything absent is offered again.</param>
     /// <param name="ExpectedVersion">The version of the list the change was made against. Another one is refused.</param>
-    public record SetProfileIgnoredModsRequest(IEnumerable<string> ModIds, int ExpectedVersion);
+    public record SetProfileIgnoreListRequest(IEnumerable<string> ModIds, IEnumerable<DismissedVersionDto> DismissedVersions, int ExpectedVersion);
 }

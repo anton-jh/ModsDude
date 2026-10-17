@@ -8,18 +8,20 @@ using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 namespace ModsDude.Server.Persistence.Tests;
 
 /// <summary>
-/// What a profile ignores, and the rules that keeps it apart from what the profile pins. Provider
-/// questions: the set is keyed by three columns, the release is a query over a list of ids, and the
-/// cascade from a profile is the database's.
+/// A profile's ignore list - the mods it ignores and the versions it dismisses - and the rules that keep
+/// the ignored mods apart from what the profile pins. Provider questions: the sets are keyed by several
+/// columns, the release is a query over a list of ids, and the cascade from a profile is the database's.
 /// </summary>
 [Collection(nameof(DatabaseCollection))]
-public class ProfileIgnoredModTests(DatabaseFixture fixture)
+public class ProfileIgnoreListTests(DatabaseFixture fixture)
 {
     private static readonly DateTimeOffset _timestamp = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly UserId _author = new("author");
     private static readonly ModId _pinned = new("FS25_Pinned");
     private static readonly ModId _noise = new("FS25_Noise");
     private static readonly ModId _moreNoise = new("FS25_MoreNoise");
+    private static readonly ModVersionId _v1 = new("1.0.0");
+    private static readonly ModVersionId _v2 = new("2.0.0");
 
 
     [Fact]
@@ -153,11 +155,118 @@ public class ProfileIgnoredModTests(DatabaseFixture fixture)
     }
 
     [Fact]
+    public async Task Dismissed_versions_are_replaced_with_the_list_and_kept_apart_from_the_ignored_mods()
+    {
+        var (repoId, profileId) = await GivenAProfilePinning();
+
+        await WhenReplacing(repoId, profileId, [_noise], [new(_pinned, _v1), new(_pinned, _v2), new(_noise, _v2)]);
+        await WhenReplacing(repoId, profileId, [], [new(_pinned, _v2), new(_moreNoise, _v1)]);
+
+        var list = await ReadList(repoId, profileId);
+
+        Assert.Empty(list.Mods);
+        Assert.True(list.Versions.SetEquals([new DismissedVersion(_pinned, _v2), new DismissedVersion(_moreNoise, _v1)]));
+    }
+
+    [Fact]
+    public async Task Writing_the_same_dismissals_twice_changes_nothing()
+    {
+        var (repoId, profileId) = await GivenAProfilePinning();
+
+        await WhenReplacing(repoId, profileId, [], [new(_pinned, _v1), new(_pinned, _v2)]);
+        await WhenReplacing(repoId, profileId, [], [new(_pinned, _v1), new(_pinned, _v2)]);
+
+        Assert.Equal(2, (await ReadList(repoId, profileId)).Versions.Count);
+    }
+
+    /// <summary>The version a client sends back is a concurrency token: a write against a stale one is refused.</summary>
+    [Fact]
+    public async Task Replacing_the_list_against_a_stale_version_is_refused()
+    {
+        var (repoId, profileId) = await GivenAProfilePinning();
+
+        using var first = fixture.CreateDbContext();
+        using var second = fixture.CreateDbContext();
+
+        var firstProfile = (await first.Profiles.GetAsync(repoId, profileId, CancellationToken.None))!;
+        var secondProfile = (await second.Profiles.GetAsync(repoId, profileId, CancellationToken.None))!;
+
+        await first.ReplaceIgnoreListAsync(firstProfile, List([], [new(_pinned, _v1)]), CancellationToken.None);
+        firstProfile.NoteIgnoredReplaced();
+        await first.SaveChangesAsync(CancellationToken.None);
+
+        await second.ReplaceIgnoreListAsync(secondProfile, List([], [new(_pinned, _v2)]), CancellationToken.None);
+        secondProfile.NoteIgnoredReplaced();
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync(CancellationToken.None));
+        Assert.True((await ReadList(repoId, profileId)).Versions.SetEquals([new DismissedVersion(_pinned, _v1)]));
+    }
+
+    /// <summary>Dismissals hold for pinned mods too, so writing a revision leaves them alone.</summary>
+    [Fact]
+    public async Task Pinning_a_mod_keeps_its_dismissed_versions()
+    {
+        var (repoId, profileId) = await GivenAProfilePinning();
+
+        await WhenReplacing(repoId, profileId, [], [new(_noise, _v2)]);
+        await GivenARevisionPinning(repoId, profileId, _pinned, _noise);
+
+        Assert.True((await ReadList(repoId, profileId)).Versions.SetEquals([new DismissedVersion(_noise, _v2)]));
+    }
+
+    [Fact]
+    public async Task Removing_a_mod_takes_its_dismissed_versions_off_every_list_in_the_repo()
+    {
+        var (repoId, profileId) = await GivenAProfilePinning();
+        var other = await GivenAnotherProfileInRepo(repoId);
+        var (elsewhere, elsewhereProfile) = await GivenAProfilePinning();
+
+        await WhenReplacing(repoId, profileId, [], [new(_noise, _v1), new(_noise, _v2), new(_pinned, _v2)]);
+        await WhenReplacing(repoId, other, [], [new(_noise, _v2)]);
+        await WhenReplacing(elsewhere, elsewhereProfile, [], [new(_noise, _v2)]);
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.ReleaseModAsync(repoId, _noise, CancellationToken.None);
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+        }
+
+        Assert.True((await ReadList(repoId, profileId)).Versions.SetEquals([new DismissedVersion(_pinned, _v2)]));
+        Assert.Empty((await ReadList(repoId, other)).Versions);
+        Assert.Single((await ReadList(elsewhere, elsewhereProfile)).Versions);
+    }
+
+    [Fact]
+    public async Task Removing_a_version_takes_only_that_version_off_every_list_in_the_repo()
+    {
+        var (repoId, profileId) = await GivenAProfilePinning();
+        var other = await GivenAnotherProfileInRepo(repoId);
+        var (elsewhere, elsewhereProfile) = await GivenAProfilePinning();
+
+        await WhenReplacing(repoId, profileId, [_noise], [new(_noise, _v1), new(_noise, _v2)]);
+        await WhenReplacing(repoId, other, [], [new(_noise, _v2)]);
+        await WhenReplacing(elsewhere, elsewhereProfile, [], [new(_noise, _v2)]);
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.ReleaseModVersionAsync(repoId, _noise, _v2, CancellationToken.None);
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+        }
+
+        var list = await ReadList(repoId, profileId);
+
+        Assert.Equal([_noise], list.Mods);
+        Assert.True(list.Versions.SetEquals([new DismissedVersion(_noise, _v1)]));
+        Assert.Empty((await ReadList(repoId, other)).Versions);
+        Assert.Single((await ReadList(elsewhere, elsewhereProfile)).Versions);
+    }
+
+    [Fact]
     public async Task Deleting_a_profile_takes_what_it_ignored()
     {
         var (repoId, profileId) = await GivenAProfilePinning();
 
-        await WhenReplacing(repoId, profileId, _noise);
+        await WhenReplacing(repoId, profileId, [_noise], [new(_noise, _v2)]);
 
         using (var dbContext = fixture.CreateDbContext())
         {
@@ -168,26 +277,35 @@ public class ProfileIgnoredModTests(DatabaseFixture fixture)
         using var verification = fixture.CreateDbContext();
 
         Assert.Equal(0, await verification.ProfileIgnoredMods.CountAsync(x => x.RepoId == repoId));
+        Assert.Equal(0, await verification.ProfileDismissedVersions.CountAsync(x => x.RepoId == repoId));
     }
 
 
-    private async Task WhenReplacing(RepoId repoId, ProfileId profileId, params ModId[] modIds)
+    private Task WhenReplacing(RepoId repoId, ProfileId profileId, params ModId[] modIds)
+        => WhenReplacing(repoId, profileId, modIds, []);
+
+    private async Task WhenReplacing(RepoId repoId, ProfileId profileId, ModId[] modIds, DismissedVersion[] versions)
     {
         using var dbContext = fixture.CreateDbContext();
 
         var profile = (await dbContext.Profiles.GetAsync(repoId, profileId, CancellationToken.None))!;
 
-        await dbContext.ReplaceIgnoredAsync(profile, modIds, CancellationToken.None);
+        await dbContext.ReplaceIgnoreListAsync(profile, List(modIds, versions), CancellationToken.None);
 
         await dbContext.SaveChangesAsync(CancellationToken.None);
     }
 
-    private async Task<HashSet<ModId>> ReadIgnored(RepoId repoId, ProfileId profileId)
+    private async Task<IReadOnlySet<ModId>> ReadIgnored(RepoId repoId, ProfileId profileId)
+        => (await ReadList(repoId, profileId)).Mods;
+
+    private async Task<ProfileIgnoreList> ReadList(RepoId repoId, ProfileId profileId)
     {
         using var dbContext = fixture.CreateDbContext();
 
-        return await dbContext.ProfileIgnoredMods.GetModIdsAsync(repoId, profileId, CancellationToken.None);
+        return await dbContext.GetIgnoreListAsync(repoId, profileId, CancellationToken.None);
     }
+
+    private static ProfileIgnoreList List(ModId[] modIds, DismissedVersion[] versions) => new(modIds.ToHashSet(), versions.ToHashSet());
 
     private async Task<(RepoId RepoId, ProfileId ProfileId)> GivenAProfilePinning()
     {

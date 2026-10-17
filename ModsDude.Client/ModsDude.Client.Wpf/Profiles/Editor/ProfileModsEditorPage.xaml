@@ -420,6 +420,7 @@
                                         <ContextMenu>
                                             <MenuItem Header="Add the selected mods" Command="{Binding AddSelectedCommand}" />
                                             <MenuItem Header="Ignore the selected mods" Command="{Binding IgnoreSelectedCommand}" />
+                                            <MenuItem Header="Dismiss the selected versions" Command="{Binding DismissSelectedVersionsCommand}" />
                                             <Separator />
                                             <MenuItem Header="Select everything shown" Command="{Binding AvailableSelection.SelectAllShownCommand}" />
                                             <MenuItem Header="Clear the selection" Command="{Binding AvailableSelection.ClearSelectionCommand}" />
@@ -506,7 +507,7 @@
                                             Command="{Binding AvailableSelection.ClearSelectionCommand}" />
                                 </Grid>
 
-                                <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* *">
+                                <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* * *">
                                     <Button Grid.Column="0"
                                             Margin="0 0 4 0"
                                             HorizontalAlignment="Stretch"
@@ -514,11 +515,17 @@
                                             ToolTip="Hide the picked mods from this list"
                                             Command="{Binding IgnoreSelectedCommand}" />
                                     <Button Grid.Column="1"
-                                            Margin="4 0 0 0"
+                                            Margin="4 0"
                                             HorizontalAlignment="Stretch"
                                             Content="{Binding UnignoreSelectedText}"
                                             ToolTip="Stop ignoring the picked mods"
                                             Command="{Binding UnignoreSelectedCommand}" />
+                                    <Button Grid.Column="2"
+                                            Margin="4 0 0 0"
+                                            HorizontalAlignment="Stretch"
+                                            Content="{Binding DismissSelectedVersionsText}"
+                                            ToolTip="Never offer the version each picked row shows as an update"
+                                            Command="{Binding DismissSelectedVersionsCommand}" />
                                 </Grid>
 
                                 <Grid Grid.Row="2"
@@ -648,6 +655,13 @@
                                     <Button Padding="6 2"
                                             Margin="8 0 0 0"
                                             Style="{DynamicResource SubtleMenuButton}"
+                                            Content="{Binding Summary.DismissedText}"
+                                            ToolTip="Versions never offered as updates. Open the list to offer any of them again."
+                                            Visibility="{Binding Summary.HasDismissed, Converter={StaticResource BoolToVisibilityConverter}}"
+                                            Command="{Binding ShowDismissedCommand}" />
+                                    <Button Padding="6 2"
+                                            Margin="8 0 0 0"
+                                            Style="{DynamicResource SubtleMenuButton}"
                                             Content="{Binding Summary.UnsettledText}"
                                             ToolTip="Their order relative to what the repo holds is not settled. Importing one will ask which comes first."
                                             Visibility="{Binding Summary.HasUnsettled, Converter={StaticResource BoolToVisibilityConverter}}"
@@ -689,6 +703,7 @@
                                             <MenuItem Header="Revert the selected mods" Command="{Binding RevertSelectedCommand}" />
                                             <Separator />
                                             <MenuItem Header="Update the selected mods" Command="{Binding UpdateSelectedCommand}" />
+                                            <MenuItem Header="Dismiss the selected updates" Command="{Binding DismissSelectedUpdatesCommand}" />
                                             <MenuItem Header="Lock the selected mods" Command="{Binding LockSelectedCommand}" />
                                             <MenuItem Header="Unlock the selected mods" Command="{Binding UnlockSelectedCommand}" />
                                             <Separator />
@@ -807,7 +822,7 @@
                                             Command="{Binding PinnedSelection.ClearSelectionCommand}" />
                                 </Grid>
 
-                                <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* auto auto auto">
+                                <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* auto auto auto auto">
                                     <Button Grid.Column="0"
                                             Margin="0 0 4 0"
                                             HorizontalAlignment="Stretch"
@@ -817,16 +832,22 @@
                                     <Button Grid.Column="1"
                                             Margin="4 0"
                                             MinWidth="72"
+                                            Content="{Binding DismissSelectedUpdatesText}"
+                                            ToolTip="Never offer the version each picked mod's update points at"
+                                            Command="{Binding DismissSelectedUpdatesCommand}" />
+                                    <Button Grid.Column="2"
+                                            Margin="4 0"
+                                            MinWidth="72"
                                             Content="Lock"
                                             ToolTip="Hold the picked mods at their versions in this profile"
                                             Command="{Binding LockSelectedCommand}" />
-                                    <Button Grid.Column="2"
+                                    <Button Grid.Column="3"
                                             Margin="4 0"
                                             MinWidth="72"
                                             Content="Unlock"
                                             ToolTip="Release this profile's own lock on the picked mods"
                                             Command="{Binding UnlockSelectedCommand}" />
-                                    <Button Grid.Column="3"
+                                    <Button Grid.Column="4"
                                             Margin="4 0 0 0"
                                             MinWidth="72"
                                             Content="{Binding RevertSelectedText}"

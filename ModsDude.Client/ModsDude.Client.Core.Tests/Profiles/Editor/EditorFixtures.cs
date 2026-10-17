@@ -47,7 +47,9 @@ internal static class EditorFixtures
     public static ProfileEditorInputs WithRemote(this ProfileEditorInputs inputs, params RemoteSourceAnswers[] answers)
         => inputs with { Catalog = inputs.Catalog.WithRemote(answers, _ => null) };
 
-    public static ProfileDraft Draft(params ProfileModPin[] saved) => new(saved, []);
+    public static ProfileDraft Draft(params ProfileModPin[] saved) => new(saved, [], []);
+
+    public static ModVersionIdentity Version(string modId, string version) => new(Mod(modId), V(version));
 
     public static ProfileEditorState Compute(ProfileEditorInputs inputs) => ProfileEditorState.Compute(inputs);
 

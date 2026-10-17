@@ -457,6 +457,18 @@
           "WindingDown"
         ]
       },
+      "DismissedVersionDto": {
+        "additionalProperties": false,
+        "properties": {
+          "modId": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "GameActivityDto": {
         "additionalProperties": false,
         "properties": {
@@ -1144,9 +1156,15 @@
         },
         "type": "object"
       },
-      "ProfileIgnoredModsDto": {
+      "ProfileIgnoreListDto": {
         "additionalProperties": false,
         "properties": {
+          "dismissedVersions": {
+            "items": {
+              "$ref": "#/components/schemas/DismissedVersionDto"
+            },
+            "type": "array"
+          },
           "modIds": {
             "items": {
               "type": "string"
@@ -2006,9 +2024,15 @@
         },
         "type": "object"
       },
-      "SetProfileIgnoredModsRequest": {
+      "SetProfileIgnoreListRequest": {
         "additionalProperties": false,
         "properties": {
+          "dismissedVersions": {
+            "items": {
+              "$ref": "#/components/schemas/DismissedVersionDto"
+            },
+            "type": "array"
+          },
           "expectedVersion": {
             "format": "int32",
             "type": "integer"
@@ -5509,9 +5533,9 @@
         ]
       }
     },
-    "/api/v1/repos/{repoId}/profiles/{profileId}/ignoredMods": {
+    "/api/v1/repos/{repoId}/profiles/{profileId}/ignoreList": {
       "get": {
-        "operationId": "GetProfileIgnoredModsV1",
+        "operationId": "GetProfileIgnoreListV1",
         "parameters": [
           {
             "in": "path",
@@ -5539,7 +5563,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileIgnoredModsDto"
+                  "$ref": "#/components/schemas/ProfileIgnoreListDto"
                 }
               }
             },
@@ -5596,7 +5620,7 @@
         ]
       },
       "put": {
-        "operationId": "SetProfileIgnoredModsV1",
+        "operationId": "SetProfileIgnoreListV1",
         "parameters": [
           {
             "in": "path",
@@ -5623,7 +5647,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SetProfileIgnoredModsRequest"
+                "$ref": "#/components/schemas/SetProfileIgnoreListRequest"
               }
             }
           },
@@ -5636,7 +5660,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileIgnoredModsDto"
+                  "$ref": "#/components/schemas/ProfileIgnoreListDto"
                 }
               }
             },

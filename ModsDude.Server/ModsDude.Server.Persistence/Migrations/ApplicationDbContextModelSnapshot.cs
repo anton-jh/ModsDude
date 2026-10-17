@@ -329,7 +329,7 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<int>("HeadRevision")
                         .HasColumnType("integer");
 
-                    b.Property<int>("IgnoredModsVersion")
+                    b.Property<int>("IgnoredVersion")
                         .IsConcurrencyToken()
                         .HasColumnType("integer");
 
@@ -351,6 +351,25 @@ namespace ModsDude.Server.Persistence.Migrations
                         .HasFilter("\"ArchivedAt\" IS NULL");
 
                     b.ToTable("Profiles");
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Profiles.ProfileDismissedVersion", b =>
+                {
+                    b.Property<Guid>("RepoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ModId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("VersionId")
+                        .HasColumnType("text");
+
+                    b.HasKey("RepoId", "ProfileId", "ModId", "VersionId");
+
+                    b.ToTable("ProfileDismissedVersions");
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Profiles.ProfileIgnoredMod", b =>
@@ -1013,6 +1032,15 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.HasOne("ModsDude.Server.Domain.Repos.Repo", null)
                         .WithMany()
                         .HasForeignKey("RepoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Profiles.ProfileDismissedVersion", b =>
+                {
+                    b.HasOne("ModsDude.Server.Domain.Profiles.Profile", null)
+                        .WithMany()
+                        .HasForeignKey("RepoId", "ProfileId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

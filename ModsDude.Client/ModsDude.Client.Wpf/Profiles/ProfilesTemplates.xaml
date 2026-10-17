@@ -28,6 +28,9 @@
     <DataTemplate DataType="{x:Type profiles:ProfileLockedUpdatesModalViewModel}">
         <profiles:ProfileLockedUpdatesModal />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type profiles:ProfileDismissedVersionsModalViewModel}">
+        <profiles:ProfileDismissedVersionsModal />
+    </DataTemplate>
     <DataTemplate DataType="{x:Type profiles:CopyProfileModsModalViewModel}">
         <profiles:CopyProfileModsModal />
     </DataTemplate>

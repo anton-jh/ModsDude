@@ -35,10 +35,10 @@ public class Profile(
     public int Version { get; private set; }
 
     /// <summary>
-    /// Counts changes to the mods it ignores, which are their own list with their own editor - so a rename
-    /// does not make an ignored-mods change look stale, nor the other way round.
+    /// Counts changes to its ignore list - the mods it ignores and the versions it dismisses - which has
+    /// its own editor, so a rename does not make an ignore list change look stale, nor the other way round.
     /// </summary>
-    public int IgnoredModsVersion { get; private set; }
+    public int IgnoredVersion { get; private set; }
     public DateTime Created { get; } = created;
 
     /// <summary>
@@ -70,10 +70,10 @@ public class Profile(
         Version++;
     }
 
-    /// <summary>Records that the list of mods it ignores was replaced.</summary>
-    public void NoteIgnoredModsReplaced()
+    /// <summary>Records that its ignore list was replaced.</summary>
+    public void NoteIgnoredReplaced()
     {
-        IgnoredModsVersion++;
+        IgnoredVersion++;
     }
 
     public void Archive(DateTime now)

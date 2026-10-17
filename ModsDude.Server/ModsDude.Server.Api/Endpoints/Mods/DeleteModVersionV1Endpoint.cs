@@ -56,6 +56,10 @@ public class DeleteModVersionV1Endpoint : IEndpoint
         dbContext.ModVersions.Remove(modVersion);
         ModVersionSequencer.CloseGap(remaining, modVersion, timeService.Now());
 
+        // Off every ignore list in the repo, in the same commit, so a version imported again later is
+        // offered again.
+        await dbContext.ReleaseModVersionAsync(modVersion.RepoId, modVersion.ModId, modVersion.Id, cancellationToken);
+
         await unitOfWork.CommitAsync(cancellationToken);
 
         // One version fewer can turn a mod that was outside its window into one winding down.

@@ -4,14 +4,23 @@ namespace ModsDude.Client.Core.Profiles.Editor;
 
 /// <summary>One entry in a row's version selector.</summary>
 /// <param name="CouldNotCompare">The ordering could not place this version against the repo's newest.</param>
-public sealed record ProfileModVersionOption(CatalogModVersion Version, bool CouldNotCompare = false)
+/// <param name="IsDismissed">The profile has dismissed this version, so it is never offered as an update. Still pickable.</param>
+public sealed record ProfileModVersionOption(CatalogModVersion Version, bool CouldNotCompare = false, bool IsDismissed = false)
 {
-    public string Label => Version switch
+    public string Label
     {
-        { IsOnServer: true } => Version.VersionId.Value,
-        { Download: RemoteOffer offer } => $"{Version.VersionId.Value} · {offer.SourceName}",
-        _ => $"{Version.VersionId.Value}*"
-    };
+        get
+        {
+            var label = Version switch
+            {
+                { IsOnServer: true } => Version.VersionId.Value,
+                { Download: RemoteOffer offer } => $"{Version.VersionId.Value} · {offer.SourceName}",
+                _ => $"{Version.VersionId.Value}*"
+            };
+
+            return IsDismissed ? $"{label} · dismissed" : label;
+        }
+    }
 
     public string? Note
     {

@@ -67,7 +67,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly List<Game> _watchedGames = [];
     private readonly IReadOnlyList<IRelayCommand> _commands;
 
-    private readonly EditHistory<ProfileEditorSnapshot> _history = new(new(new ProfileDraft([], []), []));
+    private readonly EditHistory<ProfileEditorSnapshot> _history = new(new(new ProfileDraft([], [], []), []));
     private readonly OtherProfilesReader _otherProfiles;
     private readonly Dictionary<ModKey, ModVersionKey> _availableChoices = [];
 
@@ -253,6 +253,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     public string IgnoreSelectedText => Counted("Ignore", PickedAvailable().Count(x => x.IsIgnored is false));
     public string UnignoreSelectedText => Counted("Stop ignoring", PickedAvailable().Count(x => x.IsIgnored));
+    public string DismissSelectedVersionsText => Counted("Dismiss", VersionsToDismiss().Count);
+    public string DismissSelectedUpdatesText => Counted("Dismiss", UpdatesToDismiss().Count);
     public string RevertSelectedText => Counted("Revert", PickedPinned().Count(x => x.IsChanged));
 
     public string UpdateSelectedText
@@ -489,6 +491,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     {
         OnPropertyChanged(nameof(IgnoreSelectedText));
         OnPropertyChanged(nameof(UnignoreSelectedText));
+        OnPropertyChanged(nameof(DismissSelectedVersionsText));
+        OnPropertyChanged(nameof(DismissSelectedUpdatesText));
         OnPropertyChanged(nameof(UpdateSelectedText));
         OnPropertyChanged(nameof(RevertSelectedText));
 
@@ -606,6 +610,17 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         Commit(Draft.SetIgnored(rows.Select(x => x.ModId), ignored), ignored ? $"Ignored {what}" : $"Stopped ignoring {what}");
     }
+
+    /// <summary>Dismisses the version each picked row shows, so it is never offered as an update.</summary>
+    [RelayCommand(CanExecute = nameof(CanDismissSelectedVersions))]
+    private void DismissSelectedVersions() => Dismiss(VersionsToDismiss());
+
+    private bool CanDismissSelectedVersions() => CanEdit && VersionsToDismiss().Count > 0;
+
+    private List<(string Name, ModVersionIdentity Version)> VersionsToDismiss()
+        => [.. PickedAvailable()
+            .Select(x => (x.Name, x.Version.Identity))
+            .Where(x => Draft.Dismissed.Contains(x.Identity) is false)];
 
     private List<AvailableModRowViewModel> PickedAvailable() => [.. AvailableSelection.Picked().OfType<AvailableModRowViewModel>()];
 
@@ -774,6 +789,52 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         Commit(Draft.SetVersion(row.ModId, update.To), $"Updated {row.Name} to {update.To}");
     }
 
+    /// <summary>Dismisses the version each picked row's update points at, locked or not.</summary>
+    [RelayCommand(CanExecute = nameof(CanDismissSelectedUpdates))]
+    private void DismissSelectedUpdates() => Dismiss(UpdatesToDismiss());
+
+    private bool CanDismissSelectedUpdates() => CanEdit && UpdatesToDismiss().Count > 0;
+
+    private List<(string Name, ModVersionIdentity Version)> UpdatesToDismiss()
+        => [.. PickedPinned()
+            .Where(x => x.State.Update is not null)
+            .Select(x => (x.Name, new ModVersionIdentity(x.ModId, x.State.Update!.To)))];
+
+    private void Dismiss(IReadOnlyList<(string Name, ModVersionIdentity Version)> versions)
+    {
+        Commit(
+            Draft.Dismiss(versions.Select(x => x.Version)),
+            versions is [var only] ? $"Dismissed {only.Name} {only.Version.VersionId}" : $"Dismissed {versions.Count} versions");
+    }
+
+    /// <summary>Every dismissed version, each with a box to offer it as an update again.</summary>
+    [RelayCommand(CanExecute = nameof(CanEdit))]
+    private async Task ShowDismissed()
+    {
+        if (Draft.Dismissed.IsEmpty)
+        {
+            return;
+        }
+
+        var modal = new ProfileDismissedVersionsModalViewModel([.. Draft.Dismissed
+            .Select(x => new ProfileDismissedVersionViewModel(NameOf(x.ModId), x))
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Identity.ModId.Value, StringComparer.Ordinal)
+            .ThenBy(x => x.Identity.VersionId.Value, StringComparer.Ordinal)]);
+
+        await _modalService.Show(modal);
+
+        if (modal.Result.Count > 0)
+        {
+            Commit(
+                Draft.Restore(modal.Result),
+                modal.Result.Count == 1 ? $"Restored {NameOf(modal.Result[0].ModId)} {modal.Result[0].VersionId}" : $"Restored {modal.Result.Count} versions");
+        }
+    }
+
+    private string NameOf(ModKey modId)
+        => _pinnedRows.GetValueOrDefault(modId)?.Name ?? _availableRows.GetValueOrDefault(modId)?.Name ?? modId.Value;
+
     /// <summary>The locked mods with a newer version, each with a box to move it anyway.</summary>
     [RelayCommand(CanExecute = nameof(CanEdit))]
     private async Task ShowSkippedUpdates()
@@ -786,7 +847,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
 
         var modal = new ProfileLockedUpdatesModalViewModel([.. skipped
-            .Select(x => new ProfileLockedUpdateViewModel(_pinnedRows.GetValueOrDefault(x.ModId)?.Name ?? x.ModId.Value, x))]);
+            .Select(x => new ProfileLockedUpdateViewModel(NameOf(x.ModId), x))]);
 
         await _modalService.Show(modal);
 
@@ -851,6 +912,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             [.. _state.Pinned.Where(x => x.Pin is not null).Select(x => x.Pin!)],
             [.. draft.SavedIgnored],
             [.. draft.IgnoredToWrite],
+            [.. draft.SavedDismissed],
+            [.. draft.Dismissed],
             _ignoredVersion,
             [.. pending.Select(x => x.Version)],
             pending.ToDictionary(x => x.Version.Identity, x => x.Version.Name),
@@ -1246,7 +1309,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         try
         {
             var modListRead = _pinsClient.GetProfileModPinsV1Async(_repo.Id, _profile.Id, null, _cancellation.Token);
-            var ignoredRead = _profilesClient.GetProfileIgnoredModsV1Async(_repo.Id, _profile.Id, _cancellation.Token);
+            var ignoredRead = _profilesClient.GetProfileIgnoreListV1Async(_repo.Id, _profile.Id, _cancellation.Token);
 
             var modList = await modListRead;
             var ignored = await ignoredRead;
@@ -1262,7 +1325,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
                 _history.Reset(Current with
                 {
-                    Draft = new ProfileDraft(OtherProfilesReader.ToPins(modList), ignored.ModIds.Select(ModKey.From))
+                    Draft = new ProfileDraft(
+                        OtherProfilesReader.ToPins(modList),
+                        ignored.ModIds.Select(ModKey.From),
+                        ignored.DismissedVersions.Select(x => new ModVersionIdentity(ModKey.From(x.ModId), ModVersionKey.From(x.VersionId))))
                 });
             });
 

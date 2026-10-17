@@ -25,6 +25,7 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<Profile> Profiles { get; init; }
     public required DbSet<ProfileRevision> ProfileRevisions { get; init; }
     public required DbSet<ProfileIgnoredMod> ProfileIgnoredMods { get; init; }
+    public required DbSet<ProfileDismissedVersion> ProfileDismissedVersions { get; init; }
     public required DbSet<ProfileRevisionRequest> ProfileRevisionRequests { get; init; }
     public required DbSet<ModVersion> ModVersions { get; init; }
     public required DbSet<ModVersionDeletion> ModVersionDeletions { get; init; }

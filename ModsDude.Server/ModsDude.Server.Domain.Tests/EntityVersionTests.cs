@@ -59,7 +59,7 @@ public class EntityVersionTests
     }
 
     [Fact]
-    public void A_profile_counts_renames_and_archiving_apart_from_its_ignored_mods()
+    public void A_profile_counts_renames_and_archiving_apart_from_its_ignore_list()
     {
         var profile = new Profile(new RepoId(Guid.NewGuid()), new ProfileName("Season 4"), _now, new ProfileCreateRequestId(Guid.NewGuid()));
 
@@ -69,12 +69,12 @@ public class EntityVersionTests
         profile.Restore();
 
         Assert.Equal(3, profile.Version);
-        Assert.Equal(0, profile.IgnoredModsVersion);
+        Assert.Equal(0, profile.IgnoredVersion);
 
-        profile.NoteIgnoredModsReplaced();
+        profile.NoteIgnoredReplaced();
 
         Assert.Equal(3, profile.Version);
-        Assert.Equal(1, profile.IgnoredModsVersion);
+        Assert.Equal(1, profile.IgnoredVersion);
     }
 
     [Fact]

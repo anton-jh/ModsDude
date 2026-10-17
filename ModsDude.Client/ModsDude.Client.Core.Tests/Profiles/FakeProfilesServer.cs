@@ -121,8 +121,8 @@ internal sealed class FakeProfilesServer : IProfilesClient
 
     public Task DeleteProfileV1Async(Guid repoId, Guid profileId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<ICollection<ProfileDto>> GetArchivedProfilesV1Async(Guid repoId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<ProfileIgnoredModsDto> GetProfileIgnoredModsV1Async(Guid repoId, Guid profileId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<ProfileIgnoredModsDto> SetProfileIgnoredModsV1Async(Guid repoId, Guid profileId, SetProfileIgnoredModsRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task<ProfileIgnoreListDto> GetProfileIgnoreListV1Async(Guid repoId, Guid profileId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task<ProfileIgnoreListDto> SetProfileIgnoreListV1Async(Guid repoId, Guid profileId, SetProfileIgnoreListRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<GetProfileRevisionsResponse> GetProfileRevisionsV1Async(Guid repoId, Guid profileId, int? skip = null, int? limit = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<ProfileRevisionDto> SaveProfileRevisionV1Async(Guid repoId, Guid profileId, SaveProfileRevisionRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<PruneProfileRevisionsResponse> PruneProfileRevisionsV1Async(Guid repoId, Guid profileId, PruneProfileRevisionsRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();

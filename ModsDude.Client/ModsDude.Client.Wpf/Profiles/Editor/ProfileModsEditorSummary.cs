@@ -62,6 +62,9 @@ public sealed class ProfileModsEditorSummary
         HasSkippedUpdates = updates.Skipped.Count > 0;
         SkippedText = $"{updates.Skipped.Count} newer for locked mods";
 
+        HasDismissed = draft.Dismissed.Count > 0;
+        DismissedText = $"{draft.Dismissed.Count} dismissed";
+
         HasUnsettled = state.UnsettledCount > 0;
         UnsettledText = $"{Plural(state.UnsettledCount, "version")} could not be compared";
 
@@ -95,6 +98,8 @@ public sealed class ProfileModsEditorSummary
     public string UpdateRepoOnlyText { get; }
     public bool HasSkippedUpdates { get; }
     public string SkippedText { get; }
+    public bool HasDismissed { get; }
+    public string DismissedText { get; }
     public bool HasUnsettled { get; }
     public string UnsettledText { get; }
 

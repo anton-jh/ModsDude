@@ -85,12 +85,14 @@ public sealed record ProfileSaveOutcome(ProfileSaveStatus Status, string Message
 /// The starting page's catalog, invalidated when the run ends however it ends. Passed rather than
 /// owned, exactly as <see cref="ModImportCoordinator"/> takes it.
 /// </param>
-/// <param name="IgnoredOriginal">The ignore list as the server held it when the draft was read.</param>
+/// <param name="IgnoredOriginal">The ignored mods as the server held them when the draft was read.</param>
 /// <param name="IgnoredDesired">
-/// What the profile should ignore after the save, with whatever the draft pins already taken out. It is
-/// written <em>after</em> the revision and only if that succeeded, and on its own where the mod list did
-/// not change - which mints no revision, imports nothing and applies nothing.
+/// What the profile should ignore after the save, with whatever the draft pins already taken out. The
+/// ignore list is written <em>after</em> the revision and only if that succeeded, and on its own where
+/// the mod list did not change - which mints no revision, imports nothing and applies nothing.
 /// </param>
+/// <param name="DismissedOriginal">The dismissed versions as the server held them when the draft was read.</param>
+/// <param name="DismissedDesired">What the profile should dismiss after the save, written with the ignored mods.</param>
 /// <param name="Apply">Whether to re-apply afterwards. <em>Save only</em> is what clears it.</param>
 public sealed record ProfileSaveRequest(
     Repo Repo,
@@ -102,6 +104,8 @@ public sealed record ProfileSaveRequest(
     IReadOnlyList<ProfileModPin> Desired,
     IReadOnlyList<ModKey> IgnoredOriginal,
     IReadOnlyList<ModKey> IgnoredDesired,
+    IReadOnlyList<ModVersionIdentity> DismissedOriginal,
+    IReadOnlyList<ModVersionIdentity> DismissedDesired,
     int IgnoredVersion,
     IReadOnlyList<CatalogModVersion> Pending,
     IReadOnlyDictionary<ModVersionIdentity, string> Names,
@@ -109,7 +113,9 @@ public sealed record ProfileSaveRequest(
     bool Apply)
 {
     /// <summary>Whether the ignore list differs from what the server holds, and so has to be written.</summary>
-    public bool IgnoredChanged => IgnoredDesired.ToHashSet().SetEquals(IgnoredOriginal) is false;
+    public bool IgnoredChanged
+        => IgnoredDesired.ToHashSet().SetEquals(IgnoredOriginal) is false
+        || DismissedDesired.ToHashSet().SetEquals(DismissedOriginal) is false;
 }
 
 
@@ -436,16 +442,14 @@ public sealed class ProfileSaveService(
             return new ProfileSaveOutcome(ProfileSaveStatus.Failed, failure);
         }
 
-        var count = request.IgnoredDesired.Count;
+        var ignored = request.IgnoredDesired.Count;
+        var dismissed = request.DismissedDesired.Count;
 
         return new ProfileSaveOutcome(
             ProfileSaveStatus.Saved,
-            count switch
-            {
-                0 => "Saved. Nothing is ignored in this profile now.",
-                1 => "Saved. 1 mod is ignored in this profile.",
-                _ => $"Saved. {count} mods are ignored in this profile."
-            })
+            ignored == 0 && dismissed == 0
+                ? "Saved. Nothing is ignored or dismissed in this profile now."
+                : $"Saved. {Counted(ignored, "mod", "ignored")} · {Counted(dismissed, "version", "dismissed")}.")
         {
             // Unchanged: no revision was written, and the page's baseline must stay on the one it has.
             Revision = request.BasedOn,
@@ -453,13 +457,15 @@ public sealed class ProfileSaveService(
         };
     }
 
+    private static string Counted(int count, string noun, string what) => count == 1 ? $"1 {noun} {what}" : $"{count} {noun}s {what}";
+
     /// <summary>
-    /// Replaces what the profile ignores with the draft's list, when it differs. Null on success, and
-    /// otherwise the sentence saying it did not.
+    /// Replaces the profile's ignore list - ignored mods and dismissed versions - with the draft's, when
+    /// it differs. Null on success, and otherwise the sentence saying it did not.
     /// </summary>
     /// <remarks>
     /// The whole list rather than a change to it: the list belongs to one profile and is saved the way
-    /// the mod list is, as what the page showed. See <c>ProfileIgnoredMod</c>.
+    /// the mod list is, as what the page showed. See <c>ProfileIgnoredMod</c> and <c>ProfileDismissedVersion</c>.
     /// </remarks>
     private async Task<string?> WriteIgnoredAsync(ProfileSaveRun run, ProfileSaveRequest request, CancellationToken cancellationToken)
     {
@@ -468,16 +474,17 @@ public sealed class ProfileSaveService(
             return null;
         }
 
-        run.Strip?.Report("Saving the ignored mods");
+        run.Strip?.Report("Saving the ignore list");
 
         try
         {
-            await profilesClient.SetProfileIgnoredModsV1Async(
+            await profilesClient.SetProfileIgnoreListV1Async(
                 request.Repo.Id,
                 request.ProfileId,
-                new SetProfileIgnoredModsRequest
+                new SetProfileIgnoreListRequest
                 {
                     ModIds = [.. request.IgnoredDesired.Select(x => x.Value)],
+                    DismissedVersions = [.. request.DismissedDesired.Select(x => new DismissedVersionDto { ModId = x.ModId.Value, VersionId = x.VersionId.Value })],
                     ExpectedVersion = request.IgnoredVersion
                 },
                 cancellationToken);
@@ -491,15 +498,15 @@ public sealed class ProfileSaveService(
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ProfileChanged)
         {
             // Expected rather than broken, so it is said with the save's outcome rather than as an error.
-            errorReporter.Record(exception, $"saving the ignored mods of '{request.ProfileName}'");
+            errorReporter.Record(exception, $"saving the ignore list of '{request.ProfileName}'");
 
-            return "Somebody else changed the ignored mods meanwhile, so yours were not saved.";
+            return "Somebody else changed the ignore list meanwhile, so yours was not saved.";
         }
         catch (Exception exception)
         {
-            await OnUiThreadAsync(() => errorReporter.ShowAsync(exception, $"saving the ignored mods of '{request.ProfileName}'"));
+            await OnUiThreadAsync(() => errorReporter.ShowAsync(exception, $"saving the ignore list of '{request.ProfileName}'"));
 
-            return "The ignored mods could not be saved, so they are as they were.";
+            return "The ignore list could not be saved, so it is as it was.";
         }
     }
 

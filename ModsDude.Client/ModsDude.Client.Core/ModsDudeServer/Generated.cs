@@ -6104,11 +6104,11 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<ProfileIgnoredModsDto> GetProfileIgnoredModsV1Async(System.Guid repoId, System.Guid profileId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<ProfileIgnoreListDto> GetProfileIgnoreListV1Async(System.Guid repoId, System.Guid profileId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<ProfileIgnoredModsDto> SetProfileIgnoredModsV1Async(System.Guid repoId, System.Guid profileId, SetProfileIgnoredModsRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<ProfileIgnoreListDto> SetProfileIgnoreListV1Async(System.Guid repoId, System.Guid profileId, SetProfileIgnoreListRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -7003,7 +7003,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<ProfileIgnoredModsDto> GetProfileIgnoredModsV1Async(System.Guid repoId, System.Guid profileId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<ProfileIgnoreListDto> GetProfileIgnoreListV1Async(System.Guid repoId, System.Guid profileId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (repoId == null)
                 throw new System.ArgumentNullException("repoId");
@@ -7022,12 +7022,12 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                     if (!string.IsNullOrEmpty(_baseUrl)) urlBuilder_.Append(_baseUrl);
-                    // Operation Path: "api/v1/repos/{repoId}/profiles/{profileId}/ignoredMods"
+                    // Operation Path: "api/v1/repos/{repoId}/profiles/{profileId}/ignoreList"
                     urlBuilder_.Append("api/v1/repos/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(repoId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/profiles/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(profileId, System.Globalization.CultureInfo.InvariantCulture)));
-                    urlBuilder_.Append("/ignoredMods");
+                    urlBuilder_.Append("/ignoreList");
 
                     PrepareRequest(client_, request_, urlBuilder_);
 
@@ -7054,7 +7054,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
                         var status_ = (int)response_.StatusCode;
                         if (status_ == 200)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<ProfileIgnoredModsDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<ProfileIgnoreListDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -7123,7 +7123,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<ProfileIgnoredModsDto> SetProfileIgnoredModsV1Async(System.Guid repoId, System.Guid profileId, SetProfileIgnoredModsRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<ProfileIgnoreListDto> SetProfileIgnoreListV1Async(System.Guid repoId, System.Guid profileId, SetProfileIgnoreListRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (repoId == null)
                 throw new System.ArgumentNullException("repoId");
@@ -7149,12 +7149,12 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                     if (!string.IsNullOrEmpty(_baseUrl)) urlBuilder_.Append(_baseUrl);
-                    // Operation Path: "api/v1/repos/{repoId}/profiles/{profileId}/ignoredMods"
+                    // Operation Path: "api/v1/repos/{repoId}/profiles/{profileId}/ignoreList"
                     urlBuilder_.Append("api/v1/repos/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(repoId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/profiles/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(profileId, System.Globalization.CultureInfo.InvariantCulture)));
-                    urlBuilder_.Append("/ignoredMods");
+                    urlBuilder_.Append("/ignoreList");
 
                     PrepareRequest(client_, request_, urlBuilder_);
 
@@ -7181,7 +7181,7 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
                         var status_ = (int)response_.StatusCode;
                         if (status_ == 200)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<ProfileIgnoredModsDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<ProfileIgnoreListDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -11706,6 +11706,18 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial record DismissedVersionDto
+    {
+
+        [Newtonsoft.Json.JsonProperty("modId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string ModId { get; set; } = default!;
+
+        [Newtonsoft.Json.JsonProperty("versionId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string VersionId { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial record GameActivityDto
     {
 
@@ -12352,8 +12364,11 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial record ProfileIgnoredModsDto
+    public partial record ProfileIgnoreListDto
     {
+
+        [Newtonsoft.Json.JsonProperty("dismissedVersions", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Collections.Generic.ICollection<DismissedVersionDto> DismissedVersions { get; set; } = default!;
 
         [Newtonsoft.Json.JsonProperty("modIds", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Collections.Generic.ICollection<string> ModIds { get; set; } = default!;
@@ -13071,8 +13086,11 @@ namespace ModsDude.Client.Core.ModsDudeServer.Generated
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial record SetProfileIgnoredModsRequest
+    public partial record SetProfileIgnoreListRequest
     {
+
+        [Newtonsoft.Json.JsonProperty("dismissedVersions", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Collections.Generic.ICollection<DismissedVersionDto> DismissedVersions { get; set; } = default!;
 
         [Newtonsoft.Json.JsonProperty("expectedVersion", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public int ExpectedVersion { get; set; } = default!;

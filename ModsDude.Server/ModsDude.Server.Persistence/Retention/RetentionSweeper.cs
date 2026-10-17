@@ -239,6 +239,7 @@ public class RetentionSweeper(ApplicationDbContext dbContext, ILogger<RetentionS
 
             dbContext.ModVersions.Remove(version);
             ModVersionSequencer.CloseGap(siblings, version, now);
+            await dbContext.ReleaseModVersionAsync(repoId, modId, version.Id, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
             deleted++;

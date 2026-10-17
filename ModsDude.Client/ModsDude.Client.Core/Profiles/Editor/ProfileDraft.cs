@@ -8,26 +8,38 @@ namespace ModsDude.Client.Core.Profiles.Editor;
 /// edit returns a new draft, which is what makes undo a matter of keeping the old one.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Pins carry only the profile's own lock. The adapter's belongs to the version and is read from it.
+/// </para>
+/// <para>
+/// The ignore list is the ignored mods and the dismissed versions. A dismissed version is never offered
+/// as an update, pinned or not, and is written whatever the pins; one at or below a pin is kept too.
+/// </para>
 /// </remarks>
 public sealed record ProfileDraft
 {
-    public ProfileDraft(IEnumerable<ProfileModPin> saved, IEnumerable<ModKey> savedIgnored)
+    public ProfileDraft(IEnumerable<ProfileModPin> saved, IEnumerable<ModKey> savedIgnored, IEnumerable<ModVersionIdentity> savedDismissed)
     {
         Saved = saved.Select(Normalize).ToImmutableDictionary(x => x.ModId);
         SavedIgnored = [.. savedIgnored];
+        SavedDismissed = [.. savedDismissed];
         Pins = Saved;
         Ignored = SavedIgnored;
+        Dismissed = SavedDismissed;
     }
 
 
     public ImmutableDictionary<ModKey, ProfileModPin> Saved { get; }
     public ImmutableHashSet<ModKey> SavedIgnored { get; }
+    public ImmutableHashSet<ModVersionIdentity> SavedDismissed { get; }
 
     public ImmutableDictionary<ModKey, ProfileModPin> Pins { get; private init; }
 
     /// <summary>What the user has ignored, pinned or not. A pin wins; see <see cref="IgnoredToWrite"/>.</summary>
     public ImmutableHashSet<ModKey> Ignored { get; private init; }
+
+    /// <summary>The exact versions never offered as updates, pinned or not.</summary>
+    public ImmutableHashSet<ModVersionIdentity> Dismissed { get; private init; }
 
 
     /// <summary>The ignore list as a save writes it: the server refuses one that overlaps the pins.</summary>
@@ -37,7 +49,7 @@ public sealed record ProfileDraft
 
     public bool HasPinChanges => Changes.IsEmpty is false;
 
-    public bool HasIgnoreChanges => IgnoredToWrite.SetEquals(SavedIgnored) is false;
+    public bool HasIgnoreChanges => IgnoredToWrite.SetEquals(SavedIgnored) is false || Dismissed.SetEquals(SavedDismissed) is false;
 
     public bool HasChanges => HasPinChanges || HasIgnoreChanges;
 
@@ -50,9 +62,11 @@ public sealed record ProfileDraft
         => ReferenceEquals(this, other)
         || (ReferenceEquals(Saved, other.Saved)
             && ReferenceEquals(SavedIgnored, other.SavedIgnored)
+            && ReferenceEquals(SavedDismissed, other.SavedDismissed)
             && Pins.Count == other.Pins.Count
             && Pins.All(x => other.Pins.TryGetValue(x.Key, out var pin) && pin == x.Value)
-            && Ignored.SetEquals(other.Ignored));
+            && Ignored.SetEquals(other.Ignored)
+            && Dismissed.SetEquals(other.Dismissed));
 
     public ProfileModTouch TouchOf(ModKey modId)
         => ProfileModTouches.Classify(Saved.GetValueOrDefault(modId), Pins.GetValueOrDefault(modId));
@@ -75,6 +89,10 @@ public sealed record ProfileDraft
     public ProfileDraft SetIgnored(IEnumerable<ModKey> mods, bool ignored)
         => this with { Ignored = ignored ? Ignored.Union(mods) : Ignored.Except(mods) };
 
+    public ProfileDraft Dismiss(IEnumerable<ModVersionIdentity> versions) => this with { Dismissed = Dismissed.Union(versions) };
+
+    public ProfileDraft Restore(IEnumerable<ModVersionIdentity> versions) => this with { Dismissed = Dismissed.Except(versions) };
+
     /// <summary>Puts each mod back the way the saved profile has it: pinned as it was, or not at all.</summary>
     public ProfileDraft Revert(IEnumerable<ModKey> mods)
     {
@@ -95,7 +113,7 @@ public sealed record ProfileDraft
         return this with { Pins = pins.ToImmutable() };
     }
 
-    public ProfileDraft RevertAll() => this with { Pins = Saved, Ignored = SavedIgnored };
+    public ProfileDraft RevertAll() => this with { Pins = Saved, Ignored = SavedIgnored, Dismissed = SavedDismissed };
 
     public ProfileDraft ReplacePins(IEnumerable<ProfileModPin> pins)
         => this with { Pins = pins.Select(Normalize).ToImmutableDictionary(x => x.ModId) };

@@ -10,7 +10,7 @@ namespace ModsDude.Client.Core.Profiles.Editor;
 /// <para>
 /// <b>The left list</b> is every mod an enabled source offers that the profile neither pins nor
 /// held when it was read. Each row offers the versions the sources offer, and points at the one its
-/// selector was set to or the newest.
+/// selector was set to, or else the newest one not dismissed, or else the newest.
 /// </para>
 /// <para>
 /// <b>The right list</b> is the draft: every pin, plus every saved pin the draft has taken out.
@@ -136,7 +136,7 @@ public sealed record ProfileEditorState
             var selected = inputs.AvailableChoices.TryGetValue(modId, out var choice)
                     && ordered.FirstOrDefault(x => x.VersionId == choice) is CatalogModVersion chosen
                 ? chosen
-                : ordered[^1];
+                : ordered.LastOrDefault(x => draft.Dismissed.Contains(x.Identity) is false) ?? ordered[^1];
 
             var status = selected.IsOnServer
                 ? AvailableModStatus.InRepo
@@ -149,7 +149,7 @@ public sealed record ProfileEditorState
             rows.Add(new AvailableModRow(
                 modId,
                 selected,
-                Options(set, ordered),
+                Options(set, ordered, draft),
                 status,
                 set?.CouldNotCompareToNewest(selected.VersionId) ?? false,
                 draft.Ignored.Contains(modId),
@@ -173,7 +173,10 @@ public sealed record ProfileEditorState
             .Select(x => x with { Lock = new ProfileModLock(Resolve(catalog, x).Locked, x.Lock.ByProfile) })
             .ToList();
 
-        var updates = ProfileModUpdates.Plan(effective, catalog.Index, catalog.IsVisible);
+        var updates = ProfileModUpdates.Plan(
+            effective,
+            catalog.Index,
+            x => catalog.IsVisible(x) && draft.Dismissed.Contains(x.Identity) is false);
         var updatesByMod = updates.Available.Concat(updates.Skipped).ToDictionary(x => x.ModId);
         var effectiveByMod = effective.ToDictionary(x => x.ModId);
 
@@ -188,8 +191,8 @@ public sealed record ProfileEditorState
             var set = catalog.Index.GetValueOrDefault(modId);
 
             var options = pin is null
-                ? [new ProfileModVersionOption(version, set?.CouldNotCompareToNewest(version.VersionId) ?? false)]
-                : Options(set, Ordered(catalog, modId, catalog.IsVisible, [version.VersionId]));
+                ? Options(set, [version], draft)
+                : Options(set, Ordered(catalog, modId, catalog.IsVisible, [version.VersionId]), draft);
 
             var added = inputs.SavedDates.TryGetValue(modId, out var date) && date.Version == current.VersionId
                 ? date.Added
@@ -270,8 +273,11 @@ public sealed record ProfileEditorState
             : null;
     }
 
-    private static List<ProfileModVersionOption> Options(ModVersionSet? set, List<CatalogModVersion> ordered)
-        => [.. Enumerable.Reverse(ordered).Select(x => new ProfileModVersionOption(x, set?.CouldNotCompareToNewest(x.VersionId) ?? false))];
+    private static List<ProfileModVersionOption> Options(ModVersionSet? set, List<CatalogModVersion> ordered, ProfileDraft draft)
+        => [.. Enumerable.Reverse(ordered).Select(x => new ProfileModVersionOption(
+            x,
+            set?.CouldNotCompareToNewest(x.VersionId) ?? false,
+            draft.Dismissed.Contains(x.Identity)))];
 
     private static CatalogModVersion Resolve(ProfileEditorCatalog catalog, ProfileModPin pin)
         => catalog.Resolve(new ModVersionIdentity(pin.ModId, pin.VersionId));

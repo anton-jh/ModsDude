@@ -11,7 +11,7 @@ internal class ProfileEntityTypeConfiguration : IEntityTypeConfiguration<Profile
         builder.HasKey(x => new { x.RepoId, x.Id });
 
         builder.Property(x => x.Version).IsConcurrencyToken();
-        builder.Property(x => x.IgnoredModsVersion).IsConcurrencyToken();
+        builder.Property(x => x.IgnoredVersion).IsConcurrencyToken();
 
         builder.HasOne<Repo>().WithMany().HasForeignKey(x => x.RepoId);
 

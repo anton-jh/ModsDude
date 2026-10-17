@@ -67,13 +67,46 @@ public class ProfileDraftTests
     [Fact]
     public void Reverting_everything_restores_the_saved_profile()
     {
-        var draft = new ProfileDraft([Pin("a", "1.0")], [Mod("b")])
+        var draft = new ProfileDraft([Pin("a", "1.0")], [Mod("b")], [Version("a", "2.0")])
             .Remove([Mod("a")])
             .Pin(Pin("c", "1.0"))
             .SetIgnored([Mod("b")], false)
+            .Restore([Version("a", "2.0")])
+            .Dismiss([Version("c", "2.0")])
             .RevertAll();
 
         Assert.False(draft.HasChanges);
+        Assert.Equal([Version("a", "2.0")], draft.Dismissed);
+    }
+
+    [Fact]
+    public void Dismissing_is_an_ignore_change_and_restoring_it_is_none()
+    {
+        var dismissed = Draft(Pin("a", "1.0")).Dismiss([Version("a", "2.0"), Version("a", "3.0")]);
+        var restored = dismissed.Restore([Version("a", "2.0"), Version("a", "3.0")]);
+
+        Assert.True(dismissed.HasIgnoreChanges);
+        Assert.False(dismissed.HasPinChanges);
+        Assert.False(restored.HasChanges);
+    }
+
+    [Fact]
+    public void Dismissing_and_restoring_the_same_version_is_the_same_draft()
+    {
+        var draft = Draft(Pin("a", "1.0"));
+
+        Assert.True(draft.Dismiss([Version("a", "2.0")]).Restore([Version("a", "2.0")]).IsSameAs(draft));
+        Assert.False(draft.Dismiss([Version("a", "2.0")]).IsSameAs(draft));
+    }
+
+    /// <summary>A dismissal holds whether or not the mod is pinned, so taking it out and adding it back keeps it.</summary>
+    [Fact]
+    public void A_taken_out_mod_keeps_its_dismissals()
+    {
+        var draft = Draft(Pin("a", "1.0")).Dismiss([Version("a", "2.0")]).Remove([Mod("a")]);
+
+        Assert.Equal([Version("a", "2.0")], draft.Dismissed);
+        Assert.Equal([Version("a", "2.0")], draft.Pin(Pin("a", "1.0")).Dismissed);
     }
 
     [Fact]
