@@ -100,22 +100,42 @@ public class ProfileEditorStateTests
     [Fact]
     public void The_updates_count_is_what_the_updates_filter_shows_whatever_the_search()
     {
-        var draft = Draft(Pin("free", "1.0"), Pin("locked", "1.0", locked: true), Pin("unsettled", "1.0"), Pin("current", "1.0"), Pin("taken", "1.0"))
+        var draft = Draft(
+                Pin("free", "1.0"), Pin("locked", "1.0", locked: true), Pin("unsettled", "1.0"),
+                Pin("lockedunsettled", "1.0", locked: true), Pin("current", "1.0"), Pin("taken", "1.0"))
             .Remove([Mod("taken")]);
 
         var inputs = Inputs(draft,
             Registered("free", "1.0", 0), Registered("free", "2.0", 1),
             Registered("locked", "1.0", 0), Registered("locked", "2.0", 1),
             Registered("unsettled", "1.0", 0), Local("unsettled", "hurr durr"),
+            Registered("lockedunsettled", "1.0", 0), Local("lockedunsettled", "hurr durr"),
             Registered("current", "1.0", 0),
             Registered("taken", "1.0", 0), Registered("taken", "2.0", 1));
 
         var filtered = Compute(inputs with { PinnedFilter = PinnedModFilter.Updates });
         var searched = Compute(inputs with { Search = ModSearchQuery.Parse("current", []) });
 
-        Assert.Equal(["free", "locked", "unsettled"], filtered.PinnedShown.Shown());
-        Assert.Equal(3, filtered.UpdatesFilterCount);
-        Assert.Equal(3, searched.UpdatesFilterCount);
+        Assert.Equal(["free", "unsettled"], filtered.PinnedShown.Shown());
+        Assert.Equal(2, filtered.UpdatesFilterCount);
+        Assert.Equal(2, searched.UpdatesFilterCount);
+        Assert.Equal(1, filtered.UnsettledCount);
+    }
+
+    [Fact]
+    public void A_locked_pin_with_a_newer_version_is_under_locked_with_its_update_and_not_under_updates()
+    {
+        var draft = Draft(Pin("mine", "1.0", locked: true));
+        var inputs = Inputs(draft, Registered("mine", "1.0", 0), Registered("mine", "2.0", 1));
+
+        var locked = Compute(inputs with { PinnedFilter = PinnedModFilter.Locked });
+        var updates = Compute(inputs with { PinnedFilter = PinnedModFilter.Updates });
+
+        Assert.Equal(["mine"], locked.PinnedShown.Shown());
+        Assert.Equal(V("2.0"), locked.Row("mine").Update?.To);
+        Assert.Empty(updates.PinnedShown);
+        Assert.Equal(0, updates.UpdatesFilterCount);
+        Assert.False(updates.Updates.HasAny);
     }
 
     [Fact]

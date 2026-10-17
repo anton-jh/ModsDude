@@ -195,7 +195,10 @@ public sealed record ProfileEditorState
                 ? date.Added
                 : (DateTimeOffset?)null;
 
+            var rowLock = new ProfileModLock(version.Locked, current.Lock.ByProfile);
+
             var unsettled = pin is not null
+                && rowLock.IsLocked is false
                 && set is not null
                 && set.Order.Any(x => x.VersionId != pin.VersionId
                     && x.IsOnServer is false
@@ -210,7 +213,7 @@ public sealed record ProfileEditorState
                 options,
                 pin,
                 saved,
-                new ProfileModLock(version.Locked, current.Lock.ByProfile),
+                rowLock,
                 ProfileModTouches.Classify(saved, pin),
                 ProfileModTouches.Describe(saved, pin),
                 pin is null ? null : updatesByMod.GetValueOrDefault(modId),

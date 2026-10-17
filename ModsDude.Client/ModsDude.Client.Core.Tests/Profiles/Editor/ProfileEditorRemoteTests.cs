@@ -27,6 +27,19 @@ public class ProfileEditorRemoteTests
     }
 
     [Fact]
+    public void An_offer_for_a_locked_mod_is_not_counted_as_an_update_or_a_download()
+    {
+        var state = Compute(Inputs(Draft(Pin("map", "1.0", locked: true)), Registered("map", "1.0", 0)).WithRemote(Answers(true, "map", "1.1")));
+
+        Assert.Equal(V("1.1"), Assert.Single(state.Updates.Skipped).To);
+        Assert.Equal(V("1.1"), state.Row("map").Update?.To);
+        Assert.Equal(0, state.Updates.Count);
+        Assert.Equal(0, state.Updates.DownloadCount);
+        Assert.Empty(state.Updates.DownloadSources);
+        Assert.Equal(0, state.UpdatesFilterCount);
+    }
+
+    [Fact]
     public void An_offer_can_be_picked_in_a_pinned_rows_selector()
     {
         var state = Compute(Inputs(Draft(Pin("map", "1.0")), Registered("map", "1.0", 0)).WithRemote(Answers(true, "map", "1.1")));

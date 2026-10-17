@@ -181,7 +181,7 @@ public class ProfileModUpdatesTests
     }
 
     [Fact]
-    public void The_locked_and_the_unlocked_are_partitioned_and_both_counted()
+    public void The_locked_and_the_unlocked_are_partitioned_and_only_the_unlocked_counted()
     {
         var plan = Plan(
             [Pin("a", "1.0"), Pin("b", "1.0", byAdapter: true), Pin("c", "1.0"), Pin("d", "1.0")],
@@ -195,7 +195,7 @@ public class ProfileModUpdatesTests
 
         Assert.Equal([Mod("a"), Mod("c")], plan.Available.Select(x => x.ModId));
         Assert.Equal([Mod("b")], plan.Skipped.Select(x => x.ModId));
-        Assert.Equal(3, plan.Count);
+        Assert.Equal(2, plan.Count);
     }
 
     /// <summary>
@@ -206,7 +206,7 @@ public class ProfileModUpdatesTests
     public void The_two_kinds_of_update_are_counted_apart()
     {
         var plan = Plan(
-            [Pin("a", "1.0"), Pin("b", "1.0"), Pin("c", "1.0", byProfile: true)],
+            [Pin("a", "1.0"), Pin("b", "1.0"), Pin("c", "1.0")],
             [
                 Registered("a", "1.0", 0), Registered("a", "1.1", 1),
                 Registered("b", "1.0", 0), LocalOnly("b", "1.1"),
@@ -216,6 +216,23 @@ public class ProfileModUpdatesTests
         Assert.Equal(3, plan.Count);
         Assert.Equal(2, plan.PendingCount);
         Assert.Equal(1, plan.FreeCount);
+    }
+
+    [Fact]
+    public void A_locked_update_counts_toward_no_total()
+    {
+        var plan = Plan(
+            [Pin("a", "1.0"), Pin("b", "1.0", byProfile: true), Pin("c", "1.0", byAdapter: true)],
+            [
+                Registered("a", "1.0", 0), LocalOnly("a", "1.1"),
+                Registered("b", "1.0", 0), LocalOnly("b", "1.1"),
+                Registered("c", "1.0", 0), Registered("c", "1.1", 1)
+            ]);
+
+        Assert.Equal(2, plan.Skipped.Count);
+        Assert.Equal(1, plan.Count);
+        Assert.Equal(1, plan.PendingCount);
+        Assert.Equal(0, plan.FreeCount);
     }
 
 

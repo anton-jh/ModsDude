@@ -8,10 +8,10 @@ using System.ComponentModel;
 namespace ModsDude.Client.Wpf.Profiles;
 
 /// <summary>
-/// The locked mods a batch update left alone, with a checkbox each and what moving one would risk.
+/// The locked mods with a newer version, with a checkbox each and what moving one would risk.
 /// </summary>
 /// <remarks>
-/// Reached deliberately, through the skipped count the batch action reports, rather than fired at
+/// Reached deliberately, through the updates band's link to them, rather than fired at
 /// every save. The same list shown automatically would re-ask a question the user answered when they
 /// locked these mods, which is how a safety prompt turns into noise people learn to dismiss.
 /// Every box starts unchecked, so dismissing this changes nothing.
@@ -35,8 +35,8 @@ public partial class ProfileLockedUpdatesModalViewModel : ModalViewModel
     public string Title => "Locked mods";
 
     public string Message => Items.Count == 1
-        ? "One mod in this profile has a newer version and was skipped because it is locked."
-        : $"{Items.Count} mods in this profile have newer versions and were skipped because they are locked.";
+        ? "One locked mod in this profile has a newer version."
+        : $"{Items.Count} locked mods in this profile have newer versions.";
 
     public string Warning => "Locking exists because changing these versions can break things that are "
         + "expensive to undo. Pick the ones you mean to move.";

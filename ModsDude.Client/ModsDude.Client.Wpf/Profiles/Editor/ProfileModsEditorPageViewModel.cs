@@ -774,7 +774,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         Commit(Draft.SetVersion(row.ModId, update.To), $"Updated {row.Name} to {update.To}");
     }
 
-    /// <summary>The locked mods the batch left alone, each with a box to move it anyway.</summary>
+    /// <summary>The locked mods with a newer version, each with a box to move it anyway.</summary>
     [RelayCommand(CanExecute = nameof(CanEdit))]
     private async Task ShowSkippedUpdates()
     {

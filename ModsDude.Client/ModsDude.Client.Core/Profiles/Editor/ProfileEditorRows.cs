@@ -65,7 +65,9 @@ public sealed record AvailableModRow(
 /// <param name="Pin">What the draft pins, with the version's own adapter lock. Null when taken out.</param>
 /// <param name="Saved">What the saved profile pins, or null.</param>
 /// <param name="Options">Newest first.</param>
-/// <param name="HasUnsettledVersion">A visible version exists that the ordering could not place against the repo's newest.</param>
+/// <param name="HasUnsettledVersion">
+/// The pin is unlocked and a visible version exists that the ordering could not place against the repo's newest.
+/// </param>
 /// <param name="NotInSources">No enabled source offers any version of the mod.</param>
 /// <param name="Added">When the mod entered the profile at this version. Null for what only the draft has done.</param>
 public sealed record PinnedModRow(
@@ -88,7 +90,8 @@ public sealed record PinnedModRow(
 
     public bool IsPending => Pin is not null && Version.IsOnServer is false;
 
-    public bool ShowsUnderUpdates => IsTakenOut is false && (Update is not null || HasUnsettledVersion);
+    /// <summary>Whether the Updates filter shows the row. A locked pin's newer version is not counted as an update.</summary>
+    public bool ShowsUnderUpdates => IsTakenOut is false && Lock.IsLocked is false && (Update is not null || HasUnsettledVersion);
 
     /// <summary>Pins a download whose file turned out to be something else, so a save will ask what to do instead.</summary>
     public bool IsBrokenDownload => Pin is not null && Version.Download is { IsBroken: true };

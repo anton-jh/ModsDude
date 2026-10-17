@@ -123,29 +123,26 @@ public sealed record ProfileModUpdate(ModKey ModId, ModVersionKey From, ModVersi
     public string? DownloadsFrom { get; init; }
 }
 
-/// <param name="Available">Unlocked, so "apply all updates" moves them.</param>
+/// <param name="Available">Unlocked, so "apply all updates" moves them. Every total counts these alone.</param>
 /// <param name="Skipped">
-/// Locked, so the batch leaves them alone and says how many it left. Reached deliberately through
-/// that count rather than swept in and prompted about.
+/// Locked, so they are not counted as updates at all. Reached deliberately through their own link rather
+/// than swept in and prompted about.
 /// </param>
 public sealed record ProfileModUpdatePlan(
     IReadOnlyList<ProfileModUpdate> Available,
     IReadOnlyList<ProfileModUpdate> Skipped)
 {
-    public static ProfileModUpdatePlan Empty { get; } = new([], []);
-
-    /// <summary>Every pin with a newer version, locked or not - what the header counts.</summary>
-    public int Count => Available.Count + Skipped.Count;
+    public int Count => Available.Count;
 
     /// <summary>Of those, how many a save would have to import first.</summary>
-    public int PendingCount => Available.Count(x => x.ImportsOnSave) + Skipped.Count(x => x.ImportsOnSave);
+    public int PendingCount => Available.Count(x => x.ImportsOnSave);
 
     /// <summary>Of those, how many a save would have to download first.</summary>
-    public int DownloadCount => Available.Count(x => x.DownloadsFrom is not null) + Skipped.Count(x => x.DownloadsFrom is not null);
+    public int DownloadCount => Available.Count(x => x.DownloadsFrom is not null);
 
     /// <summary>Where those downloads come from, in name order.</summary>
     public IReadOnlyList<string> DownloadSources
-        => [.. Available.Concat(Skipped).Select(x => x.DownloadsFrom).OfType<string>().Distinct().Order(StringComparer.Ordinal)];
+        => [.. Available.Select(x => x.DownloadsFrom).OfType<string>().Distinct().Order(StringComparer.Ordinal)];
 
     /// <summary>What <em>Update all</em> would move without uploading anything.</summary>
     public int FreeCount => Available.Count(x => x.ImportsOnSave is false);

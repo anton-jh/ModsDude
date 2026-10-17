@@ -60,7 +60,7 @@ public sealed class ProfileModsEditorSummary
         UpdateRepoOnlyText = $"Update the {updates.FreeCount} already in the repo";
 
         HasSkippedUpdates = updates.Skipped.Count > 0;
-        SkippedText = $"{updates.Skipped.Count} locked, skipped";
+        SkippedText = $"{updates.Skipped.Count} newer for locked mods";
 
         HasUnsettled = state.UnsettledCount > 0;
         UnsettledText = $"{Plural(state.UnsettledCount, "version")} could not be compared";

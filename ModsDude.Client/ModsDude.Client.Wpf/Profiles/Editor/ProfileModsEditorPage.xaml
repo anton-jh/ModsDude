@@ -611,7 +611,7 @@
                                 <RadioButton Style="{StaticResource FilterChip}"
                                              Content="Updates"
                                              shared:FilterChip.Count="{Binding Summary.UpdatesFilterCount}"
-                                             ToolTip="Mods with a newer version - in the repo, in a folder being read, or online"
+                                             ToolTip="Unlocked mods with a newer version - in the repo, in a folder being read, or online"
                                              IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Updates}" />
                                 <RadioButton Style="{StaticResource FilterChip}"
                                              Content="Locked"
@@ -641,9 +641,8 @@
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12 0 0 0">
                                     <Button Padding="6 2"
                                             Style="{DynamicResource SubtleMenuButton}"
-                                            Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                             Content="{Binding Summary.SkippedText}"
-                                            ToolTip="Locked mods are skipped. Open the list to move any of them anyway."
+                                            ToolTip="Locked mods with a newer version. Open the list to move any of them anyway."
                                             Visibility="{Binding Summary.HasSkippedUpdates, Converter={StaticResource BoolToVisibilityConverter}}"
                                             Command="{Binding ShowSkippedUpdatesCommand}" />
                                     <Button Padding="6 2"
