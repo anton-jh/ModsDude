@@ -22,6 +22,13 @@ public sealed record ModImportRequest(
     public IProgress<ModImportProgress>? Progress { get; init; }
 
     /// <summary>
+    /// Asked once, before anything else, for every version whose mod looks like an accidental copy
+    /// of another (<see cref="CatalogModVersion.LikelyCopyOf"/>) and is not in the repo yet. Null - or
+    /// any answer but yes - leaves those versions out and keeps the rest of the batch.
+    /// </summary>
+    public ModLikelyCopyResolver? ResolveLikelyCopies { get; init; }
+
+    /// <summary>
     /// Asked once, for every mod at once, and only for the mods the comparer could not settle. Null
     /// - or a null answer - skips those mods and keeps the rest of the batch.
     /// </summary>
@@ -75,6 +82,11 @@ public sealed record ModImportRequest(
     /// </remarks>
     public IReadOnlyList<string> ModFolders { get; init; } = [];
 }
+
+/// <returns>Whether to import the versions anyway.</returns>
+public delegate Task<bool> ModLikelyCopyResolver(
+    IReadOnlyList<CatalogModVersion> versions,
+    CancellationToken cancellationToken);
 
 /// <returns>
 /// The intended final order per mod, covering every registered and incoming version. Mods left out
@@ -208,7 +220,10 @@ public enum ModImportStatus
     /// </summary>
     Replaced,
 
-    /// <summary>The download held something else, and the user chose to leave the mod out.</summary>
+    /// <summary>
+    /// The user chose to leave it out: the download held something else, or the mod looks like an
+    /// accidental copy. See <see cref="ModImportItemResult.Message"/>.
+    /// </summary>
     LeftOut,
 
     Failed

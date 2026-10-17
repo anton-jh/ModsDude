@@ -107,6 +107,7 @@ public sealed class ModImportCoordinator(
         var request = new ModImportRequest(repo.Id, versions, repo.Adapter.VersionComparer)
         {
             Progress = new StripProgress(task, names, versions.Count, progress),
+            ResolveLikelyCopies = ResolveLikelyCopiesAsync,
             ResolveArbitration = ResolveArbitrationAsync,
             ResolveSourceConflicts = ResolveSourceConflictsAsync,
             ResolveDownloadMismatches = ResolveDownloadMismatchesAsync,
@@ -161,6 +162,25 @@ public sealed class ModImportCoordinator(
         return await OnUiThreadAsync(async () =>
         {
             var modal = new ModVersionArbitrationModalViewModel(items);
+
+            await modalService.Value.Show(modal);
+
+            return modal.Result;
+        });
+    }
+
+    /// <summary>
+    /// Asked once per import, before anything else, and only where a mod new to the repo looks like an
+    /// accidental copy of another.
+    /// </summary>
+    /// <inheritdoc cref="ResolveArbitrationAsync" path="/remarks"/>
+    private async Task<bool> ResolveLikelyCopiesAsync(
+        IReadOnlyList<CatalogModVersion> versions,
+        CancellationToken cancellationToken)
+    {
+        return await OnUiThreadAsync(async () =>
+        {
+            var modal = new LikelyCopiesModalViewModel(versions);
 
             await modalService.Value.Show(modal);
 

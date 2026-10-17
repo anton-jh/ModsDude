@@ -129,13 +129,18 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [NotifyPropertyChangedFor(nameof(SecondaryChipTooltip))]
     private bool _isBrokenDownload;
 
+    /// <summary>The adapter judged this mod's id an accidental copy of another mod's, such as 'x (1)'.</summary>
+    public bool IsLikelyCopy => Mod.LikelyCopyOf is not null;
+
     /// <summary>
-    /// The small chip beside the main status one, which a source conflict already used alone. Both
-    /// mean "this row will ask you something at save", so they share the slot rather than each
-    /// costing the row a column of its own; a conflict is the more urgent of the two and wins when a
-    /// version somehow manages to be both.
+    /// The small chip beside the main status one. Every fact on it means "look at this row before
+    /// it goes in", so they share the slot rather than each costing the row a column of its own;
+    /// the most urgent wins when a version manages to be several.
     /// </summary>
-    public bool HasSecondaryChip => HasSourceConflict || IsBrokenDownload || OrderNotSettled;
+    public bool HasSecondaryChip => HasSourceConflict || IsLikelyCopy || IsBrokenDownload || OrderNotSettled;
+
+    /// <summary>The chips that warn rather than invite.</summary>
+    public bool IsSecondaryChipCaution => HasSourceConflict || IsLikelyCopy;
 
     /// <summary>
     /// "New?" rather than a word about ordering - the reader does not need to know a comparer
@@ -143,10 +148,16 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     /// mark is the point: the row is an invitation, not a warning, which is also why it never
     /// replaces the main chip's plain "New".
     /// </summary>
-    public string SecondaryChipText => HasSourceConflict ? "Conflict" : IsBrokenDownload ? "Other file" : OrderNotSettled ? "New?" : string.Empty;
+    public string SecondaryChipText => HasSourceConflict ? "Conflict"
+        : IsLikelyCopy ? "Copy?"
+        : IsBrokenDownload ? "Other file"
+        : OrderNotSettled ? "New?"
+        : string.Empty;
 
     public string? SecondaryChipTooltip => HasSourceConflict
         ? SourceConflictTooltip
+        : IsLikelyCopy
+            ? $"The name looks like a copy of {Mod.LikelyCopyOf}."
         : IsBrokenDownload
             ? "An earlier download of this version held something else. Saving will ask what to do."
         : OrderNotSettled

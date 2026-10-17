@@ -100,7 +100,7 @@ public static class ModImportProblems
         ModImportStatus.NoLocalFile => "Not imported: there is no local file to upload.",
         ModImportStatus.DownloadFailed => "Not imported: the download failed.",
         ModImportStatus.DownloadMismatch => "Not imported: the download held something else.",
-        ModImportStatus.LeftOut => "Left out: the download held something else.",
+        ModImportStatus.LeftOut => "Left out of the import.",
         ModImportStatus.Failed => "This mod could not be imported.",
         _ => "This mod was not imported."
     };

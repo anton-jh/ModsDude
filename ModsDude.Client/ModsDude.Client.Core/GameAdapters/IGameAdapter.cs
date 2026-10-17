@@ -118,6 +118,12 @@ public interface IBaseModAdapter
 
     SavegameCompatibilityPolicy SavegameCompatibility { get; }
 
+    /// <summary>
+    /// The mod <paramref name="modId"/> looks like an accidental copy of, such as <c>x</c> for
+    /// <c>x (1)</c>, or null where the id looks like the mod's own name.
+    /// </summary>
+    ModKey? LikelyCopyOf(ModKey modId) => null;
+
     Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken);
     ILocalModAdapter WithLocalSettings(string serializedLocalSettings);
     ILocalModAdapter WithLocalSettings(DynamicForm localSettings);

@@ -161,6 +161,16 @@ public class BeamNgModArchiveTests : IDisposable
         Assert.Empty(await Scan());
     }
 
+    [Fact]
+    public void A_mod_named_like_a_second_download_is_a_likely_copy()
+    {
+        var adapter = new BeamNgBaseModAdapter();
+
+        Assert.Equal(ModKey.From("truck"), adapter.LikelyCopyOf(ModKey.From("truck (1)")));
+        Assert.Equal(ModKey.From("truck"), adapter.LikelyCopyOf(ModKey.From("truck - Copy")));
+        Assert.Null(adapter.LikelyCopyOf(ModKey.From("truck")));
+    }
+
 
     private void WriteZip(string name, Dictionary<string, string> entries)
     {

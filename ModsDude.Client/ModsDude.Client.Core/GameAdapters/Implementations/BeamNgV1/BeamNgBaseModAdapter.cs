@@ -29,6 +29,9 @@ public class BeamNgBaseModAdapter(ILoggerFactory? loggerFactory = null) : IBaseM
         PromptThreshold: 50);
 
 
+    /// <summary>The mod id is the archive's file name, so a copy's name is a different mod.</summary>
+    public ModKey? LikelyCopyOf(ModKey modId) => CopyNames.OriginalOf(modId, Log);
+
     public Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
         => ReadFolder(path, _ => false, Path.GetFileName, cancellationToken);
 

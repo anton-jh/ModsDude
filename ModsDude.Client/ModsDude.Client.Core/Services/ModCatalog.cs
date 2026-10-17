@@ -490,7 +490,7 @@ public sealed class ModCatalog : IDisposable
         return usage;
     }
 
-    private static IReadOnlyList<CatalogModVersion> Merge(
+    private IReadOnlyList<CatalogModVersion> Merge(
         IReadOnlyList<SourceScan> scans,
         IReadOnlyList<ModDto> registered,
         IReadOnlyDictionary<ModVersionIdentity, ModUsage> usage)
@@ -530,7 +530,8 @@ public sealed class ModCatalog : IDisposable
                 occurrences.GetValueOrDefault(identity),
                 // Absent from the usage listing means no profile pins it, which is only true because
                 // the listing was read whole.
-                usage.GetValueOrDefault(identity)));
+                usage.GetValueOrDefault(identity),
+                _modAdapter.LikelyCopyOf(identity.ModId)));
         }
 
         var registeredIdentities = registered.Select(GetIdentity).ToHashSet();
@@ -539,7 +540,10 @@ public sealed class ModCatalog : IDisposable
         {
             if (registeredIdentities.Contains(identity) is false)
             {
-                versions.Add(CatalogModVersion.FromLocal(mod, occurrences.GetValueOrDefault(identity) ?? []));
+                versions.Add(CatalogModVersion.FromLocal(mod, occurrences.GetValueOrDefault(identity) ?? []) with
+                {
+                    LikelyCopyOf = _modAdapter.LikelyCopyOf(identity.ModId)
+                });
             }
         }
 
@@ -551,7 +555,8 @@ public sealed class ModCatalog : IDisposable
         ModDto dto,
         LocalMod? local,
         List<ModOccurrence>? occurrences,
-        ModUsage? usage)
+        ModUsage? usage,
+        ModKey? likelyCopyOf)
     {
         // The registered record is the shared truth, so it wins over the archive: two members looking
         // at the same registered version read the same name, lock and imagery. The archive still
@@ -577,7 +582,8 @@ public sealed class ModCatalog : IDisposable
             Registered = dto.Created,
             DeletionScheduledFor = dto.DeletionScheduledFor,
             DeletionReason = dto.DeletionReason,
-            Usage = usage
+            Usage = usage,
+            LikelyCopyOf = likelyCopyOf
         };
     }
 

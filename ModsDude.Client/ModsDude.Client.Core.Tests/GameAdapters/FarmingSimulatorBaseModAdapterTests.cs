@@ -163,6 +163,16 @@ public class FarmingSimulatorBaseModAdapterTests : IDisposable
         Assert.Empty(mod.Images);
     }
 
+    [Fact]
+    public void A_mod_named_like_a_second_download_is_a_likely_copy()
+    {
+        var adapter = new FarmingSimulatorBaseModAdapter(FarmingSimulatorGameVersion.Fs25);
+
+        Assert.Equal(ModKey.From("FS25_Plough"), adapter.LikelyCopyOf(ModKey.From("FS25_Plough (1)")));
+        Assert.Equal(ModKey.From("FS25_Plough"), adapter.LikelyCopyOf(ModKey.From("FS25_Plough - Copy")));
+        Assert.Null(adapter.LikelyCopyOf(ModKey.From("FS25_Plough")));
+    }
+
 
     private async Task<LocalMod> ScanOne()
     {

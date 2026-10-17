@@ -164,6 +164,7 @@ public sealed class ModImportService(
             _registered = await FetchRegisteredAsync(cancellationToken);
 
             candidates = DropAlreadyRegistered(candidates, _registered);
+            candidates = await ConfirmLikelyCopiesAsync(candidates, cancellationToken);
 
             if (candidates.Count == 0)
             {
@@ -288,6 +289,68 @@ public sealed class ModImportService(
 
                     versions.Remove(versionId);
                 }
+            }
+
+            return candidates
+                .Where(x => x.Value.Count > 0)
+                .ToDictionary(x => x.Key, x => x.Value);
+        }
+
+        /// <summary>
+        /// Asks once about every version whose mod looks like an accidental copy, such as <c>x (1)</c>,
+        /// and leaves them out unless the user says otherwise.
+        /// </summary>
+        /// <remarks>
+        /// A mod the repo already holds is not asked about again: somebody already chose to import it
+        /// under that name.
+        /// </remarks>
+        private async Task<Dictionary<ModKey, Dictionary<ModVersionKey, CatalogModVersion>>> ConfirmLikelyCopiesAsync(
+            Dictionary<ModKey, Dictionary<ModVersionKey, CatalogModVersion>> candidates,
+            CancellationToken cancellationToken)
+        {
+            var likelyCopies = candidates
+                .Where(x => _registered.For(x.Key).Count == 0)
+                .SelectMany(x => x.Value.Values)
+                .Where(x => x.LikelyCopyOf is not null)
+                .OrderBy(x => x.ModId.Value, StringComparer.Ordinal)
+                .ThenBy(x => x.VersionId.Value, StringComparer.Ordinal)
+                .ToList();
+
+            if (likelyCopies.Count == 0)
+            {
+                return candidates;
+            }
+
+            var importAnyway = false;
+
+            if (request.ResolveLikelyCopies is not null)
+            {
+                try
+                {
+                    importAnyway = await request.ResolveLikelyCopies(likelyCopies, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    // Losing the dialog leaves out the versions it was asking about, as a no would.
+                    logger.LogWarning(exception, "Asking about mods that look like copies failed.");
+                }
+            }
+
+            if (importAnyway)
+            {
+                return candidates;
+            }
+
+            foreach (var version in likelyCopies)
+            {
+                Record(version, ModImportStatus.LeftOut, $"Its name looks like a copy of '{version.LikelyCopyOf}'.");
+                Report(version, ModImportPhase.Skipped);
+
+                candidates[version.ModId].Remove(version.VersionId);
             }
 
             return candidates

@@ -190,10 +190,8 @@
                                ToolTip="Version-sensitive. Batch updates leave this mod alone."
                                Visibility="{Binding ShowsAdapterLockIcon, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                    <!-- Shares one slot between two facts that both mean "this row will ask you
-                         something at save": a source conflict, and a version the ordering could not
-                         place against what the repo holds. A conflict is the more urgent of the two
-                         and wins the slot when a version is somehow both. -->
+                    <!-- Shares one slot between the facts that mean "look at this row before it goes
+                         in"; the view model picks the most urgent. -->
                     <Border Grid.Column="4"
                             Margin="0 0 8 0"
                             ToolTip="{Binding SecondaryChipTooltip}"
@@ -202,7 +200,7 @@
                         <Border.Style>
                             <Style TargetType="Border" BasedOn="{StaticResource SuccessStatusChip}">
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasSourceConflict}" Value="True">
+                                    <DataTrigger Binding="{Binding IsSecondaryChipCaution}" Value="True">
                                         <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
                                     </DataTrigger>
                                 </Style.Triggers>

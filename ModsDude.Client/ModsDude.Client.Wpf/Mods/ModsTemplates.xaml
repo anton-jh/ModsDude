@@ -22,5 +22,8 @@
     <DataTemplate DataType="{x:Type import:UnrecognisedFilesModalViewModel}">
         <import:UnrecognisedFilesModal />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type import:LikelyCopiesModalViewModel}">
+        <import:LikelyCopiesModal />
+    </DataTemplate>
 
 </ResourceDictionary>

@@ -139,6 +139,12 @@ public record CatalogModVersion(
     /// </remarks>
     public IReadOnlyList<ModImageReference> ServerImages { get; init; } = [];
 
+    /// <summary>
+    /// The mod this one's id looks like an accidental copy of, as the repo's adapter judges it. Null
+    /// where the id looks like the mod's own name.
+    /// </summary>
+    public ModKey? LikelyCopyOf { get; init; }
+
     /// <summary>Where a save downloads this version from, for a version a remote source offers.</summary>
     public RemoteOffer? Download { get; init; }
 
