@@ -16,6 +16,11 @@ name: CI
 #      is fixed by deploying a fixed build.
 #   4. release-client: published as release bN, which installed clients update to. A client already
 #      released is not released again, so a failed run can simply be re-run.
+#
+# Alongside, announce-update tells the clients that are open that an update is on its way as soon as the
+# run starts, so their users can save before the API goes down. withdraw-update takes that back when the
+# run ends without replacing the API; a deploy that does replace it starts the new API with no
+# announcement. Both are best effort: shipping never waits on them or fails because of them.
 on:
   push:
   pull_request:
@@ -93,6 +98,29 @@ jobs:
       # PostgreSQL on this runner. The server's tests belong to the job that has one.
       - name: Client tests
         run: dotnet test ModsDude.Client/ModsDude.Client.Core.Tests/ModsDude.Client.Core.Tests.csproj --no-build
+
+  announce-update:
+    name: Announce the update
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    env:
+      SITE_ADDRESS: ${{ vars.SITE_ADDRESS }}
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+
+    steps:
+      - name: Announce
+        run: |
+          if [ -z "$SITE_ADDRESS" ] || [ -z "$DEPLOY_TOKEN" ]; then
+            echo "::warning::SITE_ADDRESS or DEPLOY_TOKEN is not set, so open clients were not told an update is on its way. See README.md."
+            exit 0
+          fi
+
+          if ! curl --fail --silent --show-error --max-time 10 --retry 3 --retry-all-errors \
+            --request PUT --header "Authorization: Deploy $DEPLOY_TOKEN" \
+            "https://$SITE_ADDRESS/deploy/update-announcement"; then
+            echo "::warning::Open clients could not be told an update is on its way."
+          fi
 
   build-number:
     name: Build number
@@ -370,3 +398,27 @@ jobs:
           --targetCommitish ${{ github.sha }}
           --releaseName "ModsDude ${{ env.TAG }}"
           --publish
+
+  # Every job before it in needs, so it runs once the run has ended one way or the other.
+  withdraw-update:
+    name: Withdraw the update announcement
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.deploy-server.result != 'success'
+    needs: [announce-update, server, client, build-number, publish-server, deploy-server]
+    runs-on: ubuntu-latest
+
+    env:
+      SITE_ADDRESS: ${{ vars.SITE_ADDRESS }}
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+
+    steps:
+      - name: Withdraw
+        run: |
+          if [ -z "$SITE_ADDRESS" ] || [ -z "$DEPLOY_TOKEN" ]; then
+            exit 0
+          fi
+
+          if ! curl --fail --silent --show-error --max-time 10 --retry 3 --retry-all-errors \
+            --request DELETE --header "Authorization: Deploy $DEPLOY_TOKEN" \
+            "https://$SITE_ADDRESS/deploy/update-announcement"; then
+            echo "::warning::The update announcement could not be withdrawn. It lapses on its own within 20 minutes."
+          fi

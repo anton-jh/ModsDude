@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Identity.Web;
 using ModsDude.Server.Api.Admin;
 using ModsDude.Server.Api.Builds;
+using ModsDude.Server.Api.Deploy;
 using ModsDude.Server.Api.Endpoints;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Api.Health;
@@ -123,12 +124,22 @@ builder.Services
     .AddScheme<AuthenticationSchemeOptions, AdminAuthenticationHandler>(AdminAuthenticationHandler.SchemeName, null);
 
 builder.Services
+    .Configure<DeployOptions>(builder.Configuration.GetSection(DeployOptions.SectionName))
+    .AddAuthentication()
+    .AddScheme<AuthenticationSchemeOptions, DeployAuthenticationHandler>(DeployAuthenticationHandler.SchemeName, null);
+
+builder.Services
     .AddAuthorizationBuilder()
     .AddPolicy(AdminAuthenticationHandler.PolicyName, policy => policy
         .AddAuthenticationSchemes(AdminAuthenticationHandler.SchemeName)
+        .RequireAuthenticatedUser())
+    .AddPolicy(DeployAuthenticationHandler.PolicyName, policy => policy
+        .AddAuthenticationSchemes(DeployAuthenticationHandler.SchemeName)
         .RequireAuthenticatedUser());
 
 builder.Services.AddScoped<IAdminMemberships, AdminMemberships>();
+
+builder.Services.AddSingleton<IUpdateAnnouncement, UpdateAnnouncement>();
 
 builder.Services.AddRazorPages(options =>
 {
@@ -253,6 +264,7 @@ app.MapGroup("api/v{v:apiVersion}")
 
 app.MapClientDownload();
 app.MapHealth();
+app.MapUpdateAnnouncement();
 
 app.MapRazorPages();
 
@@ -272,6 +284,11 @@ if (!isDescribingOnly)
 if (!app.Services.GetRequiredService<IOptions<AdminOptions>>().Value.IsConfigured)
 {
     app.Logger.LogInformation("No admin username or password is configured, so the admin pages let nobody in.");
+}
+
+if (!app.Services.GetRequiredService<IOptions<DeployOptions>>().Value.IsConfigured)
+{
+    app.Logger.LogInformation("No deploy token is configured, so CI cannot announce updates to clients.");
 }
 
 

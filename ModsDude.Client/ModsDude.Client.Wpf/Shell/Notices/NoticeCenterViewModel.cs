@@ -69,6 +69,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     private readonly IDismissalLedger _dismissals;
     private readonly IBackgroundProblemSource _problems;
     private readonly IUpdateStatus _updates;
+    private readonly IUpdateAnnouncementStore _updateAnnouncement;
     private readonly IConnectionRetry _connection;
     private readonly IFriendActivityService _friends;
     private readonly IFriendActivityEnvironment _friendEnvironment;
@@ -104,6 +105,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         IDismissalLedger dismissals,
         IBackgroundProblemSource problems,
         IUpdateStatus updates,
+        IUpdateAnnouncementStore updateAnnouncement,
         IConnectionRetry connection,
         IFriendActivityService friends,
         IFriendActivityEnvironment friendEnvironment,
@@ -121,6 +123,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _dismissals = dismissals;
         _problems = problems;
         _updates = updates;
+        _updateAnnouncement = updateAnnouncement;
         _connection = connection;
         _friends = friends;
         _friendEnvironment = friendEnvironment;
@@ -147,6 +150,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _dismissals.Changed += OnRedrawNeeded;
         _problems.Changed += OnRedrawNeeded;
         _updates.Changed += OnRedrawNeeded;
+        _updateAnnouncement.Changed += OnRedrawNeeded;
         _connection.Changed += OnRedrawNeeded;
 
         // A friend switching is news the drift check knows nothing about, so it redraws on its own.
@@ -307,6 +311,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _dismissals.Changed -= OnRedrawNeeded;
         _problems.Changed -= OnRedrawNeeded;
         _updates.Changed -= OnRedrawNeeded;
+        _updateAnnouncement.Changed -= OnRedrawNeeded;
         _connection.Changed -= OnRedrawNeeded;
         _friends.Changed -= OnRedrawNeeded;
     }
@@ -583,6 +588,8 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         // First, because while it is up everything below it is working from a repo list that has not
         // arrived.
         var built = _connection.Build()
+            // Next, because it has a deadline: the user has minutes to save before the server goes.
+            .Concat(_updateAnnouncement.AnnouncedAt is DateTime announcedAt ? [UpdateAnnouncementNotice.For(announcedAt)] : [])
             .Concat(NoticeBuilder.Build(_monitor.Drifted, _monitor.StoreCorruption, _environment))
             .Concat(_problems.Build())
             .Concat(_updates.ReadyBuild is BuildNumber ready ? [UpdateNotice.For(ready)] : [])

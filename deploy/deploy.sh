@@ -17,7 +17,7 @@ if [ "$(loginctl show-user "$USER" --property=Linger --value)" != "yes" ]; then
   exit 1
 fi
 
-for setting in BACKUP_SAS_URL BACKUP_PING_HOURLY BACKUP_PING_DAILY; do
+for setting in DEPLOY_TOKEN BACKUP_SAS_URL BACKUP_PING_HOURLY BACKUP_PING_DAILY; do
   if ! grep --quiet "^$setting=." .env; then
     echo "$setting is not set in .env. See README.md." >&2
     exit 1

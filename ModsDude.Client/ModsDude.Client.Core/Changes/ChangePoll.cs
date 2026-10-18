@@ -7,13 +7,14 @@ using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Updates;
 using ModsDude.Client.Core.Users;
 
 namespace ModsDude.Client.Core.Changes;
 
 /// <summary>
-/// Keeps the current user and every loaded store in step with the server from one small read of
-/// change counters.
+/// Keeps the current user, every loaded store and the update announcement in step with the server
+/// from one small read of change counters.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -43,6 +44,7 @@ public sealed class ChangePoll(
     IDriftCandidateSource games,
     IDriftMonitor driftMonitor,
     ICurrentUserStore currentUser,
+    IUpdateAnnouncementStore updateAnnouncement,
     IServerConnection connection,
     ILogger<ChangePoll> logger)
     : IChangePoll
@@ -71,6 +73,8 @@ public sealed class ChangePoll(
 
         var response = await changesClient.GetChangesV1Async(cancellationToken);
         var answer = new Counters(response.User, response.Repos.ToDictionary(x => x.RepoId));
+
+        updateAnnouncement.Set(response.UpdateAnnouncedAt);
 
         var poll = new Poll(seen, answer, logger, cancellationToken);
 

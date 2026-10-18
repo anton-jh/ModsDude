@@ -550,6 +550,11 @@
             },
             "type": "array"
           },
+          "updateAnnouncedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
           "user": {
             "format": "int64",
             "type": "integer"

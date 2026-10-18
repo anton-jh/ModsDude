@@ -335,8 +335,8 @@ Then, outside the server:
    | `DEPLOY_USER` | `modsdude` |
    | `DEPLOY_KNOWN_HOSTS` | The line from step 6 |
 
-   And one secret: `DEPLOY_SSH_KEY`, the contents of `deploy_key`, the private half. Make a new pair if it
-   is lost.
+   And two secrets: `DEPLOY_SSH_KEY`, the contents of `deploy_key`, the private half (make a new pair if it
+   is lost), and `DEPLOY_TOKEN`, the same value as in `.env`.
 10. Push to main, or re-run the latest CI run on main. The first deploy creates the database and gets the
     certificate.
 
@@ -451,7 +451,9 @@ and fast-forwards `main` to it. `-WhatIf` only shows what would ship; `-Confirm:
   service container, and checks that `openapi/v1.json` matches the API.
 - **Client** (Windows): builds the whole solution and runs the client tests.
 
-A push to main also ships, each step only after the previous one succeeded:
+A push to main also ships. As soon as the run starts, open clients are told an update is on its way, so
+their users can save before the API goes down; a run that ends without deploying withdraws that. Then,
+each step only after the previous one succeeded:
 
 1. **Build number**: N is the number of commits on main. It refuses to ship a build older than the latest
    release.

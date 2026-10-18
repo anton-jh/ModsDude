@@ -467,6 +467,7 @@ public partial class App : Application
         services.AddSingleton<IChangeWatcher, ChangeWatcher>();
         services.AddSingleton<IChangePoll, ChangePoll>();
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IChangePoll>());
+        services.AddSingleton<IUpdateAnnouncementStore, UpdateAnnouncementStore>();
 
         // Probes the server while it does not answer, and reads everything again once it does - see the class.
         services.AddSingleton<IReconnectWatcher, ReconnectWatcher>();

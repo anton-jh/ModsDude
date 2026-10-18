@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
+using ModsDude.Server.Api.Deploy;
 using ModsDude.Server.Persistence.Changes;
 using ModsDude.Server.Persistence.DbContexts;
 
@@ -7,7 +8,8 @@ namespace ModsDude.Server.Api.Endpoints.Changes;
 
 /// <summary>
 /// Where the change counters of the caller and each of their repos stand. A client polls this one
-/// small read and reads again only the parts whose counters moved.
+/// small read and reads again only the parts whose counters moved. It also says whether an update is
+/// on its way, because this is the read every open client makes.
 /// </summary>
 /// <remarks>
 /// Scoped to the caller: their own record, and only the live repos they are a member of, the same set
@@ -25,6 +27,7 @@ public class GetChangesV1Endpoint : IEndpoint
     private static async Task<Ok<GetChangesResponse>> Get(
         HttpContext httpContext,
         ApplicationDbContext dbContext,
+        IUpdateAnnouncement updateAnnouncement,
         CancellationToken cancellationToken)
     {
         var userId = httpContext.User.GetUserId();
@@ -32,13 +35,15 @@ public class GetChangesV1Endpoint : IEndpoint
         var repos = await RepoChanges.ReadForAsync(dbContext, userId, cancellationToken);
 
         return TypedResults.Ok(new GetChangesResponse(user, [.. repos.Select(x => new RepoChangesDto(
-            x.RepoId.Value, x.Repo, x.Profiles, x.Savegames, x.Mods, x.Members, x.Activity))]));
+            x.RepoId.Value, x.Repo, x.Profiles, x.Savegames, x.Mods, x.Members, x.Activity))],
+            updateAnnouncement.AnnouncedAt));
     }
 
 
     /// <param name="User">The caller's own record, as <c>users/me</c> describes it.</param>
     /// <param name="Repos">Ordered by repo id.</param>
-    public record GetChangesResponse(long User, IReadOnlyList<RepoChangesDto> Repos);
+    /// <param name="UpdateAnnouncedAt">When CI announced the update that will replace this server. Null where none is on its way.</param>
+    public record GetChangesResponse(long User, IReadOnlyList<RepoChangesDto> Repos, DateTime? UpdateAnnouncedAt);
 
     /// <param name="Repo">The repo's own row: name, settings, archiving.</param>
     /// <param name="Savegames">Savegames, their snapshots and their claims.</param>

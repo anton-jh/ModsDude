@@ -16,6 +16,7 @@ using ModsDude.Client.Core.Tests.Profiles;
 using ModsDude.Client.Core.Tests.Savegames;
 using ModsDude.Client.Core.Tests.Stores;
 using ModsDude.Client.Core.Tests.Users;
+using ModsDude.Client.Core.Updates;
 using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Core.Tests.Changes;
@@ -299,6 +300,52 @@ public class ChangePollTests
     }
 
     [Fact]
+    public async Task The_update_announcement_follows_every_poll()
+    {
+        var harness = new Harness();
+        var announcedAt = new DateTime(2026, 10, 18, 12, 0, 0, DateTimeKind.Utc);
+
+        harness.Changes.UpdateAnnouncedAt = announcedAt;
+        await harness.PollAsync();
+
+        Assert.Equal(announcedAt, harness.UpdateAnnouncement.AnnouncedAt);
+
+        harness.Changes.UpdateAnnouncedAt = null;
+        await harness.PollAsync();
+
+        Assert.Null(harness.UpdateAnnouncement.AnnouncedAt);
+    }
+
+    [Fact]
+    public async Task A_poll_whose_store_reads_failed_still_carries_the_update_announcement()
+    {
+        var harness = new Harness();
+        var announcedAt = new DateTime(2026, 10, 18, 12, 0, 0, DateTimeKind.Utc);
+
+        harness.Changes.UpdateAnnouncedAt = announcedAt;
+        harness.CurrentUser.FailNext = true;
+        harness.Friends.FailNext = true;
+        await harness.PollAsync();
+
+        Assert.Equal(announcedAt, harness.UpdateAnnouncement.AnnouncedAt);
+    }
+
+    [Fact]
+    public async Task A_poll_while_offline_leaves_the_update_announcement_as_it_was()
+    {
+        var harness = new Harness();
+        var announcedAt = new DateTime(2026, 10, 18, 12, 0, 0, DateTimeKind.Utc);
+        harness.Changes.UpdateAnnouncedAt = announcedAt;
+        await harness.PollAsync();
+
+        harness.Changes.UpdateAnnouncedAt = null;
+        harness.Connection.ReportUnreachable();
+        await harness.PollAsync();
+
+        Assert.Equal(announcedAt, harness.UpdateAnnouncement.AnnouncedAt);
+    }
+
+    [Fact]
     public async Task Cancelling_a_poll_stops_it()
     {
         var harness = new Harness();
@@ -356,6 +403,7 @@ public class ChangePollTests
                 _candidates,
                 Drift,
                 CurrentUser,
+                UpdateAnnouncement,
                 Connection,
                 NullLogger<ChangePoll>.Instance);
         }
@@ -370,6 +418,7 @@ public class ChangePollTests
         public FakeFriends Friends { get; } = new();
         public FakeDriftMonitor Drift { get; } = new();
         public FixedCurrentUser CurrentUser { get; }
+        public UpdateAnnouncementStore UpdateAnnouncement { get; } = new();
         public ProfileStore ProfileStore { get; }
         public SavegameStore SavegameStore { get; }
         public ChangePoll Poll { get; }
@@ -431,13 +480,15 @@ public class ChangePollTests
 
         public long User { get; set; }
 
+        public DateTime? UpdateAnnouncedAt { get; set; }
+
         public async Task<GetChangesResponse> GetChangesV1Async(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             Reads++;
 
-            var answer = new GetChangesResponse { User = User, Repos = [.. _repos] };
+            var answer = new GetChangesResponse { User = User, Repos = [.. _repos], UpdateAnnouncedAt = UpdateAnnouncedAt };
 
             if (_held is { } held)
             {
