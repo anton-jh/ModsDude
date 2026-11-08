@@ -1,6 +1,5 @@
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
-
-﻿using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
@@ -9,6 +8,7 @@ using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
@@ -30,6 +30,11 @@ public class UpdateProfileV1Endpoint : IEndpoint
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.Name(request.Name) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
         if (profile is null)
         {
@@ -63,6 +68,11 @@ public class UpdateProfileV1Endpoint : IEndpoint
         catch (DbUpdateConcurrencyException)
         {
             return TypedResults.BadRequest(Problems.ProfileChanged);
+        }
+        catch (DbUpdateException exception) when (exception.IsUniqueViolation())
+        {
+            // Taken by a concurrent rename or restore since the check above.
+            return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
 
         return TypedResults.Ok(ProfileDto.FromModel(profile));

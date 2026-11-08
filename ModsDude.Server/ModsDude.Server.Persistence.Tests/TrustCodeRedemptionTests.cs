@@ -67,6 +67,39 @@ public class TrustCodeRedemptionTests(DatabaseFixture fixture)
     }
 
     [Fact]
+    public async Task A_user_whose_trust_was_revoked_can_be_trusted_again_with_a_new_code()
+    {
+        var user = await GivenAUser();
+        var firstCode = await GivenACode();
+        var secondCode = await GivenACode();
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            (await dbContext.TrustCodes.GetAsync(firstCode, CancellationToken.None))!
+                .Redeem((await dbContext.Users.GetAsync(user, CancellationToken.None))!, _now);
+            await dbContext.SaveChangesAsync();
+        }
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            (await dbContext.Users.GetAsync(user, CancellationToken.None))!.RevokeTrust();
+            await dbContext.SaveChangesAsync();
+        }
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            (await dbContext.TrustCodes.GetAsync(secondCode, CancellationToken.None))!
+                .Redeem((await dbContext.Users.GetAsync(user, CancellationToken.None))!, _now);
+            await dbContext.SaveChangesAsync();
+        }
+
+        using var verification = fixture.CreateDbContext();
+
+        Assert.True((await verification.Users.GetAsync(user, CancellationToken.None))!.IsTrusted);
+        Assert.Equal(user, (await verification.TrustCodes.GetAsync(secondCode, CancellationToken.None))!.RedeemedBy);
+    }
+
+    [Fact]
     public async Task Revoking_a_code_that_was_redeemed_meanwhile_is_refused()
     {
         var user = await GivenAUser();

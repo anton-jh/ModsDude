@@ -1,7 +1,8 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.ErrorHandling;
-using ModsDude.Server.Application.Dependencies;
-using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Storage;
+using ModsDude.Server.Persistence.DbContexts;
 
 namespace ModsDude.Server.Api.Endpoints.Images;
 
@@ -10,6 +11,10 @@ namespace ModsDude.Server.Api.Endpoints.Images;
 /// import into a repo almost every image is already stored — versions of one mod reuse their
 /// artwork, and so do mods across repos — so 2,000 mods at ~20 images each is tens of thousands of
 /// uploads that mostly need not happen.
+///
+/// Answered from the database: an image is "had" when something refers to it. One query instead of a
+/// call to storage per hash, and an image that was uploaded but never referenced is uploaded again,
+/// which is cheap and changes nothing. Whatever then refers to it checks storage itself.
 ///
 /// Authorization is <b>authenticated user</b>, not Guest of a repo. Content addressing is what makes
 /// that dedupe possible and it leaves no repo in the address, so there is nothing to scope against;
@@ -20,10 +25,7 @@ namespace ModsDude.Server.Api.Endpoints.Images;
 /// </summary>
 public class CheckImagesExistV1Endpoint : IEndpoint
 {
-    /// <summary>
-    /// Each hash costs a round trip to blob storage, which has no batch existence call, so an
-    /// unbounded batch is an unbounded amount of work for one request.
-    /// </summary>
+    /// <summary>Keeps the query's parameter list bounded.</summary>
     private const int _maximumBatchSize = 1000;
 
 
@@ -40,7 +42,7 @@ public class CheckImagesExistV1Endpoint : IEndpoint
 
     private static async Task<Results<Ok<CheckImagesExistResponse>, BadRequest<CustomProblemDetails>>> CheckExisting(
         CheckImagesExistRequest request,
-        IModImageStorageService imageStorageService,
+        ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
         var hashes = request.Hashes.ToList();
@@ -50,13 +52,28 @@ public class CheckImagesExistV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.BatchTooLarge(hashes.Count, _maximumBatchSize));
         }
 
-        if (hashes.FirstOrDefault(x => !ModImageHash.IsValid(x)) is string invalid)
+        if (hashes.FirstOrDefault(x => !Sha256Hex.IsValid(x)) is string invalid)
         {
             return TypedResults.BadRequest(Problems.InvalidImageHash(invalid));
         }
 
-        var present = await imageStorageService.CheckWhichExist(hashes, cancellationToken);
+        var distinct = hashes.Distinct().ToList();
 
-        return TypedResults.Ok(new CheckImagesExistResponse(present));
+        var onVersions = await dbContext.ModVersions
+            .AsNoTracking()
+            .SelectMany(x => x.Images)
+            .Where(x => distinct.Contains(x.Hash))
+            .Select(x => x.Hash)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var asAvatars = await dbContext.Users
+            .AsNoTracking()
+            .Where(x => x.AvatarHash != null && distinct.Contains(x.AvatarHash))
+            .Select(x => x.AvatarHash!)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return TypedResults.Ok(new CheckImagesExistResponse([.. onVersions.Union(asAvatars).Order(StringComparer.Ordinal)]));
     }
 }

@@ -15,6 +15,12 @@ public class User(UserId id, DisplayName displayName, DateTime created)
     public DateTime ProfileLastUpdated { get; private set; } = created;
     public bool IsTrusted { get; private set; } = false;
 
+    /// <summary>
+    /// Counts revocations of trust. A trust code records the epoch it was redeemed in, and one user may
+    /// redeem one code per epoch - see <see cref="Invites.TrustCode.RedeemedTrustEpoch"/>.
+    /// </summary>
+    public int TrustEpoch { get; private set; }
+
     /// <summary>When the user was blocked from the API, or null while they are not.</summary>
     public DateTime? BlockedAt { get; private set; }
 
@@ -54,7 +60,11 @@ public class User(UserId id, DisplayName displayName, DateTime created)
 
     public void RevokeTrust()
     {
-        IsTrusted = false;
+        if (IsTrusted)
+        {
+            IsTrusted = false;
+            TrustEpoch++;
+        }
     }
 
     /// <summary>Keeps the time of the first block when repeated.</summary>

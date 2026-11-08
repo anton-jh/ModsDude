@@ -1,6 +1,7 @@
 ﻿using ModsDude.Server.Domain.Exceptions;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Storage;
 
 namespace ModsDude.Server.Domain.Tests.Mods;
 
@@ -11,7 +12,7 @@ public class ModVersionImagesTests
     private static readonly DateTimeOffset _registered = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset _later = new(2026, 2, 1, 0, 0, 0, TimeSpan.Zero);
 
-    private static readonly string _hash = new('a', ModImageHash.Length);
+    private static readonly string _hash = new('a', Sha256Hex.Length);
 
 
     [Fact]

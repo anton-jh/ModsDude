@@ -130,22 +130,31 @@ public sealed class SavegameTransfer(
 
         progress?.Report(new SavegameProgress(SavegameStage.Uploading, 0, packed.SizeBytes));
 
-        var uploaded = await uploader.UploadAsync(
-            new ModFileUpload(destination, link.ContentHashMetadataKey, () => File.OpenRead(packed.FilePath))
-            {
-                BytesTransferred = progress is null
-                    ? null
-                    : new InlineProgress<long>(sent => progress.Report(new SavegameProgress(SavegameStage.Uploading, sent, packed.SizeBytes)))
-            },
-            ct);
-
-        // The uploader hashes what it sent. A mismatch means the archive changed between the two reads,
-        // and no snapshot may point at a blob nobody can reproduce.
-        if (ModContentHasher.Matches(uploaded, packed.ContentHash) is false)
+        try
+        {
+            await uploader.UploadAsync(
+                new ModFileUpload(destination, link.ContentHashMetadataKey, () => File.OpenRead(packed.FilePath))
+                {
+                    BytesTransferred = progress is null
+                        ? null
+                        : new InlineProgress<long>(sent => progress.Report(new SavegameProgress(SavegameStage.Uploading, sent, packed.SizeBytes))),
+                    // The address is the hash, so bytes that changed since packing must never be committed
+                    // under it: no snapshot may point at a blob nobody can reproduce.
+                    ExpectedHash = packed.ContentHash
+                },
+                ct);
+        }
+        catch (BlobAlreadyExistsException exception)
+        {
+            // Another check-in of the same bytes committed first. The address is their hash, so what is
+            // stored is this save.
+            logger.LogInformation(exception, "Savegame {SavegameId} content {ContentHash} was already stored in repo {RepoId}.", savegameId, packed.ContentHash, repoId);
+        }
+        catch (UploadedContentChangedException exception)
         {
             throw new UserFriendlyException(
                 "The savegame changed while it was being uploaded",
-                $"Packed as '{packed.ContentHash}' but uploaded '{uploaded}'. No snapshot has been recorded.");
+                $"Packed as '{exception.ExpectedHash}' but uploaded '{exception.ActualHash}'. No snapshot has been recorded.");
         }
     }
 }

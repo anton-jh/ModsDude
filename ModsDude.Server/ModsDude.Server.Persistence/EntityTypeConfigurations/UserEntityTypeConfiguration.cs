@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.Changes;
 
@@ -17,12 +17,12 @@ internal class UserEntityTypeConfiguration : IEntityTypeConfiguration<User>
         // is which with their tag.
         builder.Property(x => x.DisplayName);
 
-        builder.Property(x => x.AvatarHash).HasMaxLength(ModImageHash.Length);
+        builder.Property(x => x.AvatarHash).HasMaxLength(Sha256Hex.Length);
 
         // Counted by the database - see UserChanges.
         builder.Property<long>(UserChanges.CounterColumn).ValueGeneratedOnAddOrUpdate().HasDefaultValue(0L);
 
-        builder.HasMany(x => x.RepoMemberships).WithOne().HasForeignKey(x => x.UserId);
+        builder.HasMany(x => x.RepoMemberships).WithOne(x => x.User).HasForeignKey(x => x.UserId);
         builder.Navigation(x => x.RepoMemberships).AutoInclude();
     }
 }

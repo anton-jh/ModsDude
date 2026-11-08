@@ -472,6 +472,11 @@ internal sealed class FakeSavegameUploader(FakeSavegameServer server) : IModFile
         var bytes = buffer.ToArray();
         var hash = FakeSavegameServer.HashOf(bytes);
 
+        if (upload.ExpectedHash is string expected && expected != hash)
+        {
+            throw new UploadedContentChangedException(expected, hash);
+        }
+
         server.PutBlob(upload.Link, bytes);
 
         // The real uploader reports as blocks go; one report at the end is the same contract.

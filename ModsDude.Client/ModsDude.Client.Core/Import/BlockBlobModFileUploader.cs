@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Transfers;
 using System.Diagnostics;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -51,6 +52,9 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
         using var content = upload.OpenContent();
         using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 
+        // Block ids are staged against the blob's name, so two uploads of one file at the same moment
+        // must not share them, or one commit could take the other's blocks.
+        var uploadId = Guid.NewGuid();
         var buffer = new byte[_blockSize];
         var blockIds = new List<string>();
         long transferred = 0;
@@ -79,7 +83,7 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
 
             digest.AppendData(buffer, 0, read);
 
-            var blockId = MakeBlockId(blockIds.Count);
+            var blockId = MakeBlockId(uploadId, blockIds.Count);
             blockIds.Add(blockId);
 
             await PutBlockAsync(upload.Link, blockId, buffer.AsMemory(0, read), ReportSent, cancellationToken);
@@ -94,6 +98,11 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
         }
 
         var hash = ModContentHasher.Format(digest.GetHashAndReset());
+
+        if (upload.ExpectedHash is string expected && ModContentHasher.Matches(hash, expected) is false)
+        {
+            throw new UploadedContentChangedException(expected, hash);
+        }
 
         await CommitAsync(upload.Link, blockIds, upload.ContentHashMetadataKey, hash, cancellationToken);
 
@@ -136,6 +145,10 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
 
         request.Headers.TryAddWithoutValidation($"x-ms-meta-{contentHashMetadataKey}", hash);
 
+        // Never over a blob that is there already. The link cannot overwrite either, but saying so here
+        // makes the refusal one this code recognises rather than a permission error.
+        request.Headers.TryAddWithoutValidation("If-None-Match", "*");
+
         await SendAsync(request, "commit", cancellationToken);
     }
 
@@ -150,6 +163,14 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
             return;
         }
 
+        // The commit's condition: somebody else committed a blob at this address first.
+        if (response.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.PreconditionFailed
+            && response.Headers.TryGetValues("x-ms-error-code", out var codes)
+            && codes.Any(x => x is "BlobAlreadyExists" or "ConditionNotMet"))
+        {
+            throw new BlobAlreadyExistsException($"Failed to {what} the mod file: a file is already stored at its address.");
+        }
+
         // Storage answers with an XML error document naming the real cause - an expired SAS, a
         // permission the link was not granted - and none of that survives EnsureSuccessStatusCode.
         var detail = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -161,9 +182,9 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
     }
 
 
-    /// <summary>Block ids must be equal-length and base64, and are only meaningful within one upload.</summary>
-    private static string MakeBlockId(int index)
-        => Convert.ToBase64String(Encoding.ASCII.GetBytes($"{index:D8}"));
+    /// <summary>Block ids must be equal-length and base64.</summary>
+    private static string MakeBlockId(Guid uploadId, int index)
+        => Convert.ToBase64String(Encoding.ASCII.GetBytes($"{uploadId:N}-{index:D8}"));
 
     private static Uri Append(string link, string query)
         => new(link + (link.Contains('?') ? '&' : '?') + query);

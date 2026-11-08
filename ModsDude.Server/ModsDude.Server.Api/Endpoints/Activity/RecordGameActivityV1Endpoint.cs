@@ -11,6 +11,7 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
 
@@ -45,8 +46,14 @@ public class RecordGameActivityV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
+        ILogger<RecordGameActivityV1Endpoint> logger,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.Game(request.Game) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var userId = claimsPrincipal.GetUserId();
         var repoId = new RepoId(request.RepoId);
 
@@ -84,10 +91,11 @@ public class RecordGameActivityV1Endpoint : IEndpoint
         {
             await unitOfWork.CommitAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException exception) when (exception.IsUniqueViolation())
         {
             // Two of the caller's own reports about one game arriving in the same instant, and the
             // other one made the row. Either of them describes the game as well as the other.
+            logger.LogInformation(exception, "A report of game {Game} for user {UserId} lost to a concurrent report.", request.Game, userId.Value);
         }
 
         return TypedResults.Ok();

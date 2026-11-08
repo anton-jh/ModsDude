@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ModsDude.Server.Domain;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
@@ -36,7 +37,7 @@ internal class SavegameEntityTypeConfiguration : IEntityTypeConfiguration<Savega
             .HasForeignKey(x => new { x.RepoId, x.ProfileId })
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.Property(x => x.Name).HasMaxLength(SavegameName.MaximumLength);
+        builder.Property(x => x.Name).HasMaxLength(NameRule.MaximumLength);
         builder.Property(x => x.Created);
 
         // A scalar, and there is deliberately no navigation to the snapshots themselves - see

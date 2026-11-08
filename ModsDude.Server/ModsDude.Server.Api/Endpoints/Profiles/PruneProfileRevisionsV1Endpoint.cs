@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
@@ -91,6 +92,11 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Profile '{profileId}' does not exist in repo '{repoId}'"));
         }
 
+        // Held until the deletes commit, so a check-out cannot claim a revision between this reading the
+        // claims and deleting what they do not hold.
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await dbContext.LockRevisionHistoryAsync(profile.RepoId, profile.Id, cancellationToken);
+
         var existing = await dbContext.ProfileRevisions.GetExistingAsync(
             new RepoId(repoId), profile.Id, requested, cancellationToken);
 
@@ -161,6 +167,7 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
             new RepoId(repoId), profile.Id, deletable, cancellationToken);
 
         await unitOfWork.CommitAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         // Fewer revisions can turn a history that was outside its window into one winding down.
         await retentionUpkeep.ReleaseProfileAsync(profile.RepoId, profile.Id, cancellationToken);

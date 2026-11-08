@@ -201,7 +201,7 @@ public class ModUsageQueryTests(DatabaseFixture fixture)
         DisplayName = versionId,
         Description = "",
         FileName = $"{modId}.zip",
-        ContentHash = versionId,
+        ContentHash = TestHashes.Of(versionId),
         SizeBytes = 1024,
         Locked = false,
         Attributes = [],

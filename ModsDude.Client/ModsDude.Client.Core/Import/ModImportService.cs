@@ -961,49 +961,18 @@ public sealed class ModImportService(
         {
             try
             {
-                Report(version, ModImportPhase.Linking);
-
-                CreateModUploadLinkResponse link;
-
                 try
                 {
-                    link = await filesClient.CreateModUploadLinkV1Async(
-                        new CreateModUploadLinkRequest()
-                        {
-                            RepoId = request.RepoId,
-                            ModId = version.ModId.Value,
-                            VersionId = version.VersionId.Value,
-                            SizeBytes = Chosen(version).FileLength
-                        },
-                        cancellationToken);
+                    return await LinkAndUploadAsync(version, placement, cancellationToken);
                 }
-                catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.AlreadyRegistered)
+                catch (BlobAlreadyExistsException exception)
                 {
-                    // Nothing left to do. This is also what a teammate registering the same version
-                    // mid-import looks like from here, which is the same situation: the bytes this
-                    // import wanted are in the repo.
-                    Record(version, ModImportStatus.AlreadyRegistered);
-                    Report(version, ModImportPhase.Completed);
+                    // Another upload of the same version committed first. Asking for the link again
+                    // reaches what that left: a registration, or a stored file to adopt or refuse.
+                    logger.LogInformation(exception, "Mod {ModId} {VersionId} was stored by another upload first.", version.ModId.Value, version.VersionId.Value);
 
-                    return VersionOutcome.Done;
+                    return await LinkAndUploadAsync(version, placement, cancellationToken);
                 }
-                catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.FileAlreadyPresent)
-                {
-                    return await AdoptStoredFileAsync(version, placement, exception.Result.ContentHash, cancellationToken);
-                }
-
-                var total = Chosen(version).FileLength;
-
-                Report(version, ModImportPhase.Uploading, 0, total);
-
-                var hash = await uploader.UploadAsync(
-                    new ModFileUpload(link.Link, link.ContentHashMetadataKey, Chosen(version).OpenStream)
-                    {
-                        BytesTransferred = new Forwarder<long>(x => Report(version, ModImportPhase.Uploading, x, total))
-                    },
-                    cancellationToken);
-
-                return await RegisterAsync(version, placement, hash, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -1017,6 +986,56 @@ public sealed class ModImportService(
 
                 return VersionOutcome.Done;
             }
+        }
+
+        private async Task<VersionOutcome> LinkAndUploadAsync(
+            CatalogModVersion version,
+            PlannedPlacement placement,
+            CancellationToken cancellationToken)
+        {
+            Report(version, ModImportPhase.Linking);
+
+            CreateModUploadLinkResponse link;
+
+            try
+            {
+                link = await filesClient.CreateModUploadLinkV1Async(
+                    new CreateModUploadLinkRequest()
+                    {
+                        RepoId = request.RepoId,
+                        ModId = version.ModId.Value,
+                        VersionId = version.VersionId.Value,
+                        SizeBytes = Chosen(version).FileLength
+                    },
+                    cancellationToken);
+            }
+            catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.AlreadyRegistered)
+            {
+                // Nothing left to do. This is also what a teammate registering the same version
+                // mid-import looks like from here, which is the same situation: the bytes this
+                // import wanted are in the repo.
+                Record(version, ModImportStatus.AlreadyRegistered);
+                Report(version, ModImportPhase.Completed);
+
+                return VersionOutcome.Done;
+            }
+            catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.FileAlreadyPresent)
+            {
+                return await AdoptStoredFileAsync(version, placement, exception.Result.ContentHash, cancellationToken);
+            }
+
+            var total = Chosen(version).FileLength;
+
+            Report(version, ModImportPhase.Uploading, 0, total);
+
+            var hash = await uploader.UploadAsync(
+                new ModFileUpload(link.Link, link.ContentHashMetadataKey, Chosen(version).OpenStream)
+                {
+                    BytesTransferred = new Forwarder<long>(x => Report(version, ModImportPhase.Uploading, x, total))
+                },
+                cancellationToken);
+
+            return await RegisterAsync(version, placement, hash, cancellationToken);
         }
 
         /// <summary>
@@ -1093,6 +1112,15 @@ public sealed class ModImportService(
             catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.VersionPlacementConflict)
             {
                 return VersionOutcome.PlacementConflict;
+            }
+            catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.HashMismatch)
+            {
+                // The stored file records other bytes than these: somebody else's upload of the same
+                // version committed first.
+                Refuse(version, ModImportStatus.ContentMismatch,
+                    "A different file is already stored for this mod and version. Registering this one would describe bytes nobody could download.");
+
+                return VersionOutcome.Done;
             }
             catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.AlreadyExists)
             {

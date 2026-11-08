@@ -48,14 +48,19 @@ public class CreateModDownloadLinkV1Endpoint : IEndpoint
             return authResult;
         }
 
-        if (await modStorageService.GetModSize(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken) is not long size)
+        if (RequestChecks.ModId(request.ModId, request.VersionId) is { } invalidId)
+        {
+            return TypedResults.BadRequest(invalidId);
+        }
+
+        if (await modStorageService.GetStoredMod(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken) is not { } stored)
         {
             return TypedResults.BadRequest(Problems.ModFileDoesNotExist(new(request.RepoId), new(request.ModId), new(request.VersionId)));
         }
 
         var link = await modStorageService.GetDownloadLink(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken);
 
-        dbContext.FileTransfers.Add(new FileTransfer(new(request.RepoId), userId, TransferredFile.Mod, TransferDirection.Download, size, timeService.Now()));
+        dbContext.FileTransfers.Add(new FileTransfer(new(request.RepoId), userId, TransferredFile.Mod, TransferDirection.Download, stored.SizeBytes, timeService.Now()));
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(new CreateModDownloadLinkResponse(link));

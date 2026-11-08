@@ -197,14 +197,9 @@ public readonly record struct GameKey
 
     public GameKey(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (!IsValid(value))
         {
-            throw new DomainValidationException("A game must be named.");
-        }
-
-        if (value.Length > MaximumLength)
-        {
-            throw new DomainValidationException($"A game identity cannot be longer than {MaximumLength} characters.");
+            throw new DomainValidationException($"'{value}' is not a game identity. It must not be empty or longer than {MaximumLength} characters.");
         }
 
         Value = value;
@@ -212,6 +207,9 @@ public readonly record struct GameKey
 
 
     public string Value { get; }
+
+
+    public static bool IsValid(string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= MaximumLength;
 
     public override string ToString() => Value;
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
+using ModsDude.Server.Domain;
 using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
@@ -162,11 +163,12 @@ public class ReposPageModel(
 
     public async Task<IActionResult> OnPostRenameAsync(Guid repoId, string? name, CancellationToken cancellationToken)
     {
-        var trimmed = name?.Trim() ?? "";
-        if (trimmed.Length == 0)
+        if (!NameRule.IsValid(name))
         {
-            return ShowError(repoId, "A name cannot be empty.");
+            return ShowError(repoId, $"A name cannot be empty or longer than {NameRule.MaximumLength} characters.");
         }
+
+        var trimmed = name!.Trim();
 
         if (await dbContext.Repos.GetAsync(new RepoId(repoId), cancellationToken) is not { } repo)
         {

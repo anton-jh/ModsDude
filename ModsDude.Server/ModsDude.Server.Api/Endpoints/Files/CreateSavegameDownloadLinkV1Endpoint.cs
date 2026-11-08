@@ -4,11 +4,11 @@ using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
-using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Statistics;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
@@ -59,7 +59,7 @@ public class CreateSavegameDownloadLinkV1Endpoint : IEndpoint
 
         // Before storage sees it — see the upload counterpart for why the check is here as well as
         // there.
-        if (!ModImageHash.IsValid(request.ContentHash))
+        if (!Sha256Hex.IsValid(request.ContentHash))
         {
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }

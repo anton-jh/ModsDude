@@ -1052,7 +1052,15 @@
           "https://server.modsdude.com/api/problems/user-blocked",
           "https://server.modsdude.com/api/problems/repo-changed",
           "https://server.modsdude.com/api/problems/profile-changed",
-          "https://server.modsdude.com/api/problems/savegame-changed"
+          "https://server.modsdude.com/api/problems/savegame-changed",
+          "https://server.modsdude.com/api/problems/invalid-mod-id",
+          "https://server.modsdude.com/api/problems/invalid-mod-version-id",
+          "https://server.modsdude.com/api/problems/invalid-image-format",
+          "https://server.modsdude.com/api/problems/invalid-name",
+          "https://server.modsdude.com/api/problems/invalid-label",
+          "https://server.modsdude.com/api/problems/invalid-game-key",
+          "https://server.modsdude.com/api/problems/invalid-request",
+          "https://server.modsdude.com/api/problems/unexpected"
         ],
         "type": "string",
         "x-enumNames": [
@@ -1105,7 +1113,15 @@
           "UserBlocked",
           "RepoChanged",
           "ProfileChanged",
-          "SavegameChanged"
+          "SavegameChanged",
+          "InvalidModId",
+          "InvalidModVersionId",
+          "InvalidImageFormat",
+          "InvalidName",
+          "InvalidLabel",
+          "InvalidGameKey",
+          "InvalidRequest",
+          "Unexpected"
         ]
       },
       "ProfileDependentDto": {
@@ -1626,6 +1642,9 @@
       "RepoMemberDto": {
         "additionalProperties": false,
         "properties": {
+          "isBlocked": {
+            "type": "boolean"
+          },
           "membershipLevel": {
             "$ref": "#/components/schemas/RepoMembershipLevel"
           },
@@ -2164,6 +2183,16 @@
           "200": {
             "description": ""
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
           "401": {
             "content": {
               "application/json": {
@@ -2185,6 +2214,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2261,6 +2300,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -2329,6 +2378,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -2360,6 +2419,16 @@
           "200": {
             "description": ""
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
           "401": {
             "content": {
               "application/json": {
@@ -2381,6 +2450,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2436,6 +2515,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2521,6 +2610,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -2590,6 +2689,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2675,6 +2784,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -2744,6 +2863,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2829,6 +2958,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -2898,6 +3037,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2989,6 +3138,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -3058,6 +3217,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -3154,6 +3323,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -3212,6 +3391,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -3248,6 +3437,16 @@
             },
             "description": ""
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
           "401": {
             "content": {
               "application/json": {
@@ -3269,6 +3468,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -3327,6 +3536,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -3405,6 +3624,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -3472,6 +3701,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -3567,6 +3806,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -3637,6 +3886,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -3699,6 +3958,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -3794,6 +4063,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -3874,6 +4153,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -3945,6 +4234,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -4042,6 +4341,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -4129,6 +4438,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -4208,6 +4527,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -4312,6 +4641,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -4391,6 +4730,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -4459,6 +4808,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -4545,6 +4904,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -4641,6 +5010,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -4718,6 +5097,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -4833,6 +5222,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -4940,6 +5339,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -5012,6 +5421,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -5107,6 +5526,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -5169,6 +5598,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -5257,6 +5696,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -5334,6 +5783,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -5439,6 +5898,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -5526,6 +5995,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -5605,6 +6084,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -5710,6 +6199,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -5799,6 +6298,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -5897,6 +6406,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -6012,6 +6531,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -6101,6 +6630,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -6200,6 +6739,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -6317,6 +6866,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -6379,6 +6938,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -6459,6 +7028,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -6554,6 +7133,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -6634,6 +7223,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -6706,6 +7305,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -6811,6 +7420,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -6883,6 +7502,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -6998,6 +7627,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -7095,6 +7734,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -7167,6 +7816,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -7258,6 +7917,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -7373,6 +8042,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -7470,6 +8149,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -7552,6 +8241,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -7669,6 +8368,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -7746,6 +8455,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -7796,6 +8515,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -7859,6 +8588,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -7906,6 +8645,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
@@ -7989,6 +8738,16 @@
               }
             },
             "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
           }
         },
         "security": [
@@ -8058,6 +8817,16 @@
             "description": ""
           },
           "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
             "content": {
               "application/json": {
                 "schema": {

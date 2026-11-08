@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
@@ -28,9 +29,9 @@ namespace ModsDude.Server.Api.Maintenance;
 /// under a live import.
 /// </para>
 /// <para>
-/// <b>A sweep that would empty most of a container deletes nothing at all.</b> Measured against a
+/// <b>A container that is not this database's own deletes nothing at all.</b> Measured against a
 /// database that is not the one the storage account belongs to, every blob looks orphaned; see
-/// <see cref="ReclamationPlan.IsImplausible"/> and <see cref="BlobReclamationOptions.MaxReclaimableShare"/>.
+/// <see cref="StorageBinding"/> and <see cref="ReclamationGate"/>.
 /// </para>
 /// </remarks>
 public class BlobReclamationJob(
@@ -96,27 +97,45 @@ public class BlobReclamationJob(
             await PlanSavegamesAsync(cutoff, cancellationToken)
         ];
 
-        var implausible = sweeps
-            .Where(x => x.Plan.IsImplausible(options.Value.MaxReclaimableShare))
-            .ToList();
+        var binding = await dbContext.StorageBindings.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
 
-        if (implausible.Count > 0)
+        var containers = new List<ContainerReclamation>();
+        foreach (var sweep in sweeps)
         {
-            foreach (var sweep in implausible)
+            containers.Add(new ContainerReclamation(sweep.Container, sweep.Plan, await sweep.Storage.ReadBindingMarker(cancellationToken)));
+        }
+
+        var decision = ReclamationGate.Decide(containers, binding?.BindingId, options.Value.MaxReclaimableShare);
+
+        if (!decision.MayProceed)
+        {
+            foreach (var refusal in decision.Refusals)
             {
-                logger.LogError(
-                    "Blob reclamation would reclaim {Reclaimable} of {Scanned} blobs in '{Container}', more than BlobReclamation:MaxReclaimableShare ({MaxShare:P0}) allows.",
-                    sweep.Plan.Reclaimable.Count,
-                    sweep.Plan.Scanned,
-                    sweep.Container,
-                    options.Value.MaxReclaimableShare);
+                logger.LogError("Blob reclamation refused: {Refusal}", refusal);
             }
 
             // Failed rather than returned from, so the refusal shows in the dashboard as well as the log.
             throw new InvalidOperationException(
-                "Blob reclamation refused to run and deleted nothing: a container would lose more of its blobs than " +
-                "BlobReclamation:MaxReclaimableShare allows. That usually means the database is not the one the storage " +
-                "account's blobs are registered in. If it is, and that much really is garbage, raise the share for one run.");
+                "Blob reclamation refused to run and deleted nothing: a container does not belong to this database, or is not " +
+                "bound yet and would lose more of its blobs than BlobReclamation:MaxReclaimableShare allows. If the database " +
+                "is the right one and that much really is garbage, raise the share for one run.");
+        }
+
+        if (decision.CreateBinding)
+        {
+            binding = new StorageBinding(Guid.NewGuid(), timeService.Now());
+            dbContext.StorageBindings.Add(binding);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation("Bound this database to its storage account as {BindingId}.", binding.BindingId);
+        }
+
+        // Marked before anything is deleted, so a run that dies partway leaves containers that are bound
+        // or unbound, never half of either. A rerun marks whatever is still unmarked.
+        foreach (var sweep in sweeps.Where(x => decision.ToMark.Contains(x.Container)))
+        {
+            await sweep.Storage.WriteBindingMarker(binding!.BindingId, cancellationToken);
+            logger.LogInformation("Marked container '{Container}' as bound to {BindingId}.", sweep.Container, binding.BindingId);
         }
 
         foreach (var sweep in sweeps)
@@ -140,7 +159,7 @@ public class BlobReclamationJob(
             .Select(x => new ModBlobAddress(x.RepoId, x.ModId, x.Id))
             .ToHashSet();
 
-        return new ContainerSweep("mods", BlobReclamation.PlanModSweep(stored, registered, cutoff), modStorage.DeleteStoredBlob);
+        return new ContainerSweep("mods", BlobReclamation.PlanModSweep(stored, registered, cutoff), modStorage);
     }
 
     private async Task<ContainerSweep> PlanImagesAsync(DateTimeOffset cutoff, CancellationToken cancellationToken)
@@ -171,7 +190,7 @@ public class BlobReclamationJob(
             .Distinct()
             .ToListAsync(cancellationToken));
 
-        return new ContainerSweep("mod-images", BlobReclamation.PlanImageSweep(stored, referenced, cutoff), imageStorage.DeleteStoredBlob);
+        return new ContainerSweep("mod-images", BlobReclamation.PlanImageSweep(stored, referenced, cutoff), imageStorage);
     }
 
     private async Task<ContainerSweep> PlanSavegamesAsync(DateTimeOffset cutoff, CancellationToken cancellationToken)
@@ -188,18 +207,18 @@ public class BlobReclamationJob(
         // still refers to it, never how many snapshots do or which one owns it.
         var registered = await dbContext.SavegameSnapshots.GetRegisteredBlobAddressesAsync(cancellationToken);
 
-        return new ContainerSweep("savegames", BlobReclamation.PlanSavegameSweep(stored, registered, cutoff), savegameStorage.DeleteStoredBlob);
+        return new ContainerSweep("savegames", BlobReclamation.PlanSavegameSweep(stored, registered, cutoff), savegameStorage);
     }
 
     private async Task ApplyAsync(ContainerSweep sweep, CancellationToken cancellationToken)
     {
-        var (container, plan, delete) = sweep;
+        var (container, plan, storage) = sweep;
 
         var reclaimed = 0;
 
         foreach (var blob in plan.Reclaimable)
         {
-            if (await delete(blob, cancellationToken))
+            if (await storage.DeleteStoredBlob(blob, cancellationToken))
             {
                 reclaimed++;
             }
@@ -224,5 +243,5 @@ public class BlobReclamationJob(
     }
 
 
-    private sealed record ContainerSweep(string Container, ReclamationPlan Plan, Func<StoredBlob, CancellationToken, Task<bool>> Delete);
+    private sealed record ContainerSweep(string Container, ReclamationPlan Plan, IReclaimableContainer Storage);
 }

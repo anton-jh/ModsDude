@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
@@ -55,7 +56,14 @@ public class ArchiveSavegameV1Endpoint : IEndpoint
 
         savegame.Archive(timeService.Now());
 
-        await unitOfWork.CommitAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return TypedResults.BadRequest(Problems.SavegameChanged);
+        }
 
         return TypedResults.Ok();
     }

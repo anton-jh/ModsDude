@@ -3,6 +3,7 @@ using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Retention;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Domain.Savegames;
@@ -76,7 +77,7 @@ public class SavegameSnapshot
         ProfileRevision = profileRevision;
         // Validated rather than taken on trust: the hash is a blob path segment, so anything that is
         // not one addresses something that is not a savegame.
-        ContentHash = ModImageHash.Validated(contentHash);
+        ContentHash = Sha256Hex.Validated(contentHash);
         SizeBytes = sizeBytes;
         CreatedBy = createdBy;
         Created = created;

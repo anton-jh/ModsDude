@@ -20,7 +20,7 @@ public class CreateRepoV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Results<Ok<RepoDto>, Forbidden<CustomProblemDetails>>> CreateRepo(
+    private static async Task<Results<Ok<RepoDto>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> CreateRepo(
         CreateRepoRequest request,
         IUnitOfWork unitOfWork,
         ITimeService timeService,
@@ -28,6 +28,11 @@ public class CreateRepoV1Endpoint : IEndpoint
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.Name(request.Name) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var user = await dbContext.Users.GetAsync(httpContext.User.GetUserId(), cancellationToken);
 
         var authResult = user

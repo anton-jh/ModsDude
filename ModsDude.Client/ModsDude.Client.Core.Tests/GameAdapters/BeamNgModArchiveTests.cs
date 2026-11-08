@@ -102,6 +102,18 @@ public class BeamNgModArchiveTests : IDisposable
     }
 
     [Fact]
+    public async Task A_declared_version_the_server_would_refuse_falls_back_to_the_newest_file()
+    {
+        WriteZip("odd_version.zip", new()
+        {
+            ["mod_info/X/info.json"] = """{ "version": "1.0/beta" }""",
+            ["vehicles/x/x.jbeam"] = "{}"
+        });
+
+        Assert.Equal("2024.08.09.1345", (await ScanOne()).Version.Value);
+    }
+
+    [Fact]
     public async Task A_level_preview_is_the_picture_of_a_map()
     {
         WriteZip("utah.zip", new()

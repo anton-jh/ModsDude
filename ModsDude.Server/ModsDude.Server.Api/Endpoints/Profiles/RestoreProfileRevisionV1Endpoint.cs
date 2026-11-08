@@ -57,6 +57,11 @@ public class RestoreProfileRevisionV1Endpoint : IEndpoint
         IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.Label(request.Label, ProfileRevision.MaximumLabelLength) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var userId = claimsPrincipal.GetUserId();
 
         var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);

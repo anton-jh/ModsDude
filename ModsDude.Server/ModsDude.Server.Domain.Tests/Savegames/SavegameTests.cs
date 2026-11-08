@@ -1,3 +1,4 @@
+using ModsDude.Server.Domain;
 using ModsDude.Server.Domain.Exceptions;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
@@ -306,11 +307,11 @@ public class SavegameTests
     [Fact]
     public void A_savegame_name_longer_than_the_maximum_is_refused()
     {
-        Assert.Throws<DomainValidationException>(() => new SavegameName(new string('x', SavegameName.MaximumLength + 1)));
+        Assert.Throws<DomainValidationException>(() => new SavegameName(new string('x', NameRule.MaximumLength + 1)));
 
         Assert.Equal(
-            SavegameName.MaximumLength,
-            new SavegameName(new string('x', SavegameName.MaximumLength)).Value.Length);
+            NameRule.MaximumLength,
+            new SavegameName(new string('x', NameRule.MaximumLength)).Value.Length);
     }
 
 

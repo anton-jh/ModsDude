@@ -64,6 +64,11 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
         IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.Label(request.Label, SavegameSnapshot.MaximumLabelLength) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var userId = claimsPrincipal.GetUserId();
         var requestId = new SavegameSnapshotRequestId(request.RequestId);
 

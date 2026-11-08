@@ -37,6 +37,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModsDude.Server.ModHub", "M
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModsDude.Server.ModHub.Tests", "ModsDude.Server\ModsDude.Server.ModHub.Tests\ModsDude.Server.ModHub.Tests.csproj", "{73257F58-3655-415F-95B9-850AB03D6DDE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModsDude.Server.Storage.Tests", "ModsDude.Server\ModsDude.Server.Storage.Tests\ModsDude.Server.Storage.Tests.csproj", "{00133B68-870A-4DE1-85CA-34DF06BC0F51}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -191,6 +193,18 @@ Global
 		{73257F58-3655-415F-95B9-850AB03D6DDE}.Release|x64.Build.0 = Release|Any CPU
 		{73257F58-3655-415F-95B9-850AB03D6DDE}.Release|x86.ActiveCfg = Release|Any CPU
 		{73257F58-3655-415F-95B9-850AB03D6DDE}.Release|x86.Build.0 = Release|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Debug|x64.Build.0 = Debug|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Debug|x86.Build.0 = Debug|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Release|Any CPU.Build.0 = Release|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Release|x64.ActiveCfg = Release|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Release|x64.Build.0 = Release|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Release|x86.ActiveCfg = Release|Any CPU
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -208,6 +222,7 @@ Global
 		{2DCB616C-AB91-471C-96AD-6F95E306055E} = {6D15BD6A-4AE5-43D2-5792-2F69DB82D193}
 		{5F501224-2803-411A-AA17-4EBEDA9A716A} = {B5F5D79F-D466-7054-2E70-E9E7493C2180}
 		{73257F58-3655-415F-95B9-850AB03D6DDE} = {B5F5D79F-D466-7054-2E70-E9E7493C2180}
+		{00133B68-870A-4DE1-85CA-34DF06BC0F51} = {B5F5D79F-D466-7054-2E70-E9E7493C2180}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {1B145B9F-9FAF-4B83-A416-0468D9FA48AD}

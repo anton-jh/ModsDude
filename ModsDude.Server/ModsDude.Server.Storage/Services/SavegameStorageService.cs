@@ -7,6 +7,7 @@ using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 using System.Runtime.CompilerServices;
 
 namespace ModsDude.Server.Storage.Services;
@@ -18,15 +19,15 @@ namespace ModsDude.Server.Storage.Services;
 /// </summary>
 internal class SavegameStorageService(
     BlobServiceClient blobServiceClient,
+    IUserDelegationKeyCache keyCache,
     ITimeService timeService)
     : ISavegameStorageService
 {
     private const string _savegamesContainerName = "savegames";
 
     /// <summary>
-    /// Sent as <c>x-ms-meta-sha256</c>. The client writes it as it uploads, because the API never
-    /// sees the bytes and so cannot compute it; the SAS it uploads over already carries Write, which
-    /// is the permission Put Blob needs to set metadata alongside the content.
+    /// Sent as <c>x-ms-meta-sha256</c>. The client writes it as it commits, because the API never
+    /// sees the bytes and so cannot compute it.
     /// </summary>
     private const string _contentHashMetadataKey = "sha256";
 
@@ -85,25 +86,12 @@ internal class SavegameStorageService(
         }
     }
 
-    public async Task<string?> GetRecordedContentHash(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var properties = await GetBlobClient(repoId, savegameId, contentHash).GetPropertiesAsync(cancellationToken: cancellationToken);
-
-            return properties.Value.Metadata.TryGetValue(_contentHashMetadataKey, out var hash) ? hash : null;
-        }
-        catch (RequestFailedException exception) when (exception.Status == 404)
-        {
-            return null;
-        }
-    }
-
     public Task<string> GetUploadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
     {
-        // Write is what lets the client stamp the content hash into blob metadata as it uploads, on
-        // top of writing the content itself.
-        return GetSasLink(repoId, savegameId, contentHash, BlobSasPermissions.Create | BlobSasPermissions.Write, cancellationToken);
+        // Create without Write: a new blob can be written, metadata and all, but one that exists cannot
+        // be overwritten - by a second uploader of the same file, or by this link after the file has been
+        // registered.
+        return GetSasLink(repoId, savegameId, contentHash, BlobSasPermissions.Create, cancellationToken);
     }
 
     public Task<string> GetDownloadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
@@ -117,6 +105,11 @@ internal class SavegameStorageService(
 
         await foreach (var blob in container.GetBlobsAsync(cancellationToken: cancellationToken))
         {
+            if (ContainerBindingMarker.IsMarker(blob.Name))
+            {
+                continue;
+            }
+
             // See ModStorageService.ListStoredMods on the missing timestamp.
             yield return new StoredBlob(
                 blob.Name,
@@ -129,12 +122,18 @@ internal class SavegameStorageService(
     public Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken)
         => StoredBlobDeletion.DeleteIfUnchangedAsync(blobServiceClient.GetBlobContainerClient(_savegamesContainerName), blob, cancellationToken);
 
+    public Task<Guid?> ReadBindingMarker(CancellationToken cancellationToken)
+        => ContainerBindingMarker.ReadAsync(blobServiceClient.GetBlobContainerClient(_savegamesContainerName), cancellationToken);
+
+    public Task WriteBindingMarker(Guid bindingId, CancellationToken cancellationToken)
+        => ContainerBindingMarker.WriteAsync(blobServiceClient.GetBlobContainerClient(_savegamesContainerName), bindingId, cancellationToken);
+
 
     private Task<string> GetSasLink(RepoId repoId, SavegameId savegameId, string contentHash, BlobSasPermissions permissions, CancellationToken cancellationToken)
     {
         var blobClient = GetBlobClient(repoId, savegameId, contentHash);
 
-        return BlobSasLinks.CreateAsync(blobServiceClient, blobClient, permissions, new DateTimeOffset(timeService.Now()), cancellationToken);
+        return BlobSasLinks.CreateAsync(keyCache, blobClient, permissions, new DateTimeOffset(timeService.Now()), cancellationToken);
     }
 
     private BlobClient GetBlobClient(RepoId repoId, SavegameId savegameId, string contentHash)
@@ -152,6 +151,6 @@ internal class SavegameStorageService(
     /// </summary>
     private static string BuildSavegameFilename(RepoId repoId, SavegameId savegameId, string contentHash)
     {
-        return $"{repoId.Value}/{savegameId.Value}/{ModImageHash.Validated(contentHash)}";
+        return $"{repoId.Value}/{savegameId.Value}/{Sha256Hex.Validated(contentHash)}";
     }
 }

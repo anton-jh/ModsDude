@@ -115,8 +115,14 @@ public class Savegame : IArchivable
     /// Brings it back, optionally under a new name - which is how a clash with a live savegame is
     /// resolved, since an archived one gave up its name when it was archived.
     /// </summary>
+    /// <remarks>Refused for one that is not archived, whose rename is a rename and checks the version it was made against.</remarks>
     public void Restore(SavegameName? name = null)
     {
+        if (ArchivedAt is null)
+        {
+            throw new DomainValidationException($"Cannot restore savegame '{Id.Value}', which is not archived.");
+        }
+
         if (name is SavegameName renamed)
         {
             Name = renamed;
@@ -208,28 +214,12 @@ public class Savegame : IArchivable
 public readonly record struct SavegameId(Guid Value);
 
 
-/// <summary>
-/// A savegame's name, unique within its repo. It is read by people picking one to play, so the only
-/// thing worth refusing is an empty one and an essay.
-/// </summary>
+/// <summary>A savegame's name, unique within its repo. See <see cref="NameRule"/>.</summary>
 public readonly record struct SavegameName
 {
-    public const int MaximumLength = 100;
-
-
     public SavegameName(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new DomainValidationException("A savegame must have a name.");
-        }
-
-        if (value.Length > MaximumLength)
-        {
-            throw new DomainValidationException($"A savegame name cannot be longer than {MaximumLength} characters.");
-        }
-
-        Value = value.Trim();
+        Value = NameRule.Validated(value, "savegame");
     }
 
 

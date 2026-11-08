@@ -21,7 +21,7 @@ internal static partial class CopyNames
 
     /// <summary>The mod <paramref name="modId"/> looks like a copy of, or null where it looks like its own name.</summary>
     public static ModKey? OriginalOf(ModKey modId, ILogger log)
-        => OriginalStem(modId.Value, CopySuffixes(log)) is string original ? ModKey.From(original) : null;
+        => OriginalStem(modId.Value, CopySuffixes(log)) is string original && ModKey.IsValid(original) ? ModKey.From(original) : null;
 
     /// <summary>
     /// <paramref name="stem"/> with every copy marker stripped from its end, or null where it has none

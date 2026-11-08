@@ -207,7 +207,7 @@ public class ModVersionOrderingTests(DatabaseFixture fixture)
         DisplayName = versionId,
         Description = "",
         FileName = $"{modId.Value}.zip",
-        ContentHash = versionId,
+        ContentHash = TestHashes.Of(versionId),
         SizeBytes = 1024,
         Locked = false,
         Attributes = [],

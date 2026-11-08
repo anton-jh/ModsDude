@@ -1,5 +1,6 @@
 ﻿using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 
 namespace ModsDude.Server.Domain.Mods;
 
@@ -129,8 +130,8 @@ public static class BlobReclamation
 
     /// <summary>
     /// The layout <c>ModStorageService</c> writes: <c>{repoId}/{modId}/{versionId}</c>. Rejects
-    /// anything that is not exactly three non-empty segments with a parseable repo id, so a stray
-    /// file or a future layout is reported rather than deleted.
+    /// anything that is not exactly three segments with a parseable repo id and a valid mod id and
+    /// version id, so a stray file or a future layout is reported rather than deleted.
     /// </summary>
     public static bool TryParseModBlobName(string name, out ModBlobAddress address)
     {
@@ -139,8 +140,9 @@ public static class BlobReclamation
         var segments = name.Split('/');
 
         if (segments.Length != 3
-            || segments.Any(string.IsNullOrEmpty)
-            || !Guid.TryParse(segments[0], out var repoId))
+            || !Guid.TryParse(segments[0], out var repoId)
+            || !ModId.IsValid(segments[1])
+            || !ModVersionId.IsValid(segments[2]))
         {
             return false;
         }
@@ -164,7 +166,7 @@ public static class BlobReclamation
         if (segments.Length != 3
             || !Guid.TryParse(segments[0], out var repoId)
             || !Guid.TryParse(segments[1], out var savegameId)
-            || !ModImageHash.IsValid(segments[2]))
+            || !Sha256Hex.IsValid(segments[2]))
         {
             return false;
         }
@@ -185,7 +187,7 @@ public static class BlobReclamation
         var segments = name.Split('/');
 
         if (segments.Length != 2
-            || !ModImageHash.IsValid(segments[1])
+            || !Sha256Hex.IsValid(segments[1])
             || segments[0] != segments[1][..2])
         {
             return false;

@@ -6,11 +6,9 @@
 /// <remarks>
 /// <para>
 /// <see cref="ModId"/> is the identity and arrives normalized to lower case, because it becomes a
-/// blob path segment and half of a primary key, both of which are case-sensitive - see
-/// docs/09-mod-catalog.md#the-casing-trap. That normalization used to reach the mod folder as well:
-/// the client rebuilt the filename out of the id, so applying a profile renamed every archive to
-/// lower case. Carrying the spelling <em>alongside</em> the identity is what lets the id stay
-/// normalized while the file keeps its name.
+/// blob path segment and half of a primary key, both of which are case-sensitive. Carrying the
+/// spelling <em>alongside</em> the identity is what lets the id stay normalized while the file keeps
+/// its name.
 /// </para>
 /// <para>
 /// One member of a repo chooses this value and every other member's client writes a file with it, so
@@ -57,7 +55,9 @@ public static class ModFileName
 
         // The same normalization the client applies when it derives the id from the filename, so the
         // two agree by construction rather than by both remembering to.
-        return string.Equals(stem.Trim().ToLowerInvariant(), modId.Value, StringComparison.Ordinal);
+        var derivedId = stem.Trim().ToLowerInvariant();
+
+        return ModId.IsValid(derivedId) && string.Equals(derivedId, modId.Value, StringComparison.Ordinal);
     }
 
 

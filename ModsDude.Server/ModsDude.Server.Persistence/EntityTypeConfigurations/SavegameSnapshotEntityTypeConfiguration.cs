@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 
 namespace ModsDude.Server.Persistence.EntityTypeConfigurations;
 internal class SavegameSnapshotEntityTypeConfiguration : IEntityTypeConfiguration<SavegameSnapshot>
@@ -40,12 +41,11 @@ internal class SavegameSnapshotEntityTypeConfiguration : IEntityTypeConfiguratio
             .HasForeignKey(x => new { x.RepoId, x.ProfileId, x.ProfileRevision })
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Fixed length, because it is a SHA-256 in lowercase hex or it is not a blob address.
         // Bounded but not fixed-length. bpchar compares with trailing spaces stripped, which is a
         // semantic nobody wants standing between two hashes, and ModVersion.ContentHash - the same
         // kind of value - is a plain string. Two hashes should differ for the only reason hashes
         // differ.
-        builder.Property(x => x.ContentHash).HasMaxLength(ModImageHash.Length);
+        builder.Property(x => x.ContentHash).HasMaxLength(Sha256Hex.Length);
 
         builder.Property(x => x.Origin).HasConversion<string>();
         builder.Property(x => x.Label).HasMaxLength(SavegameSnapshot.MaximumLabelLength);

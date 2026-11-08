@@ -42,7 +42,8 @@ public sealed class ModHubModSource(IModHubClient client, string game) : IRemote
 
             foreach (var mod in response.Mods)
             {
-                if (string.IsNullOrWhiteSpace(mod.Version)
+                if (!ModKey.IsValid(mod.Name)
+                    || !ModVersionKey.IsValid(mod.Version)
                     || Uri.TryCreate(mod.DownloadUrl, UriKind.Absolute, out var download) is false
                     || IsAllowedDownload(download) is false)
                 {

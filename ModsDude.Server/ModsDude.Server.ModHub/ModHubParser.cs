@@ -17,6 +17,8 @@ namespace ModsDude.Server.ModHub;
 /// </remarks>
 public static partial class ModHubParser
 {
+    private const string _modNotFoundHeading = "Error: Mod not found";
+
     private static readonly HtmlParser _parser = new();
 
 
@@ -62,10 +64,12 @@ public static partial class ModHubParser
 
         if (info is null)
         {
-            // ModHub answers a missing mod with 200 and an error heading, not a 404.
-            return title?.StartsWith("Error", StringComparison.OrdinalIgnoreCase) is true
+            // ModHub answers a missing mod with 200 and this heading, not a 404. Any other error page - a
+            // maintenance notice, a rate limit - says nothing about the mod, so it is unreadable rather
+            // than taken for the mod's removal.
+            return string.Equals(title, _modNotFoundHeading, StringComparison.OrdinalIgnoreCase)
                 ? null
-                : throw new ModHubUnreadableException("A mod page has neither the mod's details nor ModHub's error heading.");
+                : throw new ModHubUnreadableException($"A mod page has neither the mod's details nor ModHub's \"{_modNotFoundHeading}\" heading.");
         }
 
         var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

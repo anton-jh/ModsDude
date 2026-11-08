@@ -5,11 +5,11 @@ using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
-using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
@@ -65,6 +65,11 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
+        if ((RequestChecks.FileSize(request.SizeBytes) ?? RequestChecks.Label(request.Label, SavegameSnapshot.MaximumLabelLength)) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var userId = claimsPrincipal.GetUserId();
         var requestId = new SavegameSnapshotRequestId(request.RequestId);
 
@@ -102,7 +107,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         }
 
         // Before storage and the snapshot's constructor see it: both throw where this reports.
-        if (!ModImageHash.IsValid(request.ContentHash))
+        if (!Sha256Hex.IsValid(request.ContentHash))
         {
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }

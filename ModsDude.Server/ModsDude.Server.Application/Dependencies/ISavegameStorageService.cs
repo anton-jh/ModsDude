@@ -31,7 +31,7 @@ namespace ModsDude.Server.Application.Dependencies;
 /// <see cref="BlobReclamation.TryParseSavegameBlobName"/> relies on.
 /// </para>
 /// </remarks>
-public interface ISavegameStorageService
+public interface ISavegameStorageService : IReclaimableContainer
 {
     /// <summary>
     /// The blob metadata entry the uploading client writes the packed save's SHA-256 into. The API
@@ -62,19 +62,6 @@ public interface ISavegameStorageService
     Task<bool> TryReuseSavegame(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The SHA-256 the uploader recorded against the blob, or <c>null</c> when the blob is absent or
-    /// carries no such record. Not Azure's own content hash, which is MD5.
-    /// </summary>
-    /// <remarks>
-    /// For a savegame this <b>verifies</b> the address rather than discovering it, since the address
-    /// already is the hash. An upload whose recorded hash disagrees with the address it was written
-    /// to was not produced by a client that hashed what it actually sent, and the check-in it
-    /// belongs to should be refused rather than recorded - a snapshot whose <c>ContentHash</c> does
-    /// not describe its bytes is a backup nobody can trust to be the save they checked in.
-    /// </remarks>
-    Task<string?> GetRecordedContentHash(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
-
-    /// <summary>
     /// A link the client uploads the packed save over. The client names the hash before it uploads,
     /// because the hash is the address - which means it has to have hashed the file already, and the
     /// bytes it then sends can be checked against the name it asked for.
@@ -89,9 +76,4 @@ public interface ISavegameStorageService
     /// <see cref="IModStorageService.ListStoredMods"/>.
     /// </summary>
     IAsyncEnumerable<StoredBlob> ListStoredSavegames(CancellationToken cancellationToken);
-
-    /// <summary>
-    /// See <see cref="IModStorageService.DeleteStoredBlob"/>.
-    /// </summary>
-    Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken);
 }

@@ -100,6 +100,16 @@ public class FarmingSimulatorBaseModAdapter(
 
         var desc = maybeDesc.Value;
 
+        // A mod whose name or version the server would refuse is a mod this adapter cannot carry, which
+        // is the logged case of GetModFromFile rather than the silent one.
+        var stem = Path.GetFileNameWithoutExtension(path);
+        var version = desc.Element("version")?.Value;
+
+        if (!string.IsNullOrWhiteSpace(stem) && !string.IsNullOrWhiteSpace(version) && !(ModKey.IsValid(stem) && ModVersionKey.IsValid(version)))
+        {
+            throw new InvalidDataException($"'{stem}' at version '{version}' cannot be carried as a mod id and version.");
+        }
+
         // Normalized here, where the id is produced, rather than at each use site - which is how one
         // gets missed. See docs/09-mod-catalog.md#the-casing-trap.
         var maybeLocalMod =

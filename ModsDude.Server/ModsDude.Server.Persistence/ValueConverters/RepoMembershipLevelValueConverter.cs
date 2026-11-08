@@ -10,4 +10,13 @@ internal class RepoMembershipLevelValueConverter : ValueConverter<RepoMembership
             provider => (RepoMembershipLevel)Enum.Parse(typeof(RepoMembershipLevel), provider))
     {
     }
+
+
+    /// <summary>Holds <paramref name="column"/> to the names of defined levels, so no row can carry another.</summary>
+    public static string CheckConstraintSql(string column)
+    {
+        var names = Enum.GetNames<RepoMembershipLevel>().Order(StringComparer.Ordinal).Select(x => $"'{x}'");
+
+        return $"\"{column}\" IN ({string.Join(", ", names)})";
+    }
 }

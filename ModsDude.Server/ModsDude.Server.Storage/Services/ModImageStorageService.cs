@@ -3,6 +3,7 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Storage;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
@@ -18,7 +19,10 @@ internal class ModImageStorageService(
     : IModImageStorageService
 {
     private const string _imagesContainerName = "mod-images";
-    private const int _existenceCheckConcurrency = 16;
+    private const int _reuseConcurrency = 16;
+
+
+    public string ContentType => "image/webp";
 
 
     public async Task EnsureContainerExists(CancellationToken cancellationToken)
@@ -28,31 +32,30 @@ internal class ModImageStorageService(
             .CreateIfNotExistsAsync(cancellationToken: cancellationToken);
     }
 
-    public async Task<IReadOnlyCollection<string>> CheckWhichExist(IReadOnlyCollection<string> hashes, CancellationToken cancellationToken)
+    public async Task<IReadOnlyCollection<string>> TryReuse(IReadOnlyCollection<string> hashes, CancellationToken cancellationToken)
     {
-        var present = new ConcurrentBag<string>();
+        var missing = new ConcurrentBag<string>();
 
-        // Blob storage has no batch existence API, so the batch is only a batch to the caller. It
-        // still saves the round trips that matter — the client's, over the network it is slow on.
+        // Blob storage has no batch call, so the batch is only a batch to the caller.
         await Parallel.ForEachAsync(
             hashes.Distinct(),
-            new ParallelOptions { MaxDegreeOfParallelism = _existenceCheckConcurrency, CancellationToken = cancellationToken },
+            new ParallelOptions { MaxDegreeOfParallelism = _reuseConcurrency, CancellationToken = cancellationToken },
             async (hash, ct) =>
             {
-                if ((await GetBlobClient(hash).ExistsAsync(ct)).Value)
+                if (!await TryReuseOne(hash, ct))
                 {
-                    present.Add(hash);
+                    missing.Add(hash);
                 }
             });
 
-        return [.. present];
+        return [.. missing.Order(StringComparer.Ordinal)];
     }
 
-    public async Task Upload(string hash, string contentType, Stream content, CancellationToken cancellationToken)
+    public async Task Upload(string hash, Stream content, CancellationToken cancellationToken)
     {
         var options = new BlobUploadOptions
         {
-            HttpHeaders = new BlobHttpHeaders { ContentType = contentType }
+            HttpHeaders = new BlobHttpHeaders { ContentType = ContentType }
         };
 
         // Overwriting is safe precisely because the caller verified the bytes hash to the address:
@@ -60,13 +63,13 @@ internal class ModImageStorageService(
         await GetBlobClient(hash).UploadAsync(content, options, cancellationToken);
     }
 
-    public async Task<StoredModImage?> Download(string hash, CancellationToken cancellationToken)
+    public async Task<Stream?> Download(string hash, CancellationToken cancellationToken)
     {
         try
         {
             var result = await GetBlobClient(hash).DownloadStreamingAsync(cancellationToken: cancellationToken);
 
-            return new StoredModImage(result.Value.Content, result.Value.Details.ContentType);
+            return result.Value.Content;
         }
         catch (RequestFailedException exception) when (exception.Status == 404)
         {
@@ -81,6 +84,11 @@ internal class ModImageStorageService(
 
         await foreach (var blob in container.GetBlobsAsync(cancellationToken: cancellationToken))
         {
+            if (ContainerBindingMarker.IsMarker(blob.Name))
+            {
+                continue;
+            }
+
             // See ModStorageService.ListStoredMods on the missing timestamp.
             yield return new StoredBlob(
                 blob.Name,
@@ -93,6 +101,41 @@ internal class ModImageStorageService(
     public Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken)
         => StoredBlobDeletion.DeleteIfUnchangedAsync(blobServiceClient.GetBlobContainerClient(_imagesContainerName), blob, cancellationToken);
 
+    public Task<Guid?> ReadBindingMarker(CancellationToken cancellationToken)
+        => ContainerBindingMarker.ReadAsync(blobServiceClient.GetBlobContainerClient(_imagesContainerName), cancellationToken);
+
+    public Task WriteBindingMarker(Guid bindingId, CancellationToken cancellationToken)
+        => ContainerBindingMarker.WriteAsync(blobServiceClient.GetBlobContainerClient(_imagesContainerName), bindingId, cancellationToken);
+
+
+    private async Task<bool> TryReuseOne(string hash, CancellationToken cancellationToken)
+    {
+        var blobClient = GetBlobClient(hash);
+
+        try
+        {
+            var properties = await blobClient.GetPropertiesAsync(cancellationToken: cancellationToken);
+
+            // Rewriting the metadata it already has is the cheapest write there is, and any write gives
+            // the blob a new ETag - which is what the sweep's delete is conditional on.
+            await blobClient.SetMetadataAsync(
+                properties.Value.Metadata,
+                new BlobRequestConditions { IfMatch = properties.Value.ETag },
+                cancellationToken);
+
+            return true;
+        }
+        catch (RequestFailedException exception) when (exception.Status == 404)
+        {
+            return false;
+        }
+        catch (RequestFailedException exception) when (exception.Status == 412)
+        {
+            // Written by somebody else between the read and the write, which moved the ETag just the
+            // same. The bytes are the same either way: the address is their hash.
+            return true;
+        }
+    }
 
     private BlobClient GetBlobClient(string hash)
     {
@@ -106,7 +149,7 @@ internal class ModImageStorageService(
     /// </summary>
     private static string BuildImageBlobName(string hash)
     {
-        var validated = ModImageHash.Validated(hash);
+        var validated = Sha256Hex.Validated(hash);
 
         return $"{validated[..2]}/{validated}";
     }

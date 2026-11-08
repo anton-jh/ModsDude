@@ -1,3 +1,4 @@
+using ModsDude.Server.Domain.Exceptions;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
 
@@ -91,8 +92,14 @@ public class Profile(
     /// Brings it back, optionally under a new name - which is how a clash with a live profile is
     /// resolved, since an archived one gave up its name when it was archived.
     /// </summary>
+    /// <remarks>Refused for one that is not archived, whose rename is a rename and checks the version it was made against.</remarks>
     public void Restore(ProfileName? name = null)
     {
+        if (ArchivedAt is null)
+        {
+            throw new DomainValidationException($"Cannot restore profile '{Id.Value}', which is not archived.");
+        }
+
         if (name is ProfileName renamed)
         {
             Name = renamed;
@@ -145,5 +152,17 @@ public class Profile(
 }
 
 public readonly record struct ProfileId(Guid Value);
-public readonly record struct ProfileName(string Value);
+/// <summary>A profile's name, unique within its repo. See <see cref="NameRule"/>.</summary>
+public readonly record struct ProfileName
+{
+    public ProfileName(string value)
+    {
+        Value = NameRule.Validated(value, "profile");
+    }
+
+
+    public string Value { get; }
+
+    public override string ToString() => Value;
+}
 public readonly record struct ProfileCreateRequestId(Guid Value);

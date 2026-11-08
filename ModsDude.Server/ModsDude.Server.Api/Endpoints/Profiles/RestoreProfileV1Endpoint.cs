@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
@@ -7,6 +8,7 @@ using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
@@ -43,6 +45,11 @@ public class RestoreProfileV1Endpoint : IEndpoint
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.OptionalName(request?.Name) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
         if (profile is null)
         {
@@ -52,6 +59,15 @@ public class RestoreProfileV1Endpoint : IEndpoint
         ProfileName? name = request?.Name is { Length: > 0 } requested
             ? new ProfileName(requested)
             : null;
+
+        // Already restored: a repeat of this request is answered as the first was. A rename of a live
+        // profile is UpdateProfile's, which checks the version it was made against.
+        if (profile.IsArchived is false)
+        {
+            return name is null || name == profile.Name
+                ? TypedResults.Ok(ProfileDto.FromModel(profile))
+                : TypedResults.BadRequest(Problems.NotArchived("Profile", profileId).With(x => x.Detail = $"Profile '{profileId}' is not archived, so it cannot be restored."));
+        }
 
         var wanted = name ?? profile.Name;
 
@@ -65,7 +81,18 @@ public class RestoreProfileV1Endpoint : IEndpoint
 
         profile.Restore(name);
 
-        await unitOfWork.CommitAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return TypedResults.BadRequest(Problems.ProfileChanged);
+        }
+        catch (DbUpdateException exception) when (exception.IsUniqueViolation())
+        {
+            return TypedResults.BadRequest(Problems.NameTaken(wanted.Value));
+        }
 
         return TypedResults.Ok(ProfileDto.FromModel(profile));
     }

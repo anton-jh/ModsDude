@@ -28,6 +28,11 @@ public class UpdateRepoV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.Name(request.Name) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var repo = await dbContext.Repos.GetAsync(new RepoId(repoId), cancellationToken);
         if (repo is null)
         {

@@ -10,6 +10,7 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
 using System.Security.Claims;
@@ -73,6 +74,15 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No savegame '{savegameId}' found in repo '{repoId}'"));
         }
 
+        // A claim holds the profile's revisions from the head's onwards, which pruning must see before it
+        // deletes any - see PruneProfileRevisionsV1Endpoint. Held until the claim commits.
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        if (savegame.ProfileId is ProfileId followed)
+        {
+            await dbContext.LockRevisionHistoryAsync(savegame.RepoId, followed, cancellationToken);
+        }
+
         var now = timeService.Now();
         var existing = await dbContext.SavegameCheckouts.GetOpenCheckoutAsync(savegame.RepoId, savegame.Id, cancellationToken);
 
@@ -118,8 +128,9 @@ public class CheckOutSavegameV1Endpoint : IEndpoint
         try
         {
             await unitOfWork.CommitAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException exception) when (exception.IsUniqueViolation() || exception is DbUpdateConcurrencyException)
         {
             // Two people took the save in the same instant and the one-open-claim index let exactly
             // one through. Taking a save from somebody is allowed; taking it from two people at once

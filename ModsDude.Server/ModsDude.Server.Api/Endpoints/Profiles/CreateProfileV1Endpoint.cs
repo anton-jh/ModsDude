@@ -46,6 +46,11 @@ public class CreateProfileV1Endpoint : IEndpoint
         ILogger<CreateProfileV1Endpoint> logger,
         CancellationToken cancellationToken)
     {
+        if ((RequestChecks.Name(request.Name) ?? RequestChecks.Label(request.Label, ProfileRevision.MaximumLabelLength)) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var userId = claimsPrincipal.GetUserId();
 
         var requestId = new ProfileCreateRequestId(request.RequestId);

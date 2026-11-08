@@ -3,6 +3,7 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -15,7 +16,6 @@ using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Api.Health;
 using ModsDude.Server.Api.Maintenance;
 using ModsDude.Server.Api.ModHub;
-using ModsDude.Server.Api.Middleware.ErrorHandling;
 using ModsDude.Server.Api.Middleware.UserLoading;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
@@ -39,16 +39,27 @@ var builder = WebApplication.CreateBuilder(args);
 // real data.
 var isDescribingOnly = Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
 
+// Names only: an integer would bind to any value of the enum's underlying type, defined or not.
 builder.Services
     .ConfigureHttpJsonOptions(options =>
     {
-        options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
     });
 builder.Services
     .Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
     {
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
     });
+
+// A request that cannot be bound throws in every environment, so ApiExceptionHandler answers it with a
+// problem type instead of the framework answering with a bare 400.
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
+
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+
+// Required by UseExceptionHandler without a path or delegate. ApiExceptionHandler answers everything
+// first, so it never writes a body itself.
+builder.Services.AddProblemDetails();
 
 builder.Services
     .AddEndpointsApiExplorer()
@@ -150,7 +161,6 @@ builder.Services.AddRazorPages(options =>
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<UserLoadingMiddleware>();
-builder.Services.AddScoped<NotAuthenticatedMiddleware>();
 builder.Services.AddScoped<ClientBuildMiddleware>();
 
 builder.Services
@@ -205,6 +215,13 @@ builder.Services.AddStorage(
 
 var app = builder.Build();
 
+// First, so nothing after it can answer with an exception page or a bare status. ApiExceptionHandler
+// logs what it handles, so the middleware's own log entry is not written as well.
+app.UseExceptionHandler(new ExceptionHandlerOptions
+{
+    SuppressDiagnosticsCallback = context => context.ExceptionHandledBy is ExceptionHandledType.ExceptionHandlerService
+});
+
 var apiVersionSet = app.NewApiVersionSet()
     .HasApiVersion(new ApiVersion(1))
     .Build();
@@ -235,16 +252,15 @@ app.UseWhen(
     context => context.Request.Path.StartsWithSegments("/api"),
     api => api.UseMiddleware<ClientBuildMiddleware>());
 
-app.UseMiddleware<NotAuthenticatedMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseMiddleware<UserLoadingMiddleware>();
 
-// The 401, 403 and 412 are declared once here rather than in every endpoint's Results<...> union,
-// because middleware produces them for every endpoint, including the ones that return a bare Ok<T>
-// and have no union.
+// The 401, 403, 412 and 500 are declared once here rather than in every endpoint's Results<...> union,
+// because middleware and ApiExceptionHandler produce them for every endpoint, including the ones that
+// return a bare Ok<T> and have no union.
 app.MapGroup("api/v{v:apiVersion}")
     .WithApiVersionSet(apiVersionSet)
     .RequireAuthorization()
@@ -258,6 +274,10 @@ app.MapGroup("api/v{v:apiVersion}")
         ["application/json"]))
     .WithMetadata(new ProducesResponseTypeMetadata(
         StatusCodes.Status412PreconditionFailed,
+        typeof(CustomProblemDetails),
+        ["application/json"]))
+    .WithMetadata(new ProducesResponseTypeMetadata(
+        StatusCodes.Status500InternalServerError,
         typeof(CustomProblemDetails),
         ["application/json"]))
     .MapAllEndpointsFromAssembly(typeof(Program).Assembly);

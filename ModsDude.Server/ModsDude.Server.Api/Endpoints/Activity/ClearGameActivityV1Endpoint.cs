@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
+using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain.Activity;
 using ModsDude.Server.Persistence.DbContexts;
@@ -29,13 +30,18 @@ public class ClearGameActivityV1Endpoint : IEndpoint
     /// The game identity. A query parameter rather than part of the path, because an identity may
     /// hold a '#' - which a path cannot carry.
     /// </param>
-    private static async Task<Ok> Clear(
+    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>>> Clear(
         string game,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.Game(game) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         if (await dbContext.GameActivities.GetAsync(claimsPrincipal.GetUserId(), new GameKey(game), cancellationToken) is GameActivity existing)
         {
             dbContext.GameActivities.Remove(existing);

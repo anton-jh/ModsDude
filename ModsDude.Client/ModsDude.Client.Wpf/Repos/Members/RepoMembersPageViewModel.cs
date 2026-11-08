@@ -291,7 +291,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
 
         // Whether somebody is the last admin depends on the whole list, so the rows are rebuilt
         // together rather than patched. The list is short and nothing selects into it.
-        var adminCount = members.Count(x => x.MembershipLevel is RepoMembershipLevel.Admin);
+        // Blocked admins cannot act, so the server does not count them either.
+        var adminCount = members.Count(x => x.MembershipLevel is RepoMembershipLevel.Admin && !x.IsBlocked);
 
         // As does whether their name needs a tag beside it. Two Antons in this repo both get one;
         // an Anton who is the only one here gets none, even if the server knows of others.
@@ -303,7 +304,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
                 member,
                 _avatarFactory.Create(member.User),
                 _repo.MembershipLevel,
-                isOnlyAdmin: member.MembershipLevel is RepoMembershipLevel.Admin && adminCount == 1,
+                isOnlyAdmin: member.MembershipLevel is RepoMembershipLevel.Admin && !member.IsBlocked && adminCount == 1,
                 isAmbiguous: ambiguous.Contains(member.User.Id),
                 isSelf: member.User.Id == _currentUserId,
                 kick: KickAsync);

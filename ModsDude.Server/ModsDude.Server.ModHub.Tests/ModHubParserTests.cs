@@ -109,6 +109,12 @@ public class ModHubParserTests
     }
 
     [Fact]
+    public void Another_error_page_is_unreadable_rather_than_a_removed_mod()
+    {
+        Assert.Throws<ModHubUnreadableException>(() => ModHubParser.ParseModPage("<html><body><h2 class=\"title-label\">Error: Service temporarily unavailable</h2></body></html>"));
+    }
+
+    [Fact]
     public void A_mod_page_without_details_or_an_error_is_unreadable()
     {
         Assert.Throws<ModHubUnreadableException>(() => ModHubParser.ParseModPage("<html><body><h2 class=\"title-label\">Something</h2></body></html>"));

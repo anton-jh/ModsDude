@@ -178,4 +178,11 @@ public class RepoInviteTests
             expiresAt,
             maximumUses);
     }
+
+    [Fact]
+    public void An_invite_cannot_grant_a_level_that_is_not_defined()
+    {
+        Assert.Throws<DomainValidationException>(
+            () => new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), (RepoMembershipLevel)0, _creator, _created, null, null));
+    }
 }

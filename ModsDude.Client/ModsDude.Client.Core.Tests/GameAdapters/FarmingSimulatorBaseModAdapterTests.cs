@@ -126,6 +126,19 @@ public class FarmingSimulatorBaseModAdapterTests : IDisposable
         Assert.Equal("hurr durr", mod.Version.Value);
     }
 
+    /// <summary>
+    /// The version becomes part of a blob name on the server, which refuses one that is not a single
+    /// segment. Such a mod is one this adapter cannot carry, like an unreadable one.
+    /// </summary>
+    [Fact]
+    public async Task A_mod_whose_version_the_server_would_refuse_is_skipped()
+    {
+        WriteMod("FS25_Plough", "1.0.0", []);
+        WriteMod("FS25_Odd", "1.0/beta", []);
+
+        Assert.Equal("fs25_plough", (await ScanOne()).Id.Value);
+    }
+
 
     [Fact]
     public async Task A_mod_without_maps_shows_its_store_images()

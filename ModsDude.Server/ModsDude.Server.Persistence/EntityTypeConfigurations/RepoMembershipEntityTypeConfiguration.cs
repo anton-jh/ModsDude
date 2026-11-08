@@ -12,5 +12,7 @@ internal class RepoMembershipEntityTypeConfiguration : IEntityTypeConfiguration<
 
         builder.Property(x => x.Level)
             .HasConversion<RepoMembershipLevelValueConverter>();
+
+        builder.ToTable(x => x.HasCheckConstraint("CK_RepoMemberships_Level", RepoMembershipLevelValueConverter.CheckConstraintSql("Level")));
     }
 }

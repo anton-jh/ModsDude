@@ -1,9 +1,9 @@
 ﻿using ModsDude.Server.Domain.Exceptions;
-using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Storage;
 
-namespace ModsDude.Server.Domain.Tests.Mods;
+namespace ModsDude.Server.Domain.Tests.Storage;
 
-public class ModImageHashTests
+public class Sha256HexTests
 {
     private const string _validHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
@@ -11,7 +11,7 @@ public class ModImageHashTests
     [Fact]
     public void A_lowercase_hex_sha256_is_valid()
     {
-        Assert.True(ModImageHash.IsValid(_validHash));
+        Assert.True(Sha256Hex.IsValid(_validHash));
     }
 
     [Theory]
@@ -21,7 +21,7 @@ public class ModImageHashTests
     [InlineData("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85555")]
     public void A_hash_of_the_wrong_length_is_rejected(string? hash)
     {
-        Assert.False(ModImageHash.IsValid(hash));
+        Assert.False(Sha256Hex.IsValid(hash));
     }
 
     [Fact]
@@ -29,13 +29,13 @@ public class ModImageHashTests
     {
         // One set of bytes has to have exactly one address, or dedupe and the client's permanent
         // cache-by-hash both stop holding.
-        Assert.False(ModImageHash.IsValid(_validHash.ToUpperInvariant()));
+        Assert.False(Sha256Hex.IsValid(_validHash.ToUpperInvariant()));
     }
 
     [Fact]
     public void A_hash_containing_a_non_hex_character_is_rejected()
     {
-        Assert.False(ModImageHash.IsValid(_validHash[..63] + "g"));
+        Assert.False(Sha256Hex.IsValid(_validHash[..63] + "g"));
     }
 
     /// <summary>
@@ -45,18 +45,18 @@ public class ModImageHashTests
     [Fact]
     public void A_hash_carrying_path_separators_is_rejected()
     {
-        Assert.False(ModImageHash.IsValid("../" + _validHash[3..]));
+        Assert.False(Sha256Hex.IsValid("../" + _validHash[3..]));
     }
 
     [Fact]
     public void Validating_an_invalid_hash_throws()
     {
-        Assert.Throws<DomainValidationException>(() => ModImageHash.Validated("not-a-hash"));
+        Assert.Throws<DomainValidationException>(() => Sha256Hex.Validated("not-a-hash"));
     }
 
     [Fact]
     public void Validating_a_valid_hash_returns_it()
     {
-        Assert.Equal(_validHash, ModImageHash.Validated(_validHash));
+        Assert.Equal(_validHash, Sha256Hex.Validated(_validHash));
     }
 }

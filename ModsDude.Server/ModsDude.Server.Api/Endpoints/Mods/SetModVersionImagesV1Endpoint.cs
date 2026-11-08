@@ -7,6 +7,7 @@ using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
@@ -32,6 +33,13 @@ public class SetModVersionImagesV1Endpoint : IEndpoint
     }
 
 
+    /// <summary>
+    /// Far beyond any real gallery, because each reference costs a call to storage. A safety net
+    /// rather than a working limit.
+    /// </summary>
+    private const int _maximumImages = 100;
+
+
     public record SetModVersionImagesRequest(IEnumerable<ModImageReferenceDto> Images);
 
 
@@ -44,6 +52,11 @@ public class SetModVersionImagesV1Endpoint : IEndpoint
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.ModId(modId, versionId) is { } invalidId)
+        {
+            return TypedResults.BadRequest(invalidId);
+        }
+
         var modVersion = await dbContext.ModVersions.GetAsync(new RepoId(repoId), new ModId(modId), new ModVersionId(versionId), cancellationToken);
         if (modVersion is null)
         {
@@ -52,20 +65,14 @@ public class SetModVersionImagesV1Endpoint : IEndpoint
 
         var requested = request.Images.ToList();
 
-        if (requested.Select(x => x.Hash).FirstOrDefault(x => !ModImageHash.IsValid(x)) is string invalid)
+        if (requested.Count > _maximumImages)
         {
-            return TypedResults.BadRequest(Problems.InvalidImageHash(invalid));
+            return TypedResults.BadRequest(Problems.BatchTooLarge(requested.Count, _maximumImages));
         }
 
-        // Never blocking registration does not mean never checking: a reference to an address
-        // nothing was uploaded to renders as a permanently broken image, and the client has just
-        // uploaded these, so the check costs nothing it did not already pay.
-        var hashes = requested.Select(x => x.Hash).Distinct().ToList();
-        var present = await imageStorageService.CheckWhichExist(hashes, cancellationToken);
-
-        if (hashes.Except(present).FirstOrDefault() is string missing)
+        if (requested.Select(x => x.Hash).FirstOrDefault(x => !Sha256Hex.IsValid(x)) is string invalid)
         {
-            return TypedResults.BadRequest(Problems.ImageDoesNotExist(missing));
+            return TypedResults.BadRequest(Problems.InvalidImageHash(invalid));
         }
 
         var images = requested.Select(ModImageReferenceDto.ToModel).ToList();
@@ -73,6 +80,17 @@ public class SetModVersionImagesV1Endpoint : IEndpoint
         if (!ModVersion.CheckImagesAreValid(images))
         {
             return TypedResults.BadRequest(Problems.InvalidImageSet(new RepoId(repoId), new ModId(modId), new ModVersionId(versionId)));
+        }
+
+        // Never blocking registration does not mean never checking: a reference to an address
+        // nothing was uploaded to renders as a permanently broken image. Reusing is the check, and
+        // also what stops a reclamation sweep that listed an image as unreferenced deleting it from
+        // under this call.
+        var missing = await imageStorageService.TryReuse([.. requested.Select(x => x.Hash).Distinct()], cancellationToken);
+
+        if (missing.FirstOrDefault() is string absent)
+        {
+            return TypedResults.BadRequest(Problems.ImageDoesNotExist(absent));
         }
 
         modVersion.SetImages(images, timeService.Now());

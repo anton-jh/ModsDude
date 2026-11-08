@@ -5,7 +5,7 @@ using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Exceptions;
 using ModsDude.Server.Application.Services;
-using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
@@ -41,13 +41,14 @@ public class SetAvatarV1Endpoint : IEndpoint
         ITimeService timeService,
         CancellationToken cancellationToken)
     {
-        if (!ModImageHash.IsValid(request.Hash))
+        if (!Sha256Hex.IsValid(request.Hash))
         {
             return TypedResults.BadRequest(Problems.InvalidImageHash(request.Hash));
         }
 
-        var present = await imageStorageService.CheckWhichExist([request.Hash], cancellationToken);
-        if (present.Count == 0)
+        // Reusing also stops a reclamation sweep that listed the image as unreferenced deleting it.
+        var missing = await imageStorageService.TryReuse([request.Hash], cancellationToken);
+        if (missing.Count > 0)
         {
             return TypedResults.BadRequest(Problems.ImageDoesNotExist(request.Hash));
         }

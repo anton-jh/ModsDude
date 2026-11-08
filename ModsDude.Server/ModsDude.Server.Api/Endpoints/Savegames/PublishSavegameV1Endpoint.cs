@@ -5,11 +5,11 @@ using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
-using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
@@ -78,6 +78,11 @@ public class PublishSavegameV1Endpoint : IEndpoint
         IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
+        if ((RequestChecks.Name(request.Name) ?? RequestChecks.FileSize(request.SizeBytes) ?? RequestChecks.Label(request.Label, SavegameSnapshot.MaximumLabelLength)) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var userId = claimsPrincipal.GetUserId();
         var repo = new RepoId(repoId);
         var requestId = new SavegamePublishRequestId(request.RequestId);
@@ -119,9 +124,9 @@ public class PublishSavegameV1Endpoint : IEndpoint
         }
 
         // Before storage sees it, and before the snapshot's own constructor does. Both validate the
-        // hash again, and both throw where this reports - and there is no global handler to turn a
-        // domain validation exception into anything but a 500.
-        if (!ModImageHash.IsValid(request.ContentHash))
+        // hash again, but they throw, which reaches the client as a generic InvalidRequest rather
+        // than this.
+        if (!Sha256Hex.IsValid(request.ContentHash))
         {
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }

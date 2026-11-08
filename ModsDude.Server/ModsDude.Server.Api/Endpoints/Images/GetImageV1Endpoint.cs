@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
-using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Storage;
 
 namespace ModsDude.Server.Api.Endpoints.Images;
 
@@ -39,7 +39,7 @@ public class GetImageV1Endpoint : IEndpoint
         IModImageStorageService imageStorageService,
         CancellationToken cancellationToken)
     {
-        if (!ModImageHash.IsValid(hash))
+        if (!Sha256Hex.IsValid(hash))
         {
             return TypedResults.BadRequest(Problems.InvalidImageHash(hash));
         }
@@ -54,6 +54,9 @@ public class GetImageV1Endpoint : IEndpoint
         // tag is the address itself.
         httpContext.Response.Headers.CacheControl = $"public, max-age={(int)_cacheLifetime.TotalSeconds}, immutable";
 
-        return TypedResults.File(image.Content, image.ContentType, entityTag: new EntityTagHeaderValue($"\"{hash}\""));
+        // The type is the server's, never what an uploader claimed, and a browser must not second-guess it.
+        httpContext.Response.Headers.XContentTypeOptions = "nosniff";
+
+        return TypedResults.File(image, imageStorageService.ContentType, entityTag: new EntityTagHeaderValue($"\"{hash}\""));
     }
 }

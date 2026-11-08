@@ -36,6 +36,11 @@ public class RepoInvite
         DateTime? expiresAt,
         int? maximumUses)
     {
+        if (!Enum.IsDefined(grantedLevel))
+        {
+            throw new DomainValidationException($"'{grantedLevel}' is not a membership level.");
+        }
+
         if (grantedLevel >= RepoMembershipLevel.Admin)
         {
             throw new DomainValidationException("An invite cannot grant Admin.");

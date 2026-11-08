@@ -1,4 +1,5 @@
 ﻿using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Storage;
 
 namespace ModsDude.Server.Domain.Tests.Mods;
 
@@ -31,6 +32,7 @@ public class ModFileNameTests
     [InlineData("fs25_a.zip.")]
     [InlineData("fs25_a.zip ")]
     [InlineData("..")]
+    [InlineData("...zip")]
     [InlineData("")]
     [InlineData(null)]
     public void A_name_that_is_not_a_bare_writable_file_name_is_refused(string? raw)
@@ -50,7 +52,9 @@ public class ModFileNameTests
     [Fact]
     public void A_name_longer_than_a_path_component_is_refused()
     {
-        Assert.False(ModFileName.IsValidFor(new ModId(new string('a', 300)), new string('a', 300) + ".zip"));
+        var modId = new string('a', BlobPathSegment.MaximumLength);
+
+        Assert.False(ModFileName.IsValidFor(new ModId(modId), modId + "." + new string('z', 200)));
     }
 
     [Fact]

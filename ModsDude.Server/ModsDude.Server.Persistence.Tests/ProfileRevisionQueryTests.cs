@@ -101,7 +101,7 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
         var rows = await dbContext.ProfileRevisions.GetPinRowsAsync(dbContext.ModVersions, repoId, profileId, new RevisionNumber(1), CancellationToken.None);
         var row = Assert.Single(rows);
 
-        Assert.Equal("1.0.0", row.ContentHash);
+        Assert.Equal(TestHashes.Of("1.0.0"), row.ContentHash);
         Assert.Equal($"{_modId.Value}.zip", row.FileName);
         Assert.Equal(1024, row.SizeBytes);
         Assert.True(row.Locked);
@@ -551,7 +551,7 @@ public class ProfileRevisionQueryTests(DatabaseFixture fixture)
         DisplayName = versionId,
         Description = "",
         FileName = $"{_modId.Value}.zip",
-        ContentHash = versionId,
+        ContentHash = TestHashes.Of(versionId),
         SizeBytes = 1024,
         Locked = false,
         Attributes = [],

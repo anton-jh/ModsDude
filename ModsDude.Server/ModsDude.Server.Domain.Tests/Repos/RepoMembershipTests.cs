@@ -203,6 +203,44 @@ public class RepoMembershipTests
         Assert.Equal(before, repo.MembersVersion);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(150)]
+    public void A_level_that_is_not_defined_is_refused(int level)
+    {
+        var repo = CreateRepo();
+        repo.AddMember(_other, RepoMembershipLevel.Guest);
+
+        Assert.Throws<DomainValidationException>(() => repo.AddMember(new User(new UserId("third"), new DisplayName("Third"), _now), (RepoMembershipLevel)level));
+        Assert.Throws<DomainValidationException>(() => repo.UpdateMembershipLevel(_other.Id, (RepoMembershipLevel)level));
+        Assert.Equal(RepoMembershipLevel.Guest, repo.GetMembership(_other.Id)?.Level);
+    }
+
+    [Fact]
+    public void An_admin_beside_only_blocked_admins_is_the_only_admin()
+    {
+        var repo = CreateRepo();
+        repo.AddMember(_other, RepoMembershipLevel.Admin);
+
+        _other.Block(_now);
+
+        Assert.True(repo.IsOnlyAdmin(_creator.Id));
+        Assert.Throws<DomainValidationException>(() => repo.UpdateMembershipLevel(_creator.Id, RepoMembershipLevel.Member));
+        Assert.Throws<DomainValidationException>(() => repo.KickMember(_creator.Id));
+    }
+
+    [Fact]
+    public void A_blocked_admin_can_be_removed_while_an_unblocked_one_remains()
+    {
+        var repo = CreateRepo();
+        repo.AddMember(_other, RepoMembershipLevel.Admin);
+
+        _other.Block(_now);
+        repo.KickMember(_other.Id);
+
+        Assert.False(repo.HasMember(_other.Id));
+    }
+
 
     private Repo CreateRepo() => new(new RepoName("repo"), _now, _creator)
     {

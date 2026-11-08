@@ -68,6 +68,11 @@ public class SaveProfileRevisionV1Endpoint : IEndpoint
         IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
+        if ((RequestChecks.Label(request.Label, ProfileRevision.MaximumLabelLength) ?? request.Mods.Select(x => RequestChecks.ModId(x.ModId, x.VersionId)).FirstOrDefault(x => x is not null)) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var userId = claimsPrincipal.GetUserId();
 
         var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);

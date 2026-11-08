@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
@@ -6,6 +7,7 @@ using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Api.Endpoints.Profiles;
@@ -50,7 +52,15 @@ public class DeleteProfileV1Endpoint : IEndpoint
         }
 
         dbContext.Profiles.Remove(profile);
-        await unitOfWork.CommitAsync(cancellationToken);
+
+        try
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (exception.IsForeignKeyViolation())
+        {
+            return TypedResults.BadRequest(Problems.ProfileInUseBySavegame(new RepoId(repoId), new ProfileId(profileId)));
+        }
 
         return TypedResults.Ok();
     }

@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.EntityTypeConfigurations;
 
 namespace ModsDude.Server.Persistence.Extensions.EntityExtensions;
 public static class RepoExtensions
@@ -19,9 +21,12 @@ public static class RepoExtensions
     // are unique within their repo because a profile is picked by name out of a list the whole group
     // shares; a repo is only ever arrived at through an invite code.
 
+    /// <summary>The repo with its members and their users, which is what deciding who can still administer it needs.</summary>
     public static async Task<Repo?> GetAsync(this DbSet<Repo> dbSet, RepoId repoId, CancellationToken cancellationToken)
     {
-        return await dbSet.FindAsync(GetKey(repoId), cancellationToken);
+        return await dbSet
+            .Include($"{RepoEntityTypeConfiguration.MembershipsField}.{nameof(RepoMembership.User)}")
+            .FirstOrDefaultAsync(x => x.Id == repoId, cancellationToken);
     }
 
     /// <summary>

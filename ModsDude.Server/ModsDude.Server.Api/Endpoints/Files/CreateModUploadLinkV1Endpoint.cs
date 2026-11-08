@@ -53,6 +53,11 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
             return authResult;
         }
 
+        if (RequestChecks.ModId(request.ModId, request.VersionId) is { } invalidId)
+        {
+            return TypedResults.BadRequest(invalidId);
+        }
+
         if (request.SizeBytes < 0)
         {
             return TypedResults.BadRequest(Problems.InvalidFileSize(request.SizeBytes));
@@ -68,11 +73,9 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.ModVersionAlreadyRegistered(new(request.RepoId), new(request.ModId), new(request.VersionId)));
         }
 
-        if (await modStorageService.CheckIfModExists(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken))
+        if (await modStorageService.GetStoredMod(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken) is { } stored)
         {
-            var storedContentHash = await modStorageService.GetRecordedContentHash(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken);
-
-            return TypedResults.BadRequest(Problems.ModFileAlreadyPresent(new(request.RepoId), new(request.ModId), new(request.VersionId), storedContentHash));
+            return TypedResults.BadRequest(Problems.ModFileAlreadyPresent(new(request.RepoId), new(request.ModId), new(request.VersionId), stored.RecordedContentHash));
         }
 
         var link = await modStorageService.GetUploadLink(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken);

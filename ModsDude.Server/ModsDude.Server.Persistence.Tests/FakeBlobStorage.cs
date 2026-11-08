@@ -29,9 +29,8 @@ public class FakeBlobStorage : IModStorageService, ISavegameStorageService, IMod
 
 
     public Task EnsureContainerExists(CancellationToken cancellationToken) => throw new NotSupportedException();
-    public Task<bool> CheckIfModExists(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken) => throw new NotSupportedException();
-    public Task<long?> GetModSize(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken) => throw new NotSupportedException();
-    public Task<string?> GetRecordedContentHash(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<StoredModFile?> GetStoredMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<StoredModFile?> ClaimStoredMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<string> GetUploadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<string> GetDownloadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task DeleteMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -39,12 +38,14 @@ public class FakeBlobStorage : IModStorageService, ISavegameStorageService, IMod
     public Task<bool> CheckIfSavegameExists(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<long?> GetSavegameSize(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<bool> TryReuseSavegame(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken) => throw new NotSupportedException();
-    public Task<string?> GetRecordedContentHash(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<string> GetUploadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken) => throw new NotSupportedException();
     public Task<string> GetDownloadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken) => throw new NotSupportedException();
-    public Task<IReadOnlyCollection<string>> CheckWhichExist(IReadOnlyCollection<string> hashes, CancellationToken cancellationToken) => throw new NotSupportedException();
-    public Task Upload(string hash, string contentType, Stream content, CancellationToken cancellationToken) => throw new NotSupportedException();
-    public Task<StoredModImage?> Download(string hash, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public string ContentType => "image/webp";
+    public Task<IReadOnlyCollection<string>> TryReuse(IReadOnlyCollection<string> hashes, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task Upload(string hash, Stream content, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<Stream?> Download(string hash, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<Guid?> ReadBindingMarker(CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task WriteBindingMarker(Guid bindingId, CancellationToken cancellationToken) => throw new NotSupportedException();
 
 
     private async IAsyncEnumerable<StoredBlob> ListAsync(List<StoredBlob> blobs, [EnumeratorCancellation] CancellationToken cancellationToken)

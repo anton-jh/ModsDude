@@ -11,6 +11,8 @@ namespace ModsDude.Client.Core.Import;
 public interface IModFileUploader
 {
     /// <returns>The lowercase-hex SHA-256 of the uploaded bytes, to register the version against.</returns>
+    /// <exception cref="BlobAlreadyExistsException">Something is already stored at the link's address.</exception>
+    /// <exception cref="UploadedContentChangedException">The bytes did not hash to <see cref="ModFileUpload.ExpectedHash"/>.</exception>
     Task<string> UploadAsync(ModFileUpload upload, CancellationToken cancellationToken);
 }
 
@@ -21,10 +23,16 @@ public interface IModFileUploader
 /// under the wrong key is not detected until some future import fails with nothing to explain it.
 /// </param>
 /// <param name="BytesTransferred">Reports progress across the whole file, for a per-mod row.</param>
+/// <param name="ExpectedHash">
+/// What the bytes must hash to, where the caller hashed them already. A mismatch commits nothing,
+/// which matters where the hash is the address: committed under the wrong one, the bytes could never
+/// be replaced.
+/// </param>
 public sealed record ModFileUpload(
     string Link,
     string ContentHashMetadataKey,
     Func<Stream> OpenContent)
 {
     public IProgress<long>? BytesTransferred { get; init; }
+    public string? ExpectedHash { get; init; }
 }

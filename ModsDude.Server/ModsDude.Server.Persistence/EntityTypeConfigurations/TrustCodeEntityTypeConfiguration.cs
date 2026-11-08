@@ -13,8 +13,9 @@ internal class TrustCodeEntityTypeConfiguration : IEntityTypeConfiguration<Trust
         builder.HasIndex(x => x.Code).IsUnique();
         builder.HasIndex(x => x.RequestId).IsUnique();
 
-        // One code per user: a second one has nothing left to grant.
-        builder.HasIndex(x => x.RedeemedBy).IsUnique();
+        // One code per user per period of trust: a second one has nothing left to grant, and revoking
+        // trust starts a new period.
+        builder.HasIndex(x => new { x.RedeemedBy, x.RedeemedTrustEpoch }).IsUnique();
 
         // Two users redeeming one code at the same moment: the second write loses instead of both
         // becoming trusted.
@@ -26,7 +27,7 @@ internal class TrustCodeEntityTypeConfiguration : IEntityTypeConfiguration<Trust
         {
             x.HasCheckConstraint(
                 "CK_TrustCodes_RedeemedByAndAtTogether",
-                "(\"RedeemedBy\" IS NULL) = (\"RedeemedAt\" IS NULL)");
+                "(\"RedeemedBy\" IS NULL) = (\"RedeemedAt\" IS NULL) AND (\"RedeemedBy\" IS NULL) = (\"RedeemedTrustEpoch\" IS NULL)");
             x.HasCheckConstraint(
                 "CK_TrustCodes_NotRedeemedAndRevoked",
                 "\"RedeemedAt\" IS NULL OR \"RevokedAt\" IS NULL");

@@ -9,6 +9,8 @@ using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.EntityTypeConfigurations;
+using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
 
@@ -47,6 +49,11 @@ public class MoveModVersionV1Endpoint : IEndpoint
         IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
+        if ((RequestChecks.ModId(modId, versionId) ?? RequestChecks.OptionalVersionId(request.Placement.After) ?? RequestChecks.OptionalVersionId(request.Placement.Before)) is { } invalidId)
+        {
+            return TypedResults.BadRequest(invalidId);
+        }
+
         var siblings = await dbContext.ModVersions.GetVersionsOfModAsync(new RepoId(repoId), new ModId(modId), cancellationToken);
 
         var modVersion = siblings.FirstOrDefault(x => x.Id == new ModVersionId(versionId));
@@ -65,7 +72,16 @@ public class MoveModVersionV1Endpoint : IEndpoint
 
         if (ModVersionSequencer.CheckMoveChangesTheOrder(siblings, modVersion, after, before))
         {
-            await ApplyMoveAsync(dbContext, unitOfWork, siblings, modVersion, after, before, timeService.Now(), cancellationToken);
+            // A version registered, moved or deleted alongside this one since the read leaves the
+            // ordering this move was planned against, which is the same conflict the check gives.
+            try
+            {
+                await ApplyMoveAsync(dbContext, unitOfWork, siblings, modVersion, after, before, timeService.Now(), cancellationToken);
+            }
+            catch (DbUpdateException exception) when (exception.IsUniqueViolation(ModVersionConstraints.SequenceIndex) || exception is DbUpdateConcurrencyException)
+            {
+                return TypedResults.BadRequest(Problems.VersionPlacementConflict(new RepoId(repoId), new ModId(modId)));
+            }
 
             // The order is what decides which versions are the latest, so a move can take one out
             // of the window or into it.

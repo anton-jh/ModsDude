@@ -382,7 +382,7 @@ public class ProfileIgnoreListTests(DatabaseFixture fixture)
         DisplayName = modId.Value,
         Description = "",
         FileName = $"{modId.Value}.zip",
-        ContentHash = modId.Value,
+        ContentHash = TestHashes.Of(modId.Value),
         SizeBytes = 1024,
         Locked = false,
         Attributes = [],

@@ -2,7 +2,7 @@
 using ModsDude.Server.Domain.Repos;
 
 namespace ModsDude.Server.Application.Dependencies;
-public interface IModStorageService
+public interface IModStorageService : IReclaimableContainer
 {
     /// <summary>
     /// The blob metadata entry the uploading client writes the file's SHA-256 into. The API never
@@ -13,19 +13,18 @@ public interface IModStorageService
     /// <inheritdoc cref="IModImageStorageService.EnsureContainerExists"/>
     Task EnsureContainerExists(CancellationToken cancellationToken);
 
-    Task<bool> CheckIfModExists(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
+    /// <summary>
+    /// The stored file, or <c>null</c> when there is no such blob. Read from storage rather than from
+    /// anything a client says, because the API never sees the bytes.
+    /// </summary>
+    Task<StoredModFile?> GetStoredMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
 
     /// <summary>
-    /// How many bytes the stored file holds, or <c>null</c> when there is no such blob. Read from storage
-    /// rather than from anything a client says, because the API never sees the bytes.
+    /// <see cref="GetStoredMod"/>, and a write to the blob that changes what storage calls its state,
+    /// so a reclamation sweep that listed it before this call cannot delete it. Called by whatever
+    /// is about to make the blob referenced.
     /// </summary>
-    Task<long?> GetModSize(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// The SHA-256 the uploader recorded against the blob, or <c>null</c> when the blob is absent or
-    /// carries no such record. Not Azure's own content hash, which is MD5.
-    /// </summary>
-    Task<string?> GetRecordedContentHash(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
+    Task<StoredModFile?> ClaimStoredMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
 
     Task<string> GetUploadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
     Task<string> GetDownloadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
@@ -36,12 +35,11 @@ public interface IModStorageService
     /// does not have to hold a container listing in memory before it can start.
     /// </summary>
     IAsyncEnumerable<StoredBlob> ListStoredMods(CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Deletes by the exact name storage reported, which is what the sweep must use: re-deriving a
-    /// path from a parsed address would put a parsing bug between deciding what is garbage and
-    /// deleting it. And only while the blob is still the one listed - see <see cref="StoredBlob.Version"/>.
-    /// </summary>
-    /// <returns>Whether it was deleted: false where it had gone, or had been written since the listing.</returns>
-    Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken);
 }
+
+
+/// <param name="RecordedContentHash">
+/// The SHA-256 the uploader recorded against the blob, or <c>null</c> where it carries no such record.
+/// Not Azure's own content hash, which is MD5.
+/// </param>
+public record StoredModFile(long SizeBytes, string? RecordedContentHash);

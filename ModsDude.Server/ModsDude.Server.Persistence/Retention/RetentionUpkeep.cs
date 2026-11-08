@@ -96,7 +96,7 @@ public class RetentionUpkeep(ApplicationDbContext dbContext, ITimeService timeSe
         {
             await release();
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogWarning(exception, "Clearing stale deletion schedules for {Subject} {Id} failed; the next scheduling run will.", subject, id);
         }

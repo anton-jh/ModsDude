@@ -23,11 +23,11 @@ public class BlobReclamationOptions
     public TimeSpan MinimumBlobAge { get; set; } = TimeSpan.FromDays(1);
 
     /// <summary>
-    /// The largest share of a container one sweep may reclaim. Past it (and past
+    /// The largest share of a container that is not bound yet one sweep may reclaim - see
+    /// <see cref="Domain.Storage.ReclamationGate"/>. Past it (and past
     /// <see cref="Domain.Mods.BlobReclamation.ImplausibleFloor"/> blobs) the sweep deletes nothing in
     /// any container and fails, because the likelier story is a database that is not the one storage
-    /// belongs to. Raise it for one run to let a genuine large clean-up through, such as the residue of
-    /// a deleted repo; 1 turns the check off.
+    /// belongs to. A bound container is swept whatever share it loses. 1 turns the check off.
     /// </summary>
     public double MaxReclaimableShare { get; set; } = 0.5;
 }

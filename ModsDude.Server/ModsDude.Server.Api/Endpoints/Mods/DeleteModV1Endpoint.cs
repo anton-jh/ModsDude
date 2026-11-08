@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
@@ -6,6 +7,7 @@ using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
@@ -32,6 +34,11 @@ public class DeleteModV1Endpoint : IEndpoint
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.ModId(modId) is { } invalidId)
+        {
+            return TypedResults.BadRequest(invalidId);
+        }
+
         var versions = await dbContext.ModVersions.GetVersionsOfModAsync(new RepoId(repoId), new ModId(modId), cancellationToken);
         if (versions.Count == 0)
         {
@@ -51,7 +58,15 @@ public class DeleteModV1Endpoint : IEndpoint
         // ignored in.
         await dbContext.ReleaseModAsync(new RepoId(repoId), new ModId(modId), cancellationToken);
 
-        await unitOfWork.CommitAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (exception.IsForeignKeyViolation())
+        {
+            // Pinned by a revision saved since the check above.
+            return TypedResults.BadRequest(Problems.ModInUse(new RepoId(repoId), new ModId(modId)));
+        }
 
         foreach (var version in versions)
         {

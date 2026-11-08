@@ -1,13 +1,13 @@
 ﻿using ModsDude.Server.Domain.Exceptions;
 
-namespace ModsDude.Server.Domain.Mods;
+namespace ModsDude.Server.Domain.Storage;
 
 /// <summary>
-/// The SHA-256 that addresses an image derivative, as lowercase hex. Validated rather than taken on
-/// trust because the value is a blob path segment in an address space that is global rather than
-/// repo-scoped: anything but a hash addresses something that is not an image.
+/// A SHA-256 as lowercase hex: the one format the system records content hashes in. Validated rather
+/// than taken on trust wherever it arrives, because it addresses blobs (images and savegames) and is
+/// compared byte for byte against what clients compute.
 /// </summary>
-public static class ModImageHash
+public static class Sha256Hex
 {
     public const int Length = 64;
 

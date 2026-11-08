@@ -2,6 +2,7 @@
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Persistence.DbContexts;
 
 namespace ModsDude.Server.Persistence.Extensions.EntityExtensions;
 public static class ProfileExtensions
@@ -24,6 +25,23 @@ public static class ProfileExtensions
     public static ValueTask<Profile?> GetAsync(this DbSet<Profile> dbSet, RepoId repoId, ProfileId profileId, CancellationToken cancellationToken)
     {
         return dbSet.FindAsync(GetKey(repoId, profileId), cancellationToken);
+    }
+
+    /// <summary>
+    /// Locks the profile's row until the caller's transaction ends, so whatever reads which of its
+    /// revisions are held and then acts on that cannot interleave with another doing the same. Pruning
+    /// and checking out take it: a claim's held range is not something a foreign key can protect.
+    /// </summary>
+    public static async Task LockRevisionHistoryAsync(this ApplicationDbContext dbContext, RepoId repoId, ProfileId profileId, CancellationToken cancellationToken)
+    {
+        if (dbContext.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("A profile's revision history can only be locked inside a transaction.");
+        }
+
+        await dbContext.Database.ExecuteSqlAsync(
+            $"""SELECT 1 FROM "Profiles" WHERE "RepoId" = {repoId.Value} AND "Id" = {profileId.Value} FOR UPDATE""",
+            cancellationToken);
     }
 
     /// <summary>

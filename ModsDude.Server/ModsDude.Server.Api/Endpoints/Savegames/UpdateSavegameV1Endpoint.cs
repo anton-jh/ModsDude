@@ -8,6 +8,7 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Api.Endpoints.Savegames;
@@ -48,6 +49,11 @@ public class UpdateSavegameV1Endpoint : IEndpoint
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.Name(request.Name) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         var savegame = await dbContext.Savegames.GetAsync(new RepoId(repoId), new SavegameId(savegameId), cancellationToken);
         if (savegame is null)
         {
@@ -84,6 +90,11 @@ public class UpdateSavegameV1Endpoint : IEndpoint
         catch (DbUpdateConcurrencyException)
         {
             return TypedResults.BadRequest(Problems.SavegameChanged);
+        }
+        catch (DbUpdateException exception) when (exception.IsUniqueViolation())
+        {
+            // Taken by a concurrent rename or restore since the check above.
+            return TypedResults.BadRequest(Problems.NameTaken(request.Name));
         }
 
         return TypedResults.Ok(await SavegameReads.DescribeAsync(dbContext, savegame, cancellationToken));

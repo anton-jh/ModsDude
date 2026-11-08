@@ -1,4 +1,5 @@
-﻿namespace ModsDude.Server.Domain.Mods;
+﻿using ModsDude.Server.Domain.Storage;
+namespace ModsDude.Server.Domain.Mods;
 
 public class ModImageReference(
     string hash,
@@ -7,7 +8,7 @@ public class ModImageReference(
     int position,
     string fileName)
 {
-    public string Hash { get; init; } = ModImageHash.Validated(hash);
+    public string Hash { get; init; } = Sha256Hex.Validated(hash);
     public ModImageKind Kind { get; init; } = kind;
     public ModImageRendition Rendition { get; init; } = rendition;
 

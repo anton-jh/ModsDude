@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ModsDude.Server.Domain;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 
@@ -15,7 +16,7 @@ internal class ProfileEntityTypeConfiguration : IEntityTypeConfiguration<Profile
 
         builder.HasOne<Repo>().WithMany().HasForeignKey(x => x.RepoId);
 
-        builder.Property(x => x.Name);
+        builder.Property(x => x.Name).HasMaxLength(NameRule.MaximumLength);
         builder.Property(x => x.Created);
 
         // A scalar, and there is deliberately no navigation to the revisions themselves - see

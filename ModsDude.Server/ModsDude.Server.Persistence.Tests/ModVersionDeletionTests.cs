@@ -3,6 +3,7 @@ using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
+using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
 namespace ModsDude.Server.Persistence.Tests;
@@ -98,7 +99,11 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
         var version = await dbContext.ModVersions.GetAsync(repoId, _modId, new ModVersionId("1.0.0"), CancellationToken.None);
         dbContext.ModVersions.Remove(version!);
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(() => dbContext.SaveChangesAsync(CancellationToken.None));
+
+        // What the delete endpoints answer as "in use" when a pin lands between their check and the commit.
+        Assert.True(exception.IsForeignKeyViolation());
+        Assert.False(exception.IsUniqueViolation());
     }
 
     /// <summary>
@@ -217,7 +222,7 @@ public class ModVersionDeletionTests(DatabaseFixture fixture)
         DisplayName = versionId,
         Description = "",
         FileName = $"{_modId.Value}.zip",
-        ContentHash = versionId,
+        ContentHash = TestHashes.Of(versionId),
         SizeBytes = 1024,
         Locked = false,
         Attributes = [],

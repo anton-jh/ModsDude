@@ -5,6 +5,7 @@ using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
@@ -165,7 +166,7 @@ public class RepoDeletionTests(DatabaseFixture fixture)
         dbContext.Savegames.Add(savegame);
         dbContext.SavegameSnapshots.Add(savegame.CreateSnapshot(
             new RevisionNumber(1),
-            new string('1', ModImageHash.Length),
+            new string('1', Sha256Hex.Length),
             sizeBytes: 1024,
             _author,
             DateTime.UtcNow));
@@ -209,7 +210,7 @@ public class RepoDeletionTests(DatabaseFixture fixture)
         DisplayName = versionId,
         Description = "",
         FileName = $"{_modId.Value}.zip",
-        ContentHash = versionId,
+        ContentHash = TestHashes.Of(versionId),
         SizeBytes = 1024,
         Locked = false,
         Attributes = [],

@@ -121,7 +121,10 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.HasIndex("RepoId", "RequestId")
                         .IsUnique();
 
-                    b.ToTable("RepoInvites");
+                    b.ToTable("RepoInvites", t =>
+                        {
+                            t.HasCheckConstraint("CK_RepoInvites_GrantedLevel", "\"GrantedLevel\" IN ('Admin', 'Guest', 'Member')");
+                        });
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Invites.TrustCode", b =>
@@ -142,6 +145,9 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<string>("RedeemedBy")
                         .HasColumnType("text");
 
+                    b.Property<int?>("RedeemedTrustEpoch")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("RequestId")
                         .HasColumnType("uuid");
 
@@ -157,17 +163,17 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.HasIndex("RedeemedBy")
+                    b.HasIndex("RequestId")
                         .IsUnique();
 
-                    b.HasIndex("RequestId")
+                    b.HasIndex("RedeemedBy", "RedeemedTrustEpoch")
                         .IsUnique();
 
                     b.ToTable("TrustCodes", t =>
                         {
                             t.HasCheckConstraint("CK_TrustCodes_NotRedeemedAndRevoked", "\"RedeemedAt\" IS NULL OR \"RevokedAt\" IS NULL");
 
-                            t.HasCheckConstraint("CK_TrustCodes_RedeemedByAndAtTogether", "(\"RedeemedBy\" IS NULL) = (\"RedeemedAt\" IS NULL)");
+                            t.HasCheckConstraint("CK_TrustCodes_RedeemedByAndAtTogether", "(\"RedeemedBy\" IS NULL) = (\"RedeemedAt\" IS NULL) AND (\"RedeemedBy\" IS NULL) = (\"RedeemedTrustEpoch\" IS NULL)");
                         });
                 });
 
@@ -248,10 +254,12 @@ namespace ModsDude.Server.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("ModId")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("Id")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<long>("ChangeSequence")
                         .ValueGeneratedOnAddOrUpdate()
@@ -259,7 +267,8 @@ namespace ModsDude.Server.Persistence.Migrations
 
                     b.Property<string>("ContentHash")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<DateTimeOffset>("Created")
                         .HasColumnType("timestamp with time zone");
@@ -295,16 +304,20 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<DateTimeOffset>("Updated")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("RepoId", "ModId", "Id");
+                    b.HasKey("RepoId", "ModId", "Id")
+                        .HasName("PK_ModVersions");
 
                     b.HasIndex("RepoId", "ChangeSequence")
                         .IsUnique();
 
                     b.HasIndex("RepoId", "ModId", "SequenceNumber")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("IX_ModVersions_RepoId_ModId_SequenceNumber");
 
                     b.ToTable("ModVersions", t =>
                         {
+                            t.HasCheckConstraint("CK_ModVersions_ContentHashIsSha256Hex", "\"ContentHash\" ~ '^[0-9a-f]{64}$'");
+
                             t.HasCheckConstraint("CK_ModVersions_DeletionIsScheduledWithAReason", "(\"DeletionScheduledFor\" IS NULL) = (\"DeletionReason\" IS NULL)");
                         });
                 });
@@ -335,7 +348,8 @@ namespace ModsDude.Server.Persistence.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
@@ -362,10 +376,12 @@ namespace ModsDude.Server.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("ModId")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("VersionId")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.HasKey("RepoId", "ProfileId", "ModId", "VersionId");
 
@@ -381,7 +397,8 @@ namespace ModsDude.Server.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("ModId")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.HasKey("RepoId", "ProfileId", "ModId");
 
@@ -492,7 +509,10 @@ namespace ModsDude.Server.Persistence.Migrations
 
                     b.HasIndex("RepoId");
 
-                    b.ToTable("RepoMemberships");
+                    b.ToTable("RepoMemberships", t =>
+                        {
+                            t.HasCheckConstraint("CK_RepoMemberships_Level", "\"Level\" IN ('Admin', 'Guest', 'Member')");
+                        });
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Repos.Repo", b =>
@@ -512,7 +532,8 @@ namespace ModsDude.Server.Persistence.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
@@ -819,6 +840,25 @@ namespace ModsDude.Server.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ModsDude.Server.Domain.Storage.StorageBinding", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("BindingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Created")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("StorageBindings", t =>
+                        {
+                            t.HasCheckConstraint("CK_StorageBindings_Singleton", "\"Id\" = 1");
+                        });
+                });
+
             modelBuilder.Entity("ModsDude.Server.Domain.Users.User", b =>
                 {
                     b.Property<string>("Id")
@@ -852,6 +892,9 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<DateTime>("ProfileLastUpdated")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("TrustEpoch")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.ToTable("Users");
@@ -867,11 +910,13 @@ namespace ModsDude.Server.Persistence.Migrations
 
                     b.Property<string>("ModId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("VersionId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.HasKey("RepoId", "ChangeSequence");
 
@@ -952,10 +997,12 @@ namespace ModsDude.Server.Persistence.Migrations
                                 .HasColumnType("uuid");
 
                             b1.Property<string>("ModVersionModId")
-                                .HasColumnType("text");
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)");
 
                             b1.Property<string>("ModVersionId")
-                                .HasColumnType("text");
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)");
 
                             b1.Property<int>("Id")
                                 .ValueGeneratedOnAdd()
@@ -984,10 +1031,12 @@ namespace ModsDude.Server.Persistence.Migrations
                                 .HasColumnType("uuid");
 
                             b1.Property<string>("ModVersionModId")
-                                .HasColumnType("text");
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)");
 
                             b1.Property<string>("ModVersionId")
-                                .HasColumnType("text");
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)");
 
                             b1.Property<int>("Id")
                                 .ValueGeneratedOnAdd()
@@ -1015,6 +1064,8 @@ namespace ModsDude.Server.Persistence.Migrations
                                 .HasColumnType("text");
 
                             b1.HasKey("ModVersionRepoId", "ModVersionModId", "ModVersionId", "Id");
+
+                            b1.HasIndex("Hash");
 
                             b1.ToTable("ModImageReference");
 
@@ -1074,10 +1125,12 @@ namespace ModsDude.Server.Persistence.Migrations
                                 .HasColumnType("integer");
 
                             b1.Property<string>("ModId")
-                                .HasColumnType("text");
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)");
 
                             b1.Property<string>("VersionId")
-                                .HasColumnType("text")
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)")
                                 .HasColumnName("ModVersionId");
 
                             b1.Property<DateTime>("Added")
@@ -1125,11 +1178,13 @@ namespace ModsDude.Server.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("ModsDude.Server.Domain.Users.User", null)
+                    b.HasOne("ModsDude.Server.Domain.Users.User", "User")
                         .WithMany("RepoMemberships")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Savegames.Savegame", b =>

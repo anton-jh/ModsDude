@@ -1,7 +1,7 @@
-using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
@@ -435,7 +435,7 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
         Assert.False(totals.ContainsKey(empty));
     }
 
-    private static string HashOf(char character) => new(character, ModImageHash.Length);
+    private static string HashOf(char character) => new(character, Sha256Hex.Length);
 
     private async Task<(RepoId RepoId, ProfileId ProfileId)> GivenARepoWithAProfile()
     {

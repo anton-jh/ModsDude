@@ -66,6 +66,9 @@ jobs:
       - name: ModHub parser tests
         run: dotnet test ModsDude.Server/ModsDude.Server.ModHub.Tests/ModsDude.Server.ModHub.Tests.csproj
 
+      - name: Storage tests
+        run: dotnet test ModsDude.Server/ModsDude.Server.Storage.Tests/ModsDude.Server.Storage.Tests.csproj
+
       # A database of the suite's own, because DatabaseFixture drops and recreates whatever it is
       # pointed at before every run.
       - name: Persistence tests

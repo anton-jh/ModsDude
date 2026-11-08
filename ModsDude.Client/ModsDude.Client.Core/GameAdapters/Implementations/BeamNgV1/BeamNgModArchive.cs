@@ -68,6 +68,11 @@ internal static class BeamNgModArchive
             return null;
         }
 
+        if (!ModKey.IsValid(stem))
+        {
+            throw new InvalidDataException($"'{stem}' cannot be carried as a mod id.");
+        }
+
         using var zip = ModArchives.Open(path);
 
         // Reading the entry list is where a damaged central directory surfaces, not the constructor.
@@ -92,7 +97,7 @@ internal static class BeamNgModArchive
 
         return new LocalMod(
             ModKey.From(stem),
-            ModVersionKey.From(NonBlank(info?.Version) ?? NewestEntryVersion(entries)),
+            ModVersionKey.From(UsableVersion(info?.Version) ?? NewestEntryVersion(entries)),
             NonBlank(info?.Title) ?? stem,
             NonBlank(BeamNgBbCode.ToPlainText(info?.Message)) ?? NonBlank(info?.TagLine) ?? "",
             () => File.OpenRead(path))
@@ -238,6 +243,9 @@ internal static class BeamNgModArchive
     private static string Normalize(string fullName) => fullName.Replace('\\', '/').TrimStart('/');
 
     private static string? NonBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>The declared version where it can be carried, so a version the server would refuse falls back to the dated one.</summary>
+    private static string? UsableVersion(string? declared) => NonBlank(declared) is string version && ModVersionKey.IsValid(version) ? version : null;
 
 
     private sealed record ModInfo(string? Title, string? Version, string? Author, string? TagLine, string? Message);

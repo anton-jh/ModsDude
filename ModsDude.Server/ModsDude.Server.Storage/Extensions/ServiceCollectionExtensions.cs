@@ -30,6 +30,7 @@ public static class ServiceCollectionExtensions
                 clientBuilder.AddBlobServiceClient(GetBlobServiceUri(backupStorageAccountName!)).WithName(_backupClientName);
             }
         });
+        services.AddSingleton<IUserDelegationKeyCache, UserDelegationKeyCache>(sp => new UserDelegationKeyCache(sp.GetRequiredService<BlobServiceClient>()));
         services.AddScoped<IModStorageService, ModStorageService>();
         services.AddScoped<IModImageStorageService, ModImageStorageService>();
         services.AddScoped<ISavegameStorageService, SavegameStorageService>();

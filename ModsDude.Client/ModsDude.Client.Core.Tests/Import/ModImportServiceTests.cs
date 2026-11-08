@@ -205,6 +205,45 @@ public class ModImportServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_concurrent_upload_of_the_same_file_is_adopted_when_it_committed_first()
+    {
+        var version = Local("FS25_Plough", "1.0");
+        var hash = await HashOf(version);
+
+        // A teammate's import of the same file commits while this one is still uploading.
+        _uploader.OnUpload = _ =>
+        {
+            _server.PlaceOrphan(version.Identity, hash);
+            return Task.CompletedTask;
+        };
+
+        var result = await ImportAsync([version]);
+
+        Assert.Equal(ModImportStatus.Registered, Assert.Single(result.Items).Status);
+        Assert.Equal(Vs("1.0"), _server.VersionsOf(Mod("FS25_Plough")));
+    }
+
+    [Fact]
+    public async Task A_concurrent_upload_of_a_different_build_that_committed_first_is_reported()
+    {
+        var version = Local("FS25_Plough", "1.0", content: "our build");
+        var theirs = await HashOf(Local("FS25_Plough", "1.0", content: "somebody else's build"));
+
+        _uploader.OnUpload = _ =>
+        {
+            _server.PlaceOrphan(version.Identity, theirs);
+            return Task.CompletedTask;
+        };
+
+        var result = await ImportAsync([version]);
+
+        // Their bytes are what is stored, and an upload link cannot overwrite them, so nothing that
+        // describes ours may be registered.
+        Assert.Equal(ModImportStatus.ContentMismatch, Assert.Single(result.Items).Status);
+        Assert.Empty(_server.CallsOf(ServerCallKind.Register));
+    }
+
+    [Fact]
     public async Task A_mod_imported_from_a_secondary_source_lands_in_the_store_that_will_serve_it()
     {
         var version = Local("FS25_Plough", "1.0", source: _downloads);

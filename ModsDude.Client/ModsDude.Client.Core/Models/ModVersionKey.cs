@@ -30,13 +30,16 @@ public readonly record struct ModVersionKey
     {
         var normalized = raw.Trim();
 
-        if (normalized.Length == 0)
+        if (!ModIdentifierRule.IsValid(normalized))
         {
-            throw new ArgumentException("A mod version cannot be empty.", nameof(raw));
+            throw new ArgumentException($"'{raw}' cannot be a mod version.", nameof(raw));
         }
 
         return new(normalized);
     }
+
+    /// <summary>Whether <see cref="From"/> accepts <paramref name="raw"/>.</summary>
+    public static bool IsValid(string? raw) => raw is not null && ModIdentifierRule.IsValid(raw.Trim());
 
     public override string ToString() => Value;
 }

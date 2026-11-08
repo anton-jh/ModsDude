@@ -1,5 +1,7 @@
-﻿using ModsDude.Server.Domain.Repos;
+﻿using ModsDude.Server.Domain.Exceptions;
+using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Retention;
+using ModsDude.Server.Domain.Storage;
 
 namespace ModsDude.Server.Domain.Mods;
 
@@ -103,4 +105,25 @@ public class ModVersion
 }
 
 
-public readonly record struct ModVersionId(string Value);
+/// <summary>
+/// A version's identity within its mod, as the mod's own metadata names it. Also a blob path segment,
+/// so it follows <see cref="BlobPathSegment"/>.
+/// </summary>
+public readonly record struct ModVersionId
+{
+    public ModVersionId(string value)
+    {
+        if (!IsValid(value))
+        {
+            throw new DomainValidationException($"'{value}' is not a valid mod version id");
+        }
+
+        Value = value;
+    }
+
+
+    public string Value { get; }
+
+
+    public static bool IsValid(string? value) => BlobPathSegment.IsValid(value);
+}

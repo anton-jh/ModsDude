@@ -131,9 +131,9 @@ public static class Problems
 
     /// <summary>
     /// The content hash is a blob path segment, so an unparseable one has to be refused at the
-    /// boundary rather than carried inward. There is no global exception handler, and the storage
-    /// layer validates the same value on its way to building a blob name — without this the caller
-    /// gets a 500 for what is plainly a bad request. Reuses <see cref="ProblemType.InvalidHash"/>
+    /// boundary rather than carried inward. The storage layer validates the same value on its way to
+    /// building a blob name, but it throws, and the caller would get a generic
+    /// <see cref="ProblemType.InvalidRequest"/> instead of this. Reuses <see cref="ProblemType.InvalidHash"/>
     /// rather than minting a savegame-specific type: it is the same fact about the same kind of
     /// value, and every problem type is a wire contract the generated client has to learn.
     /// </summary>
@@ -333,6 +333,82 @@ public static class Problems
         Type = ProblemType.InvalidHash,
         Title = "Not a valid image address",
         Detail = $"'{hash}' is not a lowercase hex SHA-256."
+    };
+
+    public static CustomProblemDetails InvalidModId(string? modId) => new()
+    {
+        Type = ProblemType.InvalidModId,
+        Title = "Not a valid mod id",
+        Detail = $"'{modId}' is not a valid mod id."
+    };
+
+    public static CustomProblemDetails InvalidModVersionId(string? versionId) => new()
+    {
+        Type = ProblemType.InvalidModVersionId,
+        Title = "Not a valid mod version",
+        Detail = $"'{versionId}' is not a valid mod version."
+    };
+
+    public static CustomProblemDetails ModContentHashMismatch(RepoId repoId, ModId modId, ModVersionId versionId, string claimed, string? recorded) => new()
+    {
+        Type = ProblemType.HashMismatch,
+        Title = "The content hash does not match the stored file",
+        Detail = $"Version '{versionId.Value}' of mod '{modId.Value}' in repo '{repoId.Value}' claims '{claimed}', but the stored file records '{recorded ?? "nothing"}'."
+    };
+
+    public static CustomProblemDetails InvalidContentHash(string? contentHash) => new()
+    {
+        Type = ProblemType.InvalidHash,
+        Title = "Not a valid content hash",
+        Detail = $"'{contentHash}' is not a lowercase hex SHA-256."
+    };
+
+    public static CustomProblemDetails InvalidImageFormat => new()
+    {
+        Type = ProblemType.InvalidImageFormat,
+        Title = "Not a WebP image",
+        Detail = "Images are stored as WebP only."
+    };
+
+    public static CustomProblemDetails InvalidName(string? name, int maximumLength) => new()
+    {
+        Type = ProblemType.InvalidName,
+        Title = "Not a valid name",
+        Detail = $"'{name}' is not a valid name. A name cannot be empty or longer than {maximumLength} characters."
+    };
+
+    public static CustomProblemDetails InvalidLabel(string? label, int maximumLength) => new()
+    {
+        Type = ProblemType.InvalidLabel,
+        Title = "Not a valid label",
+        Detail = $"'{label}' is not a valid label. A label cannot be longer than {maximumLength} characters."
+    };
+
+    public static CustomProblemDetails InvalidGameKey(string? gameKey) => new()
+    {
+        Type = ProblemType.InvalidGameKey,
+        Title = "Not a valid game",
+        Detail = $"'{gameKey}' is not a valid game key."
+    };
+
+    /// <summary>
+    /// A request the server could not read: malformed JSON, a value of the wrong type, an enum name it
+    /// does not know, or a value the domain refused. Written by the exception handler, so no endpoint
+    /// declares it.
+    /// </summary>
+    public static CustomProblemDetails InvalidRequest(string detail) => new()
+    {
+        Type = ProblemType.InvalidRequest,
+        Title = "Invalid request",
+        Detail = detail
+    };
+
+    /// <summary>Something failed that no endpoint expected. Written by the exception handler.</summary>
+    public static CustomProblemDetails Unexpected => new()
+    {
+        Type = ProblemType.Unexpected,
+        Title = "Unexpected error",
+        Detail = "The server failed to handle the request."
     };
 
     public static CustomProblemDetails InvalidFileSize(long sizeBytes) => new()
@@ -724,5 +800,37 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "savegame-changed")]
         [JsonStringEnumMemberName(_typeBaseUri + "savegame-changed")]
         SavegameChanged,
+
+        [EnumMember(Value = _typeBaseUri + "invalid-mod-id")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invalid-mod-id")]
+        InvalidModId,
+
+        [EnumMember(Value = _typeBaseUri + "invalid-mod-version-id")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invalid-mod-version-id")]
+        InvalidModVersionId,
+
+        [EnumMember(Value = _typeBaseUri + "invalid-image-format")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invalid-image-format")]
+        InvalidImageFormat,
+
+        [EnumMember(Value = _typeBaseUri + "invalid-name")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invalid-name")]
+        InvalidName,
+
+        [EnumMember(Value = _typeBaseUri + "invalid-label")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invalid-label")]
+        InvalidLabel,
+
+        [EnumMember(Value = _typeBaseUri + "invalid-game-key")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invalid-game-key")]
+        InvalidGameKey,
+
+        [EnumMember(Value = _typeBaseUri + "invalid-request")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invalid-request")]
+        InvalidRequest,
+
+        [EnumMember(Value = _typeBaseUri + "unexpected")]
+        [JsonStringEnumMemberName(_typeBaseUri + "unexpected")]
+        Unexpected,
     }
 }

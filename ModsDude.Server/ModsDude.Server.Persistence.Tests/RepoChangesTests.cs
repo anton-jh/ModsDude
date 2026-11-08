@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Domain.Activity;
-using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.Changes;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
@@ -92,7 +92,7 @@ public class RepoChangesTests(DatabaseFixture fixture)
 
             dbContext.Savegames.Add(savegame);
             dbContext.SavegameSnapshots.Add(savegame.CreateSnapshot(
-                new RevisionNumber(1), new string('1', ModImageHash.Length), sizeBytes: 1024, caller, DateTime.UtcNow));
+                new RevisionNumber(1), new string('1', Sha256Hex.Length), sizeBytes: 1024, caller, DateTime.UtcNow));
             dbContext.SavegameCheckouts.Add(new SavegameCheckout(repoId, savegame.Id, caller, DateTime.UtcNow));
 
             await dbContext.SaveChangesAsync(CancellationToken.None);

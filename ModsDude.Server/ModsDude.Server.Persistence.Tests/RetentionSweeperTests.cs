@@ -6,6 +6,7 @@ using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Retention;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
@@ -646,7 +647,7 @@ public class RetentionSweeperTests(DatabaseFixture fixture)
 
             dbContext.SavegameSnapshots.Add(savegame.CreateSnapshot(
                 playedOn ?? new RevisionNumber(1),
-                new string((char)('a' + index), ModImageHash.Length),
+                new string((char)('a' + index), Sha256Hex.Length),
                 sizeBytes: 1024,
                 _author,
                 DateTime.UtcNow));
@@ -686,7 +687,7 @@ public class RetentionSweeperTests(DatabaseFixture fixture)
             DisplayName = versionId,
             Description = "",
             FileName = $"{_modId.Value}.zip",
-            ContentHash = versionId,
+            ContentHash = TestHashes.Of(versionId),
             SizeBytes = 1024,
             Locked = false,
             Attributes = [],

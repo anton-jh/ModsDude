@@ -2,7 +2,7 @@
 
 namespace ModsDude.Server.Application.Dependencies;
 
-public interface IModImageStorageService
+public interface IModImageStorageService : IReclaimableContainer
 {
     /// <summary>
     /// Creates the image container if it is not there. Called once at startup, because every other
@@ -13,31 +13,26 @@ public interface IModImageStorageService
     Task EnsureContainerExists(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Which of <paramref name="hashes"/> are already stored. A batch because after the first import
-    /// into a repo almost every image is already present, and asking one at a time turns a 2,000-mod
-    /// import into tens of thousands of round trips before a single byte is uploaded.
+    /// Writes to each stored image so a reclamation sweep that listed it before this call cannot delete
+    /// it, and returns the hashes that are not stored. Called by whatever is about to make the images
+    /// referenced.
     /// </summary>
-    Task<IReadOnlyCollection<string>> CheckWhichExist(IReadOnlyCollection<string> hashes, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<string>> TryReuse(IReadOnlyCollection<string> hashes, CancellationToken cancellationToken);
 
-    Task Upload(string hash, string contentType, Stream content, CancellationToken cancellationToken);
+    /// <summary>What every stored image is served as. Clients produce WebP only, and uploads are checked for it.</summary>
+    string ContentType { get; }
+
+    Task Upload(string hash, Stream content, CancellationToken cancellationToken);
 
     /// <summary>
     /// The stored bytes, or <c>null</c> when nothing is stored at that address. The caller owns the
     /// returned stream.
     /// </summary>
-    Task<StoredModImage?> Download(string hash, CancellationToken cancellationToken);
+    Task<Stream?> Download(string hash, CancellationToken cancellationToken);
 
     /// <summary>
     /// Every stored image, for the reclamation sweep. See
     /// <see cref="IModStorageService.ListStoredMods"/>.
     /// </summary>
     IAsyncEnumerable<StoredBlob> ListStoredImages(CancellationToken cancellationToken);
-
-    /// <summary>
-    /// See <see cref="IModStorageService.DeleteStoredBlob"/>.
-    /// </summary>
-    Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken);
 }
-
-
-public record StoredModImage(Stream Content, string ContentType);

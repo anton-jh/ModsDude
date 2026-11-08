@@ -73,6 +73,8 @@ public class BlobReclamationTests
     [InlineData("11111111-1111-1111-1111-111111111111/a_mod")]
     [InlineData("11111111-1111-1111-1111-111111111111/a_mod/1.0.0/extra")]
     [InlineData("11111111-1111-1111-1111-111111111111//1.0.0")]
+    [InlineData("11111111-1111-1111-1111-111111111111/../1.0.0")]
+    [InlineData("11111111-1111-1111-1111-111111111111/a_mod/1.0.")]
     public void A_mod_blob_name_the_sweep_cannot_read_is_reported_rather_than_deleted(string name)
     {
         var plan = BlobReclamation.PlanModSweep([Old(name)], Registered(), _cutoff);

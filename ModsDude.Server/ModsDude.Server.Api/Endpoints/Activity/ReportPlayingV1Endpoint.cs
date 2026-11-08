@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
+using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Activity;
@@ -33,14 +34,20 @@ public class ReportPlayingV1Endpoint : IEndpoint
     }
 
 
-    private static async Task<Ok> Report(
+    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>>> Report(
         ReportPlayingRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
+        ILogger<ReportPlayingV1Endpoint> logger,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.Game(request.Game) is { } invalid)
+        {
+            return TypedResults.BadRequest(invalid);
+        }
+
         if (await dbContext.GameActivities.GetAsync(claimsPrincipal.GetUserId(), new GameKey(request.Game), cancellationToken) is not GameActivity activity)
         {
             return TypedResults.Ok();
@@ -59,10 +66,11 @@ public class ReportPlayingV1Endpoint : IEndpoint
         {
             await unitOfWork.CommitAsync(cancellationToken);
         }
-        catch (DbUpdateConcurrencyException)
+        catch (DbUpdateConcurrencyException exception)
         {
             // The caller's own clear deleted the row in the meantime: the game is on nothing, which is
             // the outcome a report about a game without a row has anyway.
+            logger.LogInformation(exception, "A playing report of game {Game} lost to a concurrent clear.", request.Game);
         }
 
         return TypedResults.Ok();

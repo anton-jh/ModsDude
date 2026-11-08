@@ -28,15 +28,21 @@ public readonly record struct ModKey
     /// <summary>Normalizes a raw id. Call this where the id enters the client, not at each use site.</summary>
     public static ModKey From(string raw)
     {
-        var normalized = raw.Trim().ToLowerInvariant();
+        var normalized = Normalize(raw);
 
-        if (normalized.Length == 0)
+        if (!ModIdentifierRule.IsValid(normalized))
         {
-            throw new ArgumentException("A mod id cannot be empty.", nameof(raw));
+            throw new ArgumentException($"'{raw}' cannot be a mod id.", nameof(raw));
         }
 
         return new(normalized);
     }
+
+    /// <summary>Whether <see cref="From"/> accepts <paramref name="raw"/>.</summary>
+    public static bool IsValid(string? raw) => raw is not null && ModIdentifierRule.IsValid(Normalize(raw));
+
+
+    private static string Normalize(string raw) => raw.Trim().ToLowerInvariant();
 
     public override string ToString() => Value;
 }

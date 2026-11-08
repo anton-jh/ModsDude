@@ -226,7 +226,7 @@ public class ModChangesTests(DatabaseFixture fixture)
         DisplayName = versionId,
         Description = "",
         FileName = $"{modId}.zip",
-        ContentHash = $"{modId}-{versionId}",
+        ContentHash = TestHashes.Of($"{modId}-{versionId}"),
         SizeBytes = 1024,
         Locked = false,
         Attributes = [],

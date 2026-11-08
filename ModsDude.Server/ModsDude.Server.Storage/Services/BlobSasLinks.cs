@@ -17,7 +17,7 @@ internal static class BlobSasLinks
 
 
     public static async Task<string> CreateAsync(
-        BlobServiceClient blobServiceClient,
+        IUserDelegationKeyCache keyCache,
         BlobClient blobClient,
         BlobSasPermissions permissions,
         DateTimeOffset now,
@@ -31,7 +31,7 @@ internal static class BlobSasLinks
         var startsOn = now - _clockSkewAllowance;
         var expiresOn = now + _lifetime;
 
-        var userDelegationKey = await blobServiceClient.GetUserDelegationKeyAsync(startsOn, expiresOn, cancellationToken);
+        var userDelegationKey = await keyCache.GetAsync(startsOn, expiresOn, cancellationToken);
 
         var sasBuilder = new BlobSasBuilder(permissions, expiresOn)
         {

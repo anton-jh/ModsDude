@@ -57,9 +57,12 @@ public partial class RepoMemberViewModel : ObservableObject
         ];
 
         CanChangeLevel = mayChange && !isOnlyAdmin && AvailableLevels.Count > 1;
-        CanKick = mayChange && !isOnlyAdmin;
+        // Anybody may leave; removing somebody else needs the level to change their membership.
+        var mayKick = isSelf || mayChange;
 
-        // Leaving is the same call as being removed, and it is refused for the same reason, so the
+        CanKick = mayKick && !isOnlyAdmin;
+
+        // Leaving is the same call as being removed, and the only admin is refused either way, so the
         // button is one button - it just has to say which of the two it is about to do.
         KickLabel = isSelf ? "Leave" : "Remove";
 
@@ -67,7 +70,7 @@ public partial class RepoMemberViewModel : ObservableObject
             ? isSelf
                 ? "You are the only admin. Promote somebody else before you leave."
                 : "The only admin cannot be removed. Promote somebody else first."
-            : mayChange
+            : mayKick
                 ? null
                 : "You do not have the level to change this membership.";
 

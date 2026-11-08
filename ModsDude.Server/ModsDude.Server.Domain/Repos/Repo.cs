@@ -99,6 +99,11 @@ public class Repo : IArchivable
 
     public void AddMember(User user, RepoMembershipLevel level)
     {
+        if (!Enum.IsDefined(level))
+        {
+            throw new DomainValidationException($"'{level}' is not a membership level.");
+        }
+
         if (user.IsBlocked)
         {
             throw new DomainValidationException($"Cannot add blocked user '{user.Id.Value}' to repo '{Id.Value}'.");
@@ -109,7 +114,7 @@ public class Repo : IArchivable
             throw new DomainValidationException($"User '{user.Id.Value}' is already a member of repo '{Id.Value}'.");
         }
 
-        _memberships.Add(new RepoMembership(user.Id, Id, level));
+        _memberships.Add(new RepoMembership(user.Id, Id, level) { User = user });
         MembersVersion++;
     }
 
@@ -120,6 +125,11 @@ public class Repo : IArchivable
     /// </summary>
     public void UpdateMembershipLevel(UserId userId, RepoMembershipLevel level)
     {
+        if (!Enum.IsDefined(level))
+        {
+            throw new DomainValidationException($"'{level}' is not a membership level.");
+        }
+
         var membership = GetMembership(userId)
             ?? throw new DomainValidationException($"User '{userId.Value}' is not a member of repo '{Id.Value}'.");
 
@@ -161,13 +171,27 @@ public class Repo : IArchivable
         return _memberships.FirstOrDefault(x => x.UserId == userId);
     }
 
+
+    private User UserOf(RepoMembership membership)
+    {
+        return membership.User
+            ?? throw new InvalidOperationException($"Membership of user '{membership.UserId.Value}' in repo '{Id.Value}' was loaded without its user.");
+    }
+
+    /// <summary>
+    /// Whether <paramref name="userId"/> is an admin and no other admin who is not blocked remains: a
+    /// blocked admin cannot administer anything, so a repo left with only those is left with nobody.
+    /// </summary>
     public bool IsOnlyAdmin(UserId userId)
     {
-        var numberOfAdmins = _memberships.Count(x => x.Level == RepoMembershipLevel.Admin);
         var membership = _memberships.FirstOrDefault(x => x.UserId == userId);
 
-        return membership?.Level == RepoMembershipLevel.Admin
-            && numberOfAdmins == 1;
+        if (membership?.Level != RepoMembershipLevel.Admin)
+        {
+            return false;
+        }
+
+        return !_memberships.Any(x => x.UserId != userId && x.Level == RepoMembershipLevel.Admin && !UserOf(x).IsBlocked);
     }
 }
 
@@ -176,9 +200,21 @@ public readonly record struct RepoId(Guid Value);
 /// <summary>
 /// What a repo is called. Nothing makes it unique and nothing here tries to: two groups who both
 /// called theirs Vanilla both have a Vanilla, and a list showing both of them disambiguates at the
-/// point of display with <see cref="RepoTag"/> rather than by making somebody rename theirs.
+/// point of display with <see cref="RepoTag"/> rather than by making somebody rename theirs. See
+/// <see cref="NameRule"/>.
 /// </summary>
-public readonly record struct RepoName(string Value);
+public readonly record struct RepoName
+{
+    public RepoName(string value)
+    {
+        Value = NameRule.Validated(value, "repo");
+    }
+
+
+    public string Value { get; }
+
+    public override string ToString() => Value;
+}
 
 public record AdapterData(AdapterIdentifier Id, AdapterConfiguration Configuration);
 public readonly record struct AdapterIdentifier(string Value);

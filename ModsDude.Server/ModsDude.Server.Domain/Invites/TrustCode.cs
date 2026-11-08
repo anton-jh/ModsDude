@@ -29,6 +29,13 @@ public class TrustCode
     public DateTime Created { get; private set; }
     public UserId? RedeemedBy { get; private set; }
     public DateTime? RedeemedAt { get; private set; }
+
+    /// <summary>
+    /// The redeemer's <see cref="User.TrustEpoch"/> at redemption. Unique together with
+    /// <see cref="RedeemedBy"/>, so two codes redeemed by one user at once cannot both be saved, while a
+    /// user whose trust was revoked can be trusted again with a new one.
+    /// </summary>
+    public int? RedeemedTrustEpoch { get; private set; }
     public DateTime? RevokedAt { get; private set; }
 
     /// <summary>Counts changes. A concurrency token, so two redemptions cannot both be saved.</summary>
@@ -71,6 +78,7 @@ public class TrustCode
 
         RedeemedBy = user.Id;
         RedeemedAt = now;
+        RedeemedTrustEpoch = user.TrustEpoch;
         Version++;
         user.GrantTrust();
     }

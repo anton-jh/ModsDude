@@ -112,10 +112,10 @@ public sealed class RemoteDownloadNotes : IRemoteDownloadNotes
 
         public bool IsReadable
             => Uri.TryCreate(Url, UriKind.Absolute, out _)
-            && string.IsNullOrWhiteSpace(OfferedMod) is false
-            && string.IsNullOrWhiteSpace(OfferedVersion) is false
+            && ModKey.IsValid(OfferedMod)
+            && ModVersionKey.IsValid(OfferedVersion)
             && (HeldMod is null) == (HeldVersion is null)
-            && (HeldMod is null || (string.IsNullOrWhiteSpace(HeldMod) is false && string.IsNullOrWhiteSpace(HeldVersion) is false));
+            && (HeldMod is null || (ModKey.IsValid(HeldMod) && ModVersionKey.IsValid(HeldVersion)));
 
         public RemoteDownloadNote ToNote() => new(
             new Uri(Url),

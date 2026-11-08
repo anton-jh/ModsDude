@@ -29,15 +29,25 @@ public class KickMemberV1Endpoint : IEndpoint
         IUnitOfWork unitOfWork,
         CancellationToken cancellationToken)
     {
-        // ChangeOthersMembership needs the subject's level to know what it needs, so it cannot run
-        // before the load. What can run before it is the floor that check can never fall below —
-        // Member, the level it demands to touch even a Guest — which is enough to stop a
-        // non-member learning from the responses which repo ids and memberships exist.
-        var user = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken);
+        // Removing yourself is leaving, which any member may do. Removing somebody else needs
+        // ChangeOthersMembership, which needs the subject's level and so cannot run before the load.
+        // What can run before it is the floor that check can never fall below - Member, the level it
+        // demands to touch even a Guest - which is enough to stop a non-member learning from the
+        // responses which repo ids and memberships exist.
+        var callerId = claimsPrincipal.GetUserId();
+        var isLeaving = new UserId(userId) == callerId;
+        var user = await dbContext.Users.GetAsync(callerId, cancellationToken);
+
+        // Already left: a repeat of this request gets the same answer. The same for any repo id, so it
+        // tells a non-member nothing.
+        if (isLeaving && user is not null && !user.RepoMemberships.Any(x => x.RepoId == new RepoId(repoId)))
+        {
+            return TypedResults.Ok();
+        }
 
         var authResult = user
             .CheckIsAllowedTo(x => x
-                .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member))
+                .AccessRepoAtLevel(new RepoId(repoId), isLeaving ? RepoMembershipLevel.Guest : RepoMembershipLevel.Member))
             .MapToForbidden();
         if (authResult is not null)
         {
@@ -57,13 +67,16 @@ public class KickMemberV1Endpoint : IEndpoint
             return TypedResults.Ok();
         }
 
-        authResult = user
-            .CheckIsAllowedTo(x => x
-                .ChangeOthersMembership(subjectMembership))
-            .MapToForbidden();
-        if (authResult is not null)
+        if (!isLeaving)
         {
-            return authResult;
+            authResult = user
+                .CheckIsAllowedTo(x => x
+                    .ChangeOthersMembership(subjectMembership))
+                .MapToForbidden();
+            if (authResult is not null)
+            {
+                return authResult;
+            }
         }
 
         if (repo.IsOnlyAdmin(new UserId(userId)))

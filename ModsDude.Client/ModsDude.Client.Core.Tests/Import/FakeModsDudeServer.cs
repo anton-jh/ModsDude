@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 
@@ -101,7 +102,12 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
 
         lock (_lock)
         {
-            _stored[identity] = contentHash;
+            // Upload links create and never overwrite, as storage's do.
+            if (_stored.TryAdd(identity, contentHash) is false)
+            {
+                throw new BlobAlreadyExistsException("Already stored.");
+            }
+
             _journal.Add(new ServerCall(ServerCallKind.Upload, identity));
         }
     }
@@ -164,6 +170,11 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
             if (IsRegistered(identity))
             {
                 throw Problem(ProblemType.AlreadyExists, null);
+            }
+
+            if (_stored[identity] != request.ContentHash)
+            {
+                throw Problem(ProblemType.HashMismatch, null);
             }
         }
 

@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Dependencies;
@@ -7,6 +8,8 @@ using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
+using ModsDude.Server.Persistence.EntityTypeConfigurations;
+using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
 
@@ -31,6 +34,11 @@ public class DeleteModVersionV1Endpoint : IEndpoint
         IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
+        if (RequestChecks.ModId(modId, versionId) is { } invalidId)
+        {
+            return TypedResults.BadRequest(invalidId);
+        }
+
         var siblings = await dbContext.ModVersions.GetVersionsOfModAsync(new RepoId(repoId), new ModId(modId), cancellationToken);
 
         var modVersion = siblings.FirstOrDefault(x => x.Id == new ModVersionId(versionId));
@@ -60,7 +68,21 @@ public class DeleteModVersionV1Endpoint : IEndpoint
         // offered again.
         await dbContext.ReleaseModVersionAsync(modVersion.RepoId, modVersion.ModId, modVersion.Id, cancellationToken);
 
-        await unitOfWork.CommitAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (exception.IsForeignKeyViolation())
+        {
+            // Pinned by a revision saved since the check above.
+            return TypedResults.BadRequest(Problems.ModVersionInUse(new RepoId(repoId), new ModId(modId), new ModVersionId(versionId)));
+        }
+        catch (DbUpdateException exception) when (exception.IsUniqueViolation(ModVersionConstraints.SequenceIndex) || exception is DbUpdateConcurrencyException)
+        {
+            // A sibling registered, moved or deleted since the read, so the gap this closed is not where
+            // it was. Nothing was written; asking again works against the new order.
+            return TypedResults.BadRequest(Problems.VersionPlacementConflict(new RepoId(repoId), new ModId(modId)));
+        }
 
         // One version fewer can turn a mod that was outside its window into one winding down.
         await retentionUpkeep.ReleaseModsAsync(modVersion.RepoId, [modVersion.ModId], cancellationToken);
