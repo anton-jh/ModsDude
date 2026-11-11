@@ -11,9 +11,10 @@ name: CI
 # Shipping, in order, each step only after the one before succeeded:
 #   1. build-number: N is the count of commits on main, so the same commit is always the same build.
 #   2. publish-server: the API's container image, stamped with N, and the migration script for it.
-#   3. deploy-server: the API goes first, onto the server described by deploy/compose.yml. A failed
-#      migration leaves the running API as it was. There is no rollback past that point: a later failure
-#      is fixed by deploying a fixed build.
+#   3. deploy-server: the API goes first, onto the server described by deploy/compose.yml. The old API
+#      is stopped, the database backed up and migrated, and the new API started; a failed backup or
+#      migration starts the old API again on an unchanged database. There is no rollback past that
+#      point: a later failure is fixed by deploying a fixed build.
 #   4. release-client: published as release bN, which installed clients update to. A client already
 #      released is not released again, so a failed run can simply be re-run.
 #
@@ -37,7 +38,8 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17
+        # The same as deploy/compose.yml.
+        image: postgres:17.11-trixie
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -185,9 +187,10 @@ jobs:
           -p:ContainerArchiveOutputPath=${{ github.workspace }}/release/modsdude-api.tar
 
       # Idempotent: wrapped in checks against __EFMigrationsHistory, so applying it twice, or when
-      # nothing is pending, is a no-op. Generated here from the exact code being published, rather than
-      # applied by the app at startup, so a migration failure is caught before deploy-server touches the
-      # running service at all.
+      # nothing is pending, is a no-op. Without transactions of its own, because deploy.sh applies the
+      # whole script in one: every pending migration lands or none does. Generated here from the exact
+      # code being published, rather than applied by the app at startup, so a failed migration leaves
+      # the database as it was and deploy.sh can start the running build again.
       - name: Generate the migration script
         env:
           # Design-time only - this never opens either connection, it only needs both config keys
@@ -201,6 +204,7 @@ jobs:
           dotnet tool install --global dotnet-ef --version "$version"
           dotnet ef migrations script \
             --idempotent \
+            --no-transactions \
             --project ModsDude.Server/ModsDude.Server.Persistence/ModsDude.Server.Persistence.csproj \
             --startup-project ModsDude.Server/ModsDude.Server.Api/ModsDude.Server.Api.csproj \
             --output release/migrate.sql

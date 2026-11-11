@@ -1,8 +1,12 @@
 # The whole server: the API, its database and the reverse proxy in front of it. Lives in ~/modsdude on the
 # server next to .env (see .env.example) and is uploaded fresh by every deploy; see the repository's README.md.
 #
-# Only Caddy publishes ports. Docker opens published ports past ufw, so anything else listed here with
-# ports would be on the internet whatever the firewall says.
+# Only Caddy publishes ports to the internet. Docker opens published ports past ufw, so anything else
+# listed here with ports would be on the internet whatever the firewall says - unless, like the API's
+# admin port, it is published on 127.0.0.1 only.
+#
+# The images are pinned to exact versions, so nothing changes under the server without a commit. Newer
+# ones are taken by changing the tag here and shipping.
 
 name: modsdude
 
@@ -15,7 +19,9 @@ x-logging: &logging
 
 services:
   db:
-    image: postgres:17
+    # The Debian release in the tag matters as much as the version: another one can sort text
+    # differently, which corrupts the indexes of a database created under the old one.
+    image: postgres:17.11-trixie
     restart: unless-stopped
     environment:
       POSTGRES_USER: modsdude
@@ -47,11 +53,17 @@ services:
       AZURE_TENANT_ID: ${AZURE_TENANT_ID:?}
       AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:?}
       Admin__Password: ${ADMIN_PASSWORD:?}
+      Admin__Port: 8081
+      # 8080 for Caddy; 8081 for the admin pages, which answer on nothing else.
+      ASPNETCORE_HTTP_PORTS: "8080;8081"
       Deploy__Token: ${DEPLOY_TOKEN:?}
+    # Only on the server's own loopback. Tailscale serves it to the operator's devices; see README.md.
+    ports:
+      - "127.0.0.1:8081:8081"
     logging: *logging
 
   caddy:
-    image: caddy:2
+    image: caddy:2.11.7
     restart: unless-stopped
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:?}

@@ -8,14 +8,16 @@ public class BackupStatusTests
 
 
     [Fact]
-    public void An_empty_container_reports_every_tier_missing()
+    public void An_empty_container_reports_every_scheduled_tier_missing()
     {
         var overview = BackupStatus.Summarise([], _now);
 
-        Assert.Equal([BackupTier.Hourly, BackupTier.Daily], overview.Tiers.Select(x => x.Tier));
+        Assert.Equal([BackupTier.Hourly, BackupTier.Daily, BackupTier.Deploy], overview.Tiers.Select(x => x.Tier));
+        Assert.Equal(BackupFreshness.Missing, Tier(overview, BackupTier.Hourly).Freshness);
+        Assert.Equal(BackupFreshness.Missing, Tier(overview, BackupTier.Daily).Freshness);
+        Assert.Null(Tier(overview, BackupTier.Deploy).Freshness);
         Assert.All(overview.Tiers, tier =>
         {
-            Assert.Equal(BackupFreshness.Missing, tier.Freshness);
             Assert.Null(tier.Newest);
             Assert.Null(tier.Oldest);
             Assert.Equal(0, tier.Count);
@@ -44,6 +46,28 @@ public class BackupStatusTests
         var overview = BackupStatus.Summarise([Blob(tier, _now.AddMinutes(-ageMinutes))], _now);
 
         Assert.Equal(expected, overview.Tiers.Single(x => x.Count == 1).Freshness);
+    }
+
+    [Fact]
+    public void The_deploy_tier_is_never_late_however_old_its_newest_backup_is()
+    {
+        var overview = BackupStatus.Summarise([Blob("deploy", _now.AddDays(-20), length: 7)], _now);
+
+        var deploy = Tier(overview, BackupTier.Deploy);
+
+        Assert.Null(deploy.Freshness);
+        Assert.Equal(_now.AddDays(-20), deploy.Newest?.TakenAt);
+        Assert.Equal(1, deploy.Count);
+        Assert.Equal(7, deploy.TotalBytes);
+    }
+
+    [Fact]
+    public void A_deploy_backup_does_not_count_towards_the_scheduled_tiers()
+    {
+        var overview = BackupStatus.Summarise([Blob("deploy", _now.AddMinutes(-5))], _now);
+
+        Assert.Equal(BackupFreshness.Missing, Tier(overview, BackupTier.Hourly).Freshness);
+        Assert.Equal(BackupFreshness.Missing, Tier(overview, BackupTier.Daily).Freshness);
     }
 
     [Fact]
@@ -131,6 +155,14 @@ public class BackupStatusTests
 
         Assert.All(overview.Tiers, x => Assert.Equal(0, x.Count));
         Assert.Equal(6, overview.Unrecognised.Count);
+    }
+
+    [Fact]
+    public void A_deploy_backup_name_is_recognised()
+    {
+        Assert.True(StoredBackup.TryParse(new ListedBackupBlob("deploy/modsdude-20261005T010203Z.dump", 1), out var backup));
+
+        Assert.Equal(BackupTier.Deploy, backup.Tier);
     }
 
     [Fact]

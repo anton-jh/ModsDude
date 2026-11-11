@@ -13,6 +13,11 @@ namespace ModsDude.Server.Api.Admin;
 /// rather than by the app's users: a browser cannot send the bearer token the API expects, and an
 /// operator should not need a ModsDude account.
 /// </summary>
+/// <remarks>
+/// Only on <see cref="AdminOptions.Port"/>, which the internet cannot reach; see deploy/compose.yml. On
+/// any other port the credentials are never checked and the admin pages answer 404, so they cannot be
+/// guessed at from outside even if the proxy in front lets a request through.
+/// </remarks>
 public class AdminAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
@@ -28,7 +33,9 @@ public class AdminAuthenticationHandler(
     {
         var admin = adminOptions.Value;
 
-        if (!admin.IsConfigured || !TryReadCredentials(Request.Headers.Authorization, out var username, out var password))
+        if (!admin.IsConfigured
+            || !IsAdminPort(admin)
+            || !TryReadCredentials(Request.Headers.Authorization, out var username, out var password))
         {
             return Task.FromResult(AuthenticateResult.NoResult());
         }
@@ -50,6 +57,12 @@ public class AdminAuthenticationHandler(
 
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)
     {
+        if (!IsAdminPort(adminOptions.Value))
+        {
+            Response.StatusCode = StatusCodes.Status404NotFound;
+            return Task.CompletedTask;
+        }
+
         // The challenge is what makes a browser ask for the credentials rather than show a blank page.
         Response.StatusCode = StatusCodes.Status401Unauthorized;
         Response.Headers.WWWAuthenticate = "Basic realm=\"ModsDude admin\", charset=\"UTF-8\"";
@@ -57,6 +70,11 @@ public class AdminAuthenticationHandler(
         return Task.CompletedTask;
     }
 
+
+    private bool IsAdminPort(AdminOptions admin)
+    {
+        return Context.Connection.LocalPort == admin.Port;
+    }
 
     private static bool TryReadCredentials(string? header, out string username, out string password)
     {

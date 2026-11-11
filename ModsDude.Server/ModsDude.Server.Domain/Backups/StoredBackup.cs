@@ -5,7 +5,8 @@ namespace ModsDude.Server.Domain.Backups;
 public enum BackupTier
 {
     Hourly,
-    Daily
+    Daily,
+    Deploy
 }
 
 
@@ -66,6 +67,10 @@ public readonly record struct StoredBackup(BackupTier Tier, string Name, DateTim
 
             case "daily":
                 tier = BackupTier.Daily;
+                return true;
+
+            case "deploy":
+                tier = BackupTier.Deploy;
                 return true;
 
             default:

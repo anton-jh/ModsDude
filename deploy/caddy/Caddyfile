@@ -1,4 +1,10 @@
 {$SITE_ADDRESS} {
+	# The admin pages are reached over Tailscale only; see README.md. The API refuses them on the port
+	# Caddy proxies to as well.
+	@admin path /admin /admin/*
+	handle @admin {
+		respond 404
+	}
 	handle / {
 		root * /etc/caddy/site
 		file_server

@@ -1,26 +1,34 @@
 #!/bin/bash
 set -euo pipefail
 
-# Run by the modsdude-backup@ systemd units: backup.sh <hourly|daily>. Dumps the database, uploads the dump
-# to the backup container and pings the tier's healthchecks.io check, or its /fail endpoint if any step fails.
+# Run by the modsdude-backup@ systemd units: backup.sh <hourly|daily|deploy>. Dumps the database, checks the
+# dump can be read back, uploads it to the backup container and pings the tier's healthchecks.io check, or
+# its /fail endpoint if any step fails. The daily tier also restores its dump into a scratch database, which
+# proves the data loads and not only that the archive is whole. The deploy tier is run by deploy.sh before
+# it migrates, and has no check to ping: a failure fails the deploy.
 #
-# The settings come from .env through the unit's EnvironmentFile. BACKUP_SAS_URL may only create blobs, so
-# nothing on this server can overwrite or delete a backup.
+# The settings come from .env through the unit's EnvironmentFile. BACKUP_SAS_URL may only create blobs, and
+# the server's own Azure login may only read the backup account (see README.md), so nothing on this server
+# can overwrite or delete a backup.
 
 tier="${1:-}"
 
 case "$tier" in
   hourly) ping_url="${BACKUP_PING_HOURLY:?is not set in .env}" ;;
   daily) ping_url="${BACKUP_PING_DAILY:?is not set in .env}" ;;
-  *) echo "Usage: backup.sh <hourly|daily>" >&2; exit 2 ;;
+  deploy) ping_url="" ;;
+  *) echo "Usage: backup.sh <hourly|daily|deploy>" >&2; exit 2 ;;
 esac
 
 sas_url="${BACKUP_SAS_URL:?is not set in .env}"
 
-report_failure() {
-  curl --fail --silent --show-error --max-time 10 --retry 3 "$ping_url/fail" > /dev/null || true
+ping_check() {
+  if [ -n "$ping_url" ]; then
+    curl --fail --silent --show-error --max-time 10 --retry 3 "$ping_url$1" > /dev/null
+  fi
 }
-trap report_failure ERR
+
+trap 'ping_check /fail || true' ERR
 
 cd "$(dirname "$0")"
 
@@ -38,6 +46,10 @@ if [ ! -s "$dump" ]; then
   false
 fi
 
+# Reads the archive's table of contents, so a dump that isn't a readable archive is never uploaded. Only
+# the daily tier's restore below reads the data as well.
+docker compose exec -T db pg_restore --list < "$dump" > /dev/null
+
 # Azure checks the upload against it and rejects one that arrived damaged.
 md5=$(openssl dgst -md5 -binary "$dump" | base64)
 
@@ -53,4 +65,21 @@ curl --fail --silent --show-error --retry 3 \
 
 echo "Uploaded $name ($(stat --format %s "$dump") bytes)."
 
-curl --fail --silent --show-error --max-time 10 --retry 3 "$ping_url" > /dev/null
+# After the upload, so a dump that fails to restore is still kept for whoever investigates.
+if [ "$tier" = "daily" ]; then
+  scratch=modsdude_restore_check
+
+  drop_scratch() {
+    docker compose exec -T db dropdb --username modsdude --if-exists "$scratch"
+  }
+  trap 'drop_scratch || true; rm -f "$dump"' EXIT
+
+  drop_scratch
+  docker compose exec -T db createdb --username modsdude "$scratch"
+  docker compose exec -T db pg_restore --username modsdude --dbname "$scratch" --no-owner --exit-on-error < "$dump"
+  drop_scratch
+
+  echo "Restored $name into a scratch database."
+fi
+
+ping_check ""

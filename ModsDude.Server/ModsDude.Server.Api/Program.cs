@@ -303,7 +303,7 @@ if (!isDescribingOnly)
 
 if (!app.Services.GetRequiredService<IOptions<AdminOptions>>().Value.IsConfigured)
 {
-    app.Logger.LogInformation("No admin username or password is configured, so the admin pages let nobody in.");
+    app.Logger.LogInformation("No admin username, password or port is configured, so the admin pages let nobody in.");
 }
 
 if (!app.Services.GetRequiredService<IOptions<DeployOptions>>().Value.IsConfigured)
