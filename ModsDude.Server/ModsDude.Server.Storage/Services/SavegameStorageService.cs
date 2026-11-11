@@ -88,10 +88,9 @@ internal class SavegameStorageService(
 
     public Task<string> GetUploadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
     {
-        // Create without Write: a new blob can be written, metadata and all, but one that exists cannot
-        // be overwritten - by a second uploader of the same file, or by this link after the file has been
-        // registered.
-        return GetSasLink(repoId, savegameId, contentHash, BlobSasPermissions.Create, cancellationToken);
+        // Put Block needs Write. The link could overwrite an existing blob; the client's commit sends
+        // If-None-Match: * so that it never does.
+        return GetSasLink(repoId, savegameId, contentHash, BlobSasPermissions.Create | BlobSasPermissions.Write, cancellationToken);
     }
 
     public Task<string> GetDownloadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)

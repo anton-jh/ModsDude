@@ -76,18 +76,17 @@ internal class ModStorageService(
             }
             catch (RequestFailedException exception) when (exception.Status == 412 && attempt < _claimAttempts)
             {
-                // Another claim of the same blob wrote between the read and the write. The bytes cannot
-                // have changed, because no link can overwrite them, so reading again is enough.
+                // Something wrote to the blob between the read and the write. Reading again picks up what
+                // is stored now, and the caller checks that hash.
             }
         }
     }
 
     public Task<string> GetUploadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken)
     {
-        // Create without Write: a new blob can be written, metadata and all, but one that exists cannot
-        // be overwritten - by a second uploader of the same file, or by this link after the file has been
-        // registered.
-        return GetSasLink(repoId, modId, versionId, BlobSasPermissions.Create, cancellationToken);
+        // Put Block needs Write. The link could overwrite an existing blob; the client's commit sends
+        // If-None-Match: * so that it never does.
+        return GetSasLink(repoId, modId, versionId, BlobSasPermissions.Create | BlobSasPermissions.Write, cancellationToken);
     }
 
     public Task<string> GetDownloadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken)
