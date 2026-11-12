@@ -46,7 +46,7 @@ A change is done only when all of these hold:
 - Relevant tests pass.
 - UI changes have been seen running. Ask first, then launch the real client; start the API if needed (`dotnet run --project ModsDude.Server/ModsDude.Server.Api`). The client logs in automatically.
 - The full diff has been re-read against this file.
-- On Linux (cloud sessions only): install the SDK with `apt-get install -y dotnet-sdk-10.0` if `dotnet` is missing, and build with `-p:EnableWindowsTargeting=true`. The client can't run there, and tests that depend on Windows (registry, paths, hardlinks) fail; compare against a run without your change, and say what wasn't verified.
+- On Linux (cloud sessions only): a missing `dotnet` is not a reason to skip building or testing. Install the SDK with `apt-get install -y dotnet-sdk-10.0`. Build with `-p:EnableWindowsTargeting=true` so the WPF project builds too.
 
 ## Git
 
