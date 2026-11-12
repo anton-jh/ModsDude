@@ -28,9 +28,14 @@ internal static partial class Volumes
             var resolved = TryResolveFinalPath(NearestExisting(fullPath)) ?? fullPath;
             var buffer = new char[_maxPath];
 
-            return GetVolumePathNameW(resolved, buffer, (uint)buffer.Length)
-                ? Path.TrimEndingDirectorySeparator(new string(buffer, 0, Array.IndexOf(buffer, '\0'))) + Path.DirectorySeparatorChar
-                : null;
+            if (GetVolumePathNameW(resolved, buffer, (uint)buffer.Length) is false)
+            {
+                return null;
+            }
+
+            var root = new string(buffer, 0, Array.IndexOf(buffer, '\0'));
+
+            return Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar;
         }
         catch (Exception exception) when (exception is DllNotFoundException or EntryPointNotFoundException or IOException or UnauthorizedAccessException)
         {

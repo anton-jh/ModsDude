@@ -72,7 +72,9 @@ public sealed partial class ShellRecycleBin(ILogger<ShellRecycleBin> logger) : I
                 StructureSize = (uint)Marshal.SizeOf<ShQueryRecycleBinInfo>()
             };
 
-            if (SHQueryRecycleBinW(root, ref info) != 0)
+            // Asked about the path's own drive, not the resolved volume: the shell has no bin for a
+            // subst drive and deletes there outright, even though the volume behind it has one.
+            if (SHQueryRecycleBinW(Path.GetPathRoot(Path.GetFullPath(path))!, ref info) != 0)
             {
                 return false;
             }

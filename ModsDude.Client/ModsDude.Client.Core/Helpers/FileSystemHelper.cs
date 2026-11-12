@@ -137,7 +137,12 @@ public static class FileSystemHelper
     /// <exception cref="Exception">The folder was not moved, and is still at <paramref name="source"/>.</exception>
     public static void MoveDirectory(string source, string destination, ILogger log)
     {
-        if (AreOnSameVolume(source, Path.GetDirectoryName(Path.GetFullPath(destination))!))
+        var fullSource = Path.GetFullPath(source);
+        var fullDestination = Path.GetFullPath(destination);
+
+        // Directory.Move refuses paths whose roots differ as text, even when a junction or subst drive puts them on one volume.
+        if (string.Equals(Path.GetPathRoot(fullSource), Path.GetPathRoot(fullDestination), StringComparison.OrdinalIgnoreCase)
+            && AreOnSameVolume(fullSource, Path.GetDirectoryName(fullDestination)!))
         {
             Directory.Move(source, destination);
 
