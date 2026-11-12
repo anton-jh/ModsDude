@@ -181,6 +181,7 @@ public class ContentStoreVerificationTests
             manifests,
             new ResourceLeases(),
             new FakeRecycleBin(),
+            new FakeStoreIntegrity(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await File.WriteAllBytesAsync(store.GetBlobPath(hashes[0]), Bytes("rot"));
@@ -212,6 +213,7 @@ public class ContentStoreVerificationTests
             manifests,
             new ResourceLeases(),
             new FakeRecycleBin(),
+            new FakeStoreIntegrity(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await File.WriteAllBytesAsync(store.GetBlobPath(hashes[0]), Bytes("rot"));

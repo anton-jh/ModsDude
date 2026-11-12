@@ -38,17 +38,18 @@ public sealed class ModSyncService(
     IGameFileEditor fileEditor,
     IGameRunningGuard runningGuard,
     IDiskSpaceGuard diskSpaceGuard,
+    IStoreIntegrityService storeIntegrity,
     TimeProvider timeProvider,
     ILogger<ModSyncService> logger)
     : IModSyncService
 {
     private readonly ModSyncPlanBuilder _planBuilder = new(
-        pinsClient, modStore, storeProvider, manifestStore, heldSavegames, fileEditor, runningGuard, logger);
+        pinsClient, modStore, storeProvider, manifestStore, heldSavegames, fileEditor, runningGuard, recycleBin, storeIntegrity, logger);
 
-    private readonly ModFetcher _fetcher = new(filesClient, downloader, logger);
+    private readonly ModFetcher _fetcher = new(filesClient, downloader, storeIntegrity, logger);
 
     private readonly ModSyncExecutor _executor = new(
-        new ModFetcher(filesClient, downloader, logger), storeProvider, manifestStore, recycleBin, modFolders, playAttribution, leases,
+        new ModFetcher(filesClient, downloader, storeIntegrity, logger), storeProvider, manifestStore, recycleBin, modFolders, playAttribution, leases,
         fileEditor, runningGuard, diskSpaceGuard, timeProvider, logger);
 
 

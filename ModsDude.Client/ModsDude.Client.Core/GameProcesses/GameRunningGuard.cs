@@ -6,7 +6,9 @@ public sealed class GameRunningGuard(IGameProcessNames processNames, IGameProces
 {
     public void EnsureNotRunning(GameIdentity game, string gameName)
     {
-        if (processes.IsAnyRunning(processNames.Get(game)))
+        var names = processNames.Get(game) ?? throw GameRunningException.Unknown(gameName);
+
+        if (processes.IsAnyRunning(names))
         {
             throw new GameRunningException(gameName);
         }

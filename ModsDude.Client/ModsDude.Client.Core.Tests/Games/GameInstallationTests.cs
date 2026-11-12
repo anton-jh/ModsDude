@@ -140,6 +140,7 @@ public class GameInstallationTests
         public DynamicForm BaseSettings => _inner.BaseSettings;
         public bool CanSupportMods => _inner.CanSupportMods;
         public bool CanSupportSavegames => _inner.CanSupportSavegames;
+        public IReadOnlyList<string> ProcessNames => _inner.ProcessNames;
 
         public DynamicForm GetLocalSettingsTemplate() => _inner.GetLocalSettingsTemplate();
         public DynamicForm DeserializeLocalSettings(string serializedLocalSettings) => _inner.DeserializeLocalSettings(serializedLocalSettings);

@@ -85,6 +85,9 @@ internal sealed class ModSyncExecutor(
                 return new ModSyncResult(false, failures);
             }
 
+            // Again, because the fetch can take minutes and the game may have started meanwhile.
+            runningGuard.EnsureNotRunning(plan.Game, plan.GameName);
+
             // From here the folder is being changed, so whatever happens next, what anybody has cached
             // about it is out of date. Announced once the lease is let go of, below.
             folderTouched = plan.HasWork;
@@ -117,7 +120,7 @@ internal sealed class ModSyncExecutor(
             AnnounceChange(plan);
         }
 
-        var eviction = Evict(plan, cancellationToken);
+        var eviction = await Task.Run(() => Evict(plan, cancellationToken), CancellationToken.None);
 
         return new ModSyncResult(completed, failures)
         {
@@ -144,7 +147,7 @@ internal sealed class ModSyncExecutor(
 
     /// <summary>
     /// The destructive phase, under the uninstall rules: a file whose bytes the repo can reproduce is
-    /// deleted once some store holds them, and anything else goes to the Recycle Bin.
+    /// deleted once the serving store is proven to hold them, and anything else goes to the Recycle Bin.
     /// </summary>
     /// <returns>The mods whose old file could not be moved out of the way, which are then not installed.</returns>
     private async Task<IReadOnlySet<ModKey>> RemoveAsync(
@@ -175,13 +178,9 @@ internal sealed class ModSyncExecutor(
 
             try
             {
-                if (item.InstalledIsRecoverable && item.InstalledHash is string hash && IsAsPlanned(item))
+                if (await Task.Run(() => RemoveOneAsync(plan, item, runStartedAt, cancellationToken), cancellationToken) is QuarantinedFile file)
                 {
-                    await KeepIfNothingElseHasItAsync(plan, item.InstalledPath!, hash, cancellationToken);
-                }
-                else
-                {
-                    quarantined.Add(Quarantine(plan, item, runStartedAt));
+                    quarantined.Add(file);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -226,30 +225,53 @@ internal sealed class ModSyncExecutor(
     }
 
     /// <summary>
-    /// Moves the file into the serving store only where no store on the machine holds those bytes
-    /// already; otherwise it is simply deleted.
+    /// Takes one file out of the mod folder. Deleted only where its bytes are proven to be in the
+    /// serving store: it is that store's blob under a second name, or it hashes to its address now.
+    /// Everything else is quarantined.
     /// </summary>
     /// <remarks>
-    /// Checking the stores beats hashing the file: one of them usually has it, and rehashing 2,000
-    /// archives to discover that is minutes of pointless I/O. On a hardlink-served disk the file
-    /// <em>is</em> the store entry, so the store has it and the delete is genuinely free. Declining
-    /// to keep a copy leans on another store's, which is subject to that store's eviction - "no
-    /// download needed right now" rather than "present forever" - and that is the right trade
-    /// against duplicating a mod onto a disk the user chose to keep free.
+    /// A copy in another disk's store proves nothing here: that store's eviction is out of this
+    /// apply's hands. The serving store's copy is pinned for this apply's own sweep; after that the
+    /// repo, which registers the bytes, is what makes them recoverable.
     /// </remarks>
-    private static async Task KeepIfNothingElseHasItAsync(ModSyncPlan plan, string path, string hash, CancellationToken cancellationToken)
+    /// <returns>Where the file went, or null where it was deleted or moved into the store.</returns>
+    private async Task<QuarantinedFile?> RemoveOneAsync(
+        ModSyncPlan plan,
+        ModSyncItem item,
+        DateTimeOffset runStartedAt,
+        CancellationToken cancellationToken)
     {
-        if (plan.AllStores.Any(x => x.Contains(hash)))
-        {
-            File.Delete(path);
+        var path = item.InstalledPath!;
 
-            return;
+        if (item.InstalledIsRecoverable && item.InstalledHash is string hash && IsAsPlanned(item))
+        {
+            if (IsServingBlob(plan.ServingStore, path, hash))
+            {
+                File.Delete(path);
+
+                return null;
+            }
+
+            try
+            {
+                await plan.ServingStore.IngestFileAsync(path, hash, cancellationToken);
+
+                return null;
+            }
+            catch (ContentVerificationException exception)
+            {
+                logger.LogWarning(exception, "{File} no longer holds what the plan hashed, so it is quarantined instead.", path);
+            }
         }
 
-        await plan.ServingStore.IngestFileAsync(path, hash, cancellationToken);
+        return await QuarantineAsync(plan, item, runStartedAt, cancellationToken);
     }
 
-    private QuarantinedFile Quarantine(ModSyncPlan plan, ModSyncItem item, DateTimeOffset runStartedAt)
+    private static bool IsServingBlob(ContentStore store, string path, string hash)
+        => FileLinks.TryGetFileIdentity(path) is FileIdentity installed
+            && installed == FileLinks.TryGetFileIdentity(store.GetBlobPath(hash));
+
+    private async Task<QuarantinedFile> QuarantineAsync(ModSyncPlan plan, ModSyncItem item, DateTimeOffset runStartedAt, CancellationToken cancellationToken)
     {
         var path = item.InstalledPath!;
 
@@ -257,7 +279,7 @@ internal sealed class ModSyncExecutor(
         // to - a drive that went away between the dialog and the work - falls through to the bin rather
         // than leaving the file where it blocks the install: they asked for the file to be kept, and
         // the bin keeps it.
-        if (plan.QuarantineFolder is string chosen && TryMoveInto(chosen, path, out var moved))
+        if (plan.QuarantineFolder is string chosen && await TryMoveIntoAsync(chosen, path, cancellationToken) is string moved)
         {
             return new QuarantinedFile(item.ModId, path, QuarantineDestination.ChosenFolder) { Path = moved };
         }
@@ -273,8 +295,12 @@ internal sealed class ModSyncExecutor(
         {
             return new QuarantinedFile(item.ModId, path, QuarantineDestination.QuarantineFolder)
             {
-                Path = MoveInto(plan.ServingStore.GetQuarantineDirectory(runStartedAt), path)
+                Path = await MoveIntoAsync(plan.ServingStore.GetQuarantineDirectory(runStartedAt), path, cancellationToken)
             };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception exception)
         {
@@ -282,32 +308,33 @@ internal sealed class ModSyncExecutor(
         }
     }
 
-    private bool TryMoveInto(string folder, string path, out string destination)
+    /// <returns>Where the file went, or null where it is still in the mod folder.</returns>
+    private async Task<string?> TryMoveIntoAsync(string folder, string path, CancellationToken cancellationToken)
     {
         try
         {
-            destination = MoveInto(folder, path);
-
-            return true;
+            return await MoveIntoAsync(folder, path, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception exception)
         {
             logger.LogWarning(exception, "Could not move {File} into the chosen folder {Folder}.", path, folder);
 
-            destination = string.Empty;
-
-            return false;
+            return null;
         }
     }
 
     /// <summary>Moves a file into a folder under a name nothing there already has.</summary>
-    private static string MoveInto(string folder, string path)
+    private async Task<string> MoveIntoAsync(string folder, string path, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(folder);
 
         var destination = FileSystemHelper.GetUnusedPath(folder, Path.GetFileName(path));
 
-        File.Move(path, destination);
+        await FileSystemHelper.MoveFileAsync(path, destination, logger, cancellationToken);
 
         return destination;
     }
@@ -447,7 +474,12 @@ internal sealed class ModSyncExecutor(
     /// Gives a hardlinked file data of its own, so nothing written to it afterwards reaches the store.
     /// The link being replaced is the store blob's other name, so no bytes are lost with it.
     /// </summary>
-    private void ReplaceWithCopy(string path) => CopyIntoPlace(path, path, overwrite: true);
+    private void ReplaceWithCopy(string path)
+    {
+        var modified = File.GetLastWriteTimeUtc(path);
+
+        CopyIntoPlace(path, path, overwrite: true, staged => staged.LastWriteTimeUtc = modified);
+    }
 
     /// <summary>
     /// Copied beside the destination and renamed onto it, so the name only ever holds a complete file:
@@ -455,7 +487,7 @@ internal sealed class ModSyncExecutor(
     /// </summary>
     private void CopyIntoPlace(string source, string destination, bool overwrite, Action<FileInfo>? prepare = null)
     {
-        var staging = Path.Combine(Path.GetDirectoryName(destination)!, $"{Guid.NewGuid():N}.modsdude-copy");
+        var staging = Path.Combine(Path.GetDirectoryName(destination)!, $"{Guid.NewGuid():N}{FileSystemHelper.StagingExtension}");
 
         try
         {
@@ -481,7 +513,7 @@ internal sealed class ModSyncExecutor(
     /// them allows it. Going through a name nothing holds is the same rename in two steps, and the
     /// file is put back under its old name if the second step fails.
     /// </remarks>
-    private static void Rename(string from, string to)
+    private void Rename(string from, string to)
     {
         if (string.Equals(from, to, StringComparison.Ordinal))
         {
@@ -494,7 +526,7 @@ internal sealed class ModSyncExecutor(
         }
         catch (IOException) when (File.Exists(from))
         {
-            var staging = Path.Combine(Path.GetDirectoryName(to)!, $"{Guid.NewGuid():N}.renaming");
+            var staging = ModFolderRecovery.GetRenamingPath(to);
 
             File.Move(from, staging);
 
@@ -502,9 +534,19 @@ internal sealed class ModSyncExecutor(
             {
                 File.Move(staging, to);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                File.Move(staging, from);
+                try
+                {
+                    File.Move(staging, from);
+                }
+                catch (Exception moveBack)
+                {
+                    // Left under the staging name, which the next plan puts back under its wanted name.
+                    logger.LogError(moveBack, "Could not move {Staging} back to {File} after a failed rename.", staging, from);
+
+                    throw new AggregateException($"'{Path.GetFileName(from)}' could not be renamed, and was left as '{Path.GetFileName(staging)}'.", exception, moveBack);
+                }
 
                 throw;
             }
@@ -536,6 +578,11 @@ internal sealed class ModSyncExecutor(
         // everything played on the outgoing revision to the incoming one, quietly and permanently.
         await playAttribution.ObserveAsync(plan.TargetRef, CancellationToken.None);
 
+        await Task.Run(() => manifestStore.Write(BuildManifest(plan)), CancellationToken.None);
+    }
+
+    private SyncManifest BuildManifest(ModSyncPlan plan)
+    {
         var entries = new List<SyncManifestEntry>();
 
         foreach (var item in plan.Items.Where(x => x.Action is ModSyncAction.Keep or ModSyncAction.Rename or ModSyncAction.Unlink or ModSyncAction.Install or ModSyncAction.Replace))
@@ -560,11 +607,12 @@ internal sealed class ModSyncExecutor(
                 info.LastWriteTimeUtc)
             {
                 Locked = item.Locked,
-                DisplayName = item.DisplayName
+                DisplayName = item.DisplayName,
+                ContentSuspect = ChangedSincePlanned(item, info)
             });
         }
 
-        manifestStore.Write(new SyncManifest
+        return new SyncManifest
         {
             Target = plan.TargetRef,
             RepoId = plan.RepoId,
@@ -579,8 +627,16 @@ internal sealed class ModSyncExecutor(
             UnmanagedFileNames = [.. plan.UnmanagedFileNames.Where(x => File.Exists(Path.Combine(plan.ModFolder, x)))],
             ManagedFiles = [.. plan.ManagedFiles.Select(x => Path.GetRelativePath(plan.ModFolder, x.FullPath))],
             Shared = plan.Target.Shared
-        });
+        };
     }
+
+    /// <summary>
+    /// Whether a file the plan kept has been written to since it was hashed. Its bytes are then
+    /// unknown, and the entry says so rather than vouching for the plan's hash.
+    /// </summary>
+    private static bool ChangedSincePlanned(ModSyncItem item, FileInfo info)
+        => item.Action is ModSyncAction.Keep or ModSyncAction.Rename or ModSyncAction.Unlink
+            && (info.Length != item.InstalledSize || info.LastWriteTimeUtc != item.InstalledModifiedUtc);
 
     /// <summary>
     /// Trims the serving store back inside its size limit, never dropping what an active profile on
@@ -607,6 +663,8 @@ internal sealed class ModSyncExecutor(
 
                 return null;
             }
+
+            plan.ServingStore.DeleteTemporaryFiles();
 
             return plan.ServingStore.Evict(GetPinnedHashes(plan), CancellationToken.None);
         }
@@ -635,7 +693,9 @@ internal sealed class ModSyncExecutor(
     {
         var pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var hash in plan.Items.Select(x => x.DesiredHash).OfType<string>())
+        // What this apply removed too, so a file deleted because the store holds its bytes is not
+        // then evicted by the same apply.
+        foreach (var hash in plan.Items.SelectMany(x => new[] { x.DesiredHash, x.InstalledHash }).OfType<string>())
         {
             pinned.Add(hash);
         }

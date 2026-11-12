@@ -8,6 +8,6 @@ namespace ModsDude.Client.Core.GameProcesses;
 /// </summary>
 public interface IGameProcessNames
 {
-    /// <returns>Empty where no loaded repo serves the game, or its adapter cannot name a process.</returns>
-    IReadOnlyList<string> Get(GameIdentity game);
+    /// <returns>Null where no loaded repo serves the game, or its adapter names no process.</returns>
+    IReadOnlyList<string>? Get(GameIdentity game);
 }

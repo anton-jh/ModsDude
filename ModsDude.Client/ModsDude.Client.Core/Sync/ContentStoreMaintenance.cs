@@ -45,6 +45,7 @@ public sealed class ContentStoreMaintenance(
     ISyncManifestStore manifestStore,
     IResourceLeases leases,
     IRecycleBin recycleBin,
+    IStoreIntegrityService storeIntegrity,
     ILogger<ContentStoreMaintenance> logger) : IContentStoreMaintenance
 {
     public IReadOnlyList<ContentStore> GetStores()
@@ -153,6 +154,9 @@ public sealed class ContentStoreMaintenance(
         using var lease = await Claim(store, "Checking", onWaiting, cancellationToken);
 
         var result = await store.VerifyAllAsync(progress, cancellationToken);
+
+        // A hardlinked folder still runs the bad bytes, and its manifest still vouches for them.
+        storeIntegrity.MarkSuspect(store, new HashSet<string>(result.Corrupt, StringComparer.OrdinalIgnoreCase));
 
         return new StoreVerificationReport(result, FindAffectedFolders(store, result.Corrupt));
     }

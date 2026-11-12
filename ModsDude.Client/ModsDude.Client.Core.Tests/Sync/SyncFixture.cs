@@ -55,6 +55,12 @@ internal sealed class SyncFixture : IDisposable
             ? [new(Target, Folder.Path), new(SecondTarget, _second.Path)]
             : [new(Target, Folder.Path)];
 
+        Integrity = new StoreIntegrityService(
+            new FakeStoreProvider(ServingStore, OtherStore),
+            Manifests,
+            new FakeModFolders(folders),
+            NullLogger<StoreIntegrityService>.Instance);
+
         Service = new ModSyncService(
             Server,
             new ModStore(Server, InlineStoreDispatcher.Instance, NullLogger<ModStore>.Instance),
@@ -70,6 +76,7 @@ internal sealed class SyncFixture : IDisposable
             fileEditor,
             Guard,
             new DiskSpaceGuard(DiskSpace),
+            Integrity,
             TimeProvider.System,
             NullLogger<ModSyncService>.Instance);
     }
@@ -83,6 +90,7 @@ internal sealed class SyncFixture : IDisposable
     public SyncManifestStore Manifests { get; }
     public DriftService Drift { get; }
     public FakeHeldSavegames Held { get; }
+    public StoreIntegrityService Integrity { get; }
 
     /// <summary>
     /// The real thing rather than a fake: what the sync does about a busy store is the behaviour

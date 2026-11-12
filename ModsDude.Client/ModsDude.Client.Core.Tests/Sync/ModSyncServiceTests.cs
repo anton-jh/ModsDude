@@ -204,6 +204,27 @@ public class ModSyncServiceTests
     }
 
     [Fact]
+    public async Task A_copy_on_another_disk_that_fails_verification_is_dropped_and_downloaded_instead()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        var hash = SyncTestContent.HashOf(Mod("1.0.0", "a"));
+
+        await fixture.OtherStore.IngestAsync(new MemoryStream(SyncTestContent.Bytes(Mod("1.0.0", "a"))), hash, null, CancellationToken.None);
+
+        // Rotted, or rewritten through a hardlink on that disk.
+        File.WriteAllText(fixture.OtherStore.GetBlobPath(hash), "not what the address says");
+
+        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.True(result.Completed);
+        Assert.Equal(1, fixture.Downloader.Downloads);
+        Assert.False(fixture.OtherStore.Contains(hash));
+        Assert.Equal(Mod("1.0.0", "a"), fixture.ReadInstalled("fs25_a.zip"));
+    }
+
+    [Fact]
     public async Task The_plan_says_how_many_mods_it_will_download_and_how_big_they_are()
     {
         using var fixture = new SyncFixture();
@@ -297,7 +318,7 @@ public class ModSyncServiceTests
     }
 
     [Fact]
-    public async Task An_unpinned_mod_another_disk_already_holds_is_not_duplicated_onto_this_one()
+    public async Task An_unpinned_mod_another_disk_already_holds_is_still_moved_into_this_store()
     {
         using var fixture = new SyncFixture();
         fixture.Server.Register("fs25_old", "1.0.0", Mod("1.0.0", "old"));
@@ -315,9 +336,10 @@ public class ModSyncServiceTests
 
         Assert.False(File.Exists(fixture.Folder.Combine("fs25_old.zip")));
 
-        // The bytes are already recoverable without a download, so a mod that lives on the other disk
-        // does not get copied onto this one just to be uninstalled.
-        Assert.False(fixture.ServingStore.Contains(hash));
+        // The other disk's copy is subject to that store's eviction, which this apply does not
+        // control, so it is no proof the bytes survive the uninstall.
+        Assert.True(fixture.ServingStore.Contains(hash));
+        Assert.Empty(fixture.RecycleBin.Recycled);
     }
 
     [Fact]
@@ -566,6 +588,37 @@ public class ModSyncServiceTests
         Assert.Equal(downloadsBefore, fixture.Downloader.Downloads);
         Assert.Equal(Mod("1.0.0", "a"), fixture.ReadInstalled("fs25_a.zip"));
         Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+    }
+
+    /// <summary>
+    /// The game rewrote a hardlinked mod in place while ModsDude was closed, so the store blob holds
+    /// the game's bytes under the repo's address. Relinking that blob would install the same bytes.
+    /// </summary>
+    [Fact]
+    public async Task A_mod_the_game_rewrote_through_its_hardlink_is_replaced_by_a_fresh_download()
+    {
+        using var fixture = new SyncFixture(supportsHardlinks: true);
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        var hash = SyncTestContent.HashOf(Mod("1.0.0", "a"));
+        var downloadsBefore = fixture.Downloader.Downloads;
+
+        File.WriteAllText(fixture.Folder.Combine("fs25_a.zip"), Mod("1.0.0", "the game's own build"));
+
+        var plan = await fixture.PlanAsync();
+
+        Assert.Equal(ModSyncAction.Replace, Assert.Single(plan.Items).Action);
+        Assert.False(fixture.ServingStore.Contains(hash));
+        Assert.Equal(hash, Assert.Single(fixture.Integrity.Found).Hash);
+
+        var result = await fixture.ExecuteAsync(plan);
+
+        Assert.True(result.Completed);
+        Assert.Equal(downloadsBefore + 1, fixture.Downloader.Downloads);
+        Assert.Equal(Mod("1.0.0", "a"), fixture.ReadInstalled("fs25_a.zip"));
+        Assert.Equal([Mod("1.0.0", "the game's own build")], fixture.RecycleBin.Recycled);
     }
 
     [Fact]

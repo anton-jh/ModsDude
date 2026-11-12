@@ -75,6 +75,7 @@ internal class FakeMultiTargetBaseGameAdapter : FakeMultiTargetGameAdapter, IBas
 
     public bool CanSupportMods => true;
     public bool CanSupportSavegames => true;
+    public IReadOnlyList<string> ProcessNames => ["FakeMultiTargetGame"];
 
 
     public DynamicForm GetLocalSettingsTemplate() => new FakeMultiTargetSettings();

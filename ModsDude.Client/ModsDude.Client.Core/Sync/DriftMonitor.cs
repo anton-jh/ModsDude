@@ -187,7 +187,12 @@ public sealed class DriftMonitor : IDriftMonitor
     private ITimer? _owed;
 
     private IReadOnlyList<TargetDrift> _results = [];
-    private readonly List<CorruptedBlob> _corruption = [];
+
+    /// <summary>The run in progress, which also runs whatever was queued behind it. Null when idle.</summary>
+    private Task<bool>? _running;
+
+    /// <summary>One run owed to every request made while another was in progress.</summary>
+    private TaskCompletionSource<bool>? _queued;
 
 
     public DriftMonitor(
@@ -214,6 +219,8 @@ public sealed class DriftMonitor : IDriftMonitor
         _storeIntegrity = storeIntegrity;
         _connection = connection;
         _timeProvider = timeProvider;
+
+        _storeIntegrity.Changed += OnStoreCorruptionFound;
     }
 
 
@@ -233,30 +240,14 @@ public sealed class DriftMonitor : IDriftMonitor
 
     public bool HasDrift => Drifted.Count > 0;
 
-    public IReadOnlyList<CorruptedBlob> StoreCorruption
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return [.. _corruption];
-            }
-        }
-    }
+    public IReadOnlyList<CorruptedBlob> StoreCorruption => _storeIntegrity.Found;
 
     public bool HasStoreCorruption => StoreCorruption.Count > 0;
 
     public bool HasAnything => HasDrift || HasStoreCorruption;
 
 
-    public bool Check(DriftCheckReason reason = DriftCheckReason.Explicit)
-        => CheckAsync(reason).GetAwaiter().GetResult();
-
     public Task<bool> CheckAsync(DriftCheckReason reason = DriftCheckReason.Explicit)
-        => Task.Run(() => CheckCoreAsync(reason));
-
-
-    private async Task<bool> CheckCoreAsync(DriftCheckReason reason)
     {
         lock (_lock)
         {
@@ -264,7 +255,7 @@ public sealed class DriftMonitor : IDriftMonitor
             {
                 OweCheck();
 
-                return false;
+                return Task.FromResult(false);
             }
 
             _lastCheck = _timeProvider.GetUtcNow();
@@ -272,12 +263,83 @@ public sealed class DriftMonitor : IDriftMonitor
             // This one starts after whatever was swallowed, so it sees it.
             _owed?.Dispose();
             _owed = null;
-        }
 
+            if (_running is not null)
+            {
+                // Queued rather than run beside it: two runs at once would race to publish, and the
+                // older answer could land last.
+                _queued ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                return _queued.Task;
+            }
+
+            _running = Task.Run(RunAsync);
+
+            return _running;
+        }
+    }
+
+    public void RequestCheck(DriftCheckReason reason = DriftCheckReason.Explicit)
+    {
+        // The monitor owns the run, and a run never faults: its failures are logged inside.
+        _ = CheckAsync(reason);
+    }
+
+
+    /// <summary>Runs checks one after another until nothing is queued behind the last.</summary>
+    private async Task<bool> RunAsync()
+    {
+        await RunOnceAsync();
+
+        while (true)
+        {
+            TaskCompletionSource<bool>? next;
+
+            lock (_lock)
+            {
+                next = _queued;
+                _queued = null;
+
+                if (next is null)
+                {
+                    _running = null;
+
+                    return true;
+                }
+            }
+
+            await RunOnceAsync();
+
+            next.SetResult(true);
+        }
+    }
+
+    private async Task RunOnceAsync()
+    {
+        try
+        {
+            await CheckCoreAsync();
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "The drift check failed.");
+        }
+    }
+
+    private async Task CheckCoreAsync()
+    {
         var results = new List<TargetDrift>();
 
         foreach (var candidate in _candidates.GetDriftCandidates())
         {
+            // Every folder, whatever its drift status turns out to be: a folder on another profile,
+            // or one the settings were repointed away from, still runs the files its last apply
+            // linked.
+            foreach (var target in candidate.Targets)
+            {
+                await CheckStoreAsync(target);
+            }
+
             // Once per game rather than once per target, because the hold is the game's and the
             // check costs a hash of every held slot. Asked for every game, including ones with no
             // active profile: holding somebody's evening in a slot is worth saying whether or not
@@ -319,13 +381,6 @@ public sealed class DriftMonitor : IDriftMonitor
             {
                 var report = CheckMods(candidate, target, active, SavegamesIn(savegameDrift, target));
 
-                // Runs off what the folder comparison just found changed, which is the only set of
-                // files that can have been written to since the sync.
-                report = report with
-                {
-                    StoreCorruption = await CheckStoreAsync(target, report.Changed)
-                };
-
                 // Only a drifted folder needs the manifest read a second time, and only to name the
                 // profile. Everything else has nothing to say.
                 var profileName = report.Status is DriftStatus.Drifted
@@ -357,29 +412,15 @@ public sealed class DriftMonitor : IDriftMonitor
 
         lock (_lock)
         {
-            var before = Signature(_results, _corruption);
-
-            // Kept rather than replaced - see StoreCorruption. Deduplicated by address, since two
-            // games served by one store can both reach a blob before it is gone.
-            foreach (var blob in results.SelectMany(x => x.Report.StoreCorruption))
-            {
-                if (_corruption.Any(x => ModContentHasher.Matches(x.Hash, blob.Hash)) is false)
-                {
-                    _corruption.Add(blob);
-                }
-            }
+            changed = Signature(_results) != Signature(results);
 
             _results = results;
-
-            changed = before != Signature(_results, _corruption);
         }
 
         if (changed)
         {
             Changed?.Invoke(this, EventArgs.Empty);
         }
-
-        return true;
     }
 
     /// <summary>
@@ -390,8 +431,8 @@ public sealed class DriftMonitor : IDriftMonitor
     /// <b>A backstop, not the fix.</b> The check answers
     /// <see cref="DriftStatus.FolderUnreachable"/> for a folder it cannot list, and a file that
     /// vanished between the listing and the read is drift rather than a throw - see
-    /// <c>DriftService.HasMoved</c>, which is where that one escaped from. What this is for is
-    /// the shape of the failure rather than any known instance of it: this loop runs unattended on
+    /// <c>DriftService.HasMoved</c>. What this is for is the shape of the failure rather than any
+    /// known instance of it: this loop runs unattended on
     /// every window activation, so one folder's disk must cost that folder's answer and not every
     /// other folder's with it, and nothing here may arrive as an unobserved task exception.
     /// </para>
@@ -476,26 +517,15 @@ public sealed class DriftMonitor : IDriftMonitor
     /// Swallows its failures for the same reason <see cref="CheckSavegamesAsync"/> does, including a
     /// mod folder on a drive that went away between the listing and the identity read.
     /// </remarks>
-    private async Task<IReadOnlyList<CorruptedBlob>> CheckStoreAsync(GameModFolder target, IReadOnlyList<string> changed)
+    private async Task CheckStoreAsync(GameModFolder target)
     {
-        if (changed.Count == 0)
-        {
-            return [];
-        }
-
         try
         {
-            return await _storeIntegrity.CheckAsync(
-                target.Target,
-                target.ModFolder,
-                changed,
-                CancellationToken.None);
+            await _storeIntegrity.CheckAsync(target.Target, CancellationToken.None);
         }
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Could not check store integrity for target {Target}.", target.Target);
-
-            return [];
         }
     }
 
@@ -541,6 +571,8 @@ public sealed class DriftMonitor : IDriftMonitor
 
     public void Dispose()
     {
+        _storeIntegrity.Changed -= OnStoreCorruptionFound;
+
         StopWatching();
 
         lock (_lock)
@@ -566,8 +598,10 @@ public sealed class DriftMonitor : IDriftMonitor
     {
         // An update-all rewrites hundreds of files; the throttle is what keeps that from being
         // hundreds of directory listings.
-        _ = CheckAsync(DriftCheckReason.FolderChanged);
+        RequestCheck(DriftCheckReason.FolderChanged);
     }
+
+    private void OnStoreCorruptionFound(object? sender, EventArgs e) => Changed?.Invoke(this, EventArgs.Empty);
 
     private bool ShouldRun(DriftCheckReason reason)
     {
@@ -606,7 +640,7 @@ public sealed class DriftMonitor : IDriftMonitor
 
         _owed = _timeProvider.CreateTimer(
             // Explicit, so that it is never swallowed in turn: it is the answer to one that was.
-            _ => _ = CheckAsync(DriftCheckReason.Explicit),
+            _ => RequestCheck(DriftCheckReason.Explicit),
             null,
             due > TimeSpan.Zero ? due : TimeSpan.Zero,
             Timeout.InfiniteTimeSpan);
@@ -618,32 +652,12 @@ public sealed class DriftMonitor : IDriftMonitor
     /// not raise <see cref="Changed"/>.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// <b>Change detection only.</b> This used to double as what a dismissal was recorded against -
-    /// one signature over the whole world, because the shell had one card with one button. Dismissal
-    /// is per notice now and signs what that notice says; see
-    /// <see cref="Notices.DismissalLedger"/>. What is left here is the narrower job it was always
-    /// also doing: an alt-tab that re-listed the same folders must not redraw the column.
-    /// </para>
-    /// <para>
-    /// It stays deliberately detailed for that. A second mod going wrong, a profile moving again and
-    /// a savegame drifting under an unchanged mod folder are all changes the shell has to hear about,
-    /// and a coarser signature would swallow them.
-    /// </para>
+    /// <b>Change detection only</b>; dismissal is per notice and signs what that notice says, see
+    /// <see cref="Notices.DismissalLedger"/>. It stays deliberately detailed: a second mod going
+    /// wrong, a profile moving again and a savegame drifting under an unchanged mod folder are all
+    /// changes the shell has to hear about, and a coarser signature would swallow them.
     /// </remarks>
-    /// <param name="corruption">
-    /// The <em>accumulated</em> set, never the per-check one. A corrupt blob is deleted as it is
-    /// found, so the reports empty out on the next pass.
-    /// </param>
-    private static string Signature(IReadOnlyList<TargetDrift> results, IReadOnlyList<CorruptedBlob> corruption)
-    {
-        return string.Join(
-            "//",
-            SignatureOfDrift(results),
-            string.Join(',', corruption.Select(x => x.Hash).Order(StringComparer.OrdinalIgnoreCase)));
-    }
-
-    private static string SignatureOfDrift(IReadOnlyList<TargetDrift> results)
+    private static string Signature(IReadOnlyList<TargetDrift> results)
     {
         return string.Join(
             '|',

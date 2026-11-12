@@ -45,7 +45,7 @@ public class StoreIntegrityServiceTests
         // hardlinking that file *is* the blob, so this lands in the shared store.
         await File.WriteAllBytesAsync(installed, Bytes("what the game downloaded instead"));
 
-        var found = await service.CheckAsync(_target, modFolder, ["FS22_Mod.zip"], CancellationToken.None);
+        var found = await service.CheckAsync(_target, CancellationToken.None);
 
         var blob = Assert.Single(found);
         Assert.Equal(hash, blob.Hash);
@@ -56,6 +56,12 @@ public class StoreIntegrityServiceTests
         // file the game gave them. That second half is the whole reason dropping the blob is safe.
         Assert.False(store.Contains(hash));
         Assert.Equal(Bytes("what the game downloaded instead"), await File.ReadAllBytesAsync(installed));
+
+        // Remembered after the evidence is gone, and the manifest no longer vouches for the file.
+        Assert.Equal(hash, Assert.Single(service.Found).Hash);
+        Assert.True(Assert.Single(manifests.TryRead(_target)!.Entries).ContentSuspect);
+        Assert.Empty(await service.CheckAsync(_target, CancellationToken.None));
+        Assert.Single(service.Found);
     }
 
     [Fact]
@@ -81,7 +87,7 @@ public class StoreIntegrityServiceTests
         await File.WriteAllBytesAsync(staged, Bytes("a newer build, downloaded in the game"));
         File.Move(staged, installed, overwrite: true);
 
-        var found = await service.CheckAsync(_target, modFolder, ["FS22_Mod.zip"], CancellationToken.None);
+        var found = await service.CheckAsync(_target, CancellationToken.None);
 
         // Drift, yes - the folder no longer matches. Corruption, no. Nothing was read to establish
         // that: the file in the folder is simply not the blob any more.
@@ -110,7 +116,7 @@ public class StoreIntegrityServiceTests
 
         await File.WriteAllBytesAsync(installed, Bytes("rewritten in place, harmlessly"));
 
-        Assert.Empty(await service.CheckAsync(_target, modFolder, ["FS22_Mod.zip"], CancellationToken.None));
+        Assert.Empty(await service.CheckAsync(_target, CancellationToken.None));
         Assert.True(store.Contains(hash));
     }
 
@@ -135,7 +141,7 @@ public class StoreIntegrityServiceTests
         // without changing it. The hash is what stops a blob being deleted on that suspicion alone.
         File.SetLastWriteTimeUtc(installed, DateTime.UtcNow.AddHours(1));
 
-        Assert.Empty(await service.CheckAsync(_target, modFolder, ["FS22_Mod.zip"], CancellationToken.None));
+        Assert.Empty(await service.CheckAsync(_target, CancellationToken.None));
         Assert.True(store.Contains(hash));
     }
 
@@ -152,16 +158,16 @@ public class StoreIntegrityServiceTests
 
         manifests.Write(Manifest(modFolder, hash, "FS22_Mod.zip", new FileInfo(installed)));
 
-        Assert.Empty(await service.CheckAsync(_target, modFolder, ["FS22_Mod.zip"], CancellationToken.None));
+        Assert.Empty(await service.CheckAsync(_target, CancellationToken.None));
     }
 
     [Fact]
-    public async Task Nothing_changed_means_nothing_is_looked_at()
+    public async Task A_target_never_applied_to_has_nothing_to_check()
     {
         using var root = new TempDirectory("integrity-quiet");
-        var (_, modFolder, service) = Setup(root, out _);
+        var (_, _, service) = Setup(root, out _);
 
-        Assert.Empty(await service.CheckAsync(_target, modFolder, [], CancellationToken.None));
+        Assert.Empty(await service.CheckAsync(_target, CancellationToken.None));
     }
 
     [Fact]
@@ -229,6 +235,7 @@ public class StoreIntegrityServiceTests
         return (store, modFolder, new StoreIntegrityService(
             new FakeStoreProvider(store),
             manifests,
+            new FakeModFolders(new GameModFolder(_target, modFolder)),
             NullLogger<StoreIntegrityService>.Instance));
     }
 

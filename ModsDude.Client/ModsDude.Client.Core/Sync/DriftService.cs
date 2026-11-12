@@ -187,28 +187,6 @@ public sealed record DriftReport(
     public IReadOnlyList<Savegames.SavegameDrift> SavegameDrift { get; init; } = [];
 
     public bool HasSavegameDrift => SavegameDrift.Count > 0;
-
-    /// <summary>
-    /// Store blobs that turned out to have been rewritten in place through a hardlink, and were
-    /// dropped for it.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Carried here because this is where the evidence turns up - a changed file in this game's
-    /// folder - but it is emphatically <b>not a fact about this game</b>. A store is shared by
-    /// every repo and game on its volume, so anything named here was being served to all of
-    /// them. <see cref="CorruptedBlob.VolumeRoot"/> is on the record so a notice can say that
-    /// rather than implying one mod folder is the extent of it.
-    /// </para>
-    /// <para>
-    /// <b>Computed elsewhere and passed in</b>, like <see cref="SavegameDrift"/> and for the same
-    /// reason: <see cref="StoreIntegrityService"/> needs the store provider and reads file bytes,
-    /// and this class opens nothing.
-    /// </para>
-    /// </remarks>
-    public IReadOnlyList<CorruptedBlob> StoreCorruption { get; init; } = [];
-
-    public bool HasStoreCorruption => StoreCorruption.Count > 0;
 }
 
 
@@ -389,7 +367,7 @@ public sealed class DriftService(
     /// <remarks>
     /// Internal rather than private so that a listing can be handed in. The interesting case - a name
     /// the listing held and the file read a moment later did not - is a race no test can stage through
-    /// a real <see cref="Directory.EnumerateFiles"/>, and it is the one that used to throw.
+    /// a real <see cref="Directory.EnumerateFiles"/>.
     /// </remarks>
     internal static (List<string> Added, List<string> Removed, List<string> Changed) CompareFolder(
         SyncManifest manifest,
@@ -419,7 +397,7 @@ public sealed class DriftService(
                 continue;
             }
 
-            if (HasMoved(Path.Combine(modFolder, name), entry.Size, entry.ModifiedUtc))
+            if (entry.ContentSuspect || HasMoved(Path.Combine(modFolder, name), entry.Size, entry.ModifiedUtc))
             {
                 changed.Add(name);
             }

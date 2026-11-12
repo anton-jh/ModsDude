@@ -17,6 +17,12 @@ public interface ISyncManifestStore
     void Write(SyncManifest manifest);
 
     /// <summary>
+    /// Marks the target's entries for these contents <see cref="SyncManifestEntry.ContentSuspect"/>,
+    /// once the store blobs behind them turned out corrupt.
+    /// </summary>
+    void MarkSuspect(ModTargetRef target, IReadOnlySet<string> hashes);
+
+    /// <summary>
     /// Drops every manifest that is not one of these.
     /// </summary>
     /// <remarks>

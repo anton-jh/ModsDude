@@ -210,6 +210,30 @@ public class ModSyncPlannerTests
         Assert.Equal(ModSyncAction.Quarantine, items.Single(x => x.InstalledPath == duplicate.Path).Action);
     }
 
+    [Fact]
+    public async Task Of_two_files_for_one_mod_the_one_under_its_wanted_name_is_the_installation_whatever_the_scan_order()
+    {
+        using var folder = new TempDirectory("plan-duplicate-order");
+        var wanted = Install(folder, "fs25_a", "1.0.0", "the pinned build");
+        var stray = new InstalledMod(
+            ModKey.From("fs25_a"),
+            ModVersionKey.From("1.0.0"),
+            folder.WriteFile("FS25_A (2).zip", "the pinned build"),
+            "Mod A",
+            "the pinned build".Length,
+            File.GetLastWriteTimeUtc(folder.Combine("FS25_A (2).zip")));
+
+        var want = Want("fs25_a", "1.0.0", "the pinned build") with { FileName = ModFileName.For(ModKey.From("fs25_a"), "fs25_a.zip") };
+
+        foreach (var scanned in new[] { [wanted, stray], new[] { stray, wanted } })
+        {
+            var items = await Plan([want], scanned, RegisteredContent.None, null);
+
+            Assert.Equal(ModSyncAction.Keep, items.Single(x => x.InstalledPath == wanted.Path).Action);
+            Assert.Equal(ModSyncAction.Quarantine, items.Single(x => x.InstalledPath == stray.Path).Action);
+        }
+    }
+
 
     /// <summary>
     /// What a folder an older client lower-cased looks like on the next apply. The bytes are right,

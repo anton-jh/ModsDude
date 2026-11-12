@@ -122,4 +122,11 @@ public sealed record SyncManifestEntry(
 
     /// <summary>For saying which mod, in a notice that has no mod list to look the name up in.</summary>
     public string? DisplayName { get; init; }
+
+    /// <summary>
+    /// Whether <see cref="ContentHash"/> can no longer be vouched for: the file changed between the
+    /// plan and this record, or the store blob it was linked to turned out corrupt. The file is then
+    /// hashed again before anything is decided from it, and drift reports it as changed.
+    /// </summary>
+    public bool ContentSuspect { get; init; }
 }

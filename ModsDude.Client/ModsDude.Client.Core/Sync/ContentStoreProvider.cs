@@ -25,7 +25,8 @@ public interface IContentStoreProvider
 /// <inheritdoc cref="IContentStoreProvider"/>
 public sealed class ContentStoreProvider(
     IClientSettingsRepository settingsRepository,
-    ILogger<ContentStore> storeLogger)
+    ILogger<ContentStore> storeLogger,
+    TimeProvider time)
     : IContentStoreProvider
 {
     public ContentStore GetStoreServing(string path)
@@ -33,7 +34,7 @@ public sealed class ContentStoreProvider(
         var settings = settingsRepository.Snapshot();
         var servingVolume = settings.GetServingVolume(FileSystemHelper.NormalizeVolumeRoot(path));
 
-        return Build(servingVolume, settings, storeLogger);
+        return Build(servingVolume, settings);
     }
 
     public IReadOnlyList<ContentStore> GetAllStores()
@@ -45,9 +46,10 @@ public sealed class ContentStoreProvider(
         var volumes = settings.Stores.Keys
             .Concat(settings.StoreAssignments.Values)
             .Select(FileSystemHelper.NormalizeVolumeRoot)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.Ordinal);
 
-        return [.. volumes.Select(x => Build(x, settings, storeLogger))];
+        return [.. volumes.Select(x => Build(x, settings))];
     }
 
 
@@ -55,7 +57,7 @@ public sealed class ContentStoreProvider(
     /// An unconfigured volume gets the same defaults the settings page would offer it, rather than
     /// refusing to sync until somebody has visited a page to accept them.
     /// </summary>
-    private static ContentStore Build(string volumeRoot, ClientSettings settings, ILogger<ContentStore> logger)
+    private ContentStore Build(string volumeRoot, ClientSettings settings)
     {
         var configured = settings.Stores.GetValueOrDefault(volumeRoot);
 
@@ -63,6 +65,7 @@ public sealed class ContentStoreProvider(
             volumeRoot,
             configured?.Path ?? ContentStoreSettings.GetDefaultPath(volumeRoot),
             configured?.MaxSizeBytes ?? ContentStoreSettings.DefaultMaxSizeBytes,
-            logger);
+            storeLogger,
+            time);
     }
 }

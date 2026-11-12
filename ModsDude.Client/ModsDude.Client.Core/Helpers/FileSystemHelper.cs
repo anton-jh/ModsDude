@@ -48,14 +48,62 @@ public static class FileSystemHelper
     }
 
     /// <summary>
-    /// The volume a path lives on, in the form settings are keyed by. Upper-cased rather than
-    /// compared with a case-insensitive comparer, because the key survives a round trip through
-    /// json which does not carry the dictionary's comparer.
+    /// The volume a path lives on, in the form settings are keyed by: its mount point, through
+    /// junctions, symbolic links and subst drives. Upper-cased rather than compared with a
+    /// case-insensitive comparer, because the key survives a round trip through json which does not
+    /// carry the dictionary's comparer.
     /// </summary>
     public static string NormalizeVolumeRoot(string path)
     {
-        return (Path.GetPathRoot(Path.GetFullPath(path)) ?? path).ToUpperInvariant();
+        var fullPath = Path.GetFullPath(path);
+
+        return (Volumes.TryGetVolumeRoot(fullPath) ?? Path.GetPathRoot(fullPath) ?? path).ToUpperInvariant();
     }
+
+    public static bool AreOnSameVolume(string left, string right)
+        => string.Equals(NormalizeVolumeRoot(left), NormalizeVolumeRoot(right), StringComparison.Ordinal);
+
+    /// <summary>
+    /// Moves a file. On one volume that is a rename. Across volumes it is a cancellable copy to a
+    /// staging file beside the destination, moved into place once complete, and then the source is
+    /// deleted - so the destination never holds a short file and a cancelled move leaves the source.
+    /// </summary>
+    public static async Task MoveFileAsync(string source, string destination, ILogger log, CancellationToken cancellationToken)
+    {
+        var folder = Path.GetDirectoryName(destination)!;
+
+        if (AreOnSameVolume(source, folder))
+        {
+            File.Move(source, destination);
+
+            return;
+        }
+
+        var staging = Path.Combine(folder, $"{Guid.NewGuid():N}{StagingExtension}");
+
+        try
+        {
+            await using (var from = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            await using (var to = new FileStream(staging, FileMode.CreateNew, FileAccess.Write, FileShare.None, StreamBufferSize, FileOptions.Asynchronous))
+            {
+                await ReportingCopy.CopyAsync(from, to, null, cancellationToken);
+            }
+
+            File.SetLastWriteTimeUtc(staging, File.GetLastWriteTimeUtc(source));
+            File.Move(staging, destination);
+        }
+        catch
+        {
+            TryDeleteFile(staging, log);
+
+            throw;
+        }
+
+        File.Delete(source);
+    }
+
+    /// <summary>What a file ModsDude is still copying into a folder is called, so a crash's leftovers can be told apart.</summary>
+    public const string StagingExtension = ".modsdude-copy";
 
     /// <summary>
     /// Whether two paths name the same location. Case-insensitive and separator-insensitive, which
@@ -89,7 +137,7 @@ public static class FileSystemHelper
     /// <exception cref="Exception">The folder was not moved, and is still at <paramref name="source"/>.</exception>
     public static void MoveDirectory(string source, string destination, ILogger log)
     {
-        if (string.Equals(NormalizeVolumeRoot(source), NormalizeVolumeRoot(destination), StringComparison.OrdinalIgnoreCase))
+        if (AreOnSameVolume(source, Path.GetDirectoryName(Path.GetFullPath(destination))!))
         {
             Directory.Move(source, destination);
 

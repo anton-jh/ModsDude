@@ -56,12 +56,17 @@ public static class ModSyncPlanner
         var installedByMod = new Dictionary<ModKey, InstalledMod>();
         var duplicates = new List<InstalledMod>();
 
-        foreach (var mod in installed)
+        // One mod folder should hold one file per mod, but nothing enforces it - two archives whose
+        // names differ only in case, or an adapter that finds the same mod twice. The one under the
+        // name the layout wants is the installation, then the first by path; the rest are files
+        // nobody asked for and are treated as such, which means the Recycle Bin rather than a delete.
+        var placed = layout.Placements.ToDictionary(x => x.ModId, x => x.FileName);
+        var ordered = installed
+            .OrderBy(x => placed.TryGetValue(x.ModId, out var wanted) && string.Equals(Path.GetFileName(x.Path), wanted, StringComparison.Ordinal) ? 0 : 1)
+            .ThenBy(x => x.Path, StringComparer.Ordinal);
+
+        foreach (var mod in ordered)
         {
-            // One mod folder should hold one file per mod, but nothing enforces it - two archives
-            // whose names differ only in case, or an adapter that finds the same mod twice. The
-            // first is the installation; the rest are files nobody asked for and are treated as
-            // such, which means the Recycle Bin rather than a delete.
             if (installedByMod.TryAdd(mod.ModId, mod) is false)
             {
                 duplicates.Add(mod);
@@ -213,6 +218,7 @@ public static class ModSyncPlanner
         foreach (var (have, name) in installed)
         {
             if (recorded.TryGetValue(Path.GetFileName(have.Path), out var entry) &&
+                entry.ContentSuspect is false &&
                 entry.Size == have.Size &&
                 entry.ModifiedUtc == have.ModifiedUtc)
             {

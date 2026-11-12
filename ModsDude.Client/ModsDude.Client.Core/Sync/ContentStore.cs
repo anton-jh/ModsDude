@@ -40,6 +40,8 @@ public sealed class ContentStore
     private const string _blobsDirectory = "blobs";
     private const string _temporaryDirectory = "tmp";
     private const string _quarantineDirectory = "quarantine";
+    private const string _usedDirectory = "used";
+    private const string _linkProbeExtension = ".linkprobe";
 
     /// <summary>
     /// What makes a folder a store. Written before anything else, and only into an empty folder, so
@@ -48,16 +50,19 @@ public sealed class ContentStore
     private const string _markerFile = "modsdude-store.txt";
 
     /// <summary>
-    /// Windows does not maintain last-access time by default, so last-write stands in for
-    /// last-used. Refreshing it on every hit would cost a metadata write per file per sync, so a hit
-    /// only re-stamps an entry that has already gone stale.
+    /// When an entry was last used is the last-write time of its empty marker in
+    /// <c>{root}/used</c>, never of the blob: a blob hardlinked into a mod folder is that folder's
+    /// file, and re-stamping it would change the time the sync manifest recorded. Refreshing it on
+    /// every hit would cost a metadata write per file per sync, so a hit only re-stamps an entry that
+    /// has already gone stale.
     /// </summary>
     private static readonly TimeSpan _timestampRefreshInterval = TimeSpan.FromHours(12);
 
 
-    public ContentStore(string volumeRoot, string rootPath, long maxSizeBytes, ILogger? logger = null)
+    public ContentStore(string volumeRoot, string rootPath, long maxSizeBytes, ILogger? logger = null, TimeProvider? time = null)
     {
         Log = logger ?? NullLogger.Instance;
+        Time = time ?? TimeProvider.System;
         VolumeRoot = volumeRoot;
         RootPath = rootPath;
         MaxSizeBytes = maxSizeBytes;
@@ -74,6 +79,8 @@ public sealed class ContentStore
     /// <summary>Never null: a store built without one is a store nothing is listening to.</summary>
     private ILogger Log { get; }
 
+    private TimeProvider Time { get; }
+
     /// <summary>Whether this folder is a store. Nothing is read from, counted in or deleted from one that is not.</summary>
     public bool IsMarked => File.Exists(Path.Combine(RootPath, _markerFile));
 
@@ -85,7 +92,7 @@ public sealed class ContentStore
             || File.Exists(Path.Combine(path, _markerFile));
 
     /// <summary>A path in the store's own temporary folder that nothing is using.</summary>
-    public string CreateTemporaryPath(string extension = ".part")
+    private string CreateTemporaryPath(string extension = ".part")
     {
         EnsureMarked();
 
@@ -197,7 +204,7 @@ public sealed class ContentStore
 
         try
         {
-            File.Move(sourcePath, temporaryPath);
+            await FileSystemHelper.MoveFileAsync(sourcePath, temporaryPath, Log, cancellationToken);
 
             Place(temporaryPath, expectedHash);
         }
@@ -290,7 +297,7 @@ public sealed class ContentStore
                 return false;
             }
 
-            File.Delete(path);
+            DeleteBlob(path, hash);
 
             return true;
         }
@@ -307,25 +314,24 @@ public sealed class ContentStore
     /// <summary>
     /// Records that an entry was used, so eviction drops the ones nothing has wanted for longest.
     /// </summary>
-    /// <remarks>
-    /// Skipped for an entry that has more than one name. Under hardlinking the store's blob and the
-    /// mod folder's file are the same file, so re-stamping it here would change the modification time
-    /// the sync manifest recorded and the next drift check would report a mod nobody touched. Such an
-    /// entry is never evicted anyway - it reclaims nothing - so its place in the order does not
-    /// matter.
-    /// </remarks>
     public void Touch(string hash)
     {
         try
         {
-            var path = GetBlobPath(hash);
-            var written = File.GetLastWriteTimeUtc(path);
+            var marker = GetUsedMarkerPath(hash);
+            var now = Time.GetUtcNow().UtcDateTime;
 
-            if (DateTime.UtcNow - written > _timestampRefreshInterval &&
-                FileLinks.TryGetLinkCount(path) is 1)
+            if (File.Exists(marker) is false)
             {
-                File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+                Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
+                File.WriteAllBytes(marker, []);
             }
+            else if (now - File.GetLastWriteTimeUtc(marker) <= _timestampRefreshInterval)
+            {
+                return;
+            }
+
+            File.SetLastWriteTimeUtc(marker, now);
         }
         catch (Exception exception)
         {
@@ -418,13 +424,18 @@ public sealed class ContentStore
             return [];
         }
 
+        var used = Directory.Exists(UsedPath)
+            ? new DirectoryInfo(UsedPath).EnumerateFiles().ToDictionary(x => x.Name, x => x.LastWriteTimeUtc, StringComparer.OrdinalIgnoreCase)
+            : [];
+
         return [.. new DirectoryInfo(blobs)
             .EnumerateFiles("*", SearchOption.AllDirectories)
+            .OrderBy(x => x.Name, StringComparer.Ordinal)
             .Select(x => new ContentStoreEntry(
                 x.Name,
                 x.FullName,
                 x.Length,
-                x.LastWriteTimeUtc,
+                used.TryGetValue(x.Name, out var lastUsed) ? lastUsed : x.LastWriteTimeUtc,
                 // Null means the link count could not be read, which is treated as shared: a file
                 // that cannot be inspected is not one to delete on a guess.
                 FileLinks.TryGetLinkCount(x.FullName) is int links ? links <= 1 : false))];
@@ -507,7 +518,7 @@ public sealed class ContentStore
 
             try
             {
-                File.Delete(entry.Path);
+                DeleteBlob(entry.Path, entry.Hash);
 
                 deleted++;
                 reclaimed += entry.Length;
@@ -560,7 +571,7 @@ public sealed class ContentStore
         var evicted = 0;
         long reclaimed = 0;
 
-        foreach (var entry in reclaimable.OrderBy(x => x.LastUsedUtc))
+        foreach (var entry in reclaimable.OrderBy(x => x.LastUsedUtc).ThenBy(x => x.Hash, StringComparer.Ordinal))
         {
             if (total <= MaxSizeBytes)
             {
@@ -576,7 +587,7 @@ public sealed class ContentStore
 
             try
             {
-                File.Delete(entry.Path);
+                DeleteBlob(entry.Path, entry.Hash);
 
                 total -= entry.Length;
                 reclaimed += entry.Length;
@@ -603,6 +614,29 @@ public sealed class ContentStore
 
         return Path.Combine(RootPath, _quarantineDirectory, runStartedAt.ToUnixTimeMilliseconds().ToString());
     }
+
+    /// <summary>
+    /// Deletes what interrupted writes left in the temporary folder. Only under the store's
+    /// exclusive lease, when no fetch can be writing there; the hardlink probe, which runs without
+    /// the lease, is left alone.
+    /// </summary>
+    public void DeleteTemporaryFiles()
+    {
+        var temporary = Path.Combine(RootPath, _temporaryDirectory);
+
+        if (IsMarked is false || Directory.Exists(temporary) is false)
+        {
+            return;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(temporary).Where(x => x.Contains(_linkProbeExtension, StringComparison.OrdinalIgnoreCase) is false))
+        {
+            FileSystemHelper.TryDeleteFile(file, Log);
+        }
+    }
+
+    /// <summary>A path in the store's temporary folder for probing whether it can be hardlinked into.</summary>
+    public string CreateLinkProbePath() => CreateTemporaryPath(_linkProbeExtension);
 
 
     /// <summary>The SHA-256 of a file on disk, in the encoding the repo records.</summary>
@@ -643,6 +677,16 @@ public sealed class ContentStore
     /// alone rather than overwritten: the content is the same by construction, and replacing the
     /// file would break every hardlink already pointing at it.
     /// </summary>
+    private string UsedPath => Path.Combine(RootPath, _usedDirectory);
+
+    private string GetUsedMarkerPath(string hash) => Path.Combine(UsedPath, Normalize(hash));
+
+    private void DeleteBlob(string path, string hash)
+    {
+        File.Delete(path);
+        FileSystemHelper.TryDeleteFile(GetUsedMarkerPath(hash), Log);
+    }
+
     private void Place(string temporaryPath, string hash)
     {
         var blobPath = GetBlobPath(hash);

@@ -42,7 +42,7 @@ public sealed class DriftBackstop(IDriftMonitor monitor) : IDriftBackstop
             Interval = Interval
         };
 
-        _timer.Tick += (_, _) => _ = monitor.CheckAsync(DriftCheckReason.Background);
+        _timer.Tick += (_, _) => monitor.RequestCheck(DriftCheckReason.Background);
         _timer.Start();
 
         // Static events: they keep this alive until they are removed, which is what Dispose is for.
@@ -85,7 +85,7 @@ public sealed class DriftBackstop(IDriftMonitor monitor) : IDriftBackstop
         {
             monitor.Watch();
 
-            _ = monitor.CheckAsync(DriftCheckReason.Background);
+            monitor.RequestCheck(DriftCheckReason.Background);
         });
     }
 }

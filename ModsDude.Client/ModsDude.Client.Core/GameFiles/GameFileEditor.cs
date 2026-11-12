@@ -31,6 +31,7 @@ public sealed class GameFileEditor(IRecycleBin recycleBin, ILogger<GameFileEdito
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        AtomicFile.DeleteLeftovers(path, logger);
         AtomicFile.Write(path, stream => stream.Write(replacement));
 
         return true;

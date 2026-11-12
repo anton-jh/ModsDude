@@ -240,6 +240,31 @@ public class ContentStoreTests
     }
 
     [Fact]
+    public async Task Using_an_entry_records_it_without_touching_the_blob()
+    {
+        using var root = new TempDirectory("store-touch");
+        var time = new TestTimeProvider();
+        var store = new ContentStore("C:\\", root.CreateSubdirectory("store"), _oneGigabyte, time: time);
+
+        var used = await Store(store, "aaaaaaaaaaaaaaaaaaaa");
+        var unused = await Store(store, "bbbbbbbbbbbbbbbbbbbb");
+
+        Age(store, used, TimeSpan.FromDays(30));
+        Age(store, unused, TimeSpan.FromDays(1));
+
+        var blobWritten = File.GetLastWriteTimeUtc(store.GetBlobPath(used));
+
+        store.Touch(used);
+
+        // A hardlinked blob is a mod folder's file, whose time the sync manifest recorded.
+        Assert.Equal(blobWritten, File.GetLastWriteTimeUtc(store.GetBlobPath(used)));
+        Assert.Equal(time.GetUtcNow().UtcDateTime, store.Enumerate().Single(x => x.Hash == used).LastUsedUtc);
+
+        // Never used, so its own time stands in, and the used one is now the newer of the two.
+        Assert.Equal(File.GetLastWriteTimeUtc(store.GetBlobPath(unused)), store.Enumerate().Single(x => x.Hash == unused).LastUsedUtc);
+    }
+
+    [Fact]
     public async Task Ingest_leaves_an_existing_entry_alone()
     {
         using var root = new TempDirectory("store-existing");

@@ -21,6 +21,8 @@ internal sealed class ModSyncPlanBuilder(
     IHeldSavegames heldSavegames,
     IGameFileEditor fileEditor,
     IGameRunningGuard runningGuard,
+    IRecycleBin recycleBin,
+    IStoreIntegrityService storeIntegrity,
     ILogger logger)
 {
 
@@ -49,6 +51,12 @@ internal sealed class ModSyncPlanBuilder(
         // Before anything is read, so a store the apply could never write to is the reason given
         // rather than a failure per mod once the folder is half changed.
         storeProvider.GetStoreServing(modFolder).EnsureUsable();
+
+        // Both before the folder and its manifest are read. A crash's leftovers go back to what they
+        // were before that apply, and a blob the game rewrote through its hardlink is dropped and its
+        // entry marked suspect, so the plan replaces that file rather than linking the same bad blob.
+        await Task.Run(() => ModFolderRecovery.Recover(modFolder, recycleBin, logger), cancellationToken);
+        await storeIntegrity.CheckAsync(request.TargetRef, cancellationToken);
 
         IReadOnlyList<DesiredMod> desired = [];
         int? revision = null;
@@ -645,7 +653,7 @@ internal sealed class ModSyncPlanBuilder(
 
         try
         {
-            probe = servingStore.CreateTemporaryPath(".linkprobe");
+            probe = servingStore.CreateLinkProbePath();
             link = probe + ".link";
 
             File.WriteAllBytes(probe, []);

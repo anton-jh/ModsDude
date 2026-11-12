@@ -17,7 +17,7 @@ public class DriftMonitorTests
 
 
     [Fact]
-    public void A_folder_the_game_changed_while_the_app_was_closed_is_found_at_startup()
+    public async Task A_folder_the_game_changed_while_the_app_was_closed_is_found_at_startup()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
@@ -26,7 +26,7 @@ public class DriftMonitorTests
         // makes a comparison made later still mean something.
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.True(fixture.Monitor.HasDrift);
         Assert.True(fixture.Monitor.HasAnything);
@@ -38,13 +38,13 @@ public class DriftMonitorTests
     /// which is what lets the offline check say it.
     /// </summary>
     [Fact]
-    public void A_profile_somebody_else_saved_is_drift_even_when_the_folder_is_untouched()
+    public async Task A_profile_somebody_else_saved_is_drift_even_when_the_folder_is_untouched()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(6, ("fs25_a.zip", "one"));
 
         fixture.Revisions.Head = 8;
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         var drift = Assert.Single(fixture.Monitor.Drifted);
 
@@ -61,27 +61,27 @@ public class DriftMonitorTests
     /// on: the overview says the profile is gone and offers to deactivate.
     /// </summary>
     [Fact]
-    public void A_game_whose_profiles_repo_is_gone_is_dangling_rather_than_drifted()
+    public async Task A_game_whose_profiles_repo_is_gone_is_dangling_rather_than_drifted()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
         fixture.KnownRepos.Gone.Add(_repoId);
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.False(fixture.Monitor.HasDrift);
     }
 
     [Fact]
-    public void A_game_whose_profiles_repo_is_not_known_to_be_gone_is_still_checked()
+    public async Task A_game_whose_profiles_repo_is_not_known_to_be_gone_is_still_checked()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
         fixture.KnownRepos.Gone.Add(Guid.NewGuid());
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         var drift = Assert.Single(fixture.Monitor.Drifted);
 
@@ -90,14 +90,14 @@ public class DriftMonitorTests
 
     /// <summary>A held savegame is worth saying whatever happened to the profile.</summary>
     [Fact]
-    public void A_game_whose_profiles_repo_is_gone_still_reports_its_held_savegames()
+    public async Task A_game_whose_profiles_repo_is_gone_still_reports_its_held_savegames()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
         fixture.KnownRepos.Gone.Add(_repoId);
         fixture.Held.Drifted(Keys.Slot("savegame1"));
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         var drift = Assert.Single(fixture.Monitor.Drifted);
 
@@ -106,13 +106,13 @@ public class DriftMonitorTests
     }
 
     [Fact]
-    public void A_game_on_the_profiles_current_revision_is_not_drifted_by_that()
+    public async Task A_game_on_the_profiles_current_revision_is_not_drifted_by_that()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(8, ("fs25_a.zip", "one"));
 
         fixture.Revisions.Head = 8;
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.False(fixture.Monitor.HasDrift);
     }
@@ -125,14 +125,14 @@ public class DriftMonitorTests
     /// own.
     /// </summary>
     [Fact]
-    public void A_game_holding_a_pinned_savegame_is_not_reported_as_behind_the_profile()
+    public async Task A_game_holding_a_pinned_savegame_is_not_reported_as_behind_the_profile()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(4, ("fs25_a.zip", "one"));
 
         fixture.Revisions.Head = 1004;
         fixture.Held.Hold(fixture.Candidates.Game, _profileId, targetRevision: 4);
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.False(fixture.Monitor.HasDrift);
     }
@@ -142,7 +142,7 @@ public class DriftMonitorTests
     /// re-apply it offers has to target the list the savegame needs rather than head.
     /// </summary>
     [Fact]
-    public void Folder_drift_under_a_pinned_savegame_still_reports_against_its_revision()
+    public async Task Folder_drift_under_a_pinned_savegame_still_reports_against_its_revision()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(4, ("fs25_a.zip", "one"));
@@ -150,7 +150,7 @@ public class DriftMonitorTests
         fixture.Revisions.Head = 1004;
         fixture.Held.Hold(fixture.Candidates.Game, _profileId, targetRevision: 4);
         fixture.Folder.WriteFile("fs25_b.zip", "two");
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         var drift = Assert.Single(fixture.Monitor.Drifted);
 
@@ -164,12 +164,12 @@ public class DriftMonitorTests
     /// and unknown has to read as "not asked" rather than as "unchanged" or as drift.
     /// </summary>
     [Fact]
-    public void A_profile_whose_revision_this_client_does_not_know_is_not_reported_as_moved()
+    public async Task A_profile_whose_revision_this_client_does_not_know_is_not_reported_as_moved()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(6, ("fs25_a.zip", "one"));
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.False(fixture.Monitor.HasDrift);
     }
@@ -179,19 +179,19 @@ public class DriftMonitorTests
     /// - and once the server answers again, it is.
     /// </summary>
     [Fact]
-    public void A_profile_saved_elsewhere_is_not_reported_as_moved_while_offline()
+    public async Task A_profile_saved_elsewhere_is_not_reported_as_moved_while_offline()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(6, ("fs25_a.zip", "one"));
         fixture.Revisions.Head = 8;
 
         fixture.Connection.ReportUnreachable();
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.False(fixture.Monitor.HasDrift);
 
         fixture.Connection.ReportReachable();
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.True(Assert.Single(fixture.Monitor.Drifted).Report.ProfileHasMoved);
     }
@@ -202,13 +202,13 @@ public class DriftMonitorTests
     /// the first launch after the upgrade.
     /// </summary>
     [Fact]
-    public void A_manifest_from_before_revisions_is_not_reported_as_moved()
+    public async Task A_manifest_from_before_revisions_is_not_reported_as_moved()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(null, ("fs25_a.zip", "one"));
 
         fixture.Revisions.Head = 8;
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.False(fixture.Monitor.HasDrift);
     }
@@ -218,79 +218,79 @@ public class DriftMonitorTests
     /// column bring a notice back that was waved away at revision 7.
     /// </summary>
     [Fact]
-    public void A_profile_that_moves_again_reports_the_revision_it_moved_to()
+    public async Task A_profile_that_moves_again_reports_the_revision_it_moved_to()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(6, ("fs25_a.zip", "one"));
 
         fixture.Revisions.Head = 7;
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Equal(7, fixture.Monitor.Drifted.Single().Report.CurrentRevision);
 
         fixture.Revisions.Head = 8;
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Equal(8, fixture.Monitor.Drifted.Single().Report.CurrentRevision);
     }
 
     [Fact]
-    public void Activation_checks_are_throttled_so_alt_tabbing_costs_one_listing()
+    public async Task Activation_checks_are_throttled_so_alt_tabbing_costs_one_listing()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
-        Assert.True(fixture.Monitor.Check(DriftCheckReason.WindowActivated));
+        Assert.True(await fixture.Monitor.CheckAsync(DriftCheckReason.WindowActivated));
 
         fixture.Time.Advance(DriftMonitor.ThrottleWindow - TimeSpan.FromSeconds(1));
 
-        Assert.False(fixture.Monitor.Check(DriftCheckReason.WindowActivated));
-        Assert.False(fixture.Monitor.Check(DriftCheckReason.FolderChanged));
+        Assert.False(await fixture.Monitor.CheckAsync(DriftCheckReason.WindowActivated));
+        Assert.False(await fixture.Monitor.CheckAsync(DriftCheckReason.FolderChanged));
     }
 
     [Fact]
-    public void A_check_the_app_woke_itself_for_is_throttled_like_an_activation()
+    public async Task A_check_the_app_woke_itself_for_is_throttled_like_an_activation()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
-        Assert.True(fixture.Monitor.Check(DriftCheckReason.Background));
-        Assert.False(fixture.Monitor.Check(DriftCheckReason.Background));
+        Assert.True(await fixture.Monitor.CheckAsync(DriftCheckReason.Background));
+        Assert.False(await fixture.Monitor.CheckAsync(DriftCheckReason.Background));
     }
 
     [Fact]
-    public void The_throttle_lets_go_once_the_window_has_passed()
+    public async Task The_throttle_lets_go_once_the_window_has_passed()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
-        fixture.Monitor.Check(DriftCheckReason.WindowActivated);
+        await fixture.Monitor.CheckAsync(DriftCheckReason.WindowActivated);
         fixture.Time.Advance(DriftMonitor.ThrottleWindow);
 
-        Assert.True(fixture.Monitor.Check(DriftCheckReason.WindowActivated));
+        Assert.True(await fixture.Monitor.CheckAsync(DriftCheckReason.WindowActivated));
     }
 
     [Fact]
-    public void A_check_the_user_asked_for_is_never_throttled()
+    public async Task A_check_the_user_asked_for_is_never_throttled()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
-        fixture.Monitor.Check(DriftCheckReason.WindowActivated);
+        await fixture.Monitor.CheckAsync(DriftCheckReason.WindowActivated);
 
-        Assert.True(fixture.Monitor.Check());
-        Assert.True(fixture.Monitor.Check());
+        Assert.True(await fixture.Monitor.CheckAsync());
+        Assert.True(await fixture.Monitor.CheckAsync());
     }
 
     [Fact]
-    public void Re_checking_the_same_problem_goes_on_reporting_it()
+    public async Task Re_checking_the_same_problem_goes_on_reporting_it()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
-        fixture.Monitor.Check();
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
+        await fixture.Monitor.CheckAsync();
 
         // The monitor has no opinion about what the user has read - see DismissalLedger, which does.
         Assert.True(fixture.Monitor.HasDrift);
@@ -302,60 +302,60 @@ public class DriftMonitorTests
     /// back that was waved away while only one had.
     /// </summary>
     [Fact]
-    public void A_second_mod_going_wrong_joins_the_report()
+    public async Task A_second_mod_going_wrong_joins_the_report()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"), ("fs25_b.zip", "two"));
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Equal(["fs25_a.zip"], fixture.Monitor.Drifted.Single().Report.Changed);
 
         fixture.Folder.WriteFile("fs25_b.zip", "and this");
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Equal(2, fixture.Monitor.Drifted.Single().Report.Changed.Count);
     }
 
     [Fact]
-    public void Drift_survives_a_restart()
+    public async Task Drift_survives_a_restart()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         // It is read off the manifest and the folder, so nothing about it depends on having been
         // running when the game changed them.
         using var restarted = fixture.Restart();
-        restarted.Check();
+        await restarted.CheckAsync();
 
         Assert.True(restarted.HasAnything);
     }
 
     [Fact]
-    public void Drift_going_away_takes_the_notice_with_it()
+    public async Task Drift_going_away_takes_the_notice_with_it()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.True(fixture.Monitor.HasAnything);
 
         // What a re-apply leaves behind.
         fixture.Sync(("fs25_a.zip", "one"));
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.False(fixture.Monitor.HasDrift);
         Assert.False(fixture.Monitor.HasAnything);
     }
 
     [Fact]
-    public void An_unreachable_folder_is_not_reported_as_drift()
+    public async Task An_unreachable_folder_is_not_reported_as_drift()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
@@ -364,13 +364,13 @@ public class DriftMonitorTests
         // is worse than saying nothing.
         fixture.Candidates.ModFolder = fixture.Folder.Combine("gone");
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.False(fixture.Monitor.HasDrift);
     }
 
     [Fact]
-    public void A_game_with_no_active_profile_is_not_checked_at_all()
+    public async Task A_game_with_no_active_profile_is_not_checked_at_all()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
@@ -378,7 +378,7 @@ public class DriftMonitorTests
 
         fixture.Candidates.ActiveProfile = null;
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.False(fixture.Monitor.HasDrift);
     }
@@ -389,14 +389,14 @@ public class DriftMonitorTests
     /// not. The check has to say which - a per-game answer could only say "something differs".
     /// </summary>
     [Fact]
-    public void One_folder_drifting_is_reported_against_that_folder_and_not_the_other()
+    public async Task One_folder_drifting_is_reported_against_that_folder_and_not_the_other()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.SyncSecondTarget(("fs25_a.zip", "one"));
 
         fixture.SecondFolder.WriteFile("fs25_a.zip", "the game updated this");
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         var drift = Assert.Single(fixture.Monitor.Drifted);
 
@@ -409,13 +409,13 @@ public class DriftMonitorTests
     /// answer above worth reading: both folders are checked, and only one of them is news.
     /// </summary>
     [Fact]
-    public void Both_folders_are_checked_and_a_matching_one_says_nothing()
+    public async Task Both_folders_are_checked_and_a_matching_one_says_nothing()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.SyncSecondTarget(("fs25_a.zip", "one"));
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.False(fixture.Monitor.HasDrift);
 
@@ -423,7 +423,7 @@ public class DriftMonitorTests
         // manifest was the game's and the first folder's answer was the game's answer.
         fixture.Folder.WriteFile("fs25_b.zip", "two");
         fixture.SecondFolder.WriteFile("fs25_b.zip", "two");
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Equal(2, fixture.Monitor.Drifted.Count);
     }
@@ -433,32 +433,32 @@ public class DriftMonitorTests
     /// the first's - which is what lets the column draw them as two cards and dismiss them apart.
     /// </summary>
     [Fact]
-    public void The_other_folder_going_wrong_is_its_own_entry()
+    public async Task The_other_folder_going_wrong_is_its_own_entry()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.SyncSecondTarget(("fs25_a.zip", "one"));
 
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Single(fixture.Monitor.Drifted);
 
         fixture.SecondFolder.WriteFile("fs25_a.zip", "and this");
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Equal(2, fixture.Monitor.Drifted.Count);
         Assert.Equal(2, fixture.Monitor.Drifted.Select(x => x.Target!.Target.Key).Distinct().Count());
     }
 
     [Fact]
-    public void The_drifted_game_carries_the_profile_name_the_manifest_recorded()
+    public async Task The_drifted_game_carries_the_profile_name_the_manifest_recorded()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         // Recorded rather than looked up, so the notice can name it at startup and offline.
         Assert.Equal("Season 4", fixture.Monitor.Drifted.Single().ProfileName);
@@ -473,7 +473,7 @@ public class DriftMonitorTests
     /// fine is the normal BeamMP evening.
     /// </summary>
     [Fact]
-    public void An_activation_that_did_not_land_reaches_the_notice()
+    public async Task An_activation_that_did_not_land_reaches_the_notice()
     {
         using var fixture = new MonitorFixture();
 
@@ -481,7 +481,7 @@ public class DriftMonitorTests
         fixture.Sync(("fs25_a.zip", "one"));
         fixture.Candidates.ActiveProfile = new ActiveProfile(_repoId, Guid.NewGuid());
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         var drifted = Assert.Single(fixture.Monitor.Drifted);
 
@@ -497,12 +497,12 @@ public class DriftMonitorTests
     /// record was lost, and drift detection is blind for that folder until something rewrites it.
     /// </summary>
     [Fact]
-    public void A_folder_with_no_manifest_at_all_is_drift_too()
+    public async Task A_folder_with_no_manifest_at_all_is_drift_too()
     {
         using var fixture = new MonitorFixture();
         fixture.Folder.WriteFile("fs25_a.zip", "one");
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Equal(DriftStatus.NeverSynced, Assert.Single(fixture.Monitor.Drifted).Report.Status);
         Assert.True(fixture.Monitor.HasAnything);
@@ -513,13 +513,13 @@ public class DriftMonitorTests
     /// intent to have failed, so an unapplied folder promises nothing and claims nothing.
     /// </summary>
     [Fact]
-    public void A_game_following_no_profile_stays_quiet()
+    public async Task A_game_following_no_profile_stays_quiet()
     {
         using var fixture = new MonitorFixture();
         fixture.Folder.WriteFile("fs25_a.zip", "one");
         fixture.Candidates.ActiveProfile = null;
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Empty(fixture.Monitor.Drifted);
         Assert.False(fixture.Monitor.HasAnything);
@@ -531,7 +531,7 @@ public class DriftMonitorTests
     /// about an evening played on the MP client is the same conflation this phase exists to remove.
     /// </summary>
     [Fact]
-    public void Savegame_drift_is_reported_on_the_folder_it_happened_in()
+    public async Task Savegame_drift_is_reported_on_the_folder_it_happened_in()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
@@ -539,7 +539,7 @@ public class DriftMonitorTests
 
         fixture.Held.Drifted(Keys.Slot("savegame1", "server"));
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         var drifted = Assert.Single(fixture.Monitor.Drifted);
 
@@ -554,14 +554,14 @@ public class DriftMonitorTests
     /// nowhere to sit.
     /// </summary>
     [Fact]
-    public void A_save_held_in_a_target_with_no_mod_folder_is_reported_about_the_game()
+    public async Task A_save_held_in_a_target_with_no_mod_folder_is_reported_about_the_game()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
         fixture.Held.Drifted(Keys.Slot("savegame1", "saves-only"));
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         var drifted = Assert.Single(fixture.Monitor.Drifted);
 
@@ -580,12 +580,12 @@ public class DriftMonitorTests
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
-        fixture.Monitor.Check(DriftCheckReason.WindowActivated);
+        await fixture.Monitor.CheckAsync(DriftCheckReason.WindowActivated);
 
         fixture.Time.Advance(TimeSpan.FromSeconds(1));
         File.Delete(fixture.Folder.Combine("fs25_a.zip"));
 
-        Assert.False(fixture.Monitor.Check(DriftCheckReason.FolderChanged));
+        Assert.False(await fixture.Monitor.CheckAsync(DriftCheckReason.FolderChanged));
         Assert.False(fixture.Monitor.HasDrift);
 
         var changed = new TaskCompletionSource();
@@ -599,24 +599,98 @@ public class DriftMonitorTests
     }
 
     [Fact]
-    public void A_check_that_runs_anyway_settles_what_the_throttle_owed()
+    public async Task A_check_that_runs_anyway_settles_what_the_throttle_owed()
     {
         using var fixture = new MonitorFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
-        fixture.Monitor.Check(DriftCheckReason.WindowActivated);
-        fixture.Monitor.Check(DriftCheckReason.FolderChanged);
+        await fixture.Monitor.CheckAsync(DriftCheckReason.WindowActivated);
+        await fixture.Monitor.CheckAsync(DriftCheckReason.FolderChanged);
 
         Assert.Equal(1, fixture.Time.PendingTimers);
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Equal(0, fixture.Time.PendingTimers);
     }
 
 
+    /// <summary>
+    /// Requests made while a check runs are answered by one more run after it, so the answer left
+    /// standing is never older than the last request.
+    /// </summary>
+    [Fact]
+    public async Task Requests_during_a_check_share_one_run_after_it_and_its_answer_stands()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+
+        using var release = new ManualResetEventSlim();
+        fixture.Candidates.OnRead = () =>
+        {
+            if (fixture.Candidates.Reads == 1)
+            {
+                release.Wait(TimeSpan.FromSeconds(10));
+            }
+        };
+
+        var first = fixture.Monitor.CheckAsync();
+
+        await WaitUntilAsync(() => fixture.Candidates.Reads == 1);
+
+        // Changed after the first run looked, so only a later run can see it.
+        fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
+
+        var second = fixture.Monitor.CheckAsync();
+        fixture.Monitor.RequestCheck();
+        var third = fixture.Monitor.CheckAsync();
+
+        release.Set();
+
+        Assert.True(await first);
+        Assert.True(await second);
+        Assert.True(await third);
+
+        Assert.Equal(2, fixture.Candidates.Reads);
+        Assert.True(fixture.Monitor.HasDrift);
+    }
+
+    [Fact]
+    public async Task A_check_that_fails_is_logged_and_the_next_one_still_runs()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
+
+        fixture.Candidates.OnRead = () => throw new InvalidOperationException("a bug in a candidate source");
+
+        Assert.True(await fixture.Monitor.CheckAsync());
+        Assert.False(fixture.Monitor.HasDrift);
+
+        fixture.Candidates.OnRead = null;
+
+        Assert.True(await fixture.Monitor.CheckAsync());
+        Assert.True(fixture.Monitor.HasDrift);
+    }
+
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+
+        while (condition() is false)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "timed out waiting");
+
+            await Task.Delay(10);
+        }
+    }
+
+
     private sealed class FakeCandidates : IDriftCandidateSource
     {
+        private int _reads;
+
         public ModTargetRef Target { get; } = Keys.Target();
 
         /// <summary>A second folder of the same game. Null unless a test is about having two.</summary>
@@ -631,8 +705,18 @@ public class DriftMonitorTests
 
         public ActiveProfile? ActiveProfile { get; set; } = new(_repoId, _profileId);
 
+        /// <summary>Called on every read, on the check's thread, so a test can hold a check open or fail it.</summary>
+        public Action? OnRead { get; set; }
+
+        public int Reads => Volatile.Read(ref _reads);
+
         public IReadOnlyList<DriftCandidate> GetDriftCandidates()
-            => [new DriftCandidate(Game, "Farming Simulator 25", [.. Targets()], ActiveProfile)];
+        {
+            Interlocked.Increment(ref _reads);
+            OnRead?.Invoke();
+
+            return [new DriftCandidate(Game, "Farming Simulator 25", [.. Targets()], ActiveProfile)];
+        }
 
 
         private IEnumerable<GameModFolder> Targets()
@@ -668,14 +752,6 @@ public class DriftMonitorTests
         public bool IsGone(Guid repoId) => Gone.Contains(repoId);
     }
 
-    /// <summary>Finds nothing, for the fixtures with no store on a real volume to check.</summary>
-    private sealed class NoStoreIntegrity : IStoreIntegrityService
-    {
-        public Task<IReadOnlyList<CorruptedBlob>> CheckAsync(
-            ModTargetRef target, string modFolder, IReadOnlyList<string> changed, CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<CorruptedBlob>>([]);
-    }
-
 
     /// <summary>
     /// A blob the game wrote through survives the check that can no longer see it.
@@ -687,7 +763,7 @@ public class DriftMonitorTests
     /// that says the updater writes through hardlinks would vanish on the next alt-tab.
     /// </remarks>
     [Fact]
-    public void A_rewritten_blob_stays_reported_after_the_evidence_is_gone()
+    public async Task A_rewritten_blob_stays_reported_after_the_evidence_is_gone()
     {
         using var fixture = new MonitorFixture(withStore: true);
         var hash = fixture.SyncLinked("fs25_a.zip", "one");
@@ -695,7 +771,7 @@ public class DriftMonitorTests
         // Written through the mod folder's name, which under hardlinking is the blob itself.
         fixture.Folder.WriteFile("fs25_a.zip", "the game wrote straight through the link");
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         var found = Assert.Single(fixture.Monitor.StoreCorruption);
 
@@ -705,15 +781,14 @@ public class DriftMonitorTests
 
         // The second check finds nothing - there is nothing left to find - and the monitor still
         // says it happened.
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
-        Assert.Empty(fixture.Monitor.Drifted.Single().Report.StoreCorruption);
         Assert.Single(fixture.Monitor.StoreCorruption);
         Assert.True(fixture.Monitor.HasStoreCorruption);
     }
 
     [Fact]
-    public void An_in_game_update_that_renames_over_leaves_the_store_uncorrupted()
+    public async Task An_in_game_update_that_renames_over_leaves_the_store_uncorrupted()
     {
         using var fixture = new MonitorFixture(withStore: true);
         var hash = fixture.SyncLinked("fs25_a.zip", "one");
@@ -723,7 +798,7 @@ public class DriftMonitorTests
         var staged = fixture.Folder.WriteFile("staged.tmp", "a newer build");
         File.Move(staged, fixture.Folder.Combine("fs25_a.zip"), overwrite: true);
 
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         // Drift, because the folder changed. No corruption, because the store was never written to.
         Assert.True(fixture.Monitor.HasDrift);
@@ -736,20 +811,20 @@ public class DriftMonitorTests
     /// changes what the volume's notice says and so brings a dismissed one back.
     /// </summary>
     [Fact]
-    public void A_second_rewritten_blob_joins_the_first()
+    public async Task A_second_rewritten_blob_joins_the_first()
     {
         using var fixture = new MonitorFixture(withStore: true);
         fixture.SyncLinked("fs25_a.zip", "one");
 
         fixture.Folder.WriteFile("fs25_a.zip", "written through");
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Single(fixture.Monitor.StoreCorruption);
 
         // A different mod, going the same way.
         fixture.SyncLinked("fs25_b.zip", "two");
         fixture.Folder.WriteFile("fs25_b.zip", "written through as well");
-        fixture.Monitor.Check();
+        await fixture.Monitor.CheckAsync();
 
         Assert.Equal(2, fixture.Monitor.StoreCorruption.Count);
         Assert.True(fixture.Monitor.HasAnything);
@@ -783,6 +858,7 @@ public class DriftMonitorTests
                 Integrity = new StoreIntegrityService(
                     new FakeStoreProvider(Store),
                     Manifests,
+                    new FakeModFolders(new GameModFolder(Candidates.Target, Folder.Path)),
                     NullLogger<StoreIntegrityService>.Instance);
             }
 
@@ -804,7 +880,7 @@ public class DriftMonitorTests
 
         /// <summary>Null unless this fixture was built with one - see the constructor.</summary>
         public ContentStore? Store { get; }
-        public IStoreIntegrityService Integrity { get; } = new NoStoreIntegrity();
+        public IStoreIntegrityService Integrity { get; } = new FakeStoreIntegrity();
 
         /// <summary>Answers nothing by default, which is the state before any repo has been loaded.</summary>
         public FakeProfileRevisions Revisions { get; } = new();

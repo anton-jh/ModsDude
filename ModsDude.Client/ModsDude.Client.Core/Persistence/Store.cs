@@ -108,6 +108,7 @@ public class Store<T>(string filename, Func<T, bool>? isCompatible = null, ILogg
 
     private void Write()
     {
+        AtomicFile.DeleteLeftovers(_filepath, Log);
         AtomicFile.WriteAllText(_filepath, JsonSerializer.Serialize(_state, _serializerOptions));
     }
 

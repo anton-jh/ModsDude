@@ -591,7 +591,7 @@ public class ChangePollTests
             return Task.FromResult(false);
         }
 
-        public bool Check(DriftCheckReason reason = DriftCheckReason.Explicit) => throw new NotSupportedException();
+        public void RequestCheck(DriftCheckReason reason = DriftCheckReason.Explicit) => _ = CheckAsync(reason);
         public void Watch() { }
         public void Dispose() { }
     }

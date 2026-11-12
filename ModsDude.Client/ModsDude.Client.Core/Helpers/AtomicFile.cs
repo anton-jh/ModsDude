@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Logging;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ModsDude.Client.Core.Helpers;
 
@@ -62,6 +64,34 @@ public static class AtomicFile
 
     public static Task WriteAllBytesAsync(string path, byte[] contents, CancellationToken cancellationToken)
         => WriteAsync(path, stream => stream.WriteAsync(contents, cancellationToken).AsTask());
+
+    /// <summary>
+    /// Deletes the temporaries interrupted writes to <paramref name="path"/> left beside it. Only for
+    /// a caller whose writes to the path are serialised, since it would also delete a write in flight.
+    /// </summary>
+    public static void DeleteLeftovers(string path, ILogger log)
+    {
+        var folder = Path.GetDirectoryName(path);
+
+        if (folder is null || Directory.Exists(folder) is false)
+        {
+            return;
+        }
+
+        var leftover = new Regex($"^{Regex.Escape(Path.GetFileName(path))}\\.[0-9a-f]{{32}}\\.tmp$", RegexOptions.IgnoreCase);
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(folder, $"{Path.GetFileName(path)}.*.tmp").Where(x => leftover.IsMatch(Path.GetFileName(x))))
+            {
+                FileSystemHelper.TryDeleteFile(file, log);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            log.LogWarning(exception, "Could not look for leftover temporaries of {File}.", path);
+        }
+    }
 
 
     private static FileStream Create(string path)

@@ -83,10 +83,10 @@ public interface IBaseGameAdapter : IGameAdapter
     /// What refuses any change to the game's files while it runs, and what lets the client notice
     /// somebody stopping play, which is the moment a checked-out savegame is worth a reminder to check
     /// it in. Every process a launch passes through belongs here - a launcher that stays up beside the
-    /// game as well as the game itself. Empty, the default, is a game whose sessions nobody can see:
-    /// nothing is refused or reminded of for it.
+    /// game as well as the game itself. Never empty: a game whose processes are unknown has every
+    /// change to its files refused.
     /// </remarks>
-    IReadOnlyList<string> ProcessNames => [];
+    IReadOnlyList<string> ProcessNames { get; }
 
     DynamicForm GetLocalSettingsTemplate();
     DynamicForm DeserializeLocalSettings(string serializedLocalSettings);

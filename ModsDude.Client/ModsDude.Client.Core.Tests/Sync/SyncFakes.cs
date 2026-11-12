@@ -365,6 +365,22 @@ internal sealed class FakeModFolders(params GameModFolder[] folders) : IModFolde
 }
 
 
+/// <summary>Finds nothing, and records what it was told to mark suspect.</summary>
+internal sealed class FakeStoreIntegrity : IStoreIntegrityService
+{
+    public event EventHandler? Changed { add { } remove { } }
+
+    public IReadOnlyList<CorruptedBlob> Found => [];
+
+    public List<string> MarkedSuspect { get; } = [];
+
+    public Task<IReadOnlyList<CorruptedBlob>> CheckAsync(ModTargetRef target, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<CorruptedBlob>>([]);
+
+    public void MarkSuspect(ContentStore store, IReadOnlySet<string> hashes) => MarkedSuspect.AddRange(hashes.Order(StringComparer.Ordinal));
+}
+
+
 /// <summary>
 /// What the sync engine knows about savegames, over a list of holds a test writes directly.
 /// </summary>

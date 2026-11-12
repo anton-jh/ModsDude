@@ -89,6 +89,22 @@ public sealed class SyncManifestStore : ISyncManifestStore
         }
     }
 
+    public void MarkSuspect(ModTargetRef target, IReadOnlySet<string> hashes)
+    {
+        lock (_lock)
+        {
+            if (TryRead(target) is not SyncManifest manifest || manifest.Entries.Any(x => x.ContentSuspect is false && hashes.Contains(x.ContentHash)) is false)
+            {
+                return;
+            }
+
+            Write(manifest with
+            {
+                Entries = [.. manifest.Entries.Select(x => hashes.Contains(x.ContentHash) ? x with { ContentSuspect = true } : x)]
+            });
+        }
+    }
+
     public void DropStale(IEnumerable<ModTargetRef> expected)
     {
         var keep = new HashSet<string>(expected.Select(FileName), StringComparer.OrdinalIgnoreCase);

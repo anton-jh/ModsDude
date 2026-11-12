@@ -257,7 +257,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     /// <summary>The first check plus the watcher, once the shell is up.</summary>
     public void Start()
     {
-        _ = _monitor.CheckAsync();
+        _monitor.RequestCheck();
 
         _monitor.Watch();
     }
@@ -268,7 +268,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     /// </summary>
     public void NotifyWindowActivated()
     {
-        _ = _monitor.CheckAsync(DriftCheckReason.WindowActivated);
+        _monitor.RequestCheck(DriftCheckReason.WindowActivated);
     }
 
     /// <summary>
@@ -297,7 +297,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
         Refresh();
 
-        _ = _monitor.CheckAsync();
+        _monitor.RequestCheck();
     }
 
     public void Dispose()
@@ -542,7 +542,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     {
         Refresh();
 
-        _ = _monitor.CheckAsync();
+        _monitor.RequestCheck();
     });
 
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -551,7 +551,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         // nothing.
         _monitor.Watch();
 
-        _ = _monitor.CheckAsync();
+        _monitor.RequestCheck();
     }
 
     /// <summary>
@@ -569,14 +569,14 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         // old path.
         _monitor.Watch();
 
-        _ = _monitor.CheckAsync();
+        _monitor.RequestCheck();
     }
 
     private void OnProfilesChanged(Guid repoId)
     {
         // A profile's head revision moving is drift for every folder built against the old one,
         // whether this client saved it or a teammate did and a read brought it in.
-        _ = _monitor.CheckAsync();
+        _monitor.RequestCheck();
     }
 
     /// <summary>The monitor runs its checks off the UI thread, and everything below is bound.</summary>

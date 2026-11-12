@@ -19,7 +19,7 @@ internal sealed record ModFetch(ModKey ModId, ModVersionKey VersionId, string Ha
 /// still go one at a time: several at once on one spinning disk is slower than one. Additive only,
 /// so it never touches a mod folder; the caller holds the stores' shared lease.
 /// </remarks>
-internal sealed class ModFetcher(IFilesClient filesClient, IModFileDownloader downloader, ILogger logger)
+internal sealed class ModFetcher(IFilesClient filesClient, IModFileDownloader downloader, IStoreIntegrityService storeIntegrity, ILogger logger)
 {
     /// <summary>
     /// Mods fetched at once. Their range requests share one connection budget in the downloader,
@@ -94,13 +94,13 @@ internal sealed class ModFetcher(IFilesClient filesClient, IModFileDownloader do
         SemaphoreSlim copying,
         CancellationToken cancellationToken)
     {
-        var elsewhere = allStores.FirstOrDefault(x =>
-            FileSystemHelper.ArePathsEqual(x.RootPath, servingStore.RootPath) is false &&
-            x.Contains(fetch.Hash));
+        var elsewhere = allStores
+            .Where(x => FileSystemHelper.ArePathsEqual(x.RootPath, servingStore.RootPath) is false && x.Contains(fetch.Hash))
+            .ToList();
 
         // Known up front for a cross-store copy, and only once the response headers arrive for a
         // download - so the row can show a proportion in both cases rather than only one.
-        var totalBytes = elsewhere?.GetSize(fetch.Hash) ?? 0;
+        long totalBytes = 0;
 
         // Two sources on a download - bytes arriving and bytes stored - and the bar follows whichever
         // is further on. Arriving leads while a ranged download is running; stored has the last word
@@ -120,20 +120,42 @@ internal sealed class ModFetcher(IFilesClient filesClient, IModFileDownloader do
             }
         });
 
-        if (elsewhere is not null)
+        foreach (var source in elsewhere)
         {
+            lock (gate)
+            {
+                shown = 0;
+                totalBytes = source.GetSize(fetch.Hash) ?? 0;
+            }
+
             await copying.WaitAsync(cancellationToken);
 
             try
             {
-                await servingStore.CopyFromAsync(elsewhere, fetch.Hash, report, cancellationToken);
+                await servingStore.CopyFromAsync(source, fetch.Hash, report, cancellationToken);
+
+                return;
+            }
+            catch (ContentVerificationException exception)
+            {
+                // That store's copy rotted or was rewritten through a hardlink. It is dropped, the
+                // folders running it are told, and the next source is tried.
+                logger.LogWarning(exception, "The store blob {Hash} on {Volume} no longer matches its address. Removing it.", fetch.Hash, source.VolumeRoot);
+
+                if (source.Remove(fetch.Hash))
+                {
+                    storeIntegrity.MarkSuspect(source, new HashSet<string>([fetch.Hash], StringComparer.OrdinalIgnoreCase));
+                }
             }
             finally
             {
                 copying.Release();
             }
+        }
 
-            return;
+        lock (gate)
+        {
+            shown = 0;
         }
 
         var link = await filesClient.CreateModDownloadLinkV1Async(
@@ -147,7 +169,10 @@ internal sealed class ModFetcher(IFilesClient filesClient, IModFileDownloader do
 
         using var download = await downloader.OpenAsync(link.Link, report, cancellationToken);
 
-        totalBytes = download.Length ?? 0;
+        lock (gate)
+        {
+            totalBytes = download.Length ?? 0;
+        }
 
         // Verified against what the repo declared before it is stored, never after. This is the
         // check that makes a store shared between repos safe; see ContentStore.IngestAsync.

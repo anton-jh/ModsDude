@@ -24,10 +24,21 @@ public class GameRunningGuardTests
         guard.EnsureNotRunning(Keys.Game(), "Farming Simulator 25");
     }
 
-
-    private sealed class Names(IReadOnlyList<string> names) : IGameProcessNames
+    [Fact]
+    public void A_game_whose_processes_are_unknown_is_refused()
     {
-        public IReadOnlyList<string> Get(GameIdentity game) => names;
+        var guard = new GameRunningGuard(new Names(null), new Processes(running: false));
+
+        var refusal = Assert.Throws<GameRunningException>(() => guard.EnsureNotRunning(Keys.Game(), "Farming Simulator 25"));
+
+        Assert.Equal("Farming Simulator 25", refusal.GameName);
+        Assert.Contains("Can't tell", refusal.UserMessage);
+    }
+
+
+    private sealed class Names(IReadOnlyList<string>? names) : IGameProcessNames
+    {
+        public IReadOnlyList<string>? Get(GameIdentity game) => names;
     }
 
     private sealed class Processes(bool running) : IGameProcesses

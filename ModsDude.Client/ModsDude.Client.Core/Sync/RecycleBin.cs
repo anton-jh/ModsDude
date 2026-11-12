@@ -1,5 +1,8 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Win32;
+using ModsDude.Client.Core.Helpers;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace ModsDude.Client.Core.Sync;
 
@@ -45,10 +48,10 @@ public sealed partial class ShellRecycleBin(ILogger<ShellRecycleBin> logger) : I
 
     /// <summary>
     /// Partially overrides <c>FOF_NOCONFIRMATION</c>: where the shell would permanently destroy the
-    /// file instead of recycling it - most often because it is larger than the bin's quota - it asks
-    /// first. Declining aborts the operation, which this reports as a failure so the file is
-    /// quarantined instead. Without this flag a large mod archive would be silently and
-    /// unrecoverably deleted, which is the exact outcome the uninstall rules exist to prevent.
+    /// file instead of recycling it, it asks first. <see cref="IsAvailableFor"/> refuses those cases
+    /// up front, so this is only the backstop for one it misses: a question rather than a silent
+    /// permanent delete. Declining aborts the operation, which is reported as a failure so the file
+    /// is quarantined instead.
     /// </summary>
     private const ushort _wantNukeWarning = 0x4000;
 
@@ -62,19 +65,35 @@ public sealed partial class ShellRecycleBin(ILogger<ShellRecycleBin> logger) : I
 
         try
         {
-            var root = Path.GetPathRoot(Path.GetFullPath(path));
-
-            if (string.IsNullOrEmpty(root))
-            {
-                return false;
-            }
+            var root = FileSystemHelper.NormalizeVolumeRoot(path);
 
             var info = new ShQueryRecycleBinInfo
             {
                 StructureSize = (uint)Marshal.SizeOf<ShQueryRecycleBinInfo>()
             };
 
-            return SHQueryRecycleBinW(root, ref info) == 0;
+            if (SHQueryRecycleBinW(root, ref info) != 0)
+            {
+                return false;
+            }
+
+            var settings = ReadSettings(root);
+
+            if (settings.DeletesImmediately)
+            {
+                logger.LogInformation("The Recycle Bin on {Volume} is set to delete files immediately.", root);
+
+                return false;
+            }
+
+            if (settings.MaxCapacityBytes is long capacity && SizeOf(path) > capacity)
+            {
+                logger.LogInformation("{Path} is larger than the Recycle Bin on {Volume} can hold.", path, root);
+
+                return false;
+            }
+
+            return true;
         }
         catch (Exception exception)
         {
@@ -142,6 +161,36 @@ public sealed partial class ShellRecycleBin(ILogger<ShellRecycleBin> logger) : I
             }
         }
     }
+
+
+    /// <summary>
+    /// The bin's own settings for the volume: "don't move files to the Recycle Bin", and its maximum
+    /// size, past which the shell deletes instead of recycling.
+    /// </summary>
+    private static (bool DeletesImmediately, long? MaxCapacityBytes) ReadSettings(string volumeRoot)
+        => OperatingSystem.IsWindows() ? ReadWindowsSettings(volumeRoot) : (false, null);
+
+    [SupportedOSPlatform("windows")]
+    private static (bool DeletesImmediately, long? MaxCapacityBytes) ReadWindowsSettings(string volumeRoot)
+    {
+        using var bitBucket = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket");
+
+        var volumeId = Volumes.TryGetVolumeName(volumeRoot) is string name && name.IndexOf('{') is var start and >= 0
+            ? name[start..(name.IndexOf('}', start) + 1)]
+            : null;
+
+        using var volume = volumeId is null ? null : bitBucket?.OpenSubKey($@"Volume\{volumeId}");
+
+        var nuke = volume?.GetValue("NukeOnDelete") ?? bitBucket?.GetValue("NukeOnDelete");
+        var capacityMegabytes = volume?.GetValue("MaxCapacity");
+
+        return (nuke is int and not 0, capacityMegabytes is int megabytes ? megabytes * 1024L * 1024L : null);
+    }
+
+    private static long SizeOf(string path)
+        => Directory.Exists(path)
+            ? new DirectoryInfo(path).EnumerateFiles("*", SearchOption.AllDirectories).Sum(x => x.Length)
+            : new FileInfo(path).Length;
 
 
     [LibraryImport("shell32.dll", SetLastError = false)]

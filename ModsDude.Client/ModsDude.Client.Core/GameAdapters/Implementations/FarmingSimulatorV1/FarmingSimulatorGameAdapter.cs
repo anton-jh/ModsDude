@@ -115,9 +115,8 @@ public class FarmingSimulatorBaseGameAdapter(
     /// The launcher, <c>FarmingSimulator2025.exe</c>, and the game it starts from <c>x64</c>,
     /// <c>FarmingSimulator2025Game.exe</c> - named after the year the enum is numbered by.
     /// </summary>
-    public IReadOnlyList<string> ProcessNames => BaseSettings.GameVersion is FarmingSimulatorGameVersion version
-        ? [$"FarmingSimulator{(int)version}", $"FarmingSimulator{(int)version}Game"]
-        : [];
+    public IReadOnlyList<string> ProcessNames
+        => [$"FarmingSimulator{(int)RequireGameVersion(BaseSettings)}", $"FarmingSimulator{(int)RequireGameVersion(BaseSettings)}Game"];
 
 
     /// <summary>

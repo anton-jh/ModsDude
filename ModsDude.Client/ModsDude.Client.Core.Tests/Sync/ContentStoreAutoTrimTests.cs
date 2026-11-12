@@ -78,6 +78,7 @@ public class ContentStoreAutoTrimTests
             new SyncManifestStore(root.CreateSubdirectory("manifests")),
             new ResourceLeases(),
             new FakeRecycleBin(),
+            new FakeStoreIntegrity(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         Assert.True(await maintenance.SweepAllAsync(CancellationToken.None) > 0);
@@ -116,6 +117,7 @@ public class ContentStoreAutoTrimTests
             manifests,
             new ResourceLeases(),
             new FakeRecycleBin(),
+            new FakeStoreIntegrity(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await maintenance.SweepAllAsync(CancellationToken.None);
@@ -148,6 +150,7 @@ public class ContentStoreAutoTrimTests
             new SyncManifestStore(root.CreateSubdirectory("manifests")),
             leases,
             new FakeRecycleBin(),
+            new FakeStoreIntegrity(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         // Returns rather than blocking, and leaves the store as it found it.
@@ -171,6 +174,7 @@ public class ContentStoreAutoTrimTests
             new SyncManifestStore(root.CreateSubdirectory("manifests")),
             leases,
             new FakeRecycleBin(),
+            new FakeStoreIntegrity(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await maintenance.SweepAllAsync(CancellationToken.None);
@@ -227,6 +231,7 @@ public class ContentStoreAutoTrimTests
             new SyncManifestStore(root.CreateSubdirectory("manifests")),
             new ResourceLeases(),
             recycleBin ?? new FakeRecycleBin(),
+            new FakeStoreIntegrity(),
             NullLogger<ContentStoreMaintenance>.Instance);
     }
 
