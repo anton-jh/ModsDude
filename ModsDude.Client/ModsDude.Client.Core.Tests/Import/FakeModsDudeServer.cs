@@ -15,6 +15,8 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
     public const string ContentHashMetadataKey = "sha256";
 
     private readonly Lock _lock = new();
+
+    private readonly Dictionary<ModVersionIdentity, RegisterModRequest> _registrations = [];
     private readonly List<ServerCall> _journal = [];
     private readonly Dictionary<ModVersionIdentity, string?> _stored = [];
     private readonly Dictionary<ModKey, List<ModDto>> _registered = [];
@@ -25,6 +27,21 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
 
     /// <summary>Runs before a registration is applied, which is where a teammate's change lands.</summary>
     public Func<ModVersionIdentity, Task>? BeforeRegister { get; set; }
+
+    /// <summary>Runs before every read of the mod list, where a test can make one fail.</summary>
+    public Func<Task>? BeforeGetMods { get; set; }
+
+    /// <summary>What each version was registered with, by whichever import registered it.</summary>
+    public IReadOnlyDictionary<ModVersionIdentity, RegisterModRequest> Registrations
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return new Dictionary<ModVersionIdentity, RegisterModRequest>(_registrations);
+            }
+        }
+    }
 
     public IReadOnlyList<ServerCall> Journal
     {
@@ -176,6 +193,8 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
             {
                 throw Problem(ProblemType.HashMismatch, null);
             }
+
+            _registrations[identity] = request;
         }
 
         var after = request.Placement.After is null ? (ModVersionKey?)null : ModVersionKey.From(request.Placement.After);
@@ -185,21 +204,26 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
     }
 
     /// <summary>Everything, every time: nothing here is ever deleted, so the whole list is a correct answer to any read.</summary>
-    public Task<GetModsResponse> GetModsV1Async(Guid repoId, long? after = null, int? limit = null, CancellationToken cancellationToken = default)
+    public async Task<GetModsResponse> GetModsV1Async(Guid repoId, long? after = null, int? limit = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (BeforeGetMods is not null)
+        {
+            await BeforeGetMods();
+        }
 
         lock (_lock)
         {
             _journal.Add(new ServerCall(ServerCallKind.GetMods, default));
 
-            return Task.FromResult(new GetModsResponse()
+            return new GetModsResponse()
             {
                 Mods = [.. _registered.Values.SelectMany(x => x)],
                 Deleted = [],
                 Sequence = _journal.Count,
                 HasMore = false
-            });
+            };
         }
     }
 

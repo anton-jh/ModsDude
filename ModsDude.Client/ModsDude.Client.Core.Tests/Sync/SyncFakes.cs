@@ -272,6 +272,9 @@ internal sealed class FakeModFolderAdapter(string modFolder, bool supportsHardli
     public Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
         => Read(path, _ => false);
 
+    public async Task<LocalMod?> ReadModFileAsync(string path, CancellationToken cancellationToken)
+        => (await Read(Path.GetDirectoryName(path)!, x => x != path)).SingleOrDefault();
+
     private Task<IEnumerable<LocalMod>> Read(string path, Func<string, bool> skip)
     {
         var mods = new List<LocalMod>();

@@ -57,6 +57,20 @@ public class BeamNgModArchiveTests : IDisposable
     }
 
     [Fact]
+    public async Task An_info_json_that_decompresses_past_the_cap_is_read_as_a_mod_packed_by_hand()
+    {
+        WriteZip("Roamup.zip", new()
+        {
+            ["mod_info/MAUT1EJZL/info.json"] = "{\"title\": \"" + new string('a', 17 * 1024 * 1024) + "\"}",
+            ["vehicles/roamer/roamup.jbeam"] = "{}"
+        });
+
+        var mod = await ScanOne();
+
+        Assert.Equal("Roamup", mod.Name);
+    }
+
+    [Fact]
     public async Task A_mod_without_info_json_is_named_after_its_file_and_versioned_by_its_newest_file()
     {
         WriteZip("my_truck.zip", new()

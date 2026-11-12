@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Imagery;
+using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 
@@ -168,10 +170,22 @@ public class ModImagerySourceTests
         Assert.Equal(0, backfill.Calls);
     }
 
+    [Fact]
+    public async Task A_local_copy_of_another_build_is_never_backfilled_from()
+    {
+        var version = CreateVersion(isOnServer: true, withLocalFile: true, localContent: "another build");
+        var backfill = new FakeBackfill(CreateReferences());
+
+        var imagery = await CreateSource(backfill).GetAsync(_repoId, version, CancellationToken.None);
+
+        Assert.Equal(0, backfill.Calls);
+        Assert.Null(imagery.Icon);
+    }
+
 
     private static ModImagerySource CreateSource(IModImageBackfill? backfill = null)
     {
-        return new ModImagerySource(new FakeStore(), backfill ?? new FakeBackfill([]));
+        return new ModImagerySource(new FakeStore(), backfill ?? new FakeBackfill([]), NullLogger<ModImagerySource>.Instance);
     }
 
     private static IReadOnlyList<ModImageReference> CreateReferences()
@@ -185,8 +199,13 @@ public class ModImagerySourceTests
         ];
     }
 
-    private static CatalogModVersion CreateVersion(bool isOnServer, bool withLocalFile)
+    private const string _registeredContent = "the registered build";
+
+    private static CatalogModVersion CreateVersion(bool isOnServer, bool withLocalFile, string localContent = _registeredContent)
     {
+        var registered = System.Text.Encoding.UTF8.GetBytes(_registeredContent);
+        var local = System.Text.Encoding.UTF8.GetBytes(localContent);
+
         var version = new CatalogModVersion(
             ModKey.From("fs25_amod"),
             ModVersionKey.From("1.0.0.0"),
@@ -194,7 +213,11 @@ public class ModImagerySourceTests
             "It does things.",
             IsLocal: withLocalFile,
             IsOnServer: isOnServer,
-            Locked: false);
+            Locked: false)
+        {
+            ContentHash = isOnServer ? ModContentHasher.Format(System.Security.Cryptography.SHA256.HashData(registered)) : null,
+            SizeBytes = isOnServer ? registered.Length : null
+        };
 
         if (withLocalFile is false)
         {
@@ -207,7 +230,16 @@ public class ModImagerySourceTests
         {
             Icon = new ModImage("icon.dds", "local-icon", _ => Task.FromResult<byte[]>([1])),
             Images = [new ModImage("store_01.dds", "local-store", _ => Task.FromResult<byte[]>([2]))],
-            FoundIn = [new ModOccurrence(source, @"C:\Downloads\FS25_AMod.zip", 1024, () => new MemoryStream())]
+            FoundIn =
+            [
+                new ModOccurrence(source, new LocalMod(version.ModId, version.VersionId, version.Name, version.Description, () => new MemoryStream(local))
+                {
+                    FilePath = @"C:\Downloads\FS25_AMod.zip",
+                    FileLength = local.Length,
+                    Icon = new ModImage("icon.dds", "local-icon", _ => Task.FromResult<byte[]>([1])),
+                    Images = [new ModImage("store_01.dds", "local-store", _ => Task.FromResult<byte[]>([2]))]
+                })
+            ]
         };
     }
 

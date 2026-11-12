@@ -4,6 +4,7 @@ using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Tests.Models;
 using ModsDude.Client.Core.Tests.RemoteSources;
 using ModsDude.Client.Core.Tests.Stores;
 using ModsDude.Client.Core.Tests.Sync;
@@ -193,7 +194,7 @@ public class ModImportLikelyCopyTests : IDisposable
 
         return new CatalogModVersion(Mod(modId), V(version), modId, "A mod.", IsLocal: true, IsOnServer: false, Locked: false)
         {
-            FoundIn = [new ModOccurrence(_downloads, Path.Combine(_downloads.Path, $"{modId}.zip"), bytes.Length, () => new MemoryStream(bytes))]
+            FoundIn = [TestOccurrences.Create(_downloads, Path.Combine(_downloads.Path, $"{modId}.zip"), bytes.Length, () => new MemoryStream(bytes), modId, version)]
         };
     }
 }

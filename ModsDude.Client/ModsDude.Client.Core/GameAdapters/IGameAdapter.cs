@@ -125,6 +125,11 @@ public interface IBaseModAdapter
     ModKey? LikelyCopyOf(ModKey modId) => null;
 
     Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken);
+
+    /// <summary>One file, read as a mod, telling "not a mod" apart from "could not be read".</summary>
+    /// <returns>Null where the file is not a mod. Throws where it could not be read.</returns>
+    Task<LocalMod?> ReadModFileAsync(string path, CancellationToken cancellationToken);
+
     ILocalModAdapter WithLocalSettings(string serializedLocalSettings);
     ILocalModAdapter WithLocalSettings(DynamicForm localSettings);
 }

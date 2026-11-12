@@ -134,22 +134,37 @@ internal class FakeMultiTargetBaseModAdapter : IBaseModAdapter
             return Task.FromResult<IEnumerable<LocalMod>>([]);
         }
 
-        return Task.FromResult(Directory.EnumerateFiles(path, "*.zip").Select(file =>
-        {
-            var name = Path.GetFileNameWithoutExtension(file);
-            var written = File.ReadAllText(file).Trim();
+        return Task.FromResult(Directory.EnumerateFiles(path, "*.zip").Select(Read));
+    }
 
-            return new LocalMod(
-                ModKey.From(name),
-                ModVersionKey.From(written.Length > 0 ? written : "1"),
-                name,
-                "",
-                () => File.OpenRead(file))
-            {
-                FilePath = file,
-                FileLength = new FileInfo(file).Length
-            };
-        }));
+    /// <summary>Thrown by <see cref="ReadModFileAsync"/> instead of reading, where a test sets it.</summary>
+    public Exception? ReadFailure { get; set; }
+
+    public Task<LocalMod?> ReadModFileAsync(string path, CancellationToken cancellationToken)
+    {
+        if (ReadFailure is not null)
+        {
+            throw ReadFailure;
+        }
+
+        return Task.FromResult<LocalMod?>(Path.GetExtension(path) == ".zip" ? Read(path) : null);
+    }
+
+    private static LocalMod Read(string file)
+    {
+        var name = Path.GetFileNameWithoutExtension(file);
+        var written = File.ReadAllText(file).Trim();
+
+        return new LocalMod(
+            ModKey.From(name),
+            ModVersionKey.From(written.Length > 0 ? written : "1"),
+            name,
+            "",
+            () => File.OpenRead(file))
+        {
+            FilePath = file,
+            FileLength = new FileInfo(file).Length
+        };
     }
 
     public ILocalModAdapter WithLocalSettings(string serializedLocalSettings)

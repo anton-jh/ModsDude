@@ -13,6 +13,7 @@ public interface IModFileUploader
     /// <returns>The lowercase-hex SHA-256 of the uploaded bytes, to register the version against.</returns>
     /// <exception cref="BlobAlreadyExistsException">Something is already stored at the link's address.</exception>
     /// <exception cref="UploadedContentChangedException">The bytes did not hash to <see cref="ModFileUpload.ExpectedHash"/>.</exception>
+    /// <exception cref="TimeoutException">A request stopped making progress, on every attempt.</exception>
     Task<string> UploadAsync(ModFileUpload upload, CancellationToken cancellationToken);
 }
 
@@ -28,6 +29,10 @@ public interface IModFileUploader
 /// which matters where the hash is the address: committed under the wrong one, the bytes could never
 /// be replaced.
 /// </param>
+/// <param name="RenewLink">
+/// Mints a fresh link to the same address, for an upload that outlives its link. Blocks already
+/// staged stay staged, so the upload carries on where it was. Null fails the upload instead.
+/// </param>
 public sealed record ModFileUpload(
     string Link,
     string ContentHashMetadataKey,
@@ -35,4 +40,5 @@ public sealed record ModFileUpload(
 {
     public IProgress<long>? BytesTransferred { get; init; }
     public string? ExpectedHash { get; init; }
+    public Func<CancellationToken, Task<string>>? RenewLink { get; init; }
 }

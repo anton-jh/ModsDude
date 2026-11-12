@@ -91,8 +91,16 @@ public class FarmingSimulatorBaseModAdapter(
         }
     }
 
+    public Task<LocalMod?> ReadModFileAsync(string path, CancellationToken cancellationToken)
+        => Task.Run(() => ModArchives.IsArchive(path) ? ReadModFromFile(path, gameVersion, cancellationToken) : null, cancellationToken);
+
     private static LocalMod? ReadModFromFile(string path, FarmingSimulatorGameVersion gameVersion, CancellationToken cancellationToken)
     {
+        // Before the archive is opened, so what the scan records is no newer than what it read.
+        var scanned = new FileInfo(path);
+        var scannedLength = scanned.Length;
+        var scannedLastWriteUtc = scanned.LastWriteTimeUtc;
+
         using var zip = ModArchives.Open(path);
 
         var maybeDesc = GetModDesc(zip, cancellationToken);
@@ -126,10 +134,10 @@ public class FarmingSimulatorBaseModAdapter(
                 ModVersionKey.From(rawVersion),
                 title,
                 NormalizeDescription(description),
-                () => File.OpenRead(path))
+                () => ModArchives.OpenScanned(path, scannedLength, scannedLastWriteUtc))
             {
                 FilePath = path,
-                FileLength = new FileInfo(path).Length,
+                FileLength = scannedLength,
                 Author = desc.Element("author")?.Value.Trim(),
                 Locked = DeclaresMaps(desc),
                 Icon = GetIcon(zip, path, desc),
@@ -148,7 +156,7 @@ public class FarmingSimulatorBaseModAdapter(
         var entry = zip.GetEntry("modDesc.xml");
         if (entry is null) return Maybe<XElement>.None;
 
-        using var xmlStream = entry.Open();
+        using var xmlStream = ModArchives.OpenEntry(entry, ModArchives.MaxMetadataEntryBytes);
 
         return Maybe.From(SafeXml.Load(xmlStream).Element("modDesc"));
     }

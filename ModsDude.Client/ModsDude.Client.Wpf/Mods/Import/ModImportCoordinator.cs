@@ -287,7 +287,15 @@ public sealed class ModImportCoordinator(
                     done.Dispose();
                 }
             }
-            else if (value.Phase is not ModImportPhase.Queued)
+            else if (value.Phase is ModImportPhase.Queued)
+            {
+                // Back in the queue after checking its copies: waiting its turn again, so no subtask.
+                if (_subtasks.TryRemove(value.Identity, out var waiting))
+                {
+                    waiting.Dispose();
+                }
+            }
+            else
             {
                 Track(value, name);
             }

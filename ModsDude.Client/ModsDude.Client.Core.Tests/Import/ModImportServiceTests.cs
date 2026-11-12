@@ -1,9 +1,12 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.ModVersions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Tests.Models;
 using ModsDude.Client.Core.Tests.RemoteSources;
 using ModsDude.Client.Core.Tests.Stores;
 using ModsDude.Client.Core.Tests.Sync;
@@ -464,6 +467,143 @@ public class ModImportServiceTests : IDisposable
         Assert.Equal(Path.Combine(_downloads.Path, "FS25_Plough.zip"), superseded.FilePath);
     }
 
+    [Fact]
+    public async Task A_chosen_copy_is_uploaded_against_the_hash_it_was_chosen_by()
+    {
+        await ImportAsync([Conflicted()], x => x with
+        {
+            ResolveSourceConflicts = Choose("one build")
+        });
+
+        Assert.Equal([await HashOfContent("one build")], _uploader.ExpectedHashes);
+    }
+
+    [Fact]
+    public async Task A_chosen_copy_registers_its_own_name_lock_and_attributes()
+    {
+        var version = Local("FS25_Plough", "1.0") with
+        {
+            FoundIn =
+            [
+                Occurrence(_downloads, "one build", name: "Plough", locked: false),
+                Occurrence(_game, "a different build of the same version", name: "Plough Deluxe", locked: true)
+            ]
+        };
+
+        await ImportAsync([version], x => x with
+        {
+            ResolveSourceConflicts = Choose("a different build of the same version")
+        });
+
+        var registration = _server.Registrations[version.Identity];
+
+        Assert.Equal("Plough Deluxe", registration.DisplayName);
+        Assert.True(registration.Locked);
+        Assert.Equal("deluxe", Assert.Single(registration.Attributes).Value);
+    }
+
+    [Fact]
+    public async Task A_rejected_copy_in_a_game_folder_is_left_to_the_next_apply()
+    {
+        var result = await ImportAsync([Conflicted()], x => x with
+        {
+            ResolveSourceConflicts = Choose("one build")
+        });
+
+        Assert.Equal(ModImportStatus.Registered, Assert.Single(result.Items).Status);
+        Assert.Empty(result.Superseded);
+    }
+
+    [Fact]
+    public async Task A_version_somebody_else_registered_first_supersedes_nothing()
+    {
+        // The repo may now hold the very build that was chosen against.
+        _server.BeforeRegister = identity =>
+        {
+            if (_server.VersionsOf(identity.ModId).Count == 0)
+            {
+                _server.RegisterElsewhere(identity, null, null);
+            }
+
+            return Task.CompletedTask;
+        };
+
+        var result = await ImportAsync([Conflicted()], x => x with
+        {
+            ResolveSourceConflicts = Choose("a different build of the same version")
+        });
+
+        Assert.Equal(ModImportStatus.AlreadyRegistered, Assert.Single(result.Items).Status);
+        Assert.Empty(result.Superseded);
+    }
+
+    [Fact]
+    public async Task A_file_that_changed_since_the_scan_is_refused_and_nothing_is_stored()
+    {
+        var version = Local("FS25_Plough", "1.0") with
+        {
+            FoundIn = [TestOccurrences.Create(_downloads, @"C:\Downloads\FS25_Plough.zip", 9, () => throw new ModFileChangedException(@"C:\Downloads\FS25_Plough.zip"))]
+        };
+
+        var result = await ImportAsync([version]);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(ModImportStatus.Failed, item.Status);
+        Assert.Equal("The file changed after it was scanned. Rescan and import again.", item.Message);
+        Assert.Empty(_server.CallsOf(ServerCallKind.Register));
+    }
+
+    [Fact]
+    public async Task Copies_are_checked_with_their_bytes_reported()
+    {
+        var reports = new List<ModImportProgress>();
+
+        await ImportAsync([Conflicted()], x => x with
+        {
+            ResolveSourceConflicts = Choose("one build"),
+            Progress = new InlineProgress<ModImportProgress>(y =>
+            {
+                lock (reports)
+                {
+                    reports.Add(y);
+                }
+            })
+        });
+
+        var total = "one build".Length + "a different build of the same version".Length;
+        var checking = reports.Where(x => x.Phase is ModImportPhase.Checking).ToList();
+
+        Assert.NotEmpty(checking);
+        Assert.All(checking, x => Assert.Equal(total, x.TotalBytes));
+        Assert.Equal(total, checking[^1].BytesTransferred);
+    }
+
+    [Fact]
+    public async Task A_failed_refetch_reports_that_mod_and_keeps_the_rest_of_the_result()
+    {
+        _server.Seed(Mod("FS25_Plough"), "1.0", "4.0");
+
+        var reads = 0;
+        _server.BeforeGetMods = () => ++reads > 1 ? throw new HttpRequestException("the network blinked") : Task.CompletedTask;
+
+        _server.BeforeRegister = identity =>
+        {
+            if (identity.VersionId == V("2.0") && _server.VersionsOf(identity.ModId).Count == 2)
+            {
+                _server.RegisterElsewhere(new ModVersionIdentity(Mod("FS25_Plough"), V("3.0")), V("1.0"), V("4.0"));
+            }
+
+            return Task.CompletedTask;
+        };
+
+        var result = await ImportAsync([Local("FS25_Plough", "2.0"), Local("FS25_Trailer", "1.0")]);
+
+        var plough = result.Items.Single(x => x.Identity.ModId == Mod("FS25_Plough"));
+        Assert.Equal(ModImportStatus.Failed, plough.Status);
+        Assert.Equal("Could not read the repo's version order. Try again.", plough.Message);
+        Assert.Equal(ModImportStatus.Registered, result.Items.Single(x => x.Identity.ModId == Mod("FS25_Trailer")).Status);
+    }
+
     /// <summary>
     /// The choice costs nothing until the import it was for has actually landed. A version that was
     /// resolved and then failed leaves the repo holding neither file, and the copy on disk is all
@@ -691,14 +831,23 @@ public class ModImportServiceTests : IDisposable
     {
         return new CatalogModVersion(Mod(modId), V(version), modId, "A mod.", IsLocal: true, IsOnServer: false, Locked: false)
         {
-            FoundIn = [Occurrence(source ?? _downloads, $"{content} of {modId} {version}", modId)]
+            FoundIn = [Occurrence(source ?? _downloads, $"{content} of {modId} {version}", modId, version)]
         };
     }
 
-    private static ModOccurrence Occurrence(ModSource source, string content, string modId = "FS25_Plough")
+    private static ModOccurrence Occurrence(
+        ModSource source,
+        string content,
+        string modId = "FS25_Plough",
+        string version = "1.0",
+        string? name = null,
+        bool locked = false)
     {
         var bytes = Encoding.UTF8.GetBytes(content);
+        var occurrence = TestOccurrences.Create(source, Path.Combine(source.Path, $"{modId}.zip"), bytes.Length, () => new MemoryStream(bytes), modId, version, name);
 
-        return new ModOccurrence(source, Path.Combine(source.Path, $"{modId}.zip"), bytes.Length, () => new MemoryStream(bytes));
+        return name is null
+            ? occurrence
+            : occurrence with { Mod = occurrence.Mod with { Locked = locked, Attributes = [new ModAttribute("edition", locked ? "deluxe" : "plain")] } };
     }
 }

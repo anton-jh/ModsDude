@@ -122,7 +122,7 @@ public class TransferLimitTests
     {
         var limits = TransferLimits.From(new TransferLimitSettings { UploadBytesPerSecond = 2 * _megabyte }, TimeProvider.System);
         var storage = new SinkStorage();
-        var uploader = new BlockBlobModFileUploader(new HttpClient(storage), limits);
+        var uploader = new BlockBlobModFileUploader(new HttpClient(storage), limits, TimeProvider.System);
         var bytes = new byte[2 * _megabyte];
         var reported = new List<long>();
 

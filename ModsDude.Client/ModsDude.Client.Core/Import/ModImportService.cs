@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core.ModVersions;
@@ -122,6 +123,9 @@ public sealed class ModImportService(
         ModImportRequest request,
         ILogger logger) : IDisposable
     {
+        /// <summary>How many versions have their copies hashed at once. Disk bound, like the sync planner's.</summary>
+        private const int _concurrentSourceChecks = 4;
+
         private readonly SemaphoreSlim _mods = new(Math.Max(1, request.MaxConcurrentMods));
         private readonly SemaphoreSlim _downloads = new(Math.Max(1, request.MaxConcurrentDownloads));
 
@@ -144,7 +148,7 @@ public sealed class ModImportService(
                 .DistinctBy(x => FileSystemHelper.NormalizePathForComparison(x.RootPath))]);
 
         /// <summary>Which file each version is imported from, once that has been settled.</summary>
-        private readonly Dictionary<ModVersionIdentity, ModOccurrence> _chosen = [];
+        private readonly Dictionary<ModVersionIdentity, ChosenCopy> _chosen = [];
 
         /// <summary>What the user chose against, for the versions that end up importing.</summary>
         private readonly List<ModSupersededFile> _superseded = [];
@@ -211,7 +215,7 @@ public sealed class ModImportService(
 
             foreach (var ready in plan.Ready)
             {
-                running.Add(Task.Run(() => RunModAsync(ready, null, candidates[ready.ModId], planned, cancellationToken), cancellationToken));
+                running.Add(Task.Run(() => RunModGuardedAsync(ready, null, candidates[ready.ModId], planned, cancellationToken), cancellationToken));
             }
 
             try
@@ -381,33 +385,60 @@ public sealed class ModImportService(
         {
             var conflicts = new List<ModSourceConflict>();
 
-            foreach (var (_, versions) in candidates)
-            {
-                foreach (var version in versions.Values.ToList())
+            var local = candidates.Values
+                .SelectMany(x => x.Values)
+                .Where(x => IsDownload(x) is false)
+                .OrderBy(x => x.ModId.Value, StringComparer.Ordinal)
+                .ThenBy(x => x.VersionId.Value, StringComparer.Ordinal)
+                .ToList();
+
+            var resolved = new IReadOnlyList<ModFileCandidate>[local.Count];
+
+            await Parallel.ForAsync(
+                0,
+                local.Count,
+                new ParallelOptions { MaxDegreeOfParallelism = _concurrentSourceChecks, CancellationToken = cancellationToken },
+                async (i, ct) =>
                 {
-                    if (IsDownload(version))
+                    var version = local[i];
+                    var total = version.FoundIn.Count > 1 ? version.FoundIn.Sum(x => x.FileLength) : 0;
+
+                    if (total > 0)
                     {
-                        continue;
+                        Report(version, ModImportPhase.Checking, 0, total);
                     }
 
-                    var files = await ModOccurrenceResolver.ResolveAsync(version.FoundIn, cancellationToken);
+                    resolved[i] = await ModOccurrenceResolver.ResolveAsync(
+                        version.FoundIn,
+                        total > 0 ? new InlineProgress<long>(x => Report(version, ModImportPhase.Checking, x, total)) : null,
+                        ct);
 
-                    switch (files.Count)
+                    if (total > 0)
                     {
-                        case 0:
-                            // Every copy has gone or will not open since the scan.
-                            Refuse(version, ModImportStatus.NoLocalFile, "There is no local file to upload for this version.");
-                            versions.Remove(version.VersionId);
-                            break;
-
-                        case 1:
-                            _chosen[version.Identity] = files[0].Primary;
-                            break;
-
-                        default:
-                            conflicts.Add(new ModSourceConflict(version, files));
-                            break;
+                        Report(version, ModImportPhase.Queued);
                     }
+                });
+
+            for (var i = 0; i < local.Count; i++)
+            {
+                var version = local[i];
+                var files = resolved[i];
+
+                switch (files.Count)
+                {
+                    case 0:
+                        // Every copy has gone, changed or will not open since the scan.
+                        Refuse(version, ModImportStatus.NoLocalFile, "There is no local file to upload for this version.");
+                        candidates[version.ModId].Remove(version.VersionId);
+                        break;
+
+                    case 1:
+                        _chosen[version.Identity] = new ChosenCopy(files[0].Primary, files[0].ContentHash);
+                        break;
+
+                    default:
+                        conflicts.Add(new ModSourceConflict(version, files));
+                        break;
                 }
             }
 
@@ -466,13 +497,14 @@ public sealed class ModImportService(
                     continue;
                 }
 
-                _chosen[version.Identity] = chosen.Primary;
+                _chosen[version.Identity] = new ChosenCopy(chosen.Primary, chosen.ContentHash);
 
                 // Recorded now, recycled only if this version goes on to import - and by the caller,
-                // not here. See ModSupersededFile.
+                // not here. See ModSupersededFile. A copy in a game's mod folder is left to the next
+                // apply of that folder, which replaces it through the engine.
                 foreach (var rejected in conflict.Candidates.Where(x => x != chosen))
                 {
-                    foreach (var occurrence in rejected.Occurrences)
+                    foreach (var occurrence in rejected.Occurrences.Where(x => IsInGameFolder(x) is false))
                     {
                         _superseded.Add(new ModSupersededFile(
                             version.Identity, occurrence.FilePath, occurrence.Source.Name));
@@ -487,9 +519,17 @@ public sealed class ModImportService(
         /// source's file under another source's name.
         /// </summary>
         private ModOccurrence Chosen(CatalogModVersion version)
-            => _chosen.TryGetValue(version.Identity, out var occurrence)
-                ? occurrence
+            => _chosen.TryGetValue(version.Identity, out var chosen)
+                ? chosen.Occurrence
                 : version.FoundIn[0];
+
+        /// <summary>What the chosen file hashed to when it was compared with other copies, or null where it was not.</summary>
+        private string? ChosenHash(CatalogModVersion version)
+            => _chosen.TryGetValue(version.Identity, out var chosen) ? chosen.ContentHash : null;
+
+        private bool IsInGameFolder(ModOccurrence occurrence)
+            => occurrence.Source.Kind is ModSourceKind.Game
+            || request.ModFolders.Any(x => FileSystemHelper.ArePathsEqual(Path.GetDirectoryName(occurrence.FilePath), x));
 
         private async Task StartArbitratedAsync(
             IReadOnlyList<ModVersionArbitrationItem> arbitration,
@@ -538,7 +578,7 @@ public sealed class ModImportService(
                     continue;
                 }
 
-                running.Add(Task.Run(() => RunModAsync(plan, order, candidates[item.ModId], planned, cancellationToken), cancellationToken));
+                running.Add(Task.Run(() => RunModGuardedAsync(plan, order, candidates[item.ModId], planned, cancellationToken), cancellationToken));
             }
         }
 
@@ -558,6 +598,36 @@ public sealed class ModImportService(
             }
         }
 
+
+        /// <summary>
+        /// One mod, where anything unexpected costs that mod's unfinished versions and never the
+        /// result of the run: whatever else already registered stays reported.
+        /// </summary>
+        private async Task RunModGuardedAsync(
+            ModVersionPlacementPlan plan,
+            IReadOnlyList<ModVersionKey>? resolvedOrder,
+            Dictionary<ModVersionKey, CatalogModVersion> versions,
+            RegisteredVersions planned,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await RunModAsync(plan, resolvedOrder, versions, planned, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "Importing {Mod} stopped partway.", plan.ModId.Value);
+
+                foreach (var version in versions.Values.Where(x => Outcome(x.Identity) is null))
+                {
+                    Refuse(version, ModImportStatus.Failed, "The import of this mod stopped partway.", exception);
+                }
+            }
+        }
 
         /// <summary>
         /// One mod's versions, oldest first: downloaded where a remote source offers them, then
@@ -690,7 +760,25 @@ public sealed class ModImportService(
                     // what is there now, and go again. The same path covers a version whose
                     // predecessor in this batch failed - its placement names a neighbour that never
                     // landed, and the recomputed one does not mention it.
-                    registered = await RefetchRegisteredAsync(registered, cancellationToken);
+                    try
+                    {
+                        registered = await RefetchRegisteredAsync(registered, cancellationToken);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception)
+                    {
+                        logger.LogWarning(exception, "Could not refetch the repo's versions of {Mod}.", plan.ModId.Value);
+
+                        foreach (var versionId in remaining)
+                        {
+                            Refuse(versions[versionId], ModImportStatus.Failed, "Could not read the repo's version order. Try again.", exception);
+                        }
+
+                        break;
+                    }
 
                     // The refetch can also show that what is left has since been registered by
                     // somebody else, which is a success and not something to place again.
@@ -743,7 +831,7 @@ public sealed class ModImportService(
             {
                 folder = await _downloadRun.Value.DownloadAsync(
                     offer,
-                    new Forwarder<RemoteDownloadProgress>(x => Report(version, ModImportPhase.Downloading, x.BytesReceived, x.TotalBytes ?? 0)),
+                    new InlineProgress<RemoteDownloadProgress>(x => Report(version, ModImportPhase.Downloading, x.BytesReceived, x.TotalBytes ?? 0)),
                     cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -759,7 +847,26 @@ public sealed class ModImportService(
                 return null;
             }
 
-            var held = await ReadDownloadAsync(folder, cancellationToken);
+            LocalMod? held;
+
+            try
+            {
+                held = await ReadDownloadAsync(folder, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _downloadRun.Value.Discard(folder);
+                throw;
+            }
+            catch (Exception exception)
+            {
+                // Not a verdict on the link: a file an antivirus still holds reads fine next time, so
+                // no note is recorded and the version can be tried again.
+                _downloadRun.Value.Discard(folder);
+                Refuse(version, ModImportStatus.DownloadFailed, "The download could not be read.", exception);
+
+                return null;
+            }
 
             downloadNotes.Record(new RemoteDownloadNote(
                 offer.Version.DownloadUrl,
@@ -781,25 +888,14 @@ public sealed class ModImportService(
             return null;
         }
 
-        /// <summary>The one mod a download's folder holds, or null where it holds none.</summary>
+        /// <summary>The mod a download's file holds, or null where it is not a mod. Throws where it could not be read.</summary>
         private async Task<LocalMod?> ReadDownloadAsync(string folder, CancellationToken cancellationToken)
         {
-            try
-            {
-                var mods = (await request.ModAdapter!.GetModsFromFolder(folder, cancellationToken)).ToList();
+            var files = Directory.GetFiles(folder);
 
-                return mods.Count == 1 ? mods[0] : null;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                logger.LogWarning(exception, "Could not read the download in {Folder}.", folder);
-
-                return null;
-            }
+            return files.Length == 1
+                ? await request.ModAdapter!.ReadModFileAsync(files[0], cancellationToken)
+                : null;
         }
 
         /// <summary>
@@ -901,11 +997,30 @@ public sealed class ModImportService(
 
                 if (candidates.Count > 0)
                 {
-                    _registered = await FetchRegisteredAsync(cancellationToken);
+                    try
+                    {
+                        _registered = await FetchRegisteredAsync(cancellationToken);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception)
+                    {
+                        foreach (var held in candidates.Values.SelectMany(x => x.Values))
+                        {
+                            Refuse(held, ModImportStatus.Failed, "Could not read the repo's mod list. Try again.", exception);
+                        }
 
-                    candidates = DropAlreadyRegistered(candidates, _registered);
+                        candidates = [];
+                    }
 
-                    await ImportAsync(candidates, _registered, cancellationToken);
+                    if (candidates.Count > 0)
+                    {
+                        candidates = DropAlreadyRegistered(candidates, _registered);
+
+                        await ImportAsync(candidates, _registered, cancellationToken);
+                    }
                 }
 
                 foreach (var (download, held) in replacements)
@@ -941,7 +1056,7 @@ public sealed class ModImportService(
 
         /// <summary>A downloaded file as a version found on this machine, so it imports like any other.</summary>
         private static CatalogModVersion FromDownload(LocalMod mod, RemoteOffer offer, string folder)
-            => CatalogModVersion.FromLocal(mod, [new ModOccurrence(offer.AsSource(folder), mod.FilePath, mod.FileLength, mod.GetStream)]);
+            => CatalogModVersion.FromLocal(mod, [new ModOccurrence(offer.AsSource(folder), mod)]);
 
         /// <summary>Offered by a remote source, with no file on this machine yet.</summary>
         private static bool IsDownload(CatalogModVersion version) => version.Download is not null && version.FoundIn.Count == 0;
@@ -978,11 +1093,19 @@ public sealed class ModImportService(
             {
                 throw;
             }
+            catch (Exception exception) when (exception is ModFileChangedException or UploadedContentChangedException)
+            {
+                Refuse(version, ModImportStatus.Failed, "The file changed after it was scanned. Rescan and import again.", exception);
+
+                return VersionOutcome.Done;
+            }
             catch (Exception exception)
             {
                 // One mod's problem. The rest of the batch is unaffected, which is the whole point
                 // of importing per mod rather than in phases.
-                Refuse(version, ModImportStatus.Failed, exception.Message, exception);
+                Refuse(version, ModImportStatus.Failed,
+                    exception is UserFriendlyException friendly ? friendly.UserMessage : "The upload failed.",
+                    exception);
 
                 return VersionOutcome.Done;
             }
@@ -999,15 +1122,7 @@ public sealed class ModImportService(
 
             try
             {
-                link = await filesClient.CreateModUploadLinkV1Async(
-                    new CreateModUploadLinkRequest()
-                    {
-                        RepoId = request.RepoId,
-                        ModId = version.ModId.Value,
-                        VersionId = version.VersionId.Value,
-                        SizeBytes = Chosen(version).FileLength
-                    },
-                    cancellationToken);
+                link = await CreateUploadLinkAsync(version, cancellationToken);
             }
             catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.AlreadyRegistered)
             {
@@ -1031,12 +1146,26 @@ public sealed class ModImportService(
             var hash = await uploader.UploadAsync(
                 new ModFileUpload(link.Link, link.ContentHashMetadataKey, Chosen(version).OpenStream)
                 {
-                    BytesTransferred = new Forwarder<long>(x => Report(version, ModImportPhase.Uploading, x, total))
+                    BytesTransferred = new InlineProgress<long>(x => Report(version, ModImportPhase.Uploading, x, total)),
+                    // A version picked between differing copies must upload the copy that was picked.
+                    ExpectedHash = ChosenHash(version),
+                    RenewLink = async ct => (await CreateUploadLinkAsync(version, ct)).Link
                 },
                 cancellationToken);
 
             return await RegisterAsync(version, placement, hash, cancellationToken);
         }
+
+        private Task<CreateModUploadLinkResponse> CreateUploadLinkAsync(CatalogModVersion version, CancellationToken cancellationToken)
+            => filesClient.CreateModUploadLinkV1Async(
+                new CreateModUploadLinkRequest()
+                {
+                    RepoId = request.RepoId,
+                    ModId = version.ModId.Value,
+                    VersionId = version.VersionId.Value,
+                    SizeBytes = Chosen(version).FileLength
+                },
+                cancellationToken);
 
         /// <summary>
         /// Finishes an import that already uploaded and then died: the blob is there, nothing is
@@ -1056,10 +1185,12 @@ public sealed class ModImportService(
             string? storedHash,
             CancellationToken cancellationToken)
         {
-            string ours;
+            var ours = ChosenHash(version);
 
-            using (var content = Chosen(version).OpenStream())
+            if (ours is null)
             {
+                using var content = Chosen(version).OpenStream();
+
                 ours = await ModContentHasher.ComputeAsync(content, cancellationToken);
             }
 
@@ -1083,6 +1214,11 @@ public sealed class ModImportService(
         {
             Report(version, ModImportPhase.Registering);
 
+            // What the uploaded file itself says, not what the catalog row was merged from: two copies
+            // of one version can disagree about their name, lock and attributes as well as their bytes.
+            var chosen = Chosen(version);
+            var mod = chosen.Mod;
+
             try
             {
                 await modsClient.RegisterModV1Async(
@@ -1091,21 +1227,21 @@ public sealed class ModImportService(
                     {
                         ModId = version.ModId.Value,
                         VersionId = version.VersionId.Value,
-                        DisplayName = version.Name,
-                        Description = version.Description,
+                        DisplayName = mod.Name,
+                        Description = mod.Description,
                         // The repo learns what the file is called here and nowhere else, and every
                         // other member's mod folder is named from it. Taken off the occurrence the
                         // upload read, for the same reason the bytes are - a resolved conflict must
                         // not register one source's file under another source's name.
-                        FileName = ModFileName.ForFile(version.ModId, Chosen(version).FilePath).Value,
+                        FileName = ModFileName.ForFile(version.ModId, chosen.FilePath).Value,
                         ContentHash = contentHash,
-                        Locked = version.Locked,
+                        Locked = mod.Locked,
                         Placement = new ServerPlacement()
                         {
                             After = placement.After?.Value,
                             Before = placement.Before?.Value
                         },
-                        Attributes = [.. version.Attributes.Select(x => new ModAttributeDto() { Key = x.Key, Value = x.Value })]
+                        Attributes = [.. mod.Attributes.Select(x => new ModAttributeDto() { Key = x.Key, Value = x.Value })]
                     },
                     cancellationToken);
             }
@@ -1233,10 +1369,9 @@ public sealed class ModImportService(
         /// <returns>Why imagery did not make it, or null. Never a reason to fail the version.</returns>
         private async Task<string?> PublishImageryAsync(CatalogModVersion version, CancellationToken cancellationToken)
         {
-            if (ToLocalMod(version) is not LocalMod mod)
-            {
-                return null;
-            }
+            // The occurrence the upload read, so the images published are the ones inside the file
+            // that was actually registered rather than another copy's.
+            var mod = Chosen(version).Mod;
 
             Report(version, ModImportPhase.PublishingImagery);
 
@@ -1313,31 +1448,6 @@ public sealed class ModImportService(
             => RegisteredVersions.From(await modStore.GetAsync(request.RepoId, cancellationToken));
 
 
-        /// <summary>
-        /// The archive the upload took its bytes from, in the shape the image publisher wants - the
-        /// same occurrence, so the images published are the ones inside the file that was actually
-        /// registered rather than a rejected copy's.
-        /// </summary>
-        private LocalMod? ToLocalMod(CatalogModVersion version)
-        {
-            if (version.FoundIn.Count == 0)
-            {
-                return null;
-            }
-
-            var occurrence = Chosen(version);
-
-            return new LocalMod(version.ModId, version.VersionId, version.Name, version.Description, occurrence.OpenStream)
-            {
-                FilePath = occurrence.FilePath,
-                FileLength = occurrence.FileLength,
-                Icon = version.Icon,
-                Images = version.Images,
-                Author = version.Author
-            };
-        }
-
-
         private void Report(CatalogModVersion version, ModImportPhase phase, long transferred = 0, long total = 0, string? error = null)
         {
             request.Progress?.Report(new ModImportProgress(version.Identity, phase)
@@ -1401,9 +1511,10 @@ public sealed class ModImportService(
             {
                 // Superseded files follow their version's fate. A conflict that was resolved and
                 // then failed to upload must not cost somebody the copy they chose against - the
-                // repo has neither file, and the one still on disk is all that is left.
+                // repo has neither file, and the one still on disk is all that is left. Only this
+                // import's own registration counts: one somebody else made may hold the rejected build.
                 var imported = _items
-                    .Where(x => x.IsSuccess)
+                    .Where(x => x.Status is ModImportStatus.Registered)
                     .Select(x => x.Identity)
                     .ToHashSet();
 
@@ -1427,15 +1538,8 @@ public sealed class ModImportService(
             PlacementConflict
         }
 
-        /// <summary>
-        /// Reports on the calling thread. <see cref="Progress{T}"/> would post to whatever context
-        /// happened to be current, which for byte counts arriving thousands of times per file is
-        /// both slower and out of order.
-        /// </summary>
-        private sealed class Forwarder<T>(Action<T> report) : IProgress<T>
-        {
-            public void Report(T value) => report(value);
-        }
+        /// <param name="ContentHash">What the copy hashed to when it was compared with others, or null where it was the only one.</param>
+        private sealed record ChosenCopy(ModOccurrence Occurrence, string? ContentHash);
 
         /// <summary>The repo's versions per mod, in the order the repo stores them.</summary>
         private sealed class RegisteredVersions(Dictionary<ModKey, IReadOnlyList<ModVersionKey>> byMod)

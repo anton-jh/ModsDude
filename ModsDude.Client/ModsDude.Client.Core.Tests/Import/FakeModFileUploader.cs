@@ -20,6 +20,9 @@ internal sealed class FakeModFileUploader(FakeModsDudeServer server) : IModFileU
     /// <summary>Runs inside the upload, where a test can cancel or throw partway through a batch.</summary>
     public Func<string, Task>? OnUpload { get; set; }
 
+    /// <summary>The hash each upload said its bytes must have, in the order they started.</summary>
+    public List<string?> ExpectedHashes { get; } = [];
+
 
     public async Task<string> UploadAsync(ModFileUpload upload, CancellationToken cancellationToken)
     {
@@ -38,8 +41,18 @@ internal sealed class FakeModFileUploader(FakeModsDudeServer server) : IModFileU
             // the next is scheduled.
             await Task.Delay(5, cancellationToken);
 
+            lock (_lock)
+            {
+                ExpectedHashes.Add(upload.ExpectedHash);
+            }
+
             using var content = upload.OpenContent();
             var hash = await ModContentHasher.ComputeAsync(content, cancellationToken);
+
+            if (upload.ExpectedHash is string expected && ModContentHasher.Matches(hash, expected) is false)
+            {
+                throw new UploadedContentChangedException(expected, hash);
+            }
 
             upload.BytesTransferred?.Report(content.Length);
 

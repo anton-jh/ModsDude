@@ -25,12 +25,23 @@ namespace ModsDude.Client.Core.Import;
 /// content.
 /// </para>
 /// <para>
+/// <b>Each request is timed by its progress, not its length.</b> Under a slow line or a low limit a
+/// block can take minutes, so a request fails only once it has moved nothing for
+/// <see cref="StallTimeout"/>. Blocks take a connection from the upload limiter, so under a limit a
+/// handful of mods share a few well-fed connections rather than starving many. A block that fails
+/// for a passing reason is sent again: staged blocks stay staged, so this resends one block, never
+/// the file. And a link that expires partway is renewed, where the caller can renew it.
+/// </para>
+/// <para>
 /// Written against the REST API rather than <c>Azure.Storage.Blobs</c> because this is the only
 /// place the client talks to storage, and the SDK is a large dependency for two requests.
 /// </para>
 /// </remarks>
-public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimits limits) : IModFileUploader
+public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimits limits, TimeProvider time) : IModFileUploader
 {
+    /// <summary>How many times a request that failed for a passing reason is sent again.</summary>
+    private const int _retries = 3;
+
     /// <summary>
     /// Well under the 4000 MiB per-block ceiling, and small enough that a failed block is a cheap
     /// thing to lose. The buffer is held for the length of one upload, so a handful of concurrent
@@ -47,10 +58,19 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
     private static readonly TimeSpan _reportInterval = TimeSpan.FromMilliseconds(100);
 
 
+    /// <summary>How long a request may move nothing before it is abandoned. Its own HttpClient has no overall timeout.</summary>
+    internal TimeSpan StallTimeout { get; init; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>The wait before the first resend, doubling for each one after.</summary>
+    internal TimeSpan RetryDelay { get; init; } = TimeSpan.FromSeconds(2);
+
+
     public async Task<string> UploadAsync(ModFileUpload upload, CancellationToken cancellationToken)
     {
         using var content = upload.OpenContent();
         using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+
+        var link = new UploadLink(upload);
 
         // Block ids are staged against the blob's name, so two uploads of one file at the same moment
         // must not share them, or one commit could take the other's blocks.
@@ -86,7 +106,7 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
             var blockId = MakeBlockId(uploadId, blockIds.Count);
             blockIds.Add(blockId);
 
-            await PutBlockAsync(upload.Link, blockId, buffer.AsMemory(0, read), ReportSent, cancellationToken);
+            await PutBlockAsync(link, blockId, buffer.AsMemory(0, read), ReportSent, cancellationToken);
 
             transferred += read;
             upload.BytesTransferred?.Report(transferred);
@@ -104,26 +124,34 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
             throw new UploadedContentChangedException(expected, hash);
         }
 
-        await CommitAsync(upload.Link, blockIds, upload.ContentHashMetadataKey, hash, cancellationToken);
+        await CommitAsync(link, blockIds, upload.ContentHashMetadataKey, hash, cancellationToken);
 
         return hash;
     }
 
 
-    private async Task PutBlockAsync(string link, string blockId, ReadOnlyMemory<byte> block, Action<long> sent, CancellationToken cancellationToken)
+    private async Task PutBlockAsync(UploadLink link, string blockId, ReadOnlyMemory<byte> block, Action<long> sent, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Put, Append(link, $"comp=block&blockid={Uri.EscapeDataString(blockId)}"))
-        {
-            // Throttled here rather than around the file, so the limit is paid while the bytes are
-            // actually on the wire and not while a block is being read off disk.
-            Content = new ThrottledContent(block, limits.Upload, sent)
-        };
+        using var connection = await limits.Upload.AcquireConnectionAsync(cancellationToken);
 
-        await SendAsync(request, "stage a block of", cancellationToken);
+        await SendAsync(
+            link,
+            (url, progressed) => new HttpRequestMessage(HttpMethod.Put, Append(url, $"comp=block&blockid={Uri.EscapeDataString(blockId)}"))
+            {
+                // Throttled here rather than around the file, so the limit is paid while the bytes are
+                // actually on the wire and not while a block is being read off disk.
+                Content = new ThrottledContent(block, limits.Upload, x =>
+                {
+                    progressed();
+                    sent(x);
+                })
+            },
+            "stage a block of",
+            cancellationToken);
     }
 
     private async Task CommitAsync(
-        string link,
+        UploadLink link,
         IReadOnlyList<string> blockIds,
         string contentHashMetadataKey,
         string hash,
@@ -138,48 +166,125 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
 
         body.Append("</BlockList>");
 
-        using var request = new HttpRequestMessage(HttpMethod.Put, Append(link, "comp=blocklist"))
-        {
-            Content = new StringContent(body.ToString(), Encoding.UTF8, "application/xml")
-        };
+        await SendAsync(
+            link,
+            (url, _) =>
+            {
+                var request = new HttpRequestMessage(HttpMethod.Put, Append(url, "comp=blocklist"))
+                {
+                    Content = new StringContent(body.ToString(), Encoding.UTF8, "application/xml")
+                };
 
-        request.Headers.TryAddWithoutValidation($"x-ms-meta-{contentHashMetadataKey}", hash);
+                request.Headers.TryAddWithoutValidation($"x-ms-meta-{contentHashMetadataKey}", hash);
 
-        // Never over a blob that is there already. The link cannot overwrite either, but saying so here
-        // makes the refusal one this code recognises rather than a permission error.
-        request.Headers.TryAddWithoutValidation("If-None-Match", "*");
+                // Never over a blob that is there already. The link cannot overwrite either, but saying
+                // so here makes the refusal one this code recognises rather than a permission error.
+                request.Headers.TryAddWithoutValidation("If-None-Match", "*");
 
-        await SendAsync(request, "commit", cancellationToken);
+                return request;
+            },
+            "commit",
+            cancellationToken);
     }
 
-    private async Task SendAsync(HttpRequestMessage request, string what, CancellationToken cancellationToken)
+    /// <param name="build">
+    /// The request against a link, built afresh for every attempt. Its body calls the given action
+    /// whenever it moves bytes, which is what holds off the stall timeout.
+    /// </param>
+    private async Task SendAsync(
+        UploadLink link,
+        Func<string, Action, HttpRequestMessage> build,
+        string what,
+        CancellationToken cancellationToken)
     {
-        request.Headers.TryAddWithoutValidation("x-ms-version", _storageApiVersion);
+        var renewed = false;
+        var retries = 0;
 
-        using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-
-        if (response.IsSuccessStatusCode)
+        while (true)
         {
-            return;
+            using var stall = new CancellationTokenSource(Timeout.InfiniteTimeSpan, time);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stall.Token);
+
+            void Progressed() => stall.CancelAfter(StallTimeout);
+
+            using var request = build(link.Url, Progressed);
+            request.Headers.TryAddWithoutValidation("x-ms-version", _storageApiVersion);
+
+            Exception failure;
+
+            try
+            {
+                Progressed();
+
+                using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linked.Token);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return;
+                }
+
+                var codes = response.Headers.TryGetValues("x-ms-error-code", out var values) ? values.ToList() : [];
+
+                // The commit's condition: somebody else committed a blob at this address first.
+                if (response.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.PreconditionFailed
+                    && codes.Any(x => x is "BlobAlreadyExists" or "ConditionNotMet"))
+                {
+                    throw new BlobAlreadyExistsException($"Failed to {what} the mod file: a file is already stored at its address.");
+                }
+
+                // What an expired link answers. Renewed once per request: a fresh link refused the same
+                // way is a refusal, not an expiry.
+                if (response.StatusCode is HttpStatusCode.Forbidden
+                    && codes.Contains("AuthenticationFailed")
+                    && link.CanRenew
+                    && renewed is false)
+                {
+                    await link.RenewAsync(cancellationToken);
+                    renewed = true;
+
+                    continue;
+                }
+
+                // Storage answers with an XML error document naming the real cause - an expired SAS, a
+                // permission the link was not granted - and none of that survives EnsureSuccessStatusCode.
+                var detail = await response.Content.ReadAsStringAsync(linked.Token);
+
+                failure = new HttpRequestException(
+                    $"Failed to {what} the mod file: {(int)response.StatusCode} {response.ReasonPhrase}. {detail}",
+                    null,
+                    response.StatusCode);
+
+                if (IsPassing(response.StatusCode) is false)
+                {
+                    throw failure;
+                }
+            }
+            catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested is false)
+            {
+                failure = new TimeoutException($"Failed to {what} the mod file: nothing moved for {StallTimeout}.", exception);
+            }
+            catch (HttpRequestException exception) when (exception.StatusCode is null)
+            {
+                // The connection itself failed: reset, refused, a name that did not resolve.
+                failure = exception;
+            }
+            catch (IOException exception)
+            {
+                failure = exception;
+            }
+
+            if (retries == _retries)
+            {
+                throw failure;
+            }
+
+            await Task.Delay(RetryDelay * Math.Pow(2, retries), time, cancellationToken);
+            retries++;
         }
-
-        // The commit's condition: somebody else committed a blob at this address first.
-        if (response.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.PreconditionFailed
-            && response.Headers.TryGetValues("x-ms-error-code", out var codes)
-            && codes.Any(x => x is "BlobAlreadyExists" or "ConditionNotMet"))
-        {
-            throw new BlobAlreadyExistsException($"Failed to {what} the mod file: a file is already stored at its address.");
-        }
-
-        // Storage answers with an XML error document naming the real cause - an expired SAS, a
-        // permission the link was not granted - and none of that survives EnsureSuccessStatusCode.
-        var detail = await response.Content.ReadAsStringAsync(cancellationToken);
-
-        throw new HttpRequestException(
-            $"Failed to {what} the mod file: {(int)response.StatusCode} {response.ReasonPhrase}. {detail}",
-            null,
-            response.StatusCode);
     }
+
+    private static bool IsPassing(HttpStatusCode status)
+        => status is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests || (int)status >= 500;
 
 
     /// <summary>Block ids must be equal-length and base64.</summary>
@@ -188,4 +293,16 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
 
     private static Uri Append(string link, string query)
         => new(link + (link.Contains('?') ? '&' : '?') + query);
+
+
+    /// <summary>The link an upload is sending to, replaced in place when it is renewed.</summary>
+    private sealed class UploadLink(ModFileUpload upload)
+    {
+        public string Url { get; private set; } = upload.Link;
+
+        public bool CanRenew => upload.RenewLink is not null;
+
+        public async Task RenewAsync(CancellationToken cancellationToken)
+            => Url = await upload.RenewLink!(cancellationToken);
+    }
 }

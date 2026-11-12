@@ -13,11 +13,13 @@ internal static class SafeXml
         return XDocument.Load(reader);
     }
 
-    public static XDocument Load(string path)
+    /// <param name="share">How others may use the file meanwhile; a game may hold its own files open.</param>
+    public static XDocument Load(string path, FileShare share = FileShare.Read)
     {
-        using var reader = XmlReader.Create(path, CreateSettings());
+        // Opened as a file rather than handed to XmlReader as a string, which would read it as a URI.
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, share);
 
-        return XDocument.Load(reader);
+        return Load(stream);
     }
 
 

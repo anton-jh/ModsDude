@@ -30,6 +30,7 @@ public sealed class ModHubModSource(IModHubClient client, string game) : IRemote
     {
         var versions = new List<RemoteModVersion>();
         DateTimeOffset? currentAsOf = null;
+        var first = true;
 
         foreach (var batch in mods.Select(x => x.Value).Order(StringComparer.Ordinal).Chunk(_batchSize))
         {
@@ -38,7 +39,11 @@ public sealed class ModHubModSource(IModHubClient client, string game) : IRemote
 
             // The generated client hands dates back as local or UTC depending on the payload's offset;
             // the DateTimeOffset constructor honours either kind.
-            currentAsOf = response.CurrentAsOf is DateTime asOf ? new DateTimeOffset(asOf) : null;
+            DateTimeOffset? batchAsOf = response.CurrentAsOf is DateTime asOf ? new DateTimeOffset(asOf) : null;
+
+            // The lookup is only as current as its stalest batch, and unknown if any batch is.
+            currentAsOf = first ? batchAsOf : batchAsOf is null || currentAsOf is null ? null : Min(currentAsOf.Value, batchAsOf.Value);
+            first = false;
 
             foreach (var mod in response.Mods)
             {
@@ -62,6 +67,8 @@ public sealed class ModHubModSource(IModHubClient client, string game) : IRemote
 
         return new RemoteModLookup(currentAsOf, versions);
     }
+
+    private static DateTimeOffset Min(DateTimeOffset left, DateTimeOffset right) => left <= right ? left : right;
 
     public bool IsAllowedDownload(Uri uri)
         => uri.Scheme == Uri.UriSchemeHttps

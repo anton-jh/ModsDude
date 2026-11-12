@@ -256,7 +256,7 @@ internal static class FarmingSimulatorModAttributes
     {
         try
         {
-            using var stream = entry.Open();
+            using var stream = ModArchives.OpenEntry(entry, ModArchives.MaxMetadataEntryBytes);
 
             return SafeXml.Load(stream).Root;
         }

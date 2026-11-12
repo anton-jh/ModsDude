@@ -35,6 +35,9 @@ public class BeamNgBaseModAdapter(ILoggerFactory? loggerFactory = null) : IBaseM
     public Task<IEnumerable<LocalMod>> GetModsFromFolder(string path, CancellationToken cancellationToken)
         => ReadFolder(path, _ => false, Path.GetFileName, cancellationToken);
 
+    public Task<LocalMod?> ReadModFileAsync(string path, CancellationToken cancellationToken)
+        => Task.Run(() => ModArchives.IsArchive(path) ? BeamNgModArchive.ReadArchive(path, Path.GetFileName(path), Log, cancellationToken) : null, cancellationToken);
+
     /// <param name="skip">Files the caller already knows, left unopened. See <see cref="ILocalModAdapter.GetInstalledMods"/>.</param>
     /// <param name="nameOf">The name a file's mod goes by, from the file's own.</param>
     protected Task<IEnumerable<LocalMod>> ReadFolder(
@@ -46,7 +49,7 @@ public class BeamNgBaseModAdapter(ILoggerFactory? loggerFactory = null) : IBaseM
         return ModArchives.ReadFolderAsync(
             path,
             skip,
-            (file, ct) => BeamNgModArchive.Read(file, nameOf(Path.GetFileName(file)), Log, ct),
+            (file, ct) => BeamNgModArchive.TryRead(file, nameOf(Path.GetFileName(file)), Log, ct),
             cancellationToken);
     }
 

@@ -410,7 +410,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         ? ModImportProblems.DescribeRow(ImportOutcome)
         : null;
 
-    public bool IsTransferring => ImportPhase is ModImportPhase.Uploading or ModImportPhase.Downloading;
+    public bool IsTransferring => ImportPhase is ModImportPhase.Checking or ModImportPhase.Uploading or ModImportPhase.Downloading;
 
     public string ImportStateText => ImportOutcome switch
     {
@@ -428,6 +428,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         _ => ImportPhase switch
         {
             ModImportPhase.Queued => "Queued",
+            ModImportPhase.Checking => $"Checking {ImportProgress:P0}",
             ModImportPhase.Downloading => ImportProgress > 0 ? $"Downloading {ImportProgress:P0}" : "Downloading",
             ModImportPhase.Linking => "Preparing",
             ModImportPhase.Uploading => $"Uploading {ImportProgress:P0}",

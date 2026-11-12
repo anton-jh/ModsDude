@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Tests.Models;
 using System.Text;
 
 namespace ModsDude.Client.Core.Tests.Import;
@@ -27,6 +28,7 @@ public class ModOccurrenceResolverTests
 
         var candidates = await ModOccurrenceResolver.ResolveAsync(
             [Occurrence(_downloads, "bytes", () => opened++)],
+            null,
             CancellationToken.None);
 
         var candidate = Assert.Single(candidates);
@@ -48,6 +50,7 @@ public class ModOccurrenceResolverTests
                 Occurrence(_game, "one build"),
                 Occurrence(_added, "one build")
             ],
+            null,
             CancellationToken.None);
 
         var candidate = Assert.Single(candidates);
@@ -64,6 +67,7 @@ public class ModOccurrenceResolverTests
                 Occurrence(_downloads, "one build"),
                 Occurrence(_game, "another build")
             ],
+            null,
             CancellationToken.None);
 
         Assert.Equal(2, candidates.Count);
@@ -82,6 +86,7 @@ public class ModOccurrenceResolverTests
                 Occurrence(_downloads, "aaaa"),
                 Occurrence(_game, "bbbb")
             ],
+            null,
             CancellationToken.None);
 
         Assert.Equal(2, candidates.Count);
@@ -96,9 +101,10 @@ public class ModOccurrenceResolverTests
     {
         var candidates = await ModOccurrenceResolver.ResolveAsync(
             [
-                new ModOccurrence(_downloads, @"C:\Downloads\gone.zip", 9, () => throw new FileNotFoundException()),
+                TestOccurrences.Create(_downloads, @"C:\Downloads\gone.zip", 9, () => throw new FileNotFoundException()),
                 Occurrence(_game, "one build")
             ],
+            null,
             CancellationToken.None);
 
         var candidate = Assert.Single(candidates);
@@ -111,9 +117,10 @@ public class ModOccurrenceResolverTests
     {
         var candidates = await ModOccurrenceResolver.ResolveAsync(
             [
-                new ModOccurrence(_downloads, @"C:\Downloads\gone.zip", 9, () => throw new FileNotFoundException()),
-                new ModOccurrence(_game, @"C:\FS25\mods\gone.zip", 9, () => throw new IOException())
+                TestOccurrences.Create(_downloads, @"C:\Downloads\gone.zip", 9, () => throw new FileNotFoundException()),
+                TestOccurrences.Create(_game, @"C:\FS25\mods\gone.zip", 9, () => throw new IOException())
             ],
+            null,
             CancellationToken.None);
 
         Assert.Empty(candidates);
@@ -124,7 +131,7 @@ public class ModOccurrenceResolverTests
     {
         var bytes = Encoding.UTF8.GetBytes(content);
 
-        return new ModOccurrence(source, Path.Combine(source.Path, "FS25_Plough.zip"), bytes.Length, () =>
+        return TestOccurrences.Create(source, Path.Combine(source.Path, "FS25_Plough.zip"), bytes.Length, () =>
         {
             onOpen?.Invoke();
             return new MemoryStream(bytes);

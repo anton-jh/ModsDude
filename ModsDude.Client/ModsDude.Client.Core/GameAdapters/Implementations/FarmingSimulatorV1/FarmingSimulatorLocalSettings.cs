@@ -1,8 +1,8 @@
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using ModsDude.Client.Core.Helpers;
 using System.Text.Json;
 using System.Xml;
-using System.Xml.Linq;
 
 namespace ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 
@@ -81,8 +81,7 @@ public static class FarmingSimulatorGameDataFolder
         try
         {
             // Shared with the game, which may well have it open.
-            using var stream = new FileStream(settingsFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            var element = XDocument.Load(stream).Root?.Element("modsDirectoryOverride");
+            var element = SafeXml.Load(settingsFile, FileShare.ReadWrite | FileShare.Delete).Root?.Element("modsDirectoryOverride");
 
             if (element is null || (bool?)element.Attribute("active") is not true)
             {

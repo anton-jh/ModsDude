@@ -513,7 +513,7 @@ public sealed class ModCatalog : IDisposable
                     occurrences[identity] = found = [];
                 }
 
-                found.Add(new ModOccurrence(scan.Source, mod.FilePath, mod.FileLength, mod.GetStream));
+                found.Add(new ModOccurrence(scan.Source, mod));
             }
         }
 

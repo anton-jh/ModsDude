@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.RemoteSources;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Tests.GameAdapters;
+using ModsDude.Client.Core.Tests.Models;
 using ModsDude.Client.Core.Tests.RemoteSources;
 using ModsDude.Client.Core.Tests.Stores;
 using ModsDude.Client.Core.Tests.Sync;
@@ -269,6 +270,27 @@ public class ModImportDownloadTests : IDisposable
         Assert.Equal(0, _downloader.Runs);
     }
 
+    /// <summary>
+    /// A file an antivirus still holds is not a verdict on the link: nothing is noted against it, so
+    /// the next import tries it again.
+    /// </summary>
+    [Fact]
+    public async Task A_download_that_cannot_be_read_fails_without_marking_the_link()
+    {
+        var offer = Offer("FS25_Plough", "1.1");
+        _downloader.Serve(offer.Download!.Version, "1.1");
+
+        var result = await ImportAsync([offer], x => x with
+        {
+            ModAdapter = new FakeMultiTargetBaseModAdapter { ReadFailure = new IOException("locked by a scanner") }
+        });
+
+        Assert.Equal(ModImportStatus.DownloadFailed, Assert.Single(result.Items).Status);
+        Assert.Empty(_notes.Notes);
+        Assert.Single(_downloader.Discarded);
+        Assert.Empty(_server.CallsOf(ServerCallKind.Register));
+    }
+
     [Fact]
     public async Task Cancelling_mid_download_registers_nothing_and_leaves_no_files()
     {
@@ -317,7 +339,7 @@ public class ModImportDownloadTests : IDisposable
 
         return new CatalogModVersion(Mod(modId), V(version), modId, "A mod.", IsLocal: true, IsOnServer: false, Locked: false)
         {
-            FoundIn = [new ModOccurrence(source, Path.Combine(source.Path, $"{modId}.zip"), bytes.Length, () => new MemoryStream(bytes))]
+            FoundIn = [TestOccurrences.Create(source, Path.Combine(source.Path, $"{modId}.zip"), bytes.Length, () => new MemoryStream(bytes), modId, version)]
         };
     }
 }

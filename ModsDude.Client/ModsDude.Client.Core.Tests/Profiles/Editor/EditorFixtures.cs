@@ -4,6 +4,7 @@ using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.RemoteSources;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Tests.Models;
 using static ModsDude.Client.Core.Tests.Keys;
 
 namespace ModsDude.Client.Core.Tests.Profiles.Editor;
@@ -28,7 +29,7 @@ internal static class EditorFixtures
     public static CatalogModVersion Local(string modId, string version, ModSource? source = null)
         => new(Mod(modId), V(version), modId, "", IsLocal: true, IsOnServer: false, Locked: false)
         {
-            FoundIn = [new ModOccurrence(source ?? Downloads, $@"{(source ?? Downloads).Path}\{modId}.zip", 100, () => Stream.Null)]
+            FoundIn = [TestOccurrences.Create(source ?? Downloads, $@"{(source ?? Downloads).Path}\{modId}.zip", 100, () => Stream.Null, modId, version)]
         };
 
     public static ProfileEditorCatalog Catalog(IEnumerable<CatalogModVersion> visible, IEnumerable<CatalogModVersion>? standby = null)

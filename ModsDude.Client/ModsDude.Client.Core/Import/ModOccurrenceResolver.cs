@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.Import;
@@ -54,8 +55,10 @@ public sealed record ModFileCandidate(
 public static class ModOccurrenceResolver
 {
     /// <summary>
-    /// The distinct files behind one version, most-recently-written first.
+    /// The distinct files behind one version, most-recently-written first. Copies are hashed in
+    /// parallel, since they usually sit on different folders and often on different disks.
     /// </summary>
+    /// <param name="bytesHashed">Told how many bytes have been hashed so far, across every copy.</param>
     /// <returns>
     /// Empty where nothing could be read. An occurrence whose file has gone or cannot be opened is
     /// dropped rather than failing the version: the other copy of it is very often still there, and
@@ -63,6 +66,7 @@ public static class ModOccurrenceResolver
     /// </returns>
     public static async Task<IReadOnlyList<ModFileCandidate>> ResolveAsync(
         IReadOnlyList<ModOccurrence> occurrences,
+        IProgress<long>? bytesHashed,
         CancellationToken cancellationToken)
     {
         if (occurrences.Count == 0)
@@ -75,15 +79,33 @@ public static class ModOccurrenceResolver
             return [new ModFileCandidate(null, occurrences[0].FileLength, occurrences)];
         }
 
-        var hashed = new List<(string Hash, ModOccurrence Occurrence)>();
+        var hashes = new string?[occurrences.Count];
+        var counted = new long[occurrences.Count];
+        long total = 0;
 
-        foreach (var occurrence in occurrences)
+        await Parallel.ForAsync(0, occurrences.Count, cancellationToken, async (i, ct) =>
         {
-            if (await TryHashAsync(occurrence, cancellationToken) is string hash)
-            {
-                hashed.Add((hash, occurrence));
-            }
-        }
+            var progress = bytesHashed is null
+                ? null
+                : new InlineProgress<long>(read =>
+                {
+                    // Under the lock, so what is reported only ever grows.
+                    lock (counted)
+                    {
+                        total += read - counted[i];
+                        counted[i] = read;
+                        bytesHashed.Report(total);
+                    }
+                });
+
+            hashes[i] = await TryHashAsync(occurrences[i], progress, ct);
+        });
+
+        // Indexed rather than collected, so the copies keep the order they were found in.
+        var hashed = occurrences
+            .Select((occurrence, i) => (Hash: hashes[i], Occurrence: occurrence))
+            .Where(x => x.Hash is not null)
+            .Select(x => (Hash: x.Hash!, x.Occurrence));
 
         return
         [
@@ -96,6 +118,7 @@ public static class ModOccurrenceResolver
                 // Newest first, so the choice a dialog offers first is the copy most recently put
                 // there - which is the one somebody just downloaded, far more often than not.
                 .OrderByDescending(LastWritten)
+                .ThenBy(x => x.ContentHash, StringComparer.Ordinal)
         ];
     }
 
@@ -128,13 +151,13 @@ public static class ModOccurrenceResolver
         return newest;
     }
 
-    private static async Task<string?> TryHashAsync(ModOccurrence occurrence, CancellationToken cancellationToken)
+    private static async Task<string?> TryHashAsync(ModOccurrence occurrence, IProgress<long>? bytesRead, CancellationToken cancellationToken)
     {
         try
         {
             using var content = occurrence.OpenStream();
 
-            return await ModContentHasher.ComputeAsync(content, cancellationToken);
+            return await ModContentHasher.ComputeAsync(content, bytesRead, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

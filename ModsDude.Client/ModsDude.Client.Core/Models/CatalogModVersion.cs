@@ -243,5 +243,16 @@ public readonly record struct ModUsage(int CurrentProfiles, int PastProfiles)
     public bool IsUnused => CurrentProfiles == 0 && PastProfiles == 0;
 }
 
-/// <summary>One source's copy of a version, and the file it found there.</summary>
-public record ModOccurrence(ModSource Source, string FilePath, long FileLength, Func<Stream> OpenStream);
+/// <summary>One source's copy of a version, as that copy was scanned.</summary>
+/// <param name="Mod">
+/// What this file itself holds. Two copies of one version can disagree about more than their bytes,
+/// so whatever reads, names or describes the copy being imported takes it from here.
+/// </param>
+public record ModOccurrence(ModSource Source, LocalMod Mod)
+{
+    public string FilePath => Mod.FilePath;
+
+    public long FileLength => Mod.FileLength;
+
+    public Func<Stream> OpenStream => Mod.GetStream;
+}

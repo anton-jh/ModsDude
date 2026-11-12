@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using System.Collections.Concurrent;
@@ -31,7 +33,8 @@ public interface IModImagerySource
 /// <inheritdoc cref="IModImagerySource"/>
 public class ModImagerySource(
     IModImageStore store,
-    IModImageBackfill backfill)
+    IModImageBackfill backfill,
+    ILogger<ModImagerySource> logger)
     : IModImagerySource
 {
     /// <summary>
@@ -62,7 +65,7 @@ public class ModImagerySource(
             return resolved;
         }
 
-        if (TryBuildLocalMod(version) is not LocalMod local)
+        if (TryGetLocalCopy(version) is not LocalMod local)
         {
             // Registered, no derivatives, and no file here to make them from. Initials, exactly as
             // for a local mod that ships without an icon.
@@ -71,9 +74,43 @@ public class ModImagerySource(
 
         var references = await _backfills.GetOrAdd(
             (repoId, version.ModId, version.VersionId),
-            key => backfill.BackfillAsync(key.Item1, key.Item2, key.Item3, local, CancellationToken.None));
+            key => BackfillAsync(key.Item1, version, local));
 
         return FromReferences(references);
+    }
+
+
+    private async Task<IReadOnlyList<ModImageReference>> BackfillAsync(Guid repoId, CatalogModVersion version, LocalMod local)
+    {
+        // Another build wearing the same id and version would publish its images as this one's, for
+        // everybody, so only a copy holding the registered bytes is used.
+        if (await IsRegisteredBuildAsync(version, local) is false)
+        {
+            return [];
+        }
+
+        return await backfill.BackfillAsync(repoId, version.ModId, version.VersionId, local, CancellationToken.None);
+    }
+
+    private async Task<bool> IsRegisteredBuildAsync(CatalogModVersion version, LocalMod local)
+    {
+        if (version.ContentHash is null || (version.SizeBytes is long size && size != local.FileLength))
+        {
+            return false;
+        }
+
+        try
+        {
+            await using var content = local.GetStream();
+
+            return ModContentHasher.Matches(await ModContentHasher.ComputeAsync(content, CancellationToken.None), version.ContentHash);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "Could not read {File} to backfill the imagery of {Mod} {Version}.", local.FilePath, version.ModId.Value, version.VersionId.Value);
+
+            return false;
+        }
     }
 
 
@@ -131,28 +168,16 @@ public class ModImagerySource(
     }
 
     /// <summary>
-    /// The archive record a registered version was merged from, where a source still holds the file.
-    /// Only ever used to derive what the repo is missing.
+    /// The copy a registered version's missing imagery could be derived from, where a source still
+    /// holds the file and it ships any. Not one of several copies that disagree.
     /// </summary>
-    private static LocalMod? TryBuildLocalMod(CatalogModVersion version)
+    private static LocalMod? TryGetLocalCopy(CatalogModVersion version)
     {
-        if (version.Icon is null && version.Images.Count == 0)
+        if (version.HasSourceConflict || version.FoundIn.FirstOrDefault() is not ModOccurrence occurrence)
         {
             return null;
         }
 
-        if (version.FoundIn.FirstOrDefault() is not ModOccurrence occurrence || version.OpenStream is null)
-        {
-            return null;
-        }
-
-        return new LocalMod(version.ModId, version.VersionId, version.Name, version.Description, version.OpenStream)
-        {
-            FilePath = occurrence.FilePath,
-            FileLength = occurrence.FileLength,
-            Icon = version.Icon,
-            Images = version.Images,
-            Author = version.Author
-        };
+        return occurrence.Mod.Icon is null && occurrence.Mod.Images.Count == 0 ? null : occurrence.Mod;
     }
 }

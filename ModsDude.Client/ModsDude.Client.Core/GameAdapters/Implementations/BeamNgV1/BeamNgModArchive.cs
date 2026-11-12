@@ -37,7 +37,7 @@ internal static class BeamNgModArchive
 
     /// <param name="fileName">The name the mod goes by, which may differ from the file's own - see <see cref="BeamMpCacheName"/>.</param>
     /// <returns>Null where the archive is not a mod, or could not be read - the second is logged.</returns>
-    public static LocalMod? Read(string path, string fileName, ILogger log, CancellationToken cancellationToken)
+    public static LocalMod? TryRead(string path, string fileName, ILogger log, CancellationToken cancellationToken)
     {
         try
         {
@@ -57,7 +57,10 @@ internal static class BeamNgModArchive
     }
 
 
-    private static LocalMod? ReadArchive(string path, string fileName, ILogger log, CancellationToken cancellationToken)
+    /// <returns>Null where the archive is not a mod.</returns>
+    /// <exception cref="InvalidDataException">The archive could not be read as a mod.</exception>
+    /// <exception cref="IOException">The file could not be read.</exception>
+    public static LocalMod? ReadArchive(string path, string fileName, ILogger log, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -72,6 +75,11 @@ internal static class BeamNgModArchive
         {
             throw new InvalidDataException($"'{stem}' cannot be carried as a mod id.");
         }
+
+        // Before the archive is opened, so what the scan records is no newer than what it read.
+        var scanned = new FileInfo(path);
+        var scannedLength = scanned.Length;
+        var scannedLastWriteUtc = scanned.LastWriteTimeUtc;
 
         using var zip = ModArchives.Open(path);
 
@@ -100,10 +108,10 @@ internal static class BeamNgModArchive
             ModVersionKey.From(UsableVersion(info?.Version) ?? NewestEntryVersion(entries)),
             NonBlank(info?.Title) ?? stem,
             NonBlank(BeamNgBbCode.ToPlainText(info?.Message)) ?? NonBlank(info?.TagLine) ?? "",
-            () => File.OpenRead(path))
+            () => ModArchives.OpenScanned(path, scannedLength, scannedLastWriteUtc))
         {
             FilePath = path,
-            FileLength = new FileInfo(path).Length,
+            FileLength = scannedLength,
             Author = NonBlank(info?.Author),
             Icon = FindIcon(entries, infoFolder, path),
             Images = FindImages(entries, infoFolder, path),
@@ -130,7 +138,7 @@ internal static class BeamNgModArchive
     {
         try
         {
-            using var stream = entry.Open();
+            using var stream = ModArchives.OpenEntry(entry, ModArchives.MaxMetadataEntryBytes);
             using var document = JsonDocument.Parse(stream);
 
             if (document.RootElement.ValueKind is not JsonValueKind.Object)
@@ -145,7 +153,7 @@ internal static class BeamNgModArchive
                 ReadString(document.RootElement, "tag_line"),
                 ReadString(document.RootElement, "message"));
         }
-        catch (JsonException exception)
+        catch (Exception exception) when (exception is JsonException or InvalidDataException)
         {
             // The mod is still a mod without its repository page; it just reads as one packed by hand.
             log.LogWarning(exception, "{File} carries an info.json that could not be read; reading the mod without it.", path);

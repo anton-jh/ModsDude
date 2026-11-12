@@ -149,6 +149,10 @@ public delegate Task<IReadOnlyDictionary<ModVersionIdentity, ModDownloadMismatch
 public enum ModImportPhase
 {
     Queued,
+
+    /// <summary>Hashing the version's copies to tell identical ones from different builds.</summary>
+    Checking,
+
     Downloading,
     Linking,
     Uploading,
@@ -168,7 +172,7 @@ public enum ModImportPhase
     Skipped
 }
 
-/// <param name="TotalBytes">The archive's size, so a row can show a proportion. Zero outside download and upload.</param>
+/// <param name="TotalBytes">The bytes the phase moves, so a row can show a proportion. Zero outside checking, download and upload.</param>
 public sealed record ModImportProgress(ModVersionIdentity Identity, ModImportPhase Phase)
 {
     public long BytesTransferred { get; init; }
@@ -258,7 +262,13 @@ public sealed record ModImportItemResult(ModVersionIdentity Identity, ModImportS
 /// succeeded; it does not know whether the action the user actually took has finished. In the
 /// profile editor the import is the first half of a save, and a file removed before the save
 /// commits is a file removed for a save that never happened. So the caller recycles, once its own
-/// work is done - see <see cref="ModImportService.RecycleSupersededAsync"/>.
+/// work is done - see <see cref="IModImportService.RecycleSuperseded"/>.
+/// </para>
+/// <para>
+/// <b>Never in a game's mod folder, and only for this import's own registration.</b> A rejected copy
+/// in a game's folder is replaced by the next apply of that folder, through the sync engine. A
+/// version somebody else registered first may hold the very build that was rejected, so it
+/// supersedes nothing.
 /// </para>
 /// <para>
 /// <b>Only rejected bytes.</b> Copies that are byte-identical to the one imported are left alone.

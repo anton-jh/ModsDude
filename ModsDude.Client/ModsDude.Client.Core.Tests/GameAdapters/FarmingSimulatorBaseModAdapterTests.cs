@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 using ModsDude.Client.Core.Models;
 using System.IO.Compression;
@@ -177,6 +178,63 @@ public class FarmingSimulatorBaseModAdapterTests : IDisposable
     }
 
     [Fact]
+    public async Task A_mod_desc_that_decompresses_past_the_cap_is_skipped_and_the_rest_of_the_folder_still_scans()
+    {
+        WriteMod("FS25_Plough", "1.0.0", []);
+        WriteMod("FS25_Bomb", "1.0.0", [], padding: 17 * 1024 * 1024);
+
+        Assert.Equal("fs25_plough", (await ScanOne()).Id.Value);
+    }
+
+    [Fact]
+    public async Task A_folder_scans_in_file_name_order()
+    {
+        WriteMod("FS25_Charlie", "1.0.0", []);
+        WriteMod("FS25_alpha", "1.0.0", []);
+        WriteMod("FS25_Bravo", "1.0.0", []);
+
+        Assert.Equal(["fs25_alpha", "fs25_bravo", "fs25_charlie"], (await Scan()).Select(x => x.Id.Value));
+    }
+
+    [Fact]
+    public async Task A_scanned_mod_opens_while_its_file_is_unchanged()
+    {
+        WriteMod("FS25_Plough", "1.0.0", []);
+        var mod = await ScanOne();
+
+        using var stream = mod.GetStream();
+
+        Assert.Equal(mod.FileLength, stream.Length);
+    }
+
+    [Fact]
+    public async Task A_scanned_mod_refuses_to_open_once_its_file_has_changed()
+    {
+        WriteMod("FS25_Plough", "1.0.0", []);
+        var mod = await ScanOne();
+
+        WriteMod("FS25_Plough", "1.1.0", [], padding: 1000);
+
+        Assert.Throws<ModFileChangedException>(() => mod.GetStream().Dispose());
+    }
+
+    [Fact]
+    public async Task Reading_one_file_tells_not_a_mod_apart_from_unreadable()
+    {
+        var adapter = new FarmingSimulatorBaseModAdapter(FarmingSimulatorGameVersion.Fs25);
+        var notAnArchive = Path.Combine(_folder, "readme.txt");
+        var broken = Path.Combine(_folder, "FS25_Broken.zip");
+
+        File.WriteAllText(notAnArchive, "hello");
+        File.WriteAllBytes(broken, [0x00, 0x01, 0x02, 0x03]);
+        WriteMod("FS25_Plough", "1.0.0", []);
+
+        Assert.Null(await adapter.ReadModFileAsync(notAnArchive, CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidDataException>(() => adapter.ReadModFileAsync(broken, CancellationToken.None));
+        Assert.Equal("fs25_plough", (await adapter.ReadModFileAsync(Path.Combine(_folder, "FS25_Plough.zip"), CancellationToken.None))?.Id.Value);
+    }
+
+    [Fact]
     public void A_mod_named_like_a_second_download_is_a_likely_copy()
     {
         var adapter = new FarmingSimulatorBaseModAdapter(FarmingSimulatorGameVersion.Fs25);
@@ -203,7 +261,8 @@ public class FarmingSimulatorBaseModAdapterTests : IDisposable
         string id, string version, string[] maps,
         bool writeEmptyMapsElement = false,
         string? mapPreview = null,
-        string[]? files = null)
+        string[]? files = null,
+        int padding = 0)
     {
         var previewElement = mapPreview is null ? "" : $"<iconFilename>{mapPreview}</iconFilename>";
 
@@ -219,6 +278,7 @@ public class FarmingSimulatorBaseModAdapterTests : IDisposable
                 <title><en>{id}</en></title>
                 <description><en>A mod.</en></description>
                 {mapsElement}
+                <padding>{new string('a', padding)}</padding>
             </modDesc>
             """;
 

@@ -108,13 +108,16 @@ public sealed class SavegameTransfer(
     /// </remarks>
     public async Task UploadAsync(Guid repoId, Guid savegameId, PackedSavegame packed, IProgress<SavegameProgress>? progress, CancellationToken ct)
     {
-        var link = await filesClient.CreateSavegameUploadLinkV1Async(new CreateSavegameUploadLinkRequest
-        {
-            RepoId = repoId,
-            SavegameId = savegameId,
-            ContentHash = packed.ContentHash,
-            SizeBytes = packed.SizeBytes
-        }, ct);
+        Task<CreateSavegameUploadLinkResponse> CreateLinkAsync(CancellationToken cancellationToken)
+            => filesClient.CreateSavegameUploadLinkV1Async(new CreateSavegameUploadLinkRequest
+            {
+                RepoId = repoId,
+                SavegameId = savegameId,
+                ContentHash = packed.ContentHash,
+                SizeBytes = packed.SizeBytes
+            }, cancellationToken);
+
+        var link = await CreateLinkAsync(ct);
 
         if (link.AlreadyStored)
         {
@@ -140,7 +143,10 @@ public sealed class SavegameTransfer(
                         : new InlineProgress<long>(sent => progress.Report(new SavegameProgress(SavegameStage.Uploading, sent, packed.SizeBytes))),
                     // The address is the hash, so bytes that changed since packing must never be committed
                     // under it: no snapshot may point at a blob nobody can reproduce.
-                    ExpectedHash = packed.ContentHash
+                    ExpectedHash = packed.ContentHash,
+                    // Stored meanwhile is the same outcome as a commit that lost the race: these bytes are there.
+                    RenewLink = async cancellationToken => (await CreateLinkAsync(cancellationToken)).Link
+                        ?? throw new BlobAlreadyExistsException("The savegame was stored by another upload while this one was sending.")
                 },
                 ct);
         }

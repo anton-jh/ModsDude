@@ -17,8 +17,13 @@ public interface IModImportService
     /// file removed for a save that never happened is a file removed for nothing.
     /// </para>
     /// <para>
-    /// <b>Best-effort, and never fatal.</b> A file the game is holding open stays where it is, which
-    /// costs a duplicate on disk and nothing else - the repo already has the bytes that matter.
+    /// <b>Never a game's files.</b> A rejected copy in a game's mod folder is not superseded at all:
+    /// the next apply of that folder replaces it through the sync engine, with its running-game check
+    /// and its own Recycle Bin. What reaches here is in Downloads or a folder the user added.
+    /// </para>
+    /// <para>
+    /// <b>Best-effort, and never fatal.</b> A file another program holds open stays where it is,
+    /// which costs a duplicate on disk and nothing else - the repo already has the bytes that matter.
     /// Nothing here throws, and everything it could not do is in the log.
     /// </para>
     /// </remarks>

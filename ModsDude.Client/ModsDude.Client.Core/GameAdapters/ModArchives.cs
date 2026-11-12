@@ -11,10 +11,15 @@ internal static class ModArchives
 {
     private const string _archiveExtension = ".zip";
 
+    /// <summary>The most a metadata entry (XML, JSON) may decompress to before it is refused.</summary>
+    public const long MaxMetadataEntryBytes = 16 * 1024 * 1024;
+
+    /// <summary>The most an image entry may decompress to before it is refused.</summary>
+    public const long MaxImageEntryBytes = 32 * 1024 * 1024;
+
 
     /// <summary>
-    /// Every mod archive directly in the folder, read in parallel and returned in the folder's
-    /// order. Anything that is not a <c>.zip</c> is not a candidate at all and is never opened.
+    /// Every mod archive directly in the folder, read in parallel and returned in file name order. Anything that is not a <c>.zip</c> is not a candidate at all and is never opened.
     /// </summary>
     /// <param name="skip">Files the caller already knows, left unopened.</param>
     /// <param name="read">One archive to a mod, or null where it is not one. Handles its own failures.</param>
@@ -34,7 +39,9 @@ internal static class ModArchives
         return Task.Run<IEnumerable<LocalMod>>(() =>
         {
             var files = Directory.EnumerateFiles(path)
-                .Where(x => string.Equals(Path.GetExtension(x), _archiveExtension, StringComparison.OrdinalIgnoreCase) && skip(x) is false)
+                .Where(x => IsArchive(x) && skip(x) is false)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x, StringComparer.Ordinal)
                 .ToList();
 
             var mods = new LocalMod?[files.Count];
@@ -45,12 +52,15 @@ internal static class ModArchives
                 CancellationToken = cancellationToken
             };
 
-            // Indexed rather than collected, so the results keep the order of the folder.
+            // Indexed rather than collected, so the results keep the sorted order.
             Parallel.For(0, files.Count, options, i => mods[i] = read(files[i], cancellationToken));
 
             return mods.OfType<LocalMod>().ToList();
         }, cancellationToken);
     }
+
+    /// <summary>Whether a file is a candidate at all. Anything that is not a <c>.zip</c> is never opened.</summary>
+    public static bool IsArchive(string path) => string.Equals(Path.GetExtension(path), _archiveExtension, StringComparison.OrdinalIgnoreCase);
 
     public static ZipArchive Open(string path)
     {
@@ -70,6 +80,38 @@ internal static class ModArchives
         }
     }
 
+    /// <summary>
+    /// Opens a mod file for reading, refusing it if it is no longer the file that was scanned. Shared
+    /// read, so nothing can write to it while the stream is open.
+    /// </summary>
+    /// <exception cref="ModFileChangedException">The file's length or last write time differs from the scan.</exception>
+    public static Stream OpenScanned(string path, long scannedLength, DateTime scannedLastWriteUtc)
+    {
+        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        try
+        {
+            if (stream.Length != scannedLength || File.GetLastWriteTimeUtc(stream.SafeFileHandle) != scannedLastWriteUtc)
+            {
+                throw new ModFileChangedException(path);
+            }
+
+            return stream;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// An entry's content, refused once more than <paramref name="maxBytes"/> have been
+    /// decompressed. Counts what is actually read, because the header's length is whatever the
+    /// archive claims.
+    /// </summary>
+    public static Stream OpenEntry(ZipArchiveEntry entry, long maxBytes) => new BoundedReadStream(entry.Open(), maxBytes, entry.FullName);
+
     /// <summary>An image inside a mod archive, read from the file again only when it is shown.</summary>
     public static ModImage Image(string modPath, ZipArchiveEntry entry)
     {
@@ -85,8 +127,8 @@ internal static class ModArchives
             var target = archive.GetEntry(entryName)
                 ?? throw new FileNotFoundException($"'{entryName}' is no longer present in '{modPath}'.");
 
-            await using var entryStream = target.Open();
-            using var buffer = new MemoryStream((int)target.Length);
+            await using var entryStream = OpenEntry(target, MaxImageEntryBytes);
+            using var buffer = new MemoryStream();
             await entryStream.CopyToAsync(buffer, cancellationToken);
 
             return buffer.ToArray();

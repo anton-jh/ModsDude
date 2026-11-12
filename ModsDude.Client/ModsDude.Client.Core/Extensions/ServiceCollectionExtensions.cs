@@ -20,7 +20,9 @@ public static class ServiceCollectionExtensions
 
         // Their own HttpClients: they talk to blob storage over a SAS, not to the API, and must not
         // carry the access token the generated clients attach.
-        services.AddHttpClient<IModFileUploader, BlockBlobModFileUploader>();
+        // No overall timeout: a block under a slow line can take minutes. The uploader times each
+        // request by its progress instead.
+        services.AddHttpClient<IModFileUploader, BlockBlobModFileUploader>(x => x.Timeout = Timeout.InfiniteTimeSpan);
         services.AddHttpClient<IModFileDownloader, HttpModFileDownloader>();
 
         // Talks to third parties' CDNs: names itself, and follows no redirect without checking it first.
