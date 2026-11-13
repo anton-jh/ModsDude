@@ -78,6 +78,7 @@ public class SavegameHoldRulesTests
 
         Assert.Equal(SavegameApplyRefusal.AnotherProfileIsHeld, decision.Refusal);
         Assert.Equal(_profileId, decision.ProfileId);
+        Assert.Equal(_repoId, decision.RepoId);
     }
 
     /// <summary>
@@ -191,7 +192,7 @@ public class SavegameHoldRulesTests
 
     /// <param name="target">A number puts it in compatibility mode, pinned to that revision; null follows head.</param>
     private static SavegameCheckoutBinding Hold(int? target = null, bool noProfile = false)
-        => new(Guid.NewGuid(), _savegameId, Keys.Slot("savegame1"), 1, "aaaa", DateTime.UtcNow)
+        => new(_repoId, _savegameId, Keys.Slot("savegame1"), 1, "aaaa", DateTime.UtcNow)
         {
             ProfileId = noProfile ? null : _profileId,
             ProfileRevision = target ?? 1,

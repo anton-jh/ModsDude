@@ -1068,14 +1068,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         return RunAsync("disconnecting a savegame", async () =>
         {
-            if (await _disconnectFlow.DisconnectAsync(hold.Game, row.Id, row.Name, hold.FolderName) is false)
+            if (await _disconnectFlow.DisconnectAsync(hold.Game, row.Id, row.Name, new SavegameDisconnectReason.FolderNotNamed(hold.FolderName)))
             {
-                return;
+                await _driftMonitor.CheckAsync();
             }
-
-            _toasts.Show($"ModsDude has stopped tracking '{row.Name}'. The save is still on this disk, and the claim is still yours.");
-
-            await _driftMonitor.CheckAsync();
         });
     }
 

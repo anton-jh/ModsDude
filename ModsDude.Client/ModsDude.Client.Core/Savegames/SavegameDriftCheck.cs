@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 
 namespace ModsDude.Client.Core.Savegames;
@@ -8,7 +9,8 @@ public sealed class SavegameDriftCheck(
     IHeldSlotReader reader,
     ISyncManifestStore manifestStore,
     ISavegameSightings sightings,
-    IServerConnection connection)
+    IServerConnection connection,
+    IGoneRepos goneRepos)
     : ISavegameDriftCheck
 {
     public async Task<IReadOnlyList<SavegameDrift>> CheckDriftAsync(GameIdentity game, CancellationToken ct)
@@ -31,7 +33,8 @@ public sealed class SavegameDriftCheck(
                 head,
                 manifest?.ProfileId,
                 manifest?.ProfileRevision,
-                claim);
+                claim,
+                goneRepos.IsGone(binding.RepoId));
 
             drift.AddRange(kinds.Select(kind => new SavegameDrift(binding.RepoId, binding.SavegameId, binding.Slot, kind)
             {

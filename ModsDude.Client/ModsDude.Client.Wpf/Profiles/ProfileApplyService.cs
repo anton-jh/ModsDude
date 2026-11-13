@@ -163,6 +163,7 @@ public sealed class ProfileApplyService(
     IFilePickerService filePicker,
     IBackgroundTaskReporter backgroundTasks,
     IResourceLeases leases,
+    IGoneRepos goneRepos,
     IGameActivityReporter activity) : IProfileApplyService
 {
     /// <summary>
@@ -346,7 +347,8 @@ public sealed class ProfileApplyService(
             return new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Refused,
-                $"'{game.Name}' is holding {name.Quoted}, which follows a mod list, so it was left as it is. Check it in first.");
+                $"'{game.Name}' is holding {name.Quoted}, which follows a mod list, so it was left as it is. "
+                    + SavegameRefusals.FreeHeld("it", goneRepos.IsGone(held.RepoId)));
         }
 
         if (clearMods is false)
@@ -483,7 +485,8 @@ public sealed class ProfileApplyService(
 
             var reason = refusal.Refusal is SavegameApplyRefusal.CompatibilityModeIsHeld
                 ? $"'{game.Name}' is holding {name.Quoted} in compatibility mode on rev {refusal.Revision}. It was left as it is."
-                : $"'{game.Name}' is holding {name.Quoted}, which follows another mod list, so it was left as it is. Check it in first.";
+                : $"'{game.Name}' is holding {name.Quoted}, which follows another mod list, so it was left as it is. "
+                    + SavegameRefusals.FreeHeld("it", goneRepos.IsGone(refusal.RepoId));
 
             return new ProfileApplyOutcome(game, ProfileApplyStatus.Refused, reason);
         }

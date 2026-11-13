@@ -6,9 +6,11 @@ using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Mods;
 using ModsDude.Client.Wpf.Profiles.Editor;
+using ModsDude.Client.Wpf.Savegames;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Sidebar;
 using ModsDude.Client.Wpf.Shell.Toasts;
@@ -44,6 +46,8 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
     private readonly Profile _profile;
     private readonly IProfileApplyService _applyService;
     private readonly IHeldSavegames _heldSavegames;
+    private readonly IGoneRepos _goneRepos;
+    private readonly ISavegameBindingStore _bindings;
     private readonly IDriftMonitor _driftMonitor;
     private readonly IProfileSyncStatusService _syncStatus;
     private readonly IResourceLeases _leases;
@@ -70,6 +74,8 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
         NavigationManager navigationManager,
         IProfileApplyService applyService,
         IHeldSavegames heldSavegames,
+        IGoneRepos goneRepos,
+        ISavegameBindingStore bindings,
         IDriftMonitor driftMonitor,
         IProfileSyncStatusService syncStatus,
         IResourceLeases leases,
@@ -83,12 +89,15 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
         _profile = profile;
         _applyService = applyService;
         _heldSavegames = heldSavegames;
+        _goneRepos = goneRepos;
+        _bindings = bindings;
         _driftMonitor = driftMonitor;
         _syncStatus = syncStatus;
         _leases = leases;
         _toasts = toasts;
 
         _syncStatus.Changed += OnSyncStatusChanged;
+        _bindings.BindingsChanged += OnBindingsChanged;
 
         // The activation button is greyed by a claim anything in the app can take - the drift notice
         // most of all, which belongs to no page - so the only way it can be right is to re-ask when
@@ -491,12 +500,14 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
             return;
         }
 
-        DeactivationRefusal = _heldSavegames.FindProfileHold(game.Identity) is not null
-            ? $"'{game.Name}' is holding a savegame that follows a mod list, so it cannot be taken off its profile. Check that savegame in first."
+        DeactivationRefusal = _heldSavegames.FindProfileHold(game.Identity) is SavegameCheckoutBinding held
+            ? $"'{game.Name}' is holding a savegame that follows a mod list, so it cannot be taken off its profile. "
+                + SavegameRefusals.FreeHeld("that savegame", _goneRepos.IsGone(held.RepoId))
             : null;
 
-        HoldRefusal = _heldSavegames.DecideApply(game.Identity, _profile.Id, revision: null) is { IsAllowed: false }
-            ? $"'{game.Name}' is holding a savegame that follows another mod list, so it cannot be moved to this profile. Check that savegame in first."
+        HoldRefusal = _heldSavegames.DecideApply(game.Identity, _profile.Id, revision: null) is { IsAllowed: false } refusal
+            ? $"'{game.Name}' is holding a savegame that follows another mod list, so it cannot be moved to this profile. "
+                + SavegameRefusals.FreeHeld("that savegame", _goneRepos.IsGone(refusal.RepoId))
             : null;
     }
 
@@ -567,23 +578,24 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
         _repo.Games.CollectionChanged -= OnGamesChanged;
         _leases.Changed -= OnLeasesChanged;
         _syncStatus.Changed -= OnSyncStatusChanged;
+        _bindings.BindingsChanged -= OnBindingsChanged;
 
         NavManager.Dispose();
     }
 
 
-    /// <summary>
-    /// Re-asks the hold question for the game the control now acts on.
-    /// </summary>
-    /// <remarks>
-    /// A game being connected or disconnected is the only thing that can change the answer while
-    /// this page is up: checking a savegame in happens on a repo's Saves list or a game's own, and
-    /// reaching either means leaving this page - which rebuilds it. Subscribing to the binding store
-    /// as well would be covering a window that does not exist.
-    /// </remarks>
+    /// <summary>Re-asks the hold question for the game the control now acts on.</summary>
     partial void OnConnectedGameChanged(Game? value)
     {
         RefreshHoldRefusal();
+    }
+
+    /// <summary>
+    /// A hold taken or let go while this page is up - stopping tracking from the notice column is one.
+    /// </summary>
+    private void OnBindingsChanged(object? sender, EventArgs e)
+    {
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshHoldRefusal);
     }
 
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)

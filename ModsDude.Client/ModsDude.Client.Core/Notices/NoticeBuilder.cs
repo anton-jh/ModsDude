@@ -72,17 +72,36 @@ public static class NoticeBuilder
         var game = entries[0].Game;
         var repo = environment.FindRepo(game.Identity, game.ActiveProfile?.RepoId);
 
-        // Everything this column can offer goes through the repo: re-applying needs the mod list,
+        // Deduplicated by savegame rather than by slot: the kinds are not exclusive, so one save can
+        // arrive carrying several, and they are said together on one card.
+        var savegames = entries
+            .SelectMany(x => x.Report.SavegameDrift)
+            .GroupBy(x => x.SavegameId)
+            .Select(x => x.ToList())
+            .ToList();
+
+        var gone = savegames.Where(x => x.Any(kind => kind.Kind is SavegameDriftKind.RepoGone)).ToList();
+        var held = savegames.Except(gone).ToList();
+
+        // Stopping tracking needs nothing from any repo, so a save whose repo is gone gets its card
+        // whether or not this account can reach the game through another one.
+        var notices = gone.Select(x => GoneSavegame(x, game)).ToList();
+
+        // Everything else this column can offer goes through the repo: re-applying needs the mod list,
         // reviewing needs a page in a sidebar, naming a folder needs the adapter. A game whose repo
         // this account cannot see is a game nothing here can act on, and saying that once is better
         // than counting changed files under buttons that do nothing.
         if (repo is null)
         {
-            return [Unreachable(game.Name, game.Identity, environment.ReposLoaded)];
+            if (held.Count > 0 || entries.Any(x => FiresOnItsOwn(x.Report.Status) || x.Report.LockedDrift.Count > 0))
+            {
+                notices.Add(Unreachable(game.Name, game.Identity, environment.ReposLoaded));
+            }
+
+            return Grouped(notices, game);
         }
 
         var folders = environment.FolderNames(game.Identity);
-        var notices = new List<Notice>();
 
         foreach (var entry in entries)
         {
@@ -97,19 +116,24 @@ public static class NoticeBuilder
             }
         }
 
-        // Deduplicated by savegame rather than by slot: the kinds are not exclusive, so one save can
-        // arrive carrying several, and they are said together on one card.
-        notices.AddRange(entries
-            .SelectMany(x => x.Report.SavegameDrift)
-            .GroupBy(x => x.SavegameId)
-            .Select(x => Savegame([.. x], game, repo, environment)));
+        notices.AddRange(held.Select(x => Savegame(x, game, repo, environment)));
 
-        // Only where there is more than one card to put it above - a single notice names its own
-        // game in its headline, and a heading repeating it would be furniture.
-        return notices.Count > 1
+        return Grouped(notices, game);
+    }
+
+    /// <summary>
+    /// Only where there is more than one card to put it above - a single notice names its own game in
+    /// its headline, and a heading repeating it would be furniture.
+    /// </summary>
+    private static IEnumerable<Notice> Grouped(List<Notice> notices, DriftCandidate game)
+        => notices.Count > 1
             ? notices.Select(x => x with { GroupLabel = game.Name })
             : notices;
-    }
+
+    /// <summary>The statuses the column fires for on their own, apart from any savegame.</summary>
+    private static bool FiresOnItsOwn(DriftStatus status)
+        => status is DriftStatus.Drifted or DriftStatus.NotApplied
+            or DriftStatus.FolderRepointed or DriftStatus.NeverSynced;
 
 
     /// <summary>
@@ -126,8 +150,7 @@ public static class NoticeBuilder
 
         // A status the column does not fire for on its own means the savegame half is the whole
         // reason this game is on screen, and that has its own card.
-        if (report.Status is not (DriftStatus.Drifted or DriftStatus.NotApplied
-            or DriftStatus.FolderRepointed or DriftStatus.NeverSynced))
+        if (FiresOnItsOwn(report.Status) is false)
         {
             return null;
         }
@@ -417,6 +440,35 @@ public static class NoticeBuilder
 
 
     /// <summary>
+    /// A held savegame whose repo is no longer one of this account's. It can never be checked in, and
+    /// while it is held it keeps the game off every other mod list, so the one way out is offered
+    /// here: stop tracking it, leaving the slot as it is.
+    /// </summary>
+    private static Notice GoneSavegame(IReadOnlyList<SavegameDrift> kinds, DriftCandidate game)
+    {
+        var first = kinds[0];
+        var name = first.SlotDisplayName is { Length: > 0 } named ? named : null;
+        var save = name is not null ? $"'{name}'" : "A savegame checked out here";
+
+        return Make(
+            SavegameKey(first.SavegameId),
+            NoticeSeverity.Critical,
+            $"{save} is from a repo you can't open",
+            kinds.Any(x => x.Kind is SavegameDriftKind.UncheckedInPlay)
+                ? "It has been played since it was checked out."
+                : null,
+            footnote: null,
+            actions: [new(NoticeActionKind.StopTracking, "Stop tracking") { IsPrimary = true }],
+            subject: new NoticeSubject(game.Identity, game.Name)
+            {
+                RepoId = first.RepoId,
+                SavegameId = first.SavegameId,
+                SavegameName = name
+            });
+    }
+
+
+    /// <summary>
     /// The one notice here that is not about a game at all.
     /// </summary>
     /// <remarks>
@@ -459,9 +511,10 @@ public static class NoticeBuilder
     /// <para>
     /// <b>Two causes, and only one is worth alarming anybody about.</b> Before the repo list has been
     /// read this is a shell that started a moment ago, and the notice says so and waits. After a
-    /// successful read it is a game none of this account's repos is about, holding a savegame of a
-    /// repo it is no longer in. Mod folders following a gone repo's profile never get here: the drift
-    /// check reports them as <see cref="DriftStatus.DanglingProfile"/>, which is not drift.
+    /// successful read it is a game none of this account's repos is about. Mod folders following a
+    /// gone repo's profile never get here: the drift check reports them as
+    /// <see cref="DriftStatus.DanglingProfile"/>, which is not drift. Nor do savegames of a gone repo,
+    /// which have their own card.
     /// </para>
     /// <para>
     /// <b>Not dismissible, and it offers nothing.</b> It reports a state rather than an event, so

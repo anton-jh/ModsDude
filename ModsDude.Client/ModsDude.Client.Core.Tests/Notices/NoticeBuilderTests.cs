@@ -173,6 +173,76 @@ public class NoticeBuilderTests
         Assert.Contains("has been checked in by somebody else", notice.Body);
     }
 
+    [Fact]
+    public void A_save_whose_repo_is_gone_offers_stop_tracking_and_nothing_else()
+    {
+        var notice = Assert.Single(Build(Entry(
+            DriftReport.For(DriftStatus.DanglingProfile) with
+            {
+                SavegameDrift =
+                [
+                    Save("Testing stuff", SavegameDriftKind.RepoGone, id: _savegameId),
+                    Save("Testing stuff", SavegameDriftKind.UncheckedInPlay, id: _savegameId)
+                ]
+            })));
+
+        Assert.Equal("'Testing stuff' is from a repo you can't open", notice.Headline);
+        Assert.Equal("It has been played since it was checked out.", notice.Body);
+        Assert.Equal(NoticeBuilder.SavegameKey(_savegameId), notice.Key);
+
+        var action = Assert.Single(notice.Actions);
+        Assert.Equal(NoticeActionKind.StopTracking, action.Kind);
+        Assert.True(action.IsPrimary);
+
+        Assert.Equal(_savegameId, notice.Subject?.SavegameId);
+        Assert.Equal(_repoId, notice.Subject?.RepoId);
+        Assert.Equal("Testing stuff", notice.Subject?.SavegameName);
+    }
+
+    [Fact]
+    public void An_unplayed_save_whose_repo_is_gone_still_gets_its_card()
+    {
+        var notice = Assert.Single(Build(Entry(
+            DriftReport.For(DriftStatus.DanglingProfile) with
+            {
+                SavegameDrift = [Save("one", SavegameDriftKind.RepoGone)]
+            })));
+
+        Assert.Equal("'one' is from a repo you can't open", notice.Headline);
+        Assert.Null(notice.Body);
+    }
+
+    /// <summary>Stopping tracking needs no repo, so a game this account cannot reach still gets the way out.</summary>
+    [Fact]
+    public void A_save_whose_repo_is_gone_gets_its_card_when_no_repo_serves_the_game()
+    {
+        var notice = Assert.Single(Build(
+            Entry(DriftReport.For(DriftStatus.NoActiveProfile) with
+            {
+                SavegameDrift = [Save("one", SavegameDriftKind.RepoGone)]
+            }),
+            environment: new FakeEnvironment { Repo = null }));
+
+        Assert.Equal(NoticeActionKind.StopTracking, Assert.Single(notice.Actions).Kind);
+        Assert.Null(notice.GroupLabel);
+    }
+
+    [Fact]
+    public void A_game_no_repo_serves_still_says_so_beside_a_gone_save_when_more_is_wrong()
+    {
+        var notices = Build(
+            Entry(new DriftReport(DriftStatus.Drifted, [], [], ["a.zip"], []) with
+            {
+                SavegameDrift = [Save("one", SavegameDriftKind.RepoGone)]
+            }),
+            environment: new FakeEnvironment { Repo = null });
+
+        Assert.Equal(2, notices.Count);
+        Assert.Contains(notices, x => x.Actions.Any(action => action.Kind is NoticeActionKind.StopTracking));
+        Assert.Contains(notices, x => x.Headline == "'Farming Simulator 25' belongs to a repo you are not in");
+        Assert.All(notices, x => Assert.Equal("Farming Simulator 25", x.GroupLabel));
+    }
+
     /// <summary>
     /// A warning naming a person is the only kind anybody reads, and once they have it the copies have
     /// already forked - so the sentence is about which check-in wins, not about a fork still to come.

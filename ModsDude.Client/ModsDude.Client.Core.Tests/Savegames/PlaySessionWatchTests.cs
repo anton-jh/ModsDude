@@ -1,10 +1,13 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Tests.Services;
 
 namespace ModsDude.Client.Core.Tests.Savegames;
 
@@ -45,6 +48,25 @@ public class PlaySessionWatchTests
         Assert.Equal(harness.SavegameId, played.SavegameId);
         Assert.Equal("My farm", played.SlotDisplayName);
         Assert.Single(harness.Raised);
+    }
+
+    /// <summary>A save whose repo is gone can never be checked in, so there is nothing to remind about.</summary>
+    [Fact]
+    public async Task Playing_a_save_whose_repo_is_gone_reminds_about_nothing()
+    {
+        var harness = new Harness();
+        harness.Hold();
+        harness.KnownRepos.Gone.Add(harness.RepoId);
+
+        await harness.Poll();
+        harness.Processes.Running = true;
+        await harness.Poll();
+
+        harness.Held.Hash = "bbbb";
+        harness.Processes.Running = false;
+
+        Assert.Empty(await harness.Poll());
+        Assert.Empty(harness.Raised);
     }
 
     [Fact]
@@ -181,6 +203,7 @@ public class PlaySessionWatchTests
                 _bindings,
                 Held,
                 _running,
+                new GoneRepos(KnownRepos, new ServerConnection()),
                 NullLogger<PlaySessionWatch>.Instance);
 
             Watch.Played += (_, played) => Raised.Add(played);
@@ -188,6 +211,7 @@ public class PlaySessionWatchTests
 
 
         public Guid RepoId { get; } = Guid.NewGuid();
+        public FakeKnownRepos KnownRepos { get; } = new();
         public Guid SavegameId { get; } = Guid.NewGuid();
         public Readings Held { get; }
         public Processes Processes { get; } = new();

@@ -14,6 +14,7 @@ using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Updates;
 using ModsDude.Client.Wpf.Friends;
 using ModsDude.Client.Wpf.Profiles;
+using ModsDude.Client.Wpf.Savegames;
 using ModsDude.Client.Wpf.Shell.Diagnostics;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using System.Collections.ObjectModel;
@@ -71,6 +72,8 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     private readonly IUpdateStatus _updates;
     private readonly IUpdateAnnouncementStore _updateAnnouncement;
     private readonly IConnectionRetry _connection;
+    private readonly IGoneRepos _goneRepos;
+    private readonly ISavegameDisconnectFlow _disconnectFlow;
     private readonly IFriendActivityService _friends;
     private readonly IFriendActivityEnvironment _friendEnvironment;
     private readonly IFriendFollowService _follow;
@@ -107,6 +110,8 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         IUpdateStatus updates,
         IUpdateAnnouncementStore updateAnnouncement,
         IConnectionRetry connection,
+        IGoneRepos goneRepos,
+        ISavegameDisconnectFlow disconnectFlow,
         IFriendActivityService friends,
         IFriendActivityEnvironment friendEnvironment,
         IFriendFollowService follow,
@@ -125,6 +130,8 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         _updates = updates;
         _updateAnnouncement = updateAnnouncement;
         _connection = connection;
+        _goneRepos = goneRepos;
+        _disconnectFlow = disconnectFlow;
         _friends = friends;
         _friendEnvironment = friendEnvironment;
         _follow = follow;
@@ -403,6 +410,11 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
                 break;
 
+            case NoticeActionKind.StopTracking:
+                await StopTrackingAsync(notice, card);
+
+                break;
+
             case NoticeActionKind.Reapply:
                 await ReapplyAsync(notice, card);
 
@@ -456,6 +468,40 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         {
             card?.ReportStatus("That save could not be opened from here - pick its repo in the sidebar.");
         }
+    }
+
+    /// <summary>
+    /// Asks again whether the repo is gone rather than trusting the card, which may have been drawn
+    /// before the server stopped answering.
+    /// </summary>
+    private async Task StopTrackingAsync(Notice notice, NoticeViewModel? card)
+    {
+        if (notice.Subject is not NoticeSubject subject
+            || subject.RepoId is not Guid repoId
+            || subject.SavegameId is not Guid savegameId)
+        {
+            return;
+        }
+
+        if (_goneRepos.IsGone(repoId) is false)
+        {
+            card?.ReportStatus("Its repo can't be checked right now. Try again in a moment.");
+
+            return;
+        }
+
+        if (_gameRepository.Find(subject.Game) is not Game game)
+        {
+            card?.ReportStatus("This game is no longer connected on this machine.");
+
+            return;
+        }
+
+        var played = _monitor.Drifted
+            .SelectMany(x => x.Report.SavegameDrift)
+            .Any(x => x.SavegameId == savegameId && x.Kind is SavegameDriftKind.UncheckedInPlay);
+
+        await _disconnectFlow.DisconnectAsync(game, savegameId, subject.SavegameName, new SavegameDisconnectReason.RepoGone(played));
     }
 
     /// <summary>

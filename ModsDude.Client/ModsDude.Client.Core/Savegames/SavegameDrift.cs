@@ -55,7 +55,15 @@ public enum SavegameDriftKind
     /// level it belongs to. Saying it here as well would fire this on the ordinary
     /// check-out-then-apply flow and spend the loudest warning in the app on the intended case.
     /// </remarks>
-    PlayedOnAnotherModList
+    PlayedOnAnotherModList,
+
+    /// <summary>
+    /// The repo the save was checked out from is no longer one of this account's - deleted, archived
+    /// or left - so it can never be checked in from here. Reported beside
+    /// <see cref="UncheckedInPlay"/> only: everything else is about a server that no longer answers
+    /// for this repo.
+    /// </summary>
+    RepoGone
 }
 
 
@@ -197,15 +205,25 @@ public static class SavegameDriftRules
     /// Who the server last said holds the claim, or null where nobody asked - which, like an unasked
     /// head, says nothing.
     /// </param>
+    /// <param name="repoIsGone">
+    /// Whether the save's repo is known to be gone. Only true on evidence: a repo list that has not
+    /// loaded, or a server that is not answering, is not evidence.
+    /// </param>
     public static IReadOnlyList<SavegameDriftKind> Classify(
         SavegameCheckoutBinding binding,
         string? currentContentHash,
         int? headSnapshot,
         Guid? appliedProfileId,
         int? appliedRevision,
-        SavegameClaimSighting? claim = null)
+        SavegameClaimSighting? claim = null,
+        bool repoIsGone = false)
     {
         var kinds = new List<SavegameDriftKind>();
+
+        if (repoIsGone)
+        {
+            kinds.Add(SavegameDriftKind.RepoGone);
+        }
 
         // Against the check-out value, never against LastObservedHash: this asks whether the slot
         // still matches the snapshot the server holds, which an apply refreshing the observation
@@ -213,6 +231,12 @@ public static class SavegameDriftRules
         if (currentContentHash is not null && ModContentHasher.Matches(currentContentHash, binding.ContentHash) is false)
         {
             kinds.Add(SavegameDriftKind.UncheckedInPlay);
+        }
+
+        // The rest is about a repo that still answers: its head, its claims, its mod lists.
+        if (repoIsGone)
+        {
+            return kinds;
         }
 
         // Strictly past, not merely different. A client holding a head number older than the binding

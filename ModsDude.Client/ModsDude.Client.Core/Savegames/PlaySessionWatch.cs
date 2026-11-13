@@ -3,6 +3,7 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Notices;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 
 namespace ModsDude.Client.Core.Savegames;
@@ -48,6 +49,7 @@ public sealed class PlaySessionWatch(
     ISavegameBindingStore bindings,
     IHeldSlotReader reader,
     IGameRunningMonitor runningGames,
+    IGoneRepos goneRepos,
     ILogger<PlaySessionWatch> logger) : IPlaySessionWatch
 {
     private readonly Lock _lock = new();
@@ -154,8 +156,9 @@ public sealed class PlaySessionWatch(
 
         foreach (var (binding, current, name) in await ReadOrNothingAsync(game.Identity, ct))
         {
-            // An empty or unreadable slot says nothing, the way it does to the drift check.
-            if (current is null || ModContentHasher.Matches(current, binding.ContentHash))
+            // An empty or unreadable slot says nothing, the way it does to the drift check. A save
+            // whose repo is gone can never be checked in, so there is nothing to remind about.
+            if (current is null || ModContentHasher.Matches(current, binding.ContentHash) || goneRepos.IsGone(binding.RepoId))
             {
                 continue;
             }

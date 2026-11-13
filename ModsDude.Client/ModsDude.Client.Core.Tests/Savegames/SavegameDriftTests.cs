@@ -4,7 +4,9 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Tests.Services;
 using ModsDude.Client.Core.Tests.Sync;
 
 namespace ModsDude.Client.Core.Tests.Savegames;
@@ -207,6 +209,33 @@ public class SavegameDriftTests
 
 
     [Fact]
+    public void A_save_whose_repo_is_gone_says_so_even_untouched()
+    {
+        Assert.Equal(
+            [SavegameDriftKind.RepoGone],
+            SavegameDriftRules.Classify(Binding(), "aaaa", headSnapshot: 4, _profileId, appliedRevision: 6, repoIsGone: true));
+    }
+
+    [Fact]
+    public void A_played_save_whose_repo_is_gone_says_both()
+    {
+        Assert.Equal(
+            [SavegameDriftKind.RepoGone, SavegameDriftKind.UncheckedInPlay],
+            SavegameDriftRules.Classify(Binding(), "bbbb", headSnapshot: 4, _profileId, appliedRevision: 6, repoIsGone: true));
+    }
+
+    /// <summary>Heads, claims and mod lists all belong to a repo that no longer answers for this save.</summary>
+    [Fact]
+    public void A_save_whose_repo_is_gone_reports_nothing_about_the_repo()
+    {
+        var kinds = SavegameDriftRules.Classify(
+            Binding(snapshot: 4, target: 6), "aaaa", headSnapshot: 5, Guid.NewGuid(), appliedRevision: 8, Claim("bob"), repoIsGone: true);
+
+        Assert.Equal([SavegameDriftKind.RepoGone], kinds);
+    }
+
+
+    [Fact]
     public async Task A_game_holding_nothing_reports_nothing()
     {
         using var harness = new DriftHarness();
@@ -278,6 +307,32 @@ public class SavegameDriftTests
         harness.Hold(await harness.WriteAndHashAsync("a savegame"), snapshot: 3);
         harness.Sightings.Set(_savegameId, 4);
         harness.Sightings.SetClaim(_savegameId, Claim("bob"));
+        harness.Connection.ReportUnreachable();
+
+        Assert.Empty(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_held_save_whose_repo_is_gone_is_reported_without_being_played()
+    {
+        using var harness = new DriftHarness();
+
+        harness.Hold(await harness.WriteAndHashAsync("a savegame"));
+        harness.KnownRepos.Gone.Add(_repoId);
+
+        var drift = Assert.Single(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
+
+        Assert.Equal(SavegameDriftKind.RepoGone, drift.Kind);
+    }
+
+    /// <summary>Offline, the repo list is whatever the last read said - never evidence that a repo is gone.</summary>
+    [Fact]
+    public async Task A_repo_missing_from_the_list_is_not_reported_gone_while_offline()
+    {
+        using var harness = new DriftHarness();
+
+        harness.Hold(await harness.WriteAndHashAsync("a savegame"));
+        harness.KnownRepos.Gone.Add(_repoId);
         harness.Connection.ReportUnreachable();
 
         Assert.Empty(await harness.DriftCheck.CheckDriftAsync(harness.Game.Identity, CancellationToken.None));
@@ -427,12 +482,13 @@ public class SavegameDriftTests
             var reader = new HeldSlotReader(
                 new FakeSavegameAdapters(Adapter), _bindings, new SavegamePacker(), NullLogger<HeldSlotReader>.Instance);
 
-            DriftCheck = new SavegameDriftCheck(reader, _manifestStore, Sightings, Connection);
+            DriftCheck = new SavegameDriftCheck(reader, _manifestStore, Sightings, Connection, new GoneRepos(KnownRepos, Connection));
         }
 
 
         public FakeSavegameSightings Sightings { get; } = new();
         public ServerConnection Connection { get; } = new();
+        public FakeKnownRepos KnownRepos { get; } = new();
         public FakeGameState State { get; } = new();
         public FakeSavegameAdapter Adapter { get; }
         public SavegameDriftCheck DriftCheck { get; }

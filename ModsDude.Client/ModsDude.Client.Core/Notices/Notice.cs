@@ -53,6 +53,9 @@ public enum NoticeActionKind
     /// <summary>Open the repo's saves list with this savegame picked out, where check in and discard are.</summary>
     OpenSavegame,
 
+    /// <summary>Stop tracking a savegame whose repo is gone, leaving the slot as it is.</summary>
+    StopTracking,
+
     /// <summary>Open the log folder. The only thing the quiet notices have to offer.</summary>
     OpenLog,
 
@@ -98,6 +101,9 @@ public sealed record NoticeSubject(GameIdentity Game, string GameName)
     public Guid? ProfileId { get; init; }
     public string? ProfileName { get; init; }
     public Guid? SavegameId { get; init; }
+
+    /// <summary>What the game calls the savegame, where the adapter could read it.</summary>
+    public string? SavegameName { get; init; }
 
     /// <summary>A specific revision of the profile, where the notice is about one rather than about head.</summary>
     public int? Revision { get; init; }

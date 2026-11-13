@@ -7,6 +7,16 @@ namespace ModsDude.Client.Wpf.Savegames;
 internal static class SavegameRefusals
 {
     /// <summary>
+    /// What to do about a held savegame standing in the way: check it in, or - where its repo is
+    /// gone and it never can be - stop tracking it.
+    /// </summary>
+    /// <param name="it">How the sentence before named the savegame: "it", "that savegame".</param>
+    public static string FreeHeld(string it, bool repoIsGone)
+        => repoIsGone
+            ? $"Stop tracking {it} in its notice first."
+            : $"Check {it} in first.";
+
+    /// <summary>
     /// The refusal for a verb that needs the repo's game on this machine. For a game that connects by
     /// itself, not connected can only mean not installed here.
     /// </summary>

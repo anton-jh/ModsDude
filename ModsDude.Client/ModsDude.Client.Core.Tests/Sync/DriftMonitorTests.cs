@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Core.Tests.Services;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -743,13 +744,6 @@ public class DriftMonitorTests
         public int? Head { get; set; }
 
         public int? GetHeadRevision(ActiveProfile profile) => Head;
-    }
-
-    private sealed class FakeKnownRepos : IKnownRepos
-    {
-        public HashSet<Guid> Gone { get; } = [];
-
-        public bool IsGone(Guid repoId) => Gone.Contains(repoId);
     }
 
 

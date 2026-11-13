@@ -69,6 +69,7 @@ public static class ServiceCollectionExtensions
         // TryAdd so a host that knows its repos by another route keeps its own.
         services.TryAddSingleton<Savegames.ILocalSavegameAdapters, Savegames.RepoSavegameAdapters>();
         services.AddSingleton<Savegames.ISavegameSlots, Savegames.SavegameSlots>();
+        services.AddSingleton<Services.IGoneRepos, Services.GoneRepos>();
         services.AddSingleton<Savegames.IHeldSlotReader, Savegames.HeldSlotReader>();
         services.AddSingleton<Savegames.IHeldSavegames, Savegames.HeldSavegames>();
         services.AddSingleton<Savegames.ISavegamePlayAttribution, Savegames.SavegamePlayAttribution>();

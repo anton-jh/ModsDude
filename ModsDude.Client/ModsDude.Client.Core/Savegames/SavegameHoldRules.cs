@@ -57,6 +57,9 @@ public sealed record SavegameApplyDecision(
 {
     public static SavegameApplyDecision Allowed { get; } = new(SavegameApplyRefusal.None, Guid.Empty, null, null);
 
+    /// <summary>The repo the refusing savegame was checked out from. Empty when allowed.</summary>
+    public Guid RepoId { get; init; }
+
     public bool IsAllowed => Refusal is SavegameApplyRefusal.None;
 }
 
@@ -131,13 +134,19 @@ public static class SavegameHoldRules
             if (heldProfile != profileId)
             {
                 return new SavegameApplyDecision(
-                    SavegameApplyRefusal.AnotherProfileIsHeld, binding.SavegameId, heldProfile, binding.TargetRevision);
+                    SavegameApplyRefusal.AnotherProfileIsHeld, binding.SavegameId, heldProfile, binding.TargetRevision)
+                {
+                    RepoId = binding.RepoId
+                };
             }
 
             if (binding.TargetRevision is int pinned && revision is int asked && asked != pinned)
             {
                 return new SavegameApplyDecision(
-                    SavegameApplyRefusal.CompatibilityModeIsHeld, binding.SavegameId, heldProfile, pinned);
+                    SavegameApplyRefusal.CompatibilityModeIsHeld, binding.SavegameId, heldProfile, pinned)
+                {
+                    RepoId = binding.RepoId
+                };
             }
         }
 
