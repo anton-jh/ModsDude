@@ -47,6 +47,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
+    private readonly TimeProvider _time;
     private readonly LatestLoad _historyLoad;
     private readonly LatestLoad _modsLoad;
     private readonly LatestLoad _changesLoad;
@@ -88,9 +89,11 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
         IModalService modalService,
         IErrorReporter errorReporter,
         IToastService toasts,
-        IShellNavigationService shellNavigation)
+        IShellNavigationService shellNavigation,
+        TimeProvider time)
     {
         _errorReporter = errorReporter;
+        _time = time;
         _historyLoad = new LatestLoad(loading => IsLoading = loading);
         _modsLoad = new LatestLoad(loading => IsLoadingMods = loading);
         _changesLoad = new LatestLoad(loading => IsLoadingChanges = loading);
@@ -704,9 +707,11 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
         Revisions.Clear();
 
+        var today = DateOnly.FromDateTime(_time.GetLocalNow().DateTime);
+
         foreach (var revision in history.Revisions)
         {
-            var row = new ProfileRevisionViewModel(revision, revision.Number == history.HeadRevision);
+            var row = new ProfileRevisionViewModel(revision, revision.Number == history.HeadRevision, today);
 
             // A row's checkbox writes its flag without going through the selection.
             row.PropertyChanged += OnRevisionChanged;

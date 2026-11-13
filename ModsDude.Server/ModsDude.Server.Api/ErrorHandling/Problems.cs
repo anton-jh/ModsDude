@@ -64,6 +64,17 @@ public static class Problems
     };
 
     /// <summary>
+    /// The check-in asked about is not the caller's latest recorded one on this savegame: it never
+    /// arrived, or a later check-in or restore of theirs has replaced the record.
+    /// </summary>
+    public static CustomProblemDetails SavegameCheckInUnknown(SavegameId savegameId, Guid requestId) => new()
+    {
+        Type = ProblemType.SavegameCheckInUnknown,
+        Title = "No such check-in",
+        Detail = $"Check-in '{requestId}' is not your latest recorded check-in of savegame '{savegameId.Value}'."
+    };
+
+    /// <summary>
     /// Two people took the same savegame in the same instant, and the one-open-claim index let
     /// exactly one through. Taking a save from somebody is allowed; taking it from two people at
     /// once is not a state the log can represent.
@@ -374,7 +385,7 @@ public static class Problems
     {
         Type = ProblemType.InvalidName,
         Title = "Not a valid name",
-        Detail = $"'{name}' is not a valid name. A name cannot be empty or longer than {maximumLength} characters."
+        Detail = $"'{name}' is not a valid name. A name cannot be empty, longer than {maximumLength} characters, or hold control characters."
     };
 
     public static CustomProblemDetails InvalidLabel(string? label, int maximumLength) => new()
@@ -740,6 +751,10 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "savegame-snapshot-stale")]
         [JsonStringEnumMemberName(_typeBaseUri + "savegame-snapshot-stale")]
         SavegameSnapshotStale,
+
+        [EnumMember(Value = _typeBaseUri + "savegame-check-in-unknown")]
+        [JsonStringEnumMemberName(_typeBaseUri + "savegame-check-in-unknown")]
+        SavegameCheckInUnknown,
 
         [EnumMember(Value = _typeBaseUri + "savegame-checkout-conflict")]
         [JsonStringEnumMemberName(_typeBaseUri + "savegame-checkout-conflict")]

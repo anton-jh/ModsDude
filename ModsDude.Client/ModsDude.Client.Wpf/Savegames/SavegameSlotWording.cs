@@ -35,13 +35,17 @@ internal static class SavegameSlotWording
            "no longer tracks. Delete it yourself, or keep it as a save of your own.";
 
     /// <summary>What a hand-back says where the slot was not recycled, or null where it was.</summary>
-    public static string? NotRecycled(SavegameLocalCopy localCopy, string slot) => localCopy switch
+    public static string? NotRecycled(SavegameLocalCopy localCopy, string slot, string gameName) => localCopy switch
     {
         SavegameLocalCopy.LeftBehind => LeftBehind(slot),
 
         SavegameLocalCopy.ChangedSinceUpload =>
             $"{Capitalised(slot)} changed after it was uploaded - the game may have saved again - so it was left where it is " +
             "rather than recycled. That change is not in the snapshot; the copy is now an ordinary save ModsDude no longer tracks.",
+
+        SavegameLocalCopy.LeftGameRunning =>
+            $"'{gameName}' was running by then, so {slot} was left where it is - an ordinary save ModsDude no longer tracks. " +
+            "Delete it yourself, or keep it as a save of your own.",
 
         _ => null
     };
@@ -62,13 +66,13 @@ internal static class SavegameSlotWording
     /// calls that folder, and is the one thing here they can go and look at.
     /// </remarks>
     public static string DescribeFully(
-        string label, SavegameSlotRef id, string? targetName, IReadOnlyList<SavegameDetail> details, int? number = null)
+        string label, SavegameSlotRef id, string? targetName, IReadOnlyList<SavegameDetailLine> details, int? number = null)
     {
         var text = new StringBuilder(label);
 
         foreach (var detail in details)
         {
-            text.Append('\n').Append(detail.Label).Append(": ").Append(detail.Value);
+            text.Append('\n').Append(detail.Label).Append(": ").Append(detail.Text);
         }
 
         var where = targetName is { Length: > 0 } folder

@@ -15,10 +15,10 @@ public enum SavegameStage
     /// <summary>Fetching the archive to a temporary file.</summary>
     Downloading,
 
-    /// <summary>Hashing what arrived against the address it was asked for, before it goes anywhere near a slot.</summary>
-    Verifying,
-
-    /// <summary>Writing the archive's files into the slot. The bytes are the files', after decompression.</summary>
+    /// <summary>
+    /// Writing the archive's files beside the slot, verifying them as they land, then moving them in.
+    /// The bytes are the files', after decompression.
+    /// </summary>
     Unpacking
 }
 

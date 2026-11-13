@@ -22,15 +22,13 @@ public sealed class SavegameTransfer(
 {
     /// <remarks>
     /// Staged to a temporary file because a zip is read from its central directory at the end, and a
-    /// network stream cannot seek back. Hashed on the way past, so verifying costs no second read.
+    /// network stream cannot seek back. The contents are verified as they are unpacked, which is the
+    /// only point where what arrived and what lands in the slot are the same bytes.
     /// </remarks>
-    public async Task<DisplacedSavegame?> DownloadIntoSlotAsync(
-        ILocalSavegameAdapter adapter,
-        SavegameTarget target,
+    public async Task<DownloadedSavegame> DownloadAsync(
         Guid repoId,
         Guid savegameId,
         string contentHash,
-        SavegameSlotId slot,
         IProgress<SavegameProgress>? progress,
         CancellationToken ct)
     {
@@ -72,35 +70,43 @@ public sealed class SavegameTransfer(
                     ct);
             }
 
-            await using (var written = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
-            {
-                var size = written.Length;
-
-                progress?.Report(new SavegameProgress(SavegameStage.Verifying, 0, size));
-
-                var actual = await ModContentHasher.ComputeAsync(
-                    written,
-                    progress is null ? null : new InlineProgress<long>(read => progress.Report(new SavegameProgress(SavegameStage.Verifying, read, size))),
-                    ct);
-
-                if (ModContentHasher.Matches(actual, contentHash) is false)
-                {
-                    throw new UserFriendlyException(
-                        "The savegame that arrived is not the one that was asked for",
-                        $"Expected content hash '{contentHash}' but the downloaded blob hashes to '{actual}'. Nothing has been written into the slot.");
-                }
-            }
-
-            diskSpaceGuard.EnsureRoomFor(DiskSpaceNeeds.For(adapter.GetSlotPath(target, slot), SavegamePacker.MeasureUnpacked(archivePath)));
-
-            return await packer.UnpackAsync(archivePath, adapter, target, slot, ct, progress) is string displaced
-                ? recycler.PutAway(displaced)
-                : null;
+            return new DownloadedSavegame(archivePath, contentHash, path => FileSystemHelper.TryDeleteFile(path, logger));
         }
-        finally
+        catch (Exception)
         {
             FileSystemHelper.TryDeleteFile(archivePath, logger);
+
+            throw;
         }
+    }
+
+    public async Task<DisplacedSavegame?> WriteIntoSlotAsync(
+        DownloadedSavegame downloaded,
+        ILocalSavegameAdapter adapter,
+        SavegameTarget target,
+        SavegameSlotId slot,
+        IProgress<SavegameProgress>? progress,
+        CancellationToken ct)
+    {
+        var slotPath = adapter.GetSlotPath(target, slot);
+
+        diskSpaceGuard.EnsureRoomFor(DiskSpaceNeeds.For(slotPath, SavegamePacker.MeasureUnpacked(downloaded.ArchivePath)));
+
+        string? displaced;
+
+        try
+        {
+            displaced = await packer.UnpackAsync(downloaded.ArchivePath, downloaded.ContentHash, adapter, target, slot, ct, progress);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new UserFriendlyException(
+                "The savegame that arrived is not the one that was asked for",
+                $"The archive for contents '{downloaded.ContentHash}' did not unpack to them: {exception.Message}",
+                exception);
+        }
+
+        return displaced is null ? null : recycler.PutAway(displaced, slotPath);
     }
 
     /// <remarks>
@@ -141,9 +147,9 @@ public sealed class SavegameTransfer(
                     BytesTransferred = progress is null
                         ? null
                         : new InlineProgress<long>(sent => progress.Report(new SavegameProgress(SavegameStage.Uploading, sent, packed.SizeBytes))),
-                    // The address is the hash, so bytes that changed since packing must never be committed
-                    // under it: no snapshot may point at a blob nobody can reproduce.
-                    ExpectedHash = packed.ContentHash,
+                    // The address is the contents, so an archive that changed since packing must never
+                    // be committed under it: no snapshot may point at a blob nobody can reproduce.
+                    ExpectedHash = packed.ArchiveHash,
                     // Stored meanwhile is the same outcome as a commit that lost the race: these bytes are there.
                     RenewLink = async cancellationToken => (await CreateLinkAsync(cancellationToken)).Link
                         ?? throw new BlobAlreadyExistsException("The savegame was stored by another upload while this one was sending.")
@@ -161,6 +167,28 @@ public sealed class SavegameTransfer(
             throw new UserFriendlyException(
                 "The savegame changed while it was being uploaded",
                 $"Packed as '{exception.ExpectedHash}' but uploaded '{exception.ActualHash}'. No snapshot has been recorded.");
+        }
+    }
+
+    public void SweepTemporaryArchives()
+    {
+        var folder = SavegamePacker.TemporaryArchiveFolder;
+
+        try
+        {
+            if (Directory.Exists(folder) is false)
+            {
+                return;
+            }
+
+            foreach (var archive in Directory.EnumerateFiles(folder, "*.zip"))
+            {
+                FileSystemHelper.TryDeleteFile(archive, logger);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "Could not look for leftover savegame archives in {Folder}.", folder);
         }
     }
 }

@@ -27,9 +27,9 @@ namespace ModsDude.Client.Core.Models;
 /// The snapshot that was written into the slot - what a check-in is based on.
 /// </param>
 /// <param name="ContentHash">
-/// What was written at check-out, so that the slot having moved since is a comparison rather than a
-/// guess. This is the half that could be recomputed by rehashing the slot, and the only reason it is
-/// stored is to make the check cheap.
+/// What the slot hashed to when it last matched the held snapshot: what was written at check-out, or
+/// the slot as it stood once a check-in was accepted. The slot having moved since is then a comparison
+/// rather than a guess.
 /// </param>
 public readonly record struct SavegameCheckoutBinding(
     Guid RepoId,
@@ -123,15 +123,16 @@ public readonly record struct SavegameCheckoutBinding(
 
     /// <summary>
     /// A check-in sent and not yet answered, or null where there is none. Written before the request
-    /// goes out, so a check-in of the same bytes after a lost answer - a click again, or a restart -
-    /// repeats the request instead of making a new one the server would refuse as stale.
+    /// goes out, so a check-in of the same bytes after a lost answer repeats the request, and one of
+    /// other bytes asks the server what became of it before sending anything new.
     /// </summary>
     public SavegamePendingCheckIn? PendingCheckIn { get; init; }
 }
 
 
-/// <param name="ContentHash">The packed bytes the request was for. Other bytes are another check-in.</param>
-public sealed record SavegamePendingCheckIn(Guid RequestId, string ContentHash);
+/// <param name="ContentHash">What the request uploaded. Other contents are another check-in.</param>
+/// <param name="SlotHash">What the slot hashed to when it was packed for this request.</param>
+public sealed record SavegamePendingCheckIn(Guid RequestId, string ContentHash, string SlotHash);
 
 
 /// <summary>

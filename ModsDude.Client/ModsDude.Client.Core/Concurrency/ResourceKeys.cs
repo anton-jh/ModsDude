@@ -48,6 +48,15 @@ public static class ResourceKeys
     /// </remarks>
     public static string Profile(Guid profileId) => $"profile:{profileId:N}";
 
+    /// <summary>One savegame, for as long as something is checking it in, out, or giving it back.</summary>
+    public static string Savegame(Guid savegameId) => $"savegame:{savegameId:N}";
+
+    /// <summary>
+    /// One of a game's savegame folders. Savegame work in it runs one at a time, so two gestures never
+    /// race over the same slots or the leftovers beside them.
+    /// </summary>
+    public static string SavegameFolder(GameIdentity game, TargetKey target) => $"savegames:{game}/{target.Value.ToLowerInvariant()}";
+
     /// <summary>
     /// One content store, by the folder it lives in.
     /// </summary>

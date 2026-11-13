@@ -78,7 +78,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
         IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
-        if ((RequestChecks.Name(request.Name) ?? RequestChecks.FileSize(request.SizeBytes) ?? RequestChecks.Label(request.Label, SavegameSnapshot.MaximumLabelLength)) is { } invalid)
+        if ((RequestChecks.Name(request.Name) ?? RequestChecks.FileSize(request.SizeBytes) ?? RequestChecks.Label(request.Label, SavegameSnapshot.MaximumLabelLength) ?? SavegameDetails.Check(request.Details)) is { } invalid)
         {
             return TypedResults.BadRequest(invalid);
         }

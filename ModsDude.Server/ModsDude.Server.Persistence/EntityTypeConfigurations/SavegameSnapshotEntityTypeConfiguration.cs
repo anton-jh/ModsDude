@@ -60,7 +60,11 @@ internal class SavegameSnapshotEntityTypeConfiguration : IEntityTypeConfiguratio
         // exposes them read-only - a snapshot is immutable, so its details are decided when it is
         // minted and never after. The key is left to EF, as the attributes' is: uniqueness per key
         // is the writer's business, and SavegameDetails.From is where it is enforced.
-        builder.OwnsMany(x => x.Details, x => x.ToTable("SavegameSnapshotDetails"));
+        builder.OwnsMany(x => x.Details, x =>
+        {
+            x.ToTable("SavegameSnapshotDetails");
+            x.Property(d => d.Kind).HasConversion<string>();
+        });
 
         // Through the backing field, because the navigation is read-only: a snapshot is immutable, so
         // its details are decided when it is minted and never after.

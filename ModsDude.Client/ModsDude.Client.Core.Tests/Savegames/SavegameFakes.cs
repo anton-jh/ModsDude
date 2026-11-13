@@ -86,9 +86,10 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     public void FollowNoProfile() => _savegame = _savegame with { ProfileId = null };
 
     /// <summary>Puts a snapshot and its bytes on the server - a publish that happened before the test.</summary>
-    public SavegameSnapshotDto Seed(byte[] content, int? profileRevision = 1)
+    /// <param name="contentHash">The address the bytes are stored under. Defaults to the hash of the bytes themselves.</param>
+    public SavegameSnapshotDto Seed(byte[] content, int? profileRevision = 1, string? contentHash = null)
     {
-        var hash = HashOf(content);
+        var hash = contentHash ?? HashOf(content);
 
         _blobs[hash] = content;
 
@@ -96,14 +97,27 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     }
 
     /// <summary>Somebody else took the save over and checked in while this machine was playing.</summary>
-    public SavegameSnapshotDto CheckInFromAnotherMachine(byte[] content, int profileRevision = 1)
+    public SavegameSnapshotDto CheckInFromAnotherMachine(PackedSlot packed, int profileRevision = 1)
     {
-        var hash = HashOf(content);
+        _blobs[packed.ContentHash] = packed.Bytes;
 
-        _blobs[hash] = content;
-
-        return AddSnapshot(hash, content.Length, profileRevision, SavegameSnapshotOrigin.CheckedIn, _savegame.Head?.Number);
+        return AddSnapshot(packed.ContentHash, packed.Bytes.Length, profileRevision, SavegameSnapshotOrigin.CheckedIn, _savegame.Head?.Number);
     }
+
+    /// <summary>
+    /// What the server answers about a check-in whose answer was lost: as it was answered, where it is
+    /// the latest recorded one, and unknown otherwise.
+    /// </summary>
+    public Task<CheckInSavegameResponse> GetSavegameCheckInV1Async(Guid repoId, Guid savegameId, Guid requestId, CancellationToken cancellationToken = default)
+    {
+        CheckInLookups++;
+
+        return _lastCheckIn is { } last && last.RequestId == requestId
+            ? Task.FromResult(last.Response)
+            : throw Problem(ProblemType.SavegameCheckInUnknown, $"Check-in '{requestId}' is not the latest recorded one.");
+    }
+
+    public int CheckInLookups { get; private set; }
 
     public bool HasBlob(string contentHash) => _blobs.ContainsKey(contentHash);
 
@@ -154,8 +168,18 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
     /// <summary>The next check-in is recorded and answered, and the answer never reaches the client.</summary>
     public bool LoseNextAnswer { get; set; }
 
+    /// <summary>The next check-in never arrives: the connection drops before the server records anything.</summary>
+    public bool DropNextCheckIn { get; set; }
+
     public Task<CheckInSavegameResponse> CheckInSavegameV1Async(Guid repoId, Guid savegameId, CheckInSavegameRequest request, CancellationToken cancellationToken = default)
     {
+        if (DropNextCheckIn)
+        {
+            DropNextCheckIn = false;
+
+            throw new HttpRequestException("The connection dropped before the request arrived.");
+        }
+
         CheckIns.Add(request);
 
         // A repeat of the latest check-in is answered as the first one was, before anything else -
@@ -342,8 +366,9 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
         => throw new NotSupportedException();
     public Task RestoreSavegameV1Async(Guid repoId, Guid savegameId, RestoreRequest? request, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
+    /// <summary>Nothing is ever archived here.</summary>
     public Task<System.Collections.Generic.ICollection<SavegameDto>> GetArchivedSavegamesV1Async(Guid repoId, CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
+        => Task.FromResult<ICollection<SavegameDto>>([]);
     public Task DeleteSavegameSnapshotV1Async(Guid repoId, Guid savegameId, int number, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
     public Task DeleteSavegameV1Async(Guid repoId, Guid savegameId, CancellationToken cancellationToken = default)
@@ -491,10 +516,15 @@ internal sealed class FakeSavegameDownloader(FakeSavegameServer server) : IModFi
 {
     public int Downloads { get; private set; }
 
+    /// <summary>Runs while the bytes are on their way, as the game being started mid-download would.</summary>
+    public Action? DuringDownload { get; set; }
+
 
     public Task<ModFileDownload> OpenAsync(string link, IProgress<long>? bytesReceived, CancellationToken cancellationToken)
     {
         Downloads++;
+
+        DuringDownload?.Invoke();
 
         var bytes = server.Blob(link);
 

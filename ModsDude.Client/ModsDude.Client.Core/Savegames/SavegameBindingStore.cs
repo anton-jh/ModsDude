@@ -110,7 +110,7 @@ public sealed class SavegameBindingStore(IPersistedGameState state) : ISavegameB
         return Bindings(game);
     }
 
-    public void SetBinding(GameIdentity game, SavegameCheckoutBinding binding)
+    public void Bind(GameIdentity game, SavegameCheckoutBinding binding)
     {
         // Refused rather than ignored. Silently dropping this loses the only record of which
         // savegame is sitting in that slot, and the folder is already written by the time anybody
@@ -122,10 +122,13 @@ public sealed class SavegameBindingStore(IPersistedGameState state) : ISavegameB
                 throw new InvalidOperationException($"No local game '{game}' to bind a savegame to.");
             }
 
-            persisted.SavegameCheckouts.RemoveAll(x =>
-                x.SavegameId == binding.SavegameId ||
-                x.Slot.Addresses(binding.Slot));
+            if (persisted.SavegameCheckouts.Any(x => x.SavegameId != binding.SavegameId && x.Slot.Addresses(binding.Slot)))
+            {
+                throw new InvalidOperationException(
+                    $"Slot '{binding.Slot}' of game '{game}' is bound to another savegame, which has to be released before '{binding.SavegameId}' is bound there.");
+            }
 
+            persisted.SavegameCheckouts.RemoveAll(x => x.SavegameId == binding.SavegameId);
             persisted.SavegameCheckouts.Add(binding);
 
             SetHint(persisted, new SavegameSlotHint(binding.RepoId, binding.SavegameId, binding.Slot));
@@ -134,6 +137,47 @@ public sealed class SavegameBindingStore(IPersistedGameState state) : ISavegameB
         });
 
         BindingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public SavegameCheckoutBinding? Update(GameIdentity game, Guid savegameId, Func<SavegameCheckoutBinding, SavegameCheckoutBinding> change)
+    {
+        SavegameCheckoutBinding? updated = null;
+        var changed = false;
+
+        state.Update(game, persisted =>
+        {
+            var index = persisted?.SavegameCheckouts.FindIndex(x => x.SavegameId == savegameId) ?? -1;
+
+            if (index < 0)
+            {
+                return false;
+            }
+
+            var current = persisted!.SavegameCheckouts[index];
+            var next = change(current);
+
+            if (next.SavegameId != current.SavegameId || next.Slot.Addresses(current.Slot) is false)
+            {
+                throw new InvalidOperationException($"An update of savegame '{savegameId}' cannot change which savegame or slot it binds.");
+            }
+
+            updated = next;
+            changed = next != current;
+
+            if (changed)
+            {
+                persisted.SavegameCheckouts[index] = next;
+            }
+
+            return changed;
+        });
+
+        if (changed)
+        {
+            BindingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        return updated;
     }
 
     public void ClearBinding(GameIdentity game, Guid savegameId)

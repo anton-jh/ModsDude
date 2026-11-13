@@ -36,6 +36,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     private readonly IModalService _modalService;
     private readonly ILogger<ModListItemViewModel> _logger;
     private readonly IBackgroundProblemReporter _problems;
+    private readonly TimeProvider _time;
 
     private Task<ModVersionImagery>? _imagery;
     private bool _thumbnailRequested;
@@ -48,7 +49,8 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         IModImagerySource imagerySource,
         IModalService modalService,
         ILogger<ModListItemViewModel> logger,
-        IBackgroundProblemReporter problems)
+        IBackgroundProblemReporter problems,
+        TimeProvider time)
     {
         Mod = mod;
         _repoId = repoId;
@@ -57,6 +59,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         _modalService = modalService;
         _logger = logger;
         _problems = problems;
+        _time = time;
 
         ShortDescription = BuildShortDescription(mod.Name, mod.Description);
         Initials = BuildInitials(mod.Name);
@@ -305,7 +308,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     public bool HasUsage => ShowStatistics && UsageText is not null;
 
     /// <summary>When the server's retention deletes this version, or null where it is not scheduled.</summary>
-    public string? DeletionText => ScheduledDeletion.Describe(Mod.DeletionScheduledFor);
+    public string? DeletionText => ScheduledDeletion.Describe(Mod.DeletionScheduledFor, DateOnly.FromDateTime(_time.GetLocalNow().DateTime));
 
     /// <summary>Why, and what would keep it.</summary>
     public string? DeletionTooltip => ScheduledDeletion.Explain(Mod.DeletionReason, RetainedKind.ModVersion);

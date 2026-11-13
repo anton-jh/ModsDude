@@ -227,7 +227,7 @@ public class PlaySessionWatchTests
             return Watch.PollAsync(CancellationToken.None);
         }
 
-        public void Hold(string contentHash = CheckedOut) => _bindings.SetBinding(Keys.Game(), new SavegameCheckoutBinding(
+        public void Hold(string contentHash = CheckedOut) => _bindings.Bind(Keys.Game(), new SavegameCheckoutBinding(
             RepoId,
             SavegameId,
             Keys.Slot("savegame1"),

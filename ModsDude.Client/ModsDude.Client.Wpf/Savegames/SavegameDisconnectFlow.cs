@@ -12,12 +12,23 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// </remarks>
 public sealed class SavegameDisconnectFlow(
     ISavegameHolds savegameHolds,
+    ISavegameOperations operations,
     IToastService toasts,
     Lazy<IModalService> modalService) : ISavegameDisconnectFlow
 {
     public async Task<bool> DisconnectAsync(Game game, Guid savegameId, string? savegameName, SavegameDisconnectReason reason)
     {
         var quoted = savegameName is string name ? $"'{name}'" : "this savegame";
+
+        // Forgetting a binding mid-operation would pull the record out from under a check-in.
+        if (operations.DescribeBusy(game, savegameId) is string busy)
+        {
+            await modalService.Value.Show(ConfirmationModalViewModel.Refusal(
+                "Something else is using that savegame",
+                $"{busy} is running. Try again once it has finished."));
+
+            return false;
+        }
 
         var (message, kept) = reason switch
         {

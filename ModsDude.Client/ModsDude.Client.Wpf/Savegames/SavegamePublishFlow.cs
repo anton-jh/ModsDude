@@ -1,9 +1,7 @@
 using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Models;
-using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
-using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
@@ -26,9 +24,9 @@ public sealed class SavegamePublishFlow(
     ISavegameProfileActivation profileActivation,
     IHeldSavegameNames heldSavegameNames,
     IGameRunningGuard runningGuard,
+    ISavegameOperations operations,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
-    IBackgroundTaskReporter backgroundTasks,
     IToastService toasts) : ISavegamePublishFlow
 {
     public async Task PublishAsync(
@@ -46,39 +44,65 @@ public sealed class SavegamePublishFlow(
             return;
         }
 
+        SavegamePublishPlan? plan;
+
         try
         {
-            var slots = await ReadPublishableSlotsAsync(game, cancellationToken);
-
-            if (slots.Count == 0)
-            {
-                await modalService.Value.Show(ConfirmationModalViewModel.Refusal(
-                    "There is nothing here to publish",
-                    "Every slot is either empty or holds a savegame ModsDude already has a copy of. A checked-out save is checked in rather than published again, which is the button on its row in the repo's saves list."));
-
-                return;
-            }
-
-            var wizard = new SavegamePublishWizard(
-                repo, game, preselectProfileId, slots, savegameSlots, heldSavegames, profileStore, manifestStore, checkInFlow, heldSavegameNames);
-
-            var modal = new WizardModalViewModel(wizard.First, wizard.NextAsync, cancellationToken);
-
-            if (await modal.ShowAsync(modalService.Value) is false || wizard.Plan is not SavegamePublishPlan plan)
-            {
-                return;
-            }
-
-            await ExecuteAsync(game, repo, plan, published, cancellationToken);
+            plan = await AskAsync(repo, game, preselectProfileId, cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Navigated away.
+            // The page asking went away before anything was answered. Nothing has started.
+            return;
         }
         catch (Exception exception)
         {
             await errorReporter.ShowAsync(exception, "publishing a savegame");
+
+            return;
         }
+
+        if (plan is null)
+        {
+            return;
+        }
+
+        await operations.RunAsync(
+            new SavegameOperation(
+                game,
+                $"Publishing '{plan.Name}' to {repo.Name}",
+                "publishing a savegame",
+                $"Publishing '{plan.Name}' stopped. Your save is still in its slot.",
+                plan.CheckInFirst is SavegamePublishCheckIn checkIn ? [checkIn.SavegameId] : [],
+                AllFolders: true)
+            {
+                Detail = plan.KeepPlaying
+                    ? $"Packing and uploading '{plan.Slot.Label}'"
+                    : $"Packing and uploading '{plan.Slot.Label}', then handing it back"
+            },
+            (task, ct) => ExecuteAsync(game, repo, plan, published, task, ct));
+    }
+
+    /// <summary>The questions, as one wizard. Null where there is nothing to publish or the user backed out.</summary>
+    private async Task<SavegamePublishPlan?> AskAsync(Repo repo, Game game, Guid? preselectProfileId, CancellationToken cancellationToken)
+    {
+        var slots = await ReadPublishableSlotsAsync(game, cancellationToken);
+
+        if (slots.Count == 0)
+        {
+            await modalService.Value.Show(ConfirmationModalViewModel.Refusal(
+                "There is nothing here to publish",
+                "Every slot is either empty or holds a savegame ModsDude already has a copy of. A checked-out save is checked in rather than published again, which is the button on its row in the repo's saves list."));
+
+            return null;
+        }
+
+        var wizard = new SavegamePublishWizard(
+            repo, game, preselectProfileId, slots, savegameSlots, heldSavegames, profileStore, manifestStore, checkInFlow, heldSavegameNames);
+
+        var modal = new WizardModalViewModel(wizard.First, wizard.NextAsync, cancellationToken);
+
+        return await modal.ShowAsync(modalService.Value) ? wizard.Plan : null;
     }
 
     /// <summary>
@@ -113,6 +137,7 @@ public sealed class SavegamePublishFlow(
         Repo repo,
         SavegamePublishPlan plan,
         Action<Guid>? published,
+        IBackgroundTask task,
         CancellationToken cancellationToken)
     {
         // Before the first step, since an activation into a running game would be recorded and then
@@ -129,7 +154,7 @@ public sealed class SavegamePublishFlow(
 
         if (plan.CheckInFirst is SavegamePublishCheckIn checkIn)
         {
-            if (await CheckInFirstAsync(game, plan, checkIn, cancellationToken) is false)
+            if (await CheckInFirstAsync(game, plan, checkIn, task, cancellationToken) is false)
             {
                 return;
             }
@@ -142,12 +167,18 @@ public sealed class SavegamePublishFlow(
             return;
         }
 
-        var outcome = await PublishSlotAsync(game, repo, plan, cancellationToken);
+        task.Report($"Publishing '{plan.Name}'");
+        task.DeclareTransfers(TransferDirection.Upload);
+
+        var outcome = await savegamePublisher.PublishAsync(
+            game, repo.Id, plan.Slot.Ref, plan.Name, plan.Label, plan.Profile.ToTarget(), plan.KeepPlaying, cancellationToken,
+            new SavegameStripProgress(task));
 
         // The slot is in a different state in each ending, and the sentence is the only thing that
         // says which.
-        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, SavegameSlotWording.Named(savegameSlots.DescribeSlotNumber(game, plan.Slot.Ref), outcome.Savegame.Name))
-            is string notRecycled)
+        var slot = SavegameSlotWording.Named(savegameSlots.DescribeSlotNumber(game, plan.Slot.Ref), outcome.Savegame.Name);
+
+        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, slot, game.Name) is string notRecycled)
         {
             toasts.Show($"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. {notRecycled}", ToastSeverity.Warning);
         }
@@ -166,10 +197,11 @@ public sealed class SavegamePublishFlow(
         Game game,
         SavegamePublishPlan plan,
         SavegamePublishCheckIn checkIn,
+        IBackgroundTask task,
         CancellationToken cancellationToken)
     {
         var outcome = await checkInFlow.CheckInAsync(
-            game, checkIn.SavegameId, checkIn.Savegame, checkIn.Label, keepPlaying: false, cancellationToken);
+            game, checkIn.SavegameId, checkIn.Savegame, checkIn.Label, keepPlaying: false, task, cancellationToken);
 
         if (outcome.ReleasedTheSlot is false)
         {
@@ -182,30 +214,11 @@ public sealed class SavegamePublishFlow(
             return false;
         }
 
-        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, $"the slot of {checkIn.Savegame.Quoted}") is string notRecycled)
+        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, $"the slot of {checkIn.Savegame.Quoted}", game.Name) is string notRecycled)
         {
             toasts.Show(notRecycled, ToastSeverity.Warning);
         }
 
         return true;
-    }
-
-    private async Task<SavegamePublishResult> PublishSlotAsync(
-        Game game,
-        Repo repo,
-        SavegamePublishPlan plan,
-        CancellationToken cancellationToken)
-    {
-        using var task = backgroundTasks.Begin(
-            $"Publishing '{plan.Name}' to {repo.Name}",
-            plan.KeepPlaying
-                ? $"Packing and uploading '{plan.Slot.Label}'"
-                : $"Packing and uploading '{plan.Slot.Label}', then handing it back");
-
-        task.DeclareTransfers(TransferDirection.Upload);
-
-        return await savegamePublisher.PublishAsync(
-            game, repo.Id, plan.Slot.Ref, plan.Name, plan.Label, plan.Profile.ToTarget(), plan.KeepPlaying, cancellationToken,
-            new SavegameStripProgress(task));
     }
 }

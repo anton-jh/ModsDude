@@ -36,7 +36,6 @@ public sealed class SavegameStripProgress(IBackgroundTask task) : IProgress<Save
         SavegameStage.Uploading => "Uploading",
         SavegameStage.Recording => "Recording the snapshot",
         SavegameStage.Downloading => "Downloading",
-        SavegameStage.Verifying => "Checking what arrived",
         SavegameStage.Unpacking => "Writing it into the slot",
         _ => stage.ToString()
     };

@@ -4,6 +4,7 @@ using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using System.Globalization;
 using System.Text;
 using System.Xml;
@@ -155,17 +156,24 @@ public class FarmingSimulatorLocalSavegameAdapter(
 
     /// <summary>
     /// Sets <c>settings/savegameName</c> in the slot's career file - the element <see cref="ReadSlot"/>
-    /// reads the name from.
+    /// reads the name from. The career file it replaces goes to the Recycle Bin.
     /// </summary>
     public IReadOnlyList<GameFileEdit> RenameSavegame(SavegameRenameContext context)
     {
-        return [new GameFileEdit(_careerSavegameFile, current => WithSavegameName(current, context.Name))];
+        return [new GameFileEdit(_careerSavegameFile, current => WithSavegameName(current, context.Name)) { RecycleReplaced = true }];
     }
 
-    /// <returns>Null, leaving the file alone, where there is no readable career file or it already has the name.</returns>
+    /// <remarks>
+    /// Changes the name and nothing else: whitespace, indentation and line endings are kept as the
+    /// game wrote them, so the file differs from the original by the name alone.
+    /// </remarks>
+    /// <returns>
+    /// Null, leaving the file alone, where there is no readable career file, it already has the name,
+    /// or the name holds characters an XML file cannot.
+    /// </returns>
     internal static byte[]? WithSavegameName(byte[]? careerFile, string name)
     {
-        if (careerFile is null)
+        if (careerFile is null || IsXmlText(name) is false)
         {
             return null;
         }
@@ -175,7 +183,7 @@ public class FarmingSimulatorLocalSavegameAdapter(
         try
         {
             using var input = new MemoryStream(careerFile);
-            document = SafeXml.Load(input);
+            document = SafeXml.Load(input, LoadOptions.PreserveWhitespace);
         }
         catch (XmlException)
         {
@@ -195,7 +203,11 @@ public class FarmingSimulatorLocalSavegameAdapter(
         {
             // No BOM, matching what the game itself writes.
             Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-            Indent = true
+            Indent = false,
+            OmitXmlDeclaration = document.Declaration is null,
+            // A reader hands every line ending back as \n, so the file's own is put back on the way out.
+            NewLineChars = careerFile.AsSpan().IndexOf("\r\n"u8) >= 0 ? "\r\n" : "\n",
+            NewLineHandling = NewLineHandling.Replace
         };
 
         using var output = new MemoryStream();
@@ -206,6 +218,51 @@ public class FarmingSimulatorLocalSavegameAdapter(
         }
 
         return output.ToArray();
+    }
+
+    private static bool IsXmlText(string value)
+    {
+        try
+        {
+            XmlConvert.VerifyXmlChars(value);
+
+            return true;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether the career file is there. Only "not found" is an empty slot: a file that cannot be
+    /// looked at - access denied, a drive that went away - may well hold somebody's save.
+    /// </summary>
+    private static CareerFile ProbeCareerFile(string careerFile, ILogger log)
+    {
+        try
+        {
+            return (File.GetAttributes(careerFile) & FileAttributes.Directory) == 0
+                ? CareerFile.Present
+                : CareerFile.Unreachable;
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return CareerFile.Missing;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            log.LogDebug(exception, "Could not look at {File}.", careerFile);
+
+            return CareerFile.Unreachable;
+        }
+    }
+
+    private enum CareerFile
+    {
+        Missing,
+        Present,
+        Unreachable
     }
 
 
@@ -225,9 +282,15 @@ public class FarmingSimulatorLocalSavegameAdapter(
 
         var careerFile = Path.Combine(slotPath, _careerSavegameFile);
 
-        if (!File.Exists(careerFile))
+        switch (ProbeCareerFile(careerFile, log))
         {
-            return new SavegameSlot(id, null, false, [], number);
+            case CareerFile.Missing:
+                return new SavegameSlot(id, null, false, [], number);
+
+            case CareerFile.Unreachable:
+                log.LogWarning("Slot {Slot} could not be looked into; it will show as an unnamed save.", id.Value);
+
+                return new SavegameSlot(id, null, true, [], number);
         }
 
         var maybeCareer = ReadCareer(careerFile, log);
@@ -274,11 +337,11 @@ public class FarmingSimulatorLocalSavegameAdapter(
     {
         var details = new List<SavegameDetail>();
 
-        void Add(string detailId, string label, string? value)
+        void Add(string detailId, string label, (SavegameDetailKind Kind, string Value)? value)
         {
-            if (string.IsNullOrWhiteSpace(value) is false)
+            if (value is { } typed && string.IsNullOrWhiteSpace(typed.Value) is false)
             {
-                details.Add(new SavegameDetail(detailId, label, value.Trim()));
+                details.Add(new SavegameDetail(detailId, label, typed.Kind, typed.Value.Trim()));
             }
         }
 
@@ -287,20 +350,39 @@ public class FarmingSimulatorLocalSavegameAdapter(
         var statistics = Maybe.From(career.Element("statistics"));
         var farms = ReadFarms(slotPath, log);
 
-        Add(SavegameDetail.Ids.Map, "Map", Text(settings, "mapTitle"));
+        Add(SavegameDetail.Ids.Map, "Map", AsText(Text(settings, "mapTitle")));
 
         // The game's own record of when it was last written, which stays honest where copying the
         // save between machines has rewritten the file's own timestamp. That timestamp is the
         // fallback, because a save with no saveDate still has a "when" worth showing.
         Add(SavegameDetail.Ids.LastPlayed, "Last played",
-            Text(settings, "saveDate") ?? LastWrittenText(careerFile, log));
+            AsDate(Text(settings, "saveDate")) ?? LastWritten(careerFile, log));
 
-        Add(SavegameDetail.Ids.Started, "Started", Text(settings, "creationDate"));
+        Add(SavegameDetail.Ids.Started, "Started", AsDate(Text(settings, "creationDate")));
         Add(SavegameDetail.Ids.Playtime, "Played", Playtime(Text(statistics, "playTime"), log));
-        Add(SavegameDetail.Ids.Difficulty, "Difficulty", Difficulty(Text(settings, "economicDifficulty")));
-        Add(SavegameDetail.Ids.Multiplayer, "Multiplayer", MultiplayerText(farms));
+        Add(SavegameDetail.Ids.Difficulty, "Difficulty", AsText(Difficulty(Text(settings, "economicDifficulty"))));
+        Add(SavegameDetail.Ids.Multiplayer, "Multiplayer", AsText(MultiplayerText(farms)));
 
         return details;
+    }
+
+    private static (SavegameDetailKind, string)? AsText(string? value)
+        => value is null ? null : (SavegameDetailKind.Text, value);
+
+    /// <summary>
+    /// The game writes its dates as <c>yyyy-MM-dd</c>. One in any other shape is shown as the game
+    /// wrote it, which is still a date somebody can read.
+    /// </summary>
+    private static (SavegameDetailKind, string)? AsDate(string? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        return DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? (SavegameDetailKind.Date, date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+            : (SavegameDetailKind.Text, value);
     }
 
     /// <summary>
@@ -415,14 +497,16 @@ public class FarmingSimulatorLocalSavegameAdapter(
     /// Playtime is minutes, as an invariant decimal. Anything else is a layout this adapter does not
     /// know, and an unreadable playtime costs a line rather than a slot.
     /// </summary>
-    private static string? Playtime(string? raw, ILogger log)
+    private static (SavegameDetailKind, string)? Playtime(string? raw, ILogger log)
     {
         if (raw is null)
         {
             return null;
         }
 
-        if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var minutes) is false)
+        if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var minutes) is false
+            || double.IsFinite(minutes) is false
+            || minutes < 0)
         {
             // The element was there and this adapter could not read it, which is a layout change
             // rather than a save that simply does not record playtime. Worth telling apart.
@@ -431,13 +515,7 @@ public class FarmingSimulatorLocalSavegameAdapter(
             return null;
         }
 
-        var played = TimeSpan.FromMinutes(minutes);
-
-        // Hours, because a save's playtime is measured in tens of them and "1.21:37:00" is not a
-        // number anybody reads.
-        return played < TimeSpan.FromHours(1)
-            ? $"{played.TotalMinutes:N0} min"
-            : $"{played.TotalHours:N0} h";
+        return (SavegameDetailKind.Duration, ((long)Math.Round(minutes)).ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>The game writes these in caps, which reads as shouting in a list of sentences.</summary>
@@ -448,11 +526,13 @@ public class FarmingSimulatorLocalSavegameAdapter(
             : string.Concat(raw[..1].ToUpperInvariant(), raw[1..].ToLowerInvariant());
     }
 
-    private static string? LastWrittenText(string careerFile, ILogger log)
+    private static (SavegameDetailKind, string)? LastWritten(string careerFile, ILogger log)
     {
         try
         {
-            return File.GetLastWriteTime(careerFile).ToString("g", CultureInfo.CurrentCulture);
+            var written = new DateTimeOffset(File.GetLastWriteTimeUtc(careerFile), TimeSpan.Zero);
+
+            return (SavegameDetailKind.Instant, written.ToString("O", CultureInfo.InvariantCulture));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

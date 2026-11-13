@@ -209,6 +209,7 @@ public partial class App : Application
 
         // Whatever a run that crashed or was killed left behind. Nothing is downloading yet.
         _serviceProvider.GetRequiredService<Core.RemoteSources.IRemoteModDownloader>().Sweep();
+        _serviceProvider.GetRequiredService<Core.Savegames.ISavegameTransfer>().SweepTemporaryArchives();
 
         return new StartedApp(window, background);
     }
@@ -577,6 +578,7 @@ public partial class App : Application
         // The savegame verbs, shared by the Saves list and a profile's Overview.
         services.AddSingleton<ISavegameOffers, SavegameOffers>();
         services.AddSingleton<IHeldSavegameNames, HeldSavegameNames>();
+        services.AddSingleton<ISavegameOperations, SavegameOperations>();
         services.AddSingleton<ISavegameCheckInFlow, SavegameCheckInFlow>();
         services.AddSingleton<ISavegameDisconnectFlow, SavegameDisconnectFlow>();
         services.AddSingleton<ISavegameProfileActivation, SavegameProfileActivation>();

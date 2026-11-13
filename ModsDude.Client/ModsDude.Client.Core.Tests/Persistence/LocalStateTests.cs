@@ -95,7 +95,7 @@ public class LocalStateTests
 
         game.SavegameSlotHints.Add(new SavegameSlotHint(Guid.NewGuid(), savegameId, slot));
 
-        var pending = new SavegamePendingPublish(slot, "bbbb", Guid.NewGuid(), Guid.NewGuid());
+        var pending = new SavegamePendingPublish(slot, Guid.NewGuid(), "bbbb", "cccc", Guid.NewGuid(), Guid.NewGuid());
         game.SavegamePendingPublishes.Add(pending);
 
         state.Games[_fs25] = game;

@@ -136,8 +136,12 @@ public class SavegamePublisherTests
         Assert.Empty(harness.State.Find(harness.Game.Identity)!.SavegamePendingPublishes);
     }
 
+    /// <summary>
+    /// The first publish landed and handed the save back, and the slot has been played since. What is
+    /// in it now is a save of its own, so the first is finished here and this one goes ahead.
+    /// </summary>
     [Fact]
-    public async Task Publishing_different_bytes_after_a_lost_answer_is_a_new_publish()
+    public async Task Publishing_after_a_lost_answer_and_more_play_finishes_the_first_then_publishes_again()
     {
         using var harness = new SavegameHarness();
 
@@ -155,6 +159,97 @@ public class SavegamePublisherTests
         Assert.Equal(2, harness.Server.Publishes.Count);
         Assert.NotEqual(harness.Server.Publishes[0].RequestId, harness.Server.Publishes[1].RequestId);
         Assert.NotEqual(harness.Server.Publishes[0].SavegameId, harness.Server.Publishes[1].SavegameId);
+        Assert.Empty(harness.State.Find(harness.Game.Identity)!.SavegamePendingPublishes);
+    }
+
+    /// <summary>
+    /// The first publish landed, its answer was lost, and the same slot is published again under
+    /// another name - so other contents. The first is found and finished, and nothing is published
+    /// twice.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_under_another_name_after_a_lost_answer_does_not_publish_twice()
+    {
+        using var harness = new SavegameHarness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+        harness.Server.LoseNextPublishAnswer = true;
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None));
+
+        await Assert.ThrowsAsync<UserFriendlyException>(() => harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 6", null, harness.Target(), keepPlaying: false, CancellationToken.None));
+
+        Assert.Single(harness.Server.Publishes);
+        Assert.Equal(harness.SlotPath(_slot1), Assert.Single(harness.RecycleBin.Recycled));
+        Assert.Empty(harness.State.Find(harness.Game.Identity)!.SavegamePendingPublishes);
+    }
+
+    /// <summary>The first publish landed and kept the save, so it is bound here, and a second is refused.</summary>
+    [Fact]
+    public async Task A_lost_publish_that_kept_the_save_is_bound_when_it_is_found()
+    {
+        using var harness = new SavegameHarness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+        harness.Server.LoseNextPublishAnswer = true;
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: true, CancellationToken.None));
+
+        harness.Server.ListedCheckout = harness.Server.Claim;
+        var publishedId = harness.Server.Publishes[0].SavegameId;
+
+        await Assert.ThrowsAsync<UserFriendlyException>(() => harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 6", null, harness.Target(), keepPlaying: true, CancellationToken.None));
+
+        Assert.Single(harness.Server.Publishes);
+        Assert.Equal(_slot1, harness.Binding(publishedId).Slot);
+        Assert.Empty(harness.State.Find(harness.Game.Identity)!.SavegamePendingPublishes);
+    }
+
+    [Fact]
+    public async Task Publishing_an_empty_slot_is_refused_before_anything_is_uploaded()
+    {
+        using var harness = new SavegameHarness();
+
+        await Assert.ThrowsAsync<UserFriendlyException>(() => harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None));
+
+        Assert.Empty(harness.Server.Publishes);
+        Assert.Equal(0, harness.Uploader.Uploads);
+    }
+
+    [Fact]
+    public async Task Publishing_a_slot_that_holds_a_checked_out_savegame_is_refused()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+
+        await Assert.ThrowsAsync<UserFriendlyException>(() => harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None));
+
+        Assert.Empty(harness.Server.Publishes);
+    }
+
+    /// <summary>The upload is minutes; the game started meanwhile, so the slot is left alone rather than recycled.</summary>
+    [Fact]
+    public async Task Publishing_without_keeping_it_leaves_the_slot_alone_when_the_game_started_meanwhile()
+    {
+        using var harness = new SavegameHarness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+        harness.Guard.StartsAfterChecks = 1;
+
+        var (_, localCopy) = await harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: false, CancellationToken.None);
+
+        Assert.Equal(SavegameLocalCopy.LeftGameRunning, localCopy);
+        Assert.Empty(harness.RecycleBin.Recycled);
+        Assert.Equal("a brand new savegame", harness.ReadSlotFile(_slot1));
     }
 
     /// <summary>
@@ -348,8 +443,12 @@ public class SavegamePublisherTests
         Assert.Null(binding.TargetRevision);
     }
 
+    /// <summary>
+    /// The name is packed into the upload, and reaches the slot once the server has the savegame - so
+    /// the slot then holds exactly what was published and reads as clean.
+    /// </summary>
     [Fact]
-    public async Task Publishing_writes_the_given_name_into_the_slot_before_packing()
+    public async Task Publishing_and_keeping_it_names_the_slot_once_the_server_has_it()
     {
         using var harness = new SavegameHarness();
 
@@ -359,6 +458,23 @@ public class SavegamePublisherTests
             harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: true, CancellationToken.None);
 
         Assert.Equal("Season 5", Assert.Single(harness.Adapter.Renames).Name);
+        Assert.Equal("Season 5", File.ReadAllText(Path.Combine(harness.SlotPath(_slot1), "name.txt")));
+        Assert.Equal(SavegameSlotAvailability.HeldClean, await harness.Slots.ClassifySlotAsync(harness.Game, _slot1, CancellationToken.None));
+    }
+
+    /// <summary>A publish the server refuses leaves the slot exactly as it was - the name included.</summary>
+    [Fact]
+    public async Task A_refused_publish_leaves_the_slot_unnamed()
+    {
+        using var harness = new SavegameHarness();
+
+        harness.WriteSlotFile(_slot1, "a brand new savegame");
+        harness.Server.LoseNextPublishAnswer = true;
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => harness.Publisher.PublishAsync(
+            harness.Game, harness.Server.RepoId, _slot1, "Season 5", null, harness.Target(), keepPlaying: true, CancellationToken.None));
+
+        Assert.False(File.Exists(Path.Combine(harness.SlotPath(_slot1), "name.txt")));
     }
 
     [Fact]

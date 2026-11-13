@@ -11,9 +11,18 @@ public interface ISavegameRecycler
 {
     /// <summary>
     /// Sends a save a check-out or copy replaced to the Recycle Bin, or failing that into the content
-    /// store's quarantine folder. Where both refuse it stays beside the slots, under its new name.
+    /// store's quarantine folder. Where both refuse it stays beside the slots, under a name that says
+    /// which slot it was replaced in and when.
     /// </summary>
-    DisplacedSavegame PutAway(string displacedPath);
+    DisplacedSavegame PutAway(string displacedPath, string slotPath);
+
+    /// <summary>
+    /// Puts right what an interrupted write left beside a slot: half-extracted copies are deleted, a
+    /// slot that was moved aside and never replaced is moved back, and a slot that was replaced has
+    /// its old contents put away. Run before anything else touches the slot.
+    /// </summary>
+    /// <returns>Where each old copy that was put away went.</returns>
+    IReadOnlyList<DisplacedSavegame> RecoverSlot(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot);
 
     /// <summary>
     /// Sends a slot's folder to the Recycle Bin, asking again briefly while something (a virus scanner,
@@ -24,9 +33,10 @@ public interface ISavegameRecycler
 
     /// <summary>
     /// Recycles a slot that has just been uploaded, but only while it still holds exactly what was
-    /// uploaded. Anything the game wrote since exists nowhere else, so that slot is left alone.
+    /// packed. Anything the game wrote since exists nowhere else, so that slot is left alone.
     /// </summary>
-    Task<SavegameLocalCopy> HandBackAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, string uploadedHash);
+    /// <param name="packedSlotHash">What the slot hashed to when it was packed for the upload.</param>
+    Task<SavegameLocalCopy> HandBackAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, string packedSlotHash);
 }
 
 
@@ -42,7 +52,10 @@ public enum SavegameLocalCopy
     LeftBehind,
 
     /// <summary>Handed back, but the slot changed after the upload, so it was left in its slot.</summary>
-    ChangedSinceUpload
+    ChangedSinceUpload,
+
+    /// <summary>Handed back, but the game was running by then, so the slot was left alone.</summary>
+    LeftGameRunning
 }
 
 
@@ -54,7 +67,7 @@ public enum DisplacedSavegameDestination
     /// <summary>The Recycle Bin refused it, so it was moved into the content store's quarantine folder.</summary>
     QuarantineFolder,
 
-    /// <summary>Neither worked, so it is still beside the slots under its new name.</summary>
+    /// <summary>Neither worked, so it is still beside the slots, named for the slot it was replaced in.</summary>
     BesideSlots
 }
 

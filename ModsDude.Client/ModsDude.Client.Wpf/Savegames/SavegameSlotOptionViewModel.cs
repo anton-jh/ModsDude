@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Savegames;
+using System.Globalization;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
@@ -43,7 +44,7 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
         IsFreedByCheckIn = isFreedByCheckIn;
 
         SaveName = slot.DisplayName;
-        Details = slot.Details;
+        Details = SavegameDetailText.Lines(slot.Details, CultureInfo.CurrentCulture, TimeZoneInfo.Local);
         Number = slot.Number;
 
         Label = slot.IsOccupied
@@ -85,7 +86,7 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
     /// What the adapter says about the save here - the map, when it was last played, how long for.
     /// Free-form and in the adapter's own order; see <see cref="SavegameDetail"/>.
     /// </summary>
-    public IReadOnlyList<SavegameDetail> Details { get; }
+    public IReadOnlyList<SavegameDetailLine> Details { get; }
 
     public bool HasDetails => Details.Count > 0;
 
@@ -134,7 +135,7 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
         // The adapter's own values lead - "Zielonka · 45 h" is what tells two savegames apart - and only
         // the first few, because a row is one line. The adapter's order is its priority order, which
         // is the whole reason it is preserved; the rest are on the tooltip.
-        parts.AddRange(Details.Take(SavegameSlotWording.DetailsOnTheRow).Select(x => x.Value));
+        parts.AddRange(Details.Take(SavegameSlotWording.DetailsOnTheRow).Select(x => x.Text));
 
         parts.Add(DescribeState());
 

@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.Savegames;
@@ -54,6 +55,32 @@ internal static class SavegameRequirements
             Hint = "Check that one in first."
         };
     }
+
+    /// <summary>
+    /// Whether the game is running right now, for a local step that comes after the server has already
+    /// said yes and so cannot be refused - only left undone.
+    /// </summary>
+    public static bool IsRunning(this IGameRunningGuard guard, Game game)
+    {
+        try
+        {
+            guard.EnsureNotRunning(game.Identity, game.Name);
+
+            return false;
+        }
+        catch (GameRunningException)
+        {
+            return true;
+        }
+    }
+
+    public static UserFriendlyException SlotIsEmpty(Game game, SavegameSlotRef slot)
+        => new(
+            "That slot is empty",
+            $"Slot '{slot}' of game '{game.Identity}' holds nothing a savegame is made of, so there is nothing to upload.")
+        {
+            Hint = "Discard the savegame instead, or put the save back in its slot."
+        };
 
     public static SavegameCheckoutBinding RequireBinding(this ISavegameBindingStore bindings, Game game, Guid savegameId)
         => bindings.GetBinding(game.Identity, savegameId)

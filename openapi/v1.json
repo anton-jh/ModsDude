@@ -1051,6 +1051,7 @@
           "https://server.modsdude.com/api/problems/invite-cannot-grant-admin",
           "https://server.modsdude.com/api/problems/profile-revision-stale",
           "https://server.modsdude.com/api/problems/savegame-snapshot-stale",
+          "https://server.modsdude.com/api/problems/savegame-check-in-unknown",
           "https://server.modsdude.com/api/problems/savegame-checkout-conflict",
           "https://server.modsdude.com/api/problems/savegame-head-moved",
           "https://server.modsdude.com/api/problems/savegame-claim-changed",
@@ -1113,6 +1114,7 @@
           "InviteCannotGrantAdmin",
           "ProfileRevisionStale",
           "SavegameSnapshotStale",
+          "SavegameCheckInUnknown",
           "SavegameCheckoutConflict",
           "SavegameHeadMoved",
           "SavegameClaimChanged",
@@ -1857,6 +1859,9 @@
           "key": {
             "type": "string"
           },
+          "kind": {
+            "$ref": "#/components/schemas/SavegameDetailKind"
+          },
           "label": {
             "type": "string"
           },
@@ -1865,6 +1870,22 @@
           }
         },
         "type": "object"
+      },
+      "SavegameDetailKind": {
+        "description": "",
+        "enum": [
+          "Text",
+          "Date",
+          "Instant",
+          "Duration"
+        ],
+        "type": "string",
+        "x-enumNames": [
+          "Text",
+          "Date",
+          "Instant",
+          "Duration"
+        ]
       },
       "SavegameDto": {
         "additionalProperties": false,
@@ -7588,6 +7609,113 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Savegames"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/savegames/{savegameId}/check-ins/{requestId}": {
+      "get": {
+        "operationId": "GetSavegameCheckInV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "savegameId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          },
+          {
+            "in": "path",
+            "name": "requestId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckInSavegameResponse"
+                }
+              }
+            },
             "description": ""
           },
           "400": {

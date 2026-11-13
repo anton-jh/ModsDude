@@ -1289,6 +1289,10 @@ namespace ModsDude.Server.Persistence.Migrations
                                 .IsRequired()
                                 .HasColumnType("text");
 
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasColumnType("text");
+
                             b1.Property<string>("Label")
                                 .IsRequired()
                                 .HasColumnType("text");

@@ -1,6 +1,7 @@
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Retention;
 using ModsDude.Client.Core.Savegames;
+using System.Globalization;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
@@ -130,7 +131,7 @@ public sealed class SavegameTimelineEntryViewModel
     /// What the adapter recorded about this snapshot, in its own order. Empty for a claim row, and for
     /// a snapshot checked in by a client whose adapter describes nothing.
     /// </summary>
-    public IReadOnlyList<SavegameDetailDto> Details { get; private init; } = [];
+    public IReadOnlyList<SavegameDetailLine> Details { get; private init; } = [];
 
     public bool HasDetails => Details.Count > 0;
 
@@ -150,9 +151,9 @@ public sealed class SavegameTimelineEntryViewModel
             Label = snapshot.Label,
             SizeText = SavegameWording.Size(snapshot.SizeBytes),
             RevisionText = $"Played on revision {snapshot.ProfileRevision}",
-            Details = [.. snapshot.Details],
+            Details = SavegameDetailText.Lines(snapshot.Details, CultureInfo.CurrentCulture, TimeZoneInfo.Local),
             ProfileRevision = snapshot.ProfileRevision,
-            DeletionText = ScheduledDeletion.Describe(snapshot.DeletionScheduledFor),
+            DeletionText = ScheduledDeletion.Describe(snapshot.DeletionScheduledFor, DateOnly.FromDateTime(now.ToLocalTime().DateTime)),
             DeletionTooltip = ScheduledDeletion.Explain(snapshot.DeletionReason, RetainedKind.Snapshot)
         };
     }

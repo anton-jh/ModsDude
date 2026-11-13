@@ -443,7 +443,7 @@ public class ChangePollTests
             SavegameServer.Seed([1, 2, 3]);
             SavegameServer.ListedCheckout = Checkout("me", "Me");
 
-            _bindings.SetBinding(Keys.Game(), new SavegameCheckoutBinding(
+            _bindings.Bind(Keys.Game(), new SavegameCheckoutBinding(
                 RepoId,
                 SavegameServer.SavegameId,
                 Keys.Slot("savegame1"),

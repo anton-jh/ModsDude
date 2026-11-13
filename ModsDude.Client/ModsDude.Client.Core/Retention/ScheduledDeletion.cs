@@ -39,9 +39,6 @@ public static class ScheduledDeletion
         return $"To be deleted {scheduled.ToString(format, CultureInfo.CurrentCulture)}";
     }
 
-    public static string? Describe(DateOnly? date)
-        => Describe(date, DateOnly.FromDateTime(DateTime.Now));
-
     /// <returns>Why the row goes, and what would keep it. <c>null</c> where nothing is scheduled.</returns>
     public static string? Explain(DeletionReason? reason, RetainedKind kind) => (reason, kind) switch
     {

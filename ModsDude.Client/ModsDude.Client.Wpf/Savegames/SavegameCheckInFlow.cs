@@ -3,7 +3,6 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
-using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
@@ -24,9 +23,9 @@ public sealed class SavegameCheckInFlow(
     ISavegameBindingStore bindingStore,
     IProfileStore profileStore,
     IDriftMonitor driftMonitor,
+    ISavegameOperations operations,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
-    IBackgroundTaskReporter backgroundTasks,
     IToastService toasts) : ISavegameCheckInFlow
 {
     public SavegameCheckInStepViewModel CreateStep(
@@ -42,8 +41,9 @@ public sealed class SavegameCheckInFlow(
         HeldSavegameName savegame,
         string? label,
         bool keepPlaying,
+        IBackgroundTask task,
         CancellationToken cancellationToken)
-        => SendAsync(game, savegameId, savegame, label, keepPlaying, force: false, cancellationToken);
+        => SendAsync(game, savegameId, savegame, label, keepPlaying, force: false, task, cancellationToken);
 
     public async Task CheckInHeldAsync(
         Game game,
@@ -51,75 +51,111 @@ public sealed class SavegameCheckInFlow(
         string savegameName,
         CancellationToken cancellationToken)
     {
+        // The savegame's name stands in for the slot label: the slot id is a folder name the player
+        // never thinks in. It is this savegame's own record, so it is also the name the snapshot
+        // carries. The slot is named now, while the binding that knows it is still there.
+        var slot = SavegameSlotWording.Named(HeldSlotNumber(game, savegameId), savegameName);
+
+        var savegame = new HeldSavegameName(savegameName, null);
+        var step = CreateStep(game, savegameId, savegame);
+
         try
         {
-            // The savegame's name stands in for the slot label: the slot id is a folder name the player
-            // never thinks in. It is this savegame's own record, so it is also the name to write into
-            // the slot. The slot is named now, while the binding that knows it is still there.
-            var slot = SavegameSlotWording.Named(HeldSlotNumber(game, savegameId), savegameName);
-
-            var savegame = new HeldSavegameName(savegameName, null);
-            var step = CreateStep(game, savegameId, savegame);
-
             if (await WizardModalViewModel.Single(step, cancellationToken).ShowAsync(modalService.Value) is false)
             {
                 return;
             }
-
-            var outcome = await CheckInAsync(game, savegameId, savegame, step.TrimmedLabel, step.KeepPlaying, cancellationToken);
-
-            if (outcome.WasDeferred)
-            {
-                toasts.Show($"Left as it is. Your copy of '{savegameName}' is still in its slot.");
-
-                return;
-            }
-
-            if (outcome.Succeeded is false)
-            {
-                return;
-            }
-
-            if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, slot) is string notRecycled)
-            {
-                toasts.Show(
-                    $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server, and the save is anybody's to take. {notRecycled}",
-                    ToastSeverity.Warning);
-            }
-            else if (outcome.TakenFrom is SavegameCheckoutDto takenFrom)
-            {
-                toasts.Show(
-                    $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server. The save is still in '{game.Name}' and yours again - " +
-                    $"{takenFrom.User.DisplayName} no longer has it, and their ModsDude will tell them.");
-            }
-            else
-            {
-                toasts.Show(outcome.KeptPlaying
-                    ? $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server. The save is still in '{game.Name}' and still yours."
-                    : $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server, and the save is anybody's to take.");
-            }
-
-            await driftMonitor.CheckAsync();
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Navigated away mid-upload. The next read of the page says whether it landed.
+            // The page asking went away before anything was answered. Nothing has started.
+            return;
         }
-        catch (Exception exception)
-        {
-            await errorReporter.ShowAsync(exception, "checking a savegame in");
-        }
+
+        await operations.RunAsync(
+            new SavegameOperation(
+                game,
+                $"Checking {savegame.Quoted} in",
+                "checking a savegame in",
+                $"Check-in of {savegame.Quoted} stopped. Nothing was recorded, and your copy is still in its slot.",
+                [savegameId],
+                AllFolders: false)
+            {
+                Detail = "Packing and uploading what is in the slot"
+            },
+            async (task, ct) =>
+            {
+                var outcome = await CheckInAsync(game, savegameId, savegame, step.TrimmedLabel, step.KeepPlaying, task, ct);
+
+                if (outcome.WasDeferred)
+                {
+                    toasts.Show($"Left as it is. Your copy of '{savegameName}' is still in its slot.");
+
+                    return;
+                }
+
+                if (outcome.Succeeded is false)
+                {
+                    return;
+                }
+
+                if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, slot, game.Name) is string notRecycled)
+                {
+                    toasts.Show(
+                        $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server, and the save is anybody's to take. {notRecycled}",
+                        ToastSeverity.Warning);
+                }
+                else if (outcome.TakenFrom is SavegameCheckoutDto takenFrom)
+                {
+                    toasts.Show(
+                        $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server. The save is still in '{game.Name}' and yours again - " +
+                        $"{takenFrom.User.DisplayName} no longer has it, and their ModsDude will tell them.");
+                }
+                else
+                {
+                    toasts.Show(outcome.KeptPlaying
+                        ? $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server. The save is still in '{game.Name}' and still yours."
+                        : $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server, and the save is anybody's to take.");
+                }
+
+                await driftMonitor.CheckAsync();
+            });
     }
 
     public async Task<bool> DiscardAsync(
         Game game,
         Guid savegameId,
         string savegameName,
-        string slotLabel,
-        bool hasUnpublishedPlay,
         CancellationToken cancellationToken)
     {
-        var slot = SavegameSlotWording.Named(HeldSlotNumber(game, savegameId), slotLabel);
+        if (bindingStore.GetBinding(game.Identity, savegameId) is not SavegameCheckoutBinding binding)
+        {
+            return false;
+        }
+
+        var slot = SavegameSlotWording.Named(HeldSlotNumber(game, savegameId), savegameName);
+
+        bool hasUnpublishedPlay;
+
+        try
+        {
+            // Asked of the disk rather than read off a row's chip, which arrives from a background pass
+            // that may not have got there yet - and the two confirmations this decides between are
+            // "nothing is lost" and "an evening of play goes to the Recycle Bin".
+            hasUnpublishedPlay = await savegameSlots.ClassifySlotAsync(game, binding.Slot, cancellationToken)
+                is SavegameSlotAvailability.HeldWithUnpublishedPlay;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception exception)
+        {
+            await errorReporter.ShowAsync(exception, "giving a savegame back");
+
+            return false;
+        }
+
         var consequence = hasUnpublishedPlay
             ? $"{SavegameSlotWording.Capitalised(slot)} has been played since it was downloaded, and none of that has been checked in. " +
               "It goes to the Recycle Bin and no snapshot is minted, so the only copy of that play is one you restore by hand."
@@ -139,16 +175,28 @@ public sealed class SavegameCheckInFlow(
             return false;
         }
 
-        using var task = backgroundTasks.Begin($"Giving '{savegameName}' back", "Releasing the claim, then recycling the local copy");
+        return await operations.RunAsync(
+            new SavegameOperation(
+                game,
+                $"Giving '{savegameName}' back",
+                "giving a savegame back",
+                $"Giving '{savegameName}' back stopped. It is still checked out to you, and your copy is still in its slot.",
+                [savegameId],
+                AllFolders: false)
+            {
+                Detail = "Releasing the claim, then recycling the local copy"
+            },
+            async (_, ct) =>
+            {
+                var localCopy = await savegameCheckIn.DiscardAsync(game, savegameId, ct);
 
-        var recycled = await savegameCheckIn.DiscardAsync(game, savegameId, cancellationToken);
+                toasts.Show(SavegameSlotWording.NotRecycled(localCopy, slot, game.Name) is string notRecycled
+                        ? $"'{savegameName}' was given back without a snapshot. {notRecycled}"
+                        : $"'{savegameName}' was given back without a snapshot. The local copy is in the Recycle Bin.",
+                    localCopy is SavegameLocalCopy.Recycled ? ToastSeverity.Info : ToastSeverity.Warning);
 
-        toasts.Show(recycled
-            ? $"'{savegameName}' was given back without a snapshot. The local copy is in the Recycle Bin."
-            : $"'{savegameName}' was given back without a snapshot. {SavegameSlotWording.LeftBehind(slot)}",
-            recycled ? ToastSeverity.Info : ToastSeverity.Warning);
-
-        return true;
+                await driftMonitor.CheckAsync();
+            });
     }
 
     /// <summary>
@@ -166,12 +214,13 @@ public sealed class SavegameCheckInFlow(
         string? label,
         bool keepPlaying,
         bool force,
+        IBackgroundTask task,
         CancellationToken cancellationToken,
         bool takeOver = false)
     {
         try
         {
-            using var task = backgroundTasks.Begin($"Checking {savegame.Quoted} in", "Packing and uploading what is in the slot");
+            task.Report($"Checking {savegame.Quoted} in");
             task.DeclareTransfers(TransferDirection.Upload);
 
             var result = await savegameCheckIn.CheckInAsync(
@@ -199,7 +248,7 @@ public sealed class SavegameCheckInFlow(
                 return SavegameCheckInOutcome.Deferred;
             }
 
-            return await SendAsync(game, savegameId, savegame, label, keepPlaying, force, cancellationToken, takeOver: true);
+            return await SendAsync(game, savegameId, savegame, label, keepPlaying, force, task, cancellationToken, takeOver: true);
         }
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.SavegameSnapshotStale)
         {
@@ -219,7 +268,7 @@ public sealed class SavegameCheckInFlow(
                 return SavegameCheckInOutcome.Deferred;
             }
 
-            return await SendAsync(game, savegameId, savegame, label, keepPlaying, force: true, cancellationToken, takeOver);
+            return await SendAsync(game, savegameId, savegame, label, keepPlaying, force: true, task, cancellationToken, takeOver);
         }
         catch (UserFriendlyException exception)
         {

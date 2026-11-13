@@ -30,6 +30,32 @@ public class NameRuleTests
         Assert.Equal("Season 4", new ProfileName("  Season 4 ").Value);
     }
 
+    /// <remarks>
+    /// The names are built in code rather than passed as theory data, which the test runner re-encodes:
+    /// a lone surrogate would arrive as a replacement character, which is a perfectly good one.
+    /// </remarks>
+    [Fact]
+    public void A_name_holding_control_characters_or_a_broken_surrogate_is_refused()
+    {
+        Assert.False(NameRule.IsValid("Season" + (char)0 + "4"));
+        Assert.False(NameRule.IsValid("Season\n4"));
+        Assert.False(NameRule.IsValid("Season" + (char)0x1B + "4"));
+        Assert.False(NameRule.IsValid("Season " + (char)0xD83C));
+        Assert.False(NameRule.IsValid((char)0xDF3E + " Season"));
+    }
+
+    [Fact]
+    public void A_name_with_emoji_or_accents_is_valid()
+    {
+        Assert.True(NameRule.IsValid("Skåne 🌾"));
+    }
+
+    [Fact]
+    public void Whitespace_control_characters_around_a_name_are_trimmed_rather_than_refused()
+    {
+        Assert.Equal("Season 4", new SavegameName("\tSeason 4\r\n").Value);
+    }
+
     [Fact]
     public void Repo_profile_and_savegame_names_follow_the_rule()
     {

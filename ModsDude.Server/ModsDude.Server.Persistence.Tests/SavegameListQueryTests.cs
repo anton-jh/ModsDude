@@ -229,9 +229,9 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
                 [
                     // Deliberately handed over out of order, so what comes back is Position's doing
                     // rather than the insertion order's.
-                    new SavegameDetail("playtime", "Played", "45 h", 2),
-                    new SavegameDetail("map", "Map", "Zielonka", 0),
-                    new SavegameDetail("last-played", "Last played", "2024-11-30", 1)
+                    new SavegameDetail("playtime", "Played", SavegameDetailKind.Duration, "2700", 2),
+                    new SavegameDetail("map", "Map", SavegameDetailKind.Text, "Zielonka", 0),
+                    new SavegameDetail("last-played", "Last played", SavegameDetailKind.Date, "2024-11-30", 1)
                 ]));
 
             await dbContext.SaveChangesAsync(CancellationToken.None);
@@ -244,7 +244,8 @@ public class SavegameListQueryTests(DatabaseFixture fixture)
 
         Assert.Equal(["map", "last-played", "playtime"], row!.Details.Select(x => x.Key));
         Assert.Equal(["Map", "Last played", "Played"], row.Details.Select(x => x.Label));
-        Assert.Equal(["Zielonka", "2024-11-30", "45 h"], row.Details.Select(x => x.Value));
+        Assert.Equal(["Zielonka", "2024-11-30", "2700"], row.Details.Select(x => x.Value));
+        Assert.Equal([SavegameDetailKind.Text, SavegameDetailKind.Date, SavegameDetailKind.Duration], row.Details.Select(x => x.Kind));
     }
 
     /// <summary>An adapter that describes nothing is an ordinary adapter, not a broken one.</summary>

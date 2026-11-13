@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
@@ -71,6 +72,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private readonly IToastService _toasts;
     private readonly IUserAvatarFactory _avatarFactory;
     private readonly TimeProvider _time;
+    private readonly ISavegameOperations _operations;
+    private readonly IResourceLeases _leases;
 
     private readonly CancellationTokenSource _pageLifetime = new();
     private readonly CancellationToken _lifetime;
@@ -106,9 +109,13 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         IBackgroundProblemReporter problems,
         IToastService toasts,
         IUserAvatarFactory avatarFactory,
-        TimeProvider time)
+        TimeProvider time,
+        ISavegameOperations operations,
+        IResourceLeases leases)
     {
         _time = time;
+        _operations = operations;
+        _leases = leases;
         _problems = problems;
         _toasts = toasts;
         _avatarFactory = avatarFactory;
@@ -203,13 +210,14 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     [ObservableProperty]
     private bool _isLoadingTimeline;
 
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(CheckOutSnapshotCommand))]
-    [NotifyCanExecuteChangedFor(nameof(TakeCopySnapshotCommand))]
-    [NotifyCanExecuteChangedFor(nameof(RenameSavegameCommand))]
-    [NotifyCanExecuteChangedFor(nameof(ArchiveSavegameCommand))]
-    [NotifyCanExecuteChangedFor(nameof(PublishSaveCommand))]
-    private bool _isWorking;
+    /// <summary>How many of the page's own quick writes are in flight. Savegame operations are not among them; they hold leases.</summary>
+    private int _working;
+
+    /// <summary>
+    /// Whether one of this page's own writes - a rename, an archive, a refresh - is in flight. Counted,
+    /// so one finishing does not re-enable the page while another is still going.
+    /// </summary>
+    public bool IsWorking => _working > 0;
 
     /// <summary>
     /// Set where the listing was windowed. Nothing pages further yet, and saying so beats a history
@@ -295,20 +303,26 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         try
         {
-            await _store.EnsureArchivedLoadedAsync(_repo.Id, _lifetime);
+            // Read fresh, after the bindings: a list held from before a publish does not have the
+            // savegame that publish just made, and must never be taken as saying it is gone.
+            await _store.RefreshAsync(_repo.Id, _lifetime);
+            await _store.RefreshArchivedAsync(_repo.Id, _lifetime);
         }
-        catch (Exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // Nothing was found out, so nothing is forgotten - see the remarks. Every exception and
             // not just ApiException: this is optional housekeeping on the way into a page, and a
             // transport failure taking the savegame list down with it would be a far worse trade
             // than a binding that gets swept on the next visit instead.
+            _errorReporter.Record(exception, "checking which held savegames the repo still has");
+
             return;
         }
 
         HashSet<Guid> known = [.. _store.Live(_repo.Id).Select(x => x.Id), .. _store.Archived(_repo.Id).Select(x => x.Id)];
 
-        foreach (var binding in held.Where(x => known.Contains(x.SavegameId) is false))
+        // A savegame something is working on right now is that work's business, whatever the lists say.
+        foreach (var binding in held.Where(x => known.Contains(x.SavegameId) is false && _operations.IsBusy(game, x.SavegameId) is false))
         {
             _holds.Forget(game, binding.SavegameId);
         }
@@ -329,7 +343,38 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         _bindingStore.BindingsChanged += OnBindingsChanged;
         _games.GameChanged += OnFolderStateChanged;
         _driftMonitor.Changed += OnFolderStateChanged;
+        _leases.Changed += OnLeasesChanged;
     }
+
+    /// <summary>
+    /// Something somewhere claimed or released a resource, so which rows can act may have changed.
+    /// Marshalled, because a claim is released by whichever thread finished the work.
+    /// </summary>
+    private void OnLeasesChanged(object? sender, EventArgs e)
+    {
+        _ = Application.Current?.Dispatcher.InvokeAsync(RefreshBusy);
+    }
+
+    /// <summary>Every row's and the page's busy state, read from the leases.</summary>
+    private void RefreshBusy()
+    {
+        foreach (var row in Savegames)
+        {
+            row.SetBusy(BusyFor(row.Id));
+        }
+
+        PublishSaveCommand.NotifyCanExecuteChanged();
+        CheckOutSnapshotCommand.NotifyCanExecuteChanged();
+        TakeCopySnapshotCommand.NotifyCanExecuteChanged();
+        RenameSavegameCommand.NotifyCanExecuteChanged();
+        ArchiveSavegameCommand.NotifyCanExecuteChanged();
+    }
+
+    private string? BusyFor(Guid? savegameId)
+        => _repo.Games.FirstOrDefault() is Game game ? _operations.DescribeBusy(game, savegameId) : null;
+
+    private bool IsBusy(SavegameListItemViewModel? row)
+        => row is not null && BusyFor(row.Id) is not null;
 
     /// <summary>
     /// Which savegame to arrive with selected, for a page opened by a link about one of them.
@@ -359,6 +404,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         _bindingStore.BindingsChanged -= OnBindingsChanged;
         _games.GameChanged -= OnFolderStateChanged;
         _driftMonitor.Changed -= OnFolderStateChanged;
+        _leases.Changed -= OnLeasesChanged;
 
         _pageLifetime.Cancel();
         _annotation?.Cancel();
@@ -378,23 +424,12 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// can be made from the list that is empty and saying so.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanPublish))]
-    private async Task PublishSave()
-    {
-        IsWorking = true;
-
-        try
-        {
-            await _publishFlow.PublishAsync(_repo, preselectProfileId: null, Select, _lifetime);
-        }
-        finally
-        {
-            IsWorking = false;
-        }
-    }
+    private Task PublishSave()
+        => _publishFlow.PublishAsync(_repo, preselectProfileId: null, Select, _lifetime);
 
     // Member, like checking in and archiving: it writes to the repo, and everybody in it sees the
-    // result.
-    private bool CanPublish() => IsMember && IsWorking is false;
+    // result. Not while savegame work runs in this game, which a publish would have to wait for.
+    private bool CanPublish() => IsMember && IsWorking is false && BusyFor(null) is null;
 
     /// <summary>
     /// Checks out the selected entry's snapshot. Where that is not the head it is a restore first -
@@ -472,7 +507,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
     // Member, like archiving: it changes what everybody in the repo sees this save called, and it is
     // reversible by doing it again.
-    private bool CanRenameSelected() => IsMember && IsWorking is false && Selected is not null;
+    private bool CanRenameSelected() => IsMember && IsWorking is false && Selected is not null && IsBusy(Selected) is false;
 
     /// <returns>Null once renamed, or what to show under the name.</returns>
     private async Task<string?> SaveNameAsync(SavegameListItemViewModel row, string name)
@@ -482,7 +517,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             return null;
         }
 
-        IsWorking = true;
+        ChangeWorking(+1);
 
         try
         {
@@ -508,7 +543,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         }
         finally
         {
-            IsWorking = false;
+            ChangeWorking(-1);
         }
     }
 
@@ -545,7 +580,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
     // Member, like publishing and checking in: archiving is reversible and is part of keeping the
     // repo's saves tidy. CanPruneSnapshots is the Admin one, and gates deleting a snapshot.
-    private bool CanArchiveSelected() => IsMember && IsWorking is false && Selected is not null;
+    private bool CanArchiveSelected() => IsMember && IsWorking is false && Selected is not null && IsBusy(Selected) is false;
 
     /// <summary>
     /// Deletes the selected snapshot from the savegame's history.
@@ -595,8 +630,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private bool CanDeleteEntry()
         => CanPruneSnapshots && IsWorking is false && SelectedEntry is { IsSnapshot: true, IsHead: false };
 
-    private bool CanActOnEntry() => IsMember && IsWorking is false && SelectedEntry is { IsSnapshot: true };
-    private bool CanCopyEntry() => IsWorking is false && SelectedEntry is { IsSnapshot: true };
+    private bool CanActOnEntry() => IsMember && IsWorking is false && SelectedEntry is { IsSnapshot: true } && IsBusy(Selected) is false;
+    private bool CanCopyEntry() => IsWorking is false && SelectedEntry is { IsSnapshot: true } && IsBusy(Selected) is false;
 
     /// <summary>
     /// Into the profile's own history, where two revisions can be compared properly. The comparison
@@ -706,6 +741,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         {
             _offers.Offer(_repo, row, host, _heldNames);
             row.SetRevisionsBehind(RevisionsBehind(row.Savegame));
+            row.SetBusy(BusyFor(row.Id));
         }
 
         IsEmpty = Savegames.Count == 0;
@@ -912,6 +948,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     private async Task AnnotateUnpublishedPlayAsync(IReadOnlyList<SavegameListItemViewModel> rows, CancellationToken cancellationToken)
     {
         var played = new HashSet<Guid>();
+        var empty = new HashSet<Guid>();
 
         foreach (var game in _repo.Games.ToList())
         {
@@ -938,13 +975,18 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
                 {
                     played.Add(row.Id);
                 }
+                // A bound slot reads as free only once there is nothing in it at all.
+                else if (availability is SavegameSlotAvailability.Free)
+                {
+                    empty.Add(row.Id);
+                }
             }
         }
 
         // Every row, so one checked in since the last pass loses the chip.
         foreach (var row in rows)
         {
-            row.SetUnpublishedPlay(played.Contains(row.Id));
+            row.SetSlotState(played.Contains(row.Id), empty.Contains(row.Id));
         }
     }
 
@@ -1017,38 +1059,16 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// </remarks>
     Task ISavegameRowActions.CheckInAsync(SavegameListItemViewModel row)
         => row.HeldHere is Game game
-            ? RunAsync("checking a savegame in", () => _checkInFlow.CheckInHeldAsync(game, row.Id, row.Name, _lifetime))
+            ? _checkInFlow.CheckInHeldAsync(game, row.Id, row.Name, _lifetime)
             : Task.CompletedTask;
 
     /// <summary>
     /// Gives a save back without minting a snapshot - taken by mistake, never played.
     /// </summary>
     Task ISavegameRowActions.DiscardAsync(SavegameListItemViewModel row)
-    {
-        if (row.Hold is not SavegameHoldHere hold)
-        {
-            return Task.CompletedTask;
-        }
-
-        return RunAsync("giving a savegame back", async () =>
-        {
-            // Asked of the disk here rather than read off the row's chip. The chip arrives from a
-            // background pass that may not have reached this row yet, and the two confirmations this
-            // decides between are "nothing is lost" and "an evening of play goes to the Recycle Bin".
-            var played = await _slots.ClassifySlotAsync(hold.Game, hold.Slot, _lifetime)
-                is SavegameSlotAvailability.HeldWithUnpublishedPlay;
-
-            // The savegame's name where the modal wants a slot label, as the check-in does: a slot
-            // id is a folder name the player has never thought in, and what they are giving back is
-            // the save rather than the folder.
-            if (await _checkInFlow.DiscardAsync(hold.Game, row.Id, row.Name, row.Name, played, _lifetime) is false)
-            {
-                return;
-            }
-
-            await _driftMonitor.CheckAsync();
-        });
-    }
+        => row.Hold is SavegameHoldHere hold
+            ? _checkInFlow.DiscardAsync(hold.Game, row.Id, row.Name, _lifetime)
+            : Task.CompletedTask;
 
     /// <summary>
     /// Stops tracking a copy sitting in a folder the game's settings no longer name.
@@ -1076,18 +1096,19 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     }
 
     /// <summary>
-    /// Runs one of the page's actions with the list marked busy, and says a failure once, here.
+    /// Runs one of the page's own quick writes with the page marked busy, and says a failure once, here.
+    /// Savegame operations do not come through here: they outlive the page and report for themselves.
     /// </summary>
     /// <param name="doing">What was being done, for the error modal: "archiving a savegame".</param>
     private async Task RunAsync(string doing, Func<Task> work)
     {
-        IsWorking = true;
+        ChangeWorking(+1);
 
         try
         {
             await work();
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
             // Navigated away. There is no page left to report on.
         }
@@ -1097,8 +1118,22 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         }
         finally
         {
-            IsWorking = false;
+            ChangeWorking(-1);
         }
+    }
+
+    private void ChangeWorking(int by)
+    {
+        _working += by;
+
+        OnPropertyChanged(nameof(IsWorking));
+
+        PublishSaveCommand.NotifyCanExecuteChanged();
+        CheckOutSnapshotCommand.NotifyCanExecuteChanged();
+        TakeCopySnapshotCommand.NotifyCanExecuteChanged();
+        RenameSavegameCommand.NotifyCanExecuteChanged();
+        ArchiveSavegameCommand.NotifyCanExecuteChanged();
+        DeleteSnapshotCommand.NotifyCanExecuteChanged();
     }
 
     private Task StartAsync(
@@ -1107,8 +1142,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         int? playedRevision,
         SavegameCheckOutMode mode,
         SavegameRevisionMode? revisionMode)
-        => RunAsync("checking a savegame out", () => _checkOutFlow.CheckOutAsync(
-            _repo, row.Savegame, snapshotNumber, playedRevision, mode, revisionMode, _currentUserId, _heldNames, _lifetime));
+        => _checkOutFlow.CheckOutAsync(
+            _repo, row.Savegame, snapshotNumber, playedRevision, mode, revisionMode, _currentUserId, _heldNames, _lifetime);
 
 
     public class Factory(IServiceProvider serviceProvider)

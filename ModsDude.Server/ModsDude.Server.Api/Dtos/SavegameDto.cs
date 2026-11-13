@@ -94,11 +94,12 @@ public record SavegameSnapshotDto(
 
 /// <summary>
 /// One thing a client's game adapter chose to say about a snapshot - the map, when it was played,
-/// how long for. <b>The server never parses one</b>; see <c>SavegameDetail</c>.
+/// how long for. Formatted by whoever reads it; see <c>SavegameDetail</c>.
 /// </summary>
 /// <param name="Key">Stable and machine-readable. Never rendered - it exists so a fact can be found again later.</param>
 /// <param name="Label">What to print beside the value. Prose, and safe to reword.</param>
-public record SavegameDetailDto(string Key, string Label, string Value);
+/// <param name="Value">In the invariant form <paramref name="Kind"/> names.</param>
+public record SavegameDetailDto(string Key, string Label, SavegameDetailKind Kind, string Value);
 
 
 /// <summary>

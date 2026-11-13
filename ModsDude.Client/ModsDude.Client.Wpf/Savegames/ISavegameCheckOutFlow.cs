@@ -9,9 +9,11 @@ public interface ISavegameCheckOutFlow
     /// <summary>
     /// Checks a savegame out, or takes a copy of it: the questions first - taking it from somebody,
     /// which mod list, the mod folder, what holds it, the slot - then the check-ins, the activation,
-    /// the claim and the mods. Where the snapshot is not the head it is restored as a new head first.
-    /// Failures are reported here.
+    /// the claim and the mods, as a savegame operation of its own that carries on wherever the user
+    /// goes. Where the snapshot is not the head it is restored as a new head first. Failures are
+    /// reported here.
     /// </summary>
+    /// <param name="cancellationToken">Ends the questions, and nothing after them.</param>
     /// <param name="playedRevision">The revision the snapshot was played on. Null where it follows no profile.</param>
     /// <param name="revisionMode">
     /// Which mod list the save goes onto. Null asks where the latest has moved far enough from the

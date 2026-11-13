@@ -74,12 +74,11 @@ public interface ISavegameBindingStore
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>At most one binding per savegame and one per slot.</b> Setting one that collides on either
-    /// replaces it, so the two invariants hold by construction rather than by every caller
-    /// remembering to clear first. A savegame moving to a new slot leaves nothing behind claiming the
-    /// old one; a slot receiving a different savegame stops claiming the previous one. Both are
-    /// states the safety check in <see cref="SavegameSlotStates"/> would otherwise read as unpublished
-    /// play forever.
+    /// <b>At most one binding per savegame and one per slot.</b> The savegame's own binding is
+    /// replaced wherever it was, which is how a save moves between slots; the caller has made sure the
+    /// old slot holds nothing unpublished. A slot bound to a <em>different</em> savegame is refused:
+    /// that savegame's claim has to be released first, or it would stay open on the server with
+    /// nothing here naming it.
     /// </para>
     /// <para>
     /// The hint is written here rather than at check-in because this is the moment the fact becomes
@@ -87,8 +86,18 @@ public interface ISavegameBindingStore
     /// app is closed.
     /// </para>
     /// </remarks>
-    /// <exception cref="InvalidOperationException">No such game is configured on this machine.</exception>
-    void SetBinding(GameIdentity game, SavegameCheckoutBinding binding);
+    /// <exception cref="InvalidOperationException">
+    /// No such game is configured on this machine, or the slot is bound to another savegame.
+    /// </exception>
+    void Bind(GameIdentity game, SavegameCheckoutBinding binding);
+
+    /// <summary>
+    /// Changes the binding a savegame already has, read and written under one lock so two changes
+    /// cannot lose each other.
+    /// </summary>
+    /// <returns>The binding as changed, or null where the savegame is not bound here.</returns>
+    /// <exception cref="InvalidOperationException">The change names another savegame or slot.</exception>
+    SavegameCheckoutBinding? Update(GameIdentity game, Guid savegameId, Func<SavegameCheckoutBinding, SavegameCheckoutBinding> change);
 
     /// <summary>
     /// Releases the slot a savegame was holding - a check-in, a discard, or a take-over.

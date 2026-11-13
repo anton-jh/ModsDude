@@ -5,6 +5,7 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Wpf.Account;
 using System.Collections.ObjectModel;
+using System.Globalization;
 
 namespace ModsDude.Client.Wpf.Savegames;
 
@@ -81,6 +82,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     private readonly ISavegameRowActions? _actions;
 
     private bool _hasUnpublishedPlay;
+    private bool _slotIsEmpty;
     private int _revisionsBehind;
     private bool _promptsForCompatibility;
 
@@ -268,13 +270,13 @@ public partial class SavegameListItemViewModel : ObservableObject
     public string? CheckOutBlockedReason => _offer is null ? _notConnected : null;
 
     /// <summary>
-    /// What the row says under its buttons: why Check out is greyed out, where it is.
+    /// What the row says under its buttons: what is running on it, or why Check out is greyed out.
     /// </summary>
     /// <remarks>
     /// A guest is never offered check-out, so its refusal is not what they are acting on - and a
     /// sentence beside a button they do not have is a line about nothing they can do.
     /// </remarks>
-    public string? BlockedReason => IsMember ? CheckOutBlockedReason : null;
+    public string? BlockedReason => Busy ?? (IsMember ? CheckOutBlockedReason : null);
 
     public bool IsBlocked => BlockedReason is not null;
 
@@ -282,7 +284,9 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// The tooltip on each button: the refusal where there is one, and what the button does where
     /// there is not. A disabled button whose only explanation is its greyness is what this replaces.
     /// </summary>
-    public string CheckOutToolTip => CheckOutBlockedReason
+    public string CheckOutToolTip => Busy
+        ?? CheckOutBlockedReason
+        ?? (MovesUnpublishedPlay ? "Your copy here has play nobody has checked in. Check it in first." : null)
         ?? (_offer is { ChecksInFirst: not null }
             ? $"{(_blockingSavegame is { Name: not null } blocking ? blocking.Quoted : "Another savegame")} is checked out here, so checking this one out checks it in first. You are asked before anything changes."
             : null)
@@ -300,22 +304,25 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// activate the profile, since the copy claims nothing and the mods are the only thing it can change.
     /// A copy never checks anything in, so where another savegame holds the folder it is not asked.
     /// </summary>
-    public string TakeCopyToolTip => _offer is { ActivatesFirst: true, ChecksInFirst: null } offer
-        ? $"Writes it into a slot and claims nothing. The mod folder is not on {SavegameRowRules.DescribeActivation(ProfileName, offer.PinnedRevision)}, so you are asked whether to activate it first."
-        : "Writes it into a slot and claims nothing. Whoever holds it keeps holding it.";
+    public string TakeCopyToolTip => Busy
+        ?? (_offer is { ActivatesFirst: true, ChecksInFirst: null } offer
+            ? $"Writes it into a slot and claims nothing. The mod folder is not on {SavegameRowRules.DescribeActivation(ProfileName, offer.PinnedRevision)}, so you are asked whether to activate it first."
+            : "Writes it into a slot and claims nothing. Whoever holds it keeps holding it.");
 
     /// <summary>
-    /// Never a refusal: the button is only there when the save is yours and on this machine, which is
-    /// the whole of what checking in needs.
+    /// The button is only there when the save is yours and on this machine. It is greyed out while
+    /// something runs on it, and where the slot holds nothing to upload.
     /// </summary>
-    public string CheckInToolTip =>
-        "Uploads what is in the slot as a new snapshot and hands the save back, so somebody else can take it. A save that changed nothing mints nothing.";
+    public string CheckInToolTip => Busy
+        ?? (_slotIsEmpty
+            ? "The slot is empty, so there is nothing to check in. Discard gives the save back instead."
+            : "Uploads what is in the slot as a new snapshot and hands the save back, so somebody else can take it. A save that changed nothing mints nothing.");
 
-    public string DiscardToolTip =>
-        "Hands the claim back without minting a snapshot. The local copy goes to the Recycle Bin, so this is for a save taken by mistake rather than one that has been played.";
+    public string DiscardToolTip => Busy
+        ?? "Hands the claim back without minting a snapshot. The local copy goes to the Recycle Bin, so this is for a save taken by mistake rather than one that has been played.";
 
-    public string DisconnectToolTip =>
-        "ModsDude forgets this copy. Nothing on disk changes and the server is not told, so the claim stays yours.";
+    public string DisconnectToolTip => Busy
+        ?? "ModsDude forgets this copy. Nothing on disk changes and the server is not told, so the claim stays yours.";
 
     /// <summary>
     /// Which of the game's savegame folders the local copy is in, where that is worth saying.
@@ -383,7 +390,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// the save rather than about the sharing of it.
     /// </summary>
     public string? GameSummary => Savegame.Head is SavegameSnapshotDto head && head.Details.Count > 0
-        ? string.Join(" · ", head.Details.Select(x => x.Value))
+        ? string.Join(" · ", SavegameDetailText.Lines(head.Details, CultureInfo.CurrentCulture, TimeZoneInfo.Local).Select(x => x.Text))
         : null;
 
     public bool HasGameSummary => GameSummary is not null;
@@ -405,10 +412,31 @@ public partial class SavegameListItemViewModel : ObservableObject
     public bool HasHolder => Holder is not null;
 
 
-    [RelayCommand(CanExecute = nameof(CanCheckOut))]
+    /// <summary>
+    /// What is running on this savegame right now, named, or null where nothing is. Every button is
+    /// disabled while it runs - not hidden - and this is what the row says instead.
+    /// </summary>
+    public string? Busy { get; private set; }
+
+    /// <summary>
+    /// Whether checking this out again would move a copy here that has play nobody has checked in.
+    /// Refused, like writing over that play anywhere else: the play would be left behind.
+    /// </summary>
+    private bool MovesUnpublishedPlay => IsHeldHere && _hasUnpublishedPlay;
+
+    private bool CanRunCheckOut() => CanCheckOut && Busy is null && MovesUnpublishedPlay is false;
+    private bool CanRunCheckOutInCompatibilityMode() => CanCheckOutInCompatibilityMode && Busy is null;
+    private bool CanRunCheckIn() => CanCheckIn && Busy is null && _slotIsEmpty is false;
+    private bool CanRunDiscard() => CanDiscard && Busy is null;
+    private bool CanRunDisconnect() => CanDisconnect && Busy is null;
+    private bool CanRunTakeCopy() => Busy is null;
+    private bool CanRunTakeCopyInCompatibilityMode() => CanTakeCopyInCompatibilityMode && Busy is null;
+
+
+    [RelayCommand(CanExecute = nameof(CanRunCheckOut))]
     private Task CheckOut() => _actions?.CheckOutAsync(this, null) ?? Task.CompletedTask;
 
-    [RelayCommand(CanExecute = nameof(CanCheckOutInCompatibilityMode))]
+    [RelayCommand(CanExecute = nameof(CanRunCheckOutInCompatibilityMode))]
     private Task CheckOutInCompatibilityMode()
         => _actions?.CheckOutAsync(this, SavegameRevisionMode.Compatibility) ?? Task.CompletedTask;
 
@@ -420,7 +448,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// they finish an evening - and a row saying "You have it" whose only button offered to take it
     /// again was the thing that sent them hunting for the other page.
     /// </remarks>
-    [RelayCommand(CanExecute = nameof(CanCheckIn))]
+    [RelayCommand(CanExecute = nameof(CanRunCheckIn))]
     private Task CheckIn() => _actions?.CheckInAsync(this) ?? Task.CompletedTask;
 
     /// <summary>
@@ -429,7 +457,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// <remarks>
     /// Beside Check in, because it is the other half of the same decision.
     /// </remarks>
-    [RelayCommand(CanExecute = nameof(CanDiscard))]
+    [RelayCommand(CanExecute = nameof(CanRunDiscard))]
     private Task Discard() => _actions?.DiscardAsync(this) ?? Task.CompletedTask;
 
     /// <summary>
@@ -440,7 +468,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// server is not told, which is what makes it the only thing that can work when there is no
     /// folder left to read.
     /// </remarks>
-    [RelayCommand(CanExecute = nameof(CanDisconnect))]
+    [RelayCommand(CanExecute = nameof(CanRunDisconnect))]
     private Task Disconnect() => _actions?.DisconnectAsync(this) ?? Task.CompletedTask;
 
 
@@ -448,12 +476,46 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// Open to everybody, Guest included. It is what makes the list worth showing to somebody who
     /// cannot take the claim: they can still read the history and play a copy.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunTakeCopy))]
     private Task TakeCopy() => _actions?.TakeCopyAsync(this, null) ?? Task.CompletedTask;
 
-    [RelayCommand(CanExecute = nameof(CanTakeCopyInCompatibilityMode))]
+    [RelayCommand(CanExecute = nameof(CanRunTakeCopyInCompatibilityMode))]
     private Task TakeCopyInCompatibilityMode()
         => _actions?.TakeCopyAsync(this, SavegameRevisionMode.Compatibility) ?? Task.CompletedTask;
+
+
+    /// <summary>What is running on this savegame now, from the leases. Null where nothing is.</summary>
+    public void SetBusy(string? busy)
+    {
+        if (Busy == busy)
+        {
+            return;
+        }
+
+        Busy = busy;
+
+        OnPropertyChanged(nameof(Busy));
+        OnPropertyChanged(nameof(BlockedReason));
+        OnPropertyChanged(nameof(IsBlocked));
+        OnPropertyChanged(nameof(CheckOutToolTip));
+        OnPropertyChanged(nameof(CheckInToolTip));
+        OnPropertyChanged(nameof(DiscardToolTip));
+        OnPropertyChanged(nameof(DisconnectToolTip));
+        OnPropertyChanged(nameof(TakeCopyToolTip));
+
+        RefreshCommands();
+    }
+
+    private void RefreshCommands()
+    {
+        CheckOutCommand.NotifyCanExecuteChanged();
+        CheckOutInCompatibilityModeCommand.NotifyCanExecuteChanged();
+        CheckInCommand.NotifyCanExecuteChanged();
+        DiscardCommand.NotifyCanExecuteChanged();
+        DisconnectCommand.NotifyCanExecuteChanged();
+        TakeCopyCommand.NotifyCanExecuteChanged();
+        TakeCopyInCompatibilityModeCommand.NotifyCanExecuteChanged();
+    }
 
 
     /// <summary>
@@ -468,26 +530,30 @@ public partial class SavegameListItemViewModel : ObservableObject
         // Everything on a row is worked out from the savegame, so all of it may have moved.
         OnPropertyChanged(string.Empty);
 
-        CheckOutCommand.NotifyCanExecuteChanged();
-        CheckInCommand.NotifyCanExecuteChanged();
-        DiscardCommand.NotifyCanExecuteChanged();
+        RefreshCommands();
 
         RefreshChips();
     }
 
     /// <summary>
-    /// Records that the slot this machine holds for this savegame has moved since it was written -
-    /// which is play that exists nowhere else, and the one caution the row can raise about itself.
+    /// Records what the slot this machine holds for this savegame holds now: play since it was
+    /// written - which exists nowhere else, and the one caution the row can raise about itself - or
+    /// nothing at all, which there is nothing to check in from.
     /// </summary>
-    public void SetUnpublishedPlay(bool hasUnpublishedPlay)
+    public void SetSlotState(bool hasUnpublishedPlay, bool isEmpty)
     {
-        if (_hasUnpublishedPlay == hasUnpublishedPlay)
+        if (_hasUnpublishedPlay == hasUnpublishedPlay && _slotIsEmpty == isEmpty)
         {
             return;
         }
 
         _hasUnpublishedPlay = hasUnpublishedPlay;
+        _slotIsEmpty = isEmpty;
 
+        OnPropertyChanged(nameof(CheckOutToolTip));
+        OnPropertyChanged(nameof(CheckInToolTip));
+
+        RefreshCommands();
         RefreshChips();
     }
 
@@ -528,11 +594,7 @@ public partial class SavegameListItemViewModel : ObservableObject
         OnPropertyChanged(nameof(CanCheckOutInCompatibilityMode));
         OnPropertyChanged(nameof(CanTakeCopyInCompatibilityMode));
 
-        CheckInCommand.NotifyCanExecuteChanged();
-        DiscardCommand.NotifyCanExecuteChanged();
-        DisconnectCommand.NotifyCanExecuteChanged();
-        CheckOutInCompatibilityModeCommand.NotifyCanExecuteChanged();
-        TakeCopyInCompatibilityModeCommand.NotifyCanExecuteChanged();
+        RefreshCommands();
 
         RefreshChips();
     }
@@ -567,8 +629,7 @@ public partial class SavegameListItemViewModel : ObservableObject
         OnPropertyChanged(nameof(TakeCopyToolTip));
         OnPropertyChanged(nameof(CanCheckOutInCompatibilityMode));
 
-        CheckOutCommand.NotifyCanExecuteChanged();
-        CheckOutInCompatibilityModeCommand.NotifyCanExecuteChanged();
+        RefreshCommands();
     }
 
     /// <summary>How many revisions the profile has moved on since the save was last played.</summary>
@@ -585,8 +646,7 @@ public partial class SavegameListItemViewModel : ObservableObject
         OnPropertyChanged(nameof(CanCheckOutInCompatibilityMode));
         OnPropertyChanged(nameof(CanTakeCopyInCompatibilityMode));
 
-        CheckOutInCompatibilityModeCommand.NotifyCanExecuteChanged();
-        TakeCopyInCompatibilityModeCommand.NotifyCanExecuteChanged();
+        RefreshCommands();
 
         RefreshChips();
     }

@@ -43,6 +43,21 @@ public class SavegameDriftTests
     }
 
     /// <summary>
+    /// A check-in from here whose answer was lost may be exactly what moved the head - the user's own
+    /// snapshot, not a takeover. Nothing is said about anybody else until the next check-in finds out.
+    /// </summary>
+    [Fact]
+    public void A_head_or_claim_that_moved_while_a_check_in_is_unanswered_is_not_called_a_takeover()
+    {
+        var binding = Binding() with { PendingCheckIn = new SavegamePendingCheckIn(Guid.NewGuid(), "cccc", "bbbb") };
+        var theirs = new SavegameClaimSighting(new SavegameClaimHolder("friend", "Friend", DateTime.UtcNow), IsYours: false);
+
+        Assert.Equal(
+            [SavegameDriftKind.UncheckedInPlay],
+            SavegameDriftRules.Classify(binding, "dddd", headSnapshot: 5, _profileId, appliedRevision: 6, theirs));
+    }
+
+    /// <summary>
     /// Every hash in the client is minted by <c>ModContentHasher</c> in one format, so two spellings
     /// are not one hash written twice - they are a bug in whichever part wrote the odd one. Absorbing
     /// the difference here would hide that, and would leave the next comparison free to lean on the
@@ -513,7 +528,7 @@ public class SavegameDriftTests
         /// <summary>Records that this machine holds the savegame in the slot, at a known hash.</summary>
         /// <param name="target">A number puts it in compatibility mode, pinned to that revision.</param>
         public void Hold(string contentHash, int snapshot = 1, int revision = 6, int? target = null)
-            => _bindings.SetBinding(Game.Identity, new SavegameCheckoutBinding(
+            => _bindings.Bind(Game.Identity, new SavegameCheckoutBinding(
                 _repoId,
                 _savegameId,
                 _slot,

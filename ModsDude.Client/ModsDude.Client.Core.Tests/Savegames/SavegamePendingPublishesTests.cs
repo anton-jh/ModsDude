@@ -7,42 +7,58 @@ namespace ModsDude.Client.Core.Tests.Savegames;
 public class SavegamePendingPublishesTests
 {
     private readonly GameIdentity _game = new("farmingSimulator", "fs25");
+    private readonly Guid _repoId = Guid.NewGuid();
 
 
     [Fact]
-    public void The_same_bytes_from_the_same_slot_are_the_same_publish()
+    public void The_same_contents_from_the_same_slot_are_the_same_publish()
     {
         var (store, state) = Store();
 
-        var first = store.Begin(_game, Keys.Slot("savegame1"), "aaaa");
+        var first = store.Begin(_game, Keys.Slot("savegame1"), _repoId, "aaaa", "slot-a");
         var saves = state.Saves;
-        var again = store.Begin(_game, Keys.Slot("savegame1"), "aaaa");
+        var again = store.Begin(_game, Keys.Slot("savegame1"), _repoId, "aaaa", "slot-a");
 
         Assert.Equal(first, again);
         Assert.Equal(saves, state.Saves);
     }
 
+    /// <summary>
+    /// Never replaced: the unanswered one may have landed, and replacing it is how a retry under
+    /// another name became a second savegame with a claim nobody would ever hand back.
+    /// </summary>
     [Fact]
-    public void Other_bytes_from_the_same_slot_replace_the_unanswered_publish()
+    public void Other_contents_from_the_same_slot_are_refused_while_one_is_unanswered()
     {
         var (store, state) = Store();
 
-        var first = store.Begin(_game, Keys.Slot("savegame1"), "aaaa");
-        var second = store.Begin(_game, Keys.Slot("savegame1"), "bbbb");
+        var first = store.Begin(_game, Keys.Slot("savegame1"), _repoId, "aaaa", "slot-a");
 
-        Assert.NotEqual(first.RequestId, second.RequestId);
-        Assert.NotEqual(first.SavegameId, second.SavegameId);
-        Assert.Equal(second, Assert.Single(state.Find(_game)!.SavegamePendingPublishes));
+        Assert.Throws<InvalidOperationException>(() => store.Begin(_game, Keys.Slot("savegame1"), _repoId, "bbbb", "slot-b"));
+        Assert.Throws<InvalidOperationException>(() => store.Begin(_game, Keys.Slot("savegame1"), Guid.NewGuid(), "aaaa", "slot-a"));
+
+        Assert.Equal(first, Assert.Single(state.Find(_game)!.SavegamePendingPublishes));
+    }
+
+    [Fact]
+    public void The_unanswered_publish_from_a_slot_can_be_found()
+    {
+        var (store, _) = Store();
+
+        var first = store.Begin(_game, Keys.Slot("savegame1"), _repoId, "aaaa", "slot-a");
+
+        Assert.Equal(first, store.Find(_game, Keys.Slot("savegame1")));
+        Assert.Null(store.Find(_game, Keys.Slot("savegame2")));
     }
 
     /// <summary>The whole reference: the same slot number in the game's other folder is another slot.</summary>
     [Fact]
-    public void The_same_bytes_from_another_slot_are_another_publish()
+    public void The_same_contents_from_another_slot_are_another_publish()
     {
         var (store, state) = Store();
 
-        var first = store.Begin(_game, Keys.Slot("savegame1"), "aaaa");
-        var other = store.Begin(_game, Keys.Slot("savegame1", "client"), "aaaa");
+        var first = store.Begin(_game, Keys.Slot("savegame1"), _repoId, "aaaa", "slot-a");
+        var other = store.Begin(_game, Keys.Slot("savegame1", "client"), _repoId, "aaaa", "slot-a");
 
         Assert.NotEqual(first.RequestId, other.RequestId);
         Assert.Equal(2, state.Find(_game)!.SavegamePendingPublishes.Count);
@@ -53,14 +69,14 @@ public class SavegamePendingPublishesTests
     {
         var (store, state) = Store();
 
-        var first = store.Begin(_game, Keys.Slot("savegame1"), "aaaa");
+        var first = store.Begin(_game, Keys.Slot("savegame1"), _repoId, "aaaa", "slot-a");
 
         store.Complete(_game, first.RequestId);
         var saves = state.Saves;
         store.Complete(_game, first.RequestId);
 
         Assert.Equal(saves, state.Saves);
-        Assert.NotEqual(first.RequestId, store.Begin(_game, Keys.Slot("savegame1"), "aaaa").RequestId);
+        Assert.NotEqual(first.RequestId, store.Begin(_game, Keys.Slot("savegame1"), _repoId, "bbbb", "slot-b").RequestId);
     }
 
     [Fact]
@@ -68,7 +84,7 @@ public class SavegamePendingPublishesTests
     {
         var store = new SavegamePendingPublishes(new FakeGameState());
 
-        Assert.Throws<InvalidOperationException>(() => store.Begin(_game, Keys.Slot("savegame1"), "aaaa"));
+        Assert.Throws<InvalidOperationException>(() => store.Begin(_game, Keys.Slot("savegame1"), _repoId, "aaaa", "slot-a"));
     }
 
 

@@ -94,7 +94,7 @@ public sealed class SavegameSlots(
 
             return [.. slots
                 .FirstOrDefault(x => x.Id == slot)?.Details
-                    .Select(x => new SavegameDetailDto { Key = x.Id, Label = x.Label, Value = x.Value })
+                    .Select(x => new SavegameDetailDto { Key = x.Id, Label = x.Label, Kind = x.Kind, Value = x.Value })
                 ?? []];
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

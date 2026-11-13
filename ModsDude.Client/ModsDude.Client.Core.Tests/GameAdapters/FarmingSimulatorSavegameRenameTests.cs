@@ -134,6 +134,51 @@ public class FarmingSimulatorSavegameRenameTests : IDisposable
     }
 
 
+    /// <summary>
+    /// The file differs from what the game wrote by the name alone: same indentation, same whitespace,
+    /// same line endings. A rename that reformatted the file would be an edit the game never asked for.
+    /// </summary>
+    [Theory]
+    [InlineData("\r\n")]
+    [InlineData("\n")]
+    public void Renaming_changes_the_name_and_nothing_else_in_the_file(string newLine)
+    {
+        var original = RealCareerFile.ReplaceLineEndings(newLine);
+        WriteCareer(original);
+
+        Rename("Season 5");
+
+        Assert.Equal(original.Replace("My game save", "Season 5"), File.ReadAllText(CareerFilePath));
+    }
+
+    /// <summary>
+    /// A name XML cannot hold is left out rather than thrown on: the server refuses such names, and a
+    /// rename is decoration next to the bytes.
+    /// </summary>
+    /// <remarks>
+    /// The names are built in code rather than passed as theory data, which the test runner re-encodes:
+    /// a lone surrogate would arrive as a replacement character, which XML holds perfectly well.
+    /// </remarks>
+    [Fact]
+    public void Renaming_to_a_name_xml_cannot_hold_leaves_the_file_alone()
+    {
+        WriteCareer(RealCareerFile);
+        var before = File.ReadAllBytes(CareerFilePath);
+
+        Assert.False(Rename("Season" + (char)0 + "5"));
+        Assert.False(Rename("Season " + (char)0xD83C));
+        Assert.Equal(before, File.ReadAllBytes(CareerFilePath));
+    }
+
+    /// <summary>The career file a rename replaces is the game's own file, so it goes to the Recycle Bin.</summary>
+    [Fact]
+    public void The_career_file_a_rename_replaces_goes_to_the_recycle_bin()
+    {
+        var edit = Assert.Single(Adapter().RenameSavegame(new SavegameRenameContext(Target(), Slot, "Season 5")));
+
+        Assert.True(edit.RecycleReplaced);
+    }
+
     [Fact]
     public void Renaming_twice_changes_nothing_the_second_time()
     {

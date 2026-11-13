@@ -90,13 +90,15 @@ public sealed class SavegamePlayAttribution(
 
         var played = profileId == appliedProfileId ? appliedRevision : null;
 
-        var observed = binding with
+        SavegameCheckoutBinding Observed(SavegameCheckoutBinding current) => current with
         {
             LastObservedHash = currentContentHash,
-            LastPlayedRevision = played ?? binding.LastPlayedRevision
+            LastPlayedRevision = played ?? current.LastPlayedRevision
         };
 
-        bindings.SetBinding(game, observed);
+        // Onto what is stored now rather than the copy this was handed, so an observation never
+        // undoes a check-in that rebased the binding meanwhile.
+        var observed = bindings.Update(game, binding.SavegameId, Observed) ?? Observed(binding);
 
         logger.LogInformation(
             "Savegame {Savegame} in game {Game} has been played since it was last looked at; attributed to profile revision {Revision}.",

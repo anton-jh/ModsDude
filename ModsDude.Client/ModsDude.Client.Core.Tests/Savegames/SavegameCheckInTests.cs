@@ -176,7 +176,7 @@ public class SavegameCheckInTests
         harness.WriteSlotFile(_slot1, "a savegame, played once");
 
         // Somebody took the save over and checked in while this machine was playing.
-        harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("somebody else's evening"));
+        harness.Server.CheckInFromAnotherMachine(await harness.PackedAsync("somebody else's evening"));
 
         var exception = await Assert.ThrowsAsync<ApiException<CustomProblemDetails>>(
             () => harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None));
@@ -199,7 +199,7 @@ public class SavegameCheckInTests
         await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         harness.WriteSlotFile(_slot1, "a savegame, played once");
-        harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("somebody else's evening"));
+        harness.Server.CheckInFromAnotherMachine(await harness.PackedAsync("somebody else's evening"));
 
         var (snapshot, _, _, _) = await harness.CheckIn.CheckInAsync(harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: true, takeOver: false, CancellationToken.None);
 
@@ -268,7 +268,7 @@ public class SavegameCheckInTests
 
         var snapshotsBefore = harness.Server.Snapshots.Count;
 
-        Assert.True(await harness.CheckIn.DiscardAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None));
+        Assert.Equal(SavegameLocalCopy.Recycled, await harness.CheckIn.DiscardAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None));
 
         Assert.Equal(1, harness.Server.CheckoutsDiscarded);
         Assert.Equal(snapshotsBefore, harness.Server.Snapshots.Count);
@@ -309,7 +309,7 @@ public class SavegameCheckInTests
 
         harness.RecycleBin.Refuses = true;
 
-        Assert.False(await harness.CheckIn.DiscardAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None));
+        Assert.Equal(SavegameLocalCopy.LeftBehind, await harness.CheckIn.DiscardAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None));
 
         Assert.Equal(1, harness.Server.CheckoutsDiscarded);
         Assert.Null(harness.Bindings.GetBinding(harness.Game.Identity, harness.Server.SavegameId));
@@ -504,5 +504,169 @@ public class SavegameCheckInTests
 
         Assert.Equal(0, harness.Server.CheckoutsDiscarded);
         Assert.Equal("a savegame", harness.ReadSlotFile(_slot1));
+    }
+
+    /// <summary>
+    /// A slot somebody emptied has nothing to check in. Uploading an empty archive would make nothing
+    /// the newest snapshot and end the claim - and retention could then prune the real ones.
+    /// </summary>
+    [Fact]
+    public async Task Checking_in_an_empty_slot_is_refused_before_anything_is_uploaded()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+
+        Directory.Delete(harness.SlotPath(_slot1), recursive: true);
+
+        await Assert.ThrowsAsync<UserFriendlyException>(() => harness.CheckIn.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None));
+
+        Assert.Empty(harness.Server.CheckIns);
+        Assert.Equal(0, harness.Uploader.Uploads);
+        Assert.NotNull(harness.Bindings.GetBinding(harness.Game.Identity, harness.Server.SavegameId));
+    }
+
+    /// <summary>The rename reaches the slot only once the snapshot it is part of is accepted.</summary>
+    [Fact]
+    public async Task A_refused_check_in_leaves_the_slot_unrenamed()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
+        harness.Server.LoseNextAnswer = true;
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => harness.CheckIn.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, takeOver: false, CancellationToken.None,
+            savegameName: "New name"));
+
+        Assert.False(File.Exists(Path.Combine(harness.SlotPath(_slot1), "name.txt")));
+    }
+
+    /// <summary>
+    /// Kept, the slot takes the name once the server has the snapshot, and then holds exactly what was
+    /// uploaded - so it reads as clean, not as play.
+    /// </summary>
+    [Fact]
+    public async Task Keeping_playing_writes_the_name_into_the_slot_after_the_check_in_and_reads_as_clean()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
+
+        await harness.CheckIn.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, takeOver: false, CancellationToken.None,
+            savegameName: "New name");
+
+        Assert.Equal("New name", File.ReadAllText(Path.Combine(harness.SlotPath(_slot1), "name.txt")));
+        Assert.Equal(SavegameSlotAvailability.HeldClean, await harness.Slots.ClassifySlotAsync(harness.Game, _slot1, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// The game was started while the rename waited for the server. The slot is left alone - and its
+    /// binding records the slot as it is, so the missing name does not read as play.
+    /// </summary>
+    [Fact]
+    public async Task A_rename_the_running_game_stopped_still_leaves_the_slot_reading_as_clean()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
+        harness.Guard.StartsAfterChecks = harness.Guard.Checks + 1;
+
+        await harness.CheckIn.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, takeOver: false, CancellationToken.None,
+            savegameName: "New name");
+
+        harness.Guard.Running = false;
+        harness.Guard.StartsAfterChecks = null;
+
+        Assert.False(File.Exists(Path.Combine(harness.SlotPath(_slot1), "name.txt")));
+        Assert.Equal(SavegameSlotAvailability.HeldClean, await harness.Slots.ClassifySlotAsync(harness.Game, _slot1, CancellationToken.None));
+    }
+
+    /// <summary>The upload is minutes; the game started meanwhile, so the handed-back slot is left alone.</summary>
+    [Fact]
+    public async Task Handing_back_leaves_the_slot_alone_when_the_game_started_during_the_upload()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
+        harness.Guard.StartsAfterChecks = harness.Guard.Checks + 1;
+
+        var result = await harness.CheckIn.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None);
+
+        Assert.Equal(SavegameLocalCopy.LeftGameRunning, result.LocalCopy);
+        Assert.Empty(harness.RecycleBin.Recycled);
+        Assert.Equal("a savegame, played once", harness.ReadSlotFile(_slot1));
+        Assert.Null(harness.Bindings.GetBinding(harness.Game.Identity, harness.Server.SavegameId));
+    }
+
+    [Fact]
+    public async Task Discarding_leaves_the_slot_alone_when_the_game_started_meanwhile()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+
+        harness.Guard.StartsAfterChecks = harness.Guard.Checks + 1;
+
+        Assert.Equal(SavegameLocalCopy.LeftGameRunning, await harness.CheckIn.DiscardAsync(harness.Game, harness.Server.SavegameId, CancellationToken.None));
+
+        Assert.Equal(1, harness.Server.CheckoutsDiscarded);
+        Assert.Empty(harness.RecycleBin.Recycled);
+        Assert.Equal("a savegame", harness.ReadSlotFile(_slot1));
+    }
+
+    /// <summary>A save on a mod list nobody can name is refused before its bytes leave the machine.</summary>
+    [Fact]
+    public async Task A_save_with_no_known_mod_list_is_refused_before_anything_is_uploaded()
+    {
+        using var harness = new SavegameHarness(writeManifest: false);
+        await harness.SeedHeadAsync("a savegame", profileRevision: 1);
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+
+        harness.Bindings.Update(harness.Game.Identity, harness.Server.SavegameId, x => x with { ProfileRevision = null });
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
+
+        await Assert.ThrowsAsync<UserFriendlyException>(() => harness.CheckIn.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None));
+
+        Assert.Equal(0, harness.Uploader.Uploads);
+        Assert.Empty(harness.Server.UploadLinkRequests);
+    }
+
+    /// <summary>
+    /// Killed between moving the old contents aside and moving the new ones in, a slot is left missing
+    /// with its contents beside it. The next operation on the slot puts it back first.
+    /// </summary>
+    [Fact]
+    public async Task A_slot_left_moved_aside_by_a_crash_is_put_back_before_a_check_in()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+
+        harness.WriteSlotFile(_slot1, "a savegame, played once");
+
+        var slotPath = harness.SlotPath(_slot1);
+        Directory.Move(slotPath, Path.Combine(Path.GetDirectoryName(slotPath)!, $".modsdude-replaced-{_slot1.Slot.Value}-{Guid.NewGuid():N}"));
+        Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(slotPath)!, $".modsdude-unpack-{_slot1.Slot.Value}-{Guid.NewGuid():N}"));
+
+        var result = await harness.CheckIn.CheckInAsync(
+            harness.Game, harness.Server.SavegameId, null, keepPlaying: true, force: false, takeOver: false, CancellationToken.None);
+
+        Assert.Equal(2, result.Snapshot.Number);
+        Assert.Equal("a savegame, played once", harness.ReadSlotFile(_slot1));
+        Assert.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(slotPath)!, ".modsdude-*"));
     }
 }

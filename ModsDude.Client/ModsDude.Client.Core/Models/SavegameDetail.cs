@@ -1,28 +1,27 @@
+using ModsDude.Client.Core.ModsDudeServer.Generated;
+
 namespace ModsDude.Client.Core.Models;
 
 /// <summary>
-/// One fact an adapter chose to say about a savegame, already worded for a person to read.
+/// One fact an adapter chose to say about a savegame.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Free-form, because the games are.</b> Farming Simulator has a map, a difficulty and a
-/// playtime; another game has a seed, a chapter and a death count; a third has none of it. Modelling
-/// any of that as columns would mean either a schema with a hole in it for every game nobody wrote
-/// yet, or an adapter contract that grows a field per game. The adapter decides what is worth
-/// saying and what to call it, and everything above simply renders the list.
+/// playtime; another game has a seed, a chapter and a death count; a third has none of it. The adapter
+/// decides what is worth saying and what to call it, and everything above simply renders the list.
 /// </para>
 /// <para>
-/// <b><see cref="Id"/> is not shown, and that is the point.</b> A label is prose - it can be
-/// reworded, translated, or shortened because a column got narrow - and prose is not something to
-/// key on. The id is the stable name for "this is the map", so that if a fact turns out to be worth
-/// promoting to a real property later, the values already recorded can be found and migrated
-/// rather than parsed back out of a sentence.
+/// <b>Typed, never pre-formatted.</b> A date, a moment or a length of time is carried in one
+/// invariant form and worded by whoever reads it - see <see cref="Savegames.SavegameDetailText"/> - so
+/// a snapshot checked in on a Swedish machine at 23:00 reads in the reader's own culture and time zone.
 /// </para>
 /// <para>
-/// <b>Nothing may depend on one.</b> Same rule the mod catalog's attributes follow: these are
-/// opaque, optional, written by whichever adapter produced them, and read only to be displayed. A
-/// fact the system needs in order to behave correctly is a real property with a real column -
-/// <c>ContentHash</c> and <c>ProfileRevision</c> are what that looks like.
+/// <b><see cref="Id"/> is not shown, and that is the point.</b> A label is prose and can be reworded;
+/// the id is the stable name for "this is the map".
+/// </para>
+/// <para>
+/// <b>Nothing may depend on one.</b> These are opaque, optional, and read only to be displayed.
 /// </para>
 /// </remarks>
 /// <param name="Id">
@@ -30,8 +29,11 @@ namespace ModsDude.Client.Core.Models;
 /// use the same id for the same idea, and equally free not to.
 /// </param>
 /// <param name="Label">What to print beside the value. Prose, and safe to change.</param>
-/// <param name="Value">Already formatted. The adapter knows what a playtime or a difficulty means.</param>
-public record SavegameDetail(string Id, string Label, string Value)
+/// <param name="Value">
+/// In the invariant form <paramref name="Kind"/> names: <c>yyyy-MM-dd</c> for a date, ISO 8601 round-trip
+/// in UTC for an instant, whole minutes for a duration, and anything for text.
+/// </param>
+public record SavegameDetail(string Id, string Label, SavegameDetailKind Kind, string Value)
 {
     /// <summary>
     /// Ids the reference adapter uses, kept together so that a second adapter describing the same

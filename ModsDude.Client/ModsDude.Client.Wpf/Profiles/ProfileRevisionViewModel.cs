@@ -13,7 +13,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 /// to render a line: a profile holds one to two thousand mods, and a history page renders tens of
 /// these at once.
 /// </remarks>
-public partial class ProfileRevisionViewModel(ProfileRevisionDto revision, bool isHead) : ObservableObject, ISelectableRow
+public partial class ProfileRevisionViewModel(ProfileRevisionDto revision, bool isHead, DateOnly today) : ObservableObject, ISelectableRow
 {
     public ProfileRevisionDto Revision { get; } = revision;
 
@@ -105,7 +105,7 @@ public partial class ProfileRevisionViewModel(ProfileRevisionDto revision, bool 
     public string ModCountText => Revision.ModCount == 1 ? "1 mod" : $"{Revision.ModCount} mods";
 
     /// <summary>When retention deletes this revision, or null where it is not scheduled.</summary>
-    public string? DeletionText => ScheduledDeletion.Describe(Revision.DeletionScheduledFor);
+    public string? DeletionText => ScheduledDeletion.Describe(Revision.DeletionScheduledFor, today);
 
     /// <summary>Why, and what would keep it.</summary>
     public string? DeletionTooltip => ScheduledDeletion.Explain(Revision.DeletionReason, RetainedKind.Revision);

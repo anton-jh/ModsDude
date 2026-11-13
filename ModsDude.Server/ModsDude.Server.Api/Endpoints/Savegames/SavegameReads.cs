@@ -1,4 +1,5 @@
 using ModsDude.Server.Api.Dtos;
+using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
@@ -252,7 +253,7 @@ internal static class SavegameReads
             row.Origin,
             row.BaseSnapshot?.Value,
             row.CheckoutId?.Value,
-            [.. row.Details.Select(x => new SavegameDetailDto(x.Key, x.Label, x.Value))],
+            [.. row.Details.Select(x => new SavegameDetailDto(x.Key, x.Label, x.Kind, x.Value))],
             row.DeletionScheduledFor,
             row.DeletionReason);
     }
@@ -266,8 +267,9 @@ internal static class SavegameReads
 }
 
 /// <summary>
-/// Turns what a client's adapter said into what the snapshot stores. The server does not look inside
-/// - see <see cref="SavegameDetail"/> - so this only drops the empties and keeps the order sent.
+/// Turns what a client's adapter said into what the snapshot stores. The server looks only at each
+/// value's form - see <see cref="SavegameDetail"/> - and otherwise drops the empties and keeps the
+/// order sent.
 /// </summary>
 internal static class SavegameDetails
 {
@@ -277,13 +279,25 @@ internal static class SavegameDetails
     /// </summary>
     private const int _maximum = 24;
 
+    /// <returns>The problem with the first detail whose value is not in its kind's form, or null.</returns>
+    public static CustomProblemDetails? Check(IEnumerable<SavegameDetailDto>? details)
+    {
+        var invalid = Sent(details).FirstOrDefault(x => SavegameDetailValues.IsValid(x.Kind, x.Value.Trim()) is false);
+
+        return invalid is null
+            ? null
+            : Problems.InvalidRequest($"Savegame detail '{invalid.Key}' has '{invalid.Value}', which is not a {invalid.Kind} value.");
+    }
+
     public static IEnumerable<SavegameDetail> From(IEnumerable<SavegameDetailDto>? details)
     {
-        return (details ?? [])
-            .Where(x => string.IsNullOrWhiteSpace(x.Key) is false && string.IsNullOrWhiteSpace(x.Value) is false)
+        return Sent(details)
             // The order the adapter sent them in is the order it wanted them read.
-            .Select((x, index) => new SavegameDetail(x.Key.Trim(), x.Label.Trim(), x.Value.Trim(), index))
+            .Select((x, index) => new SavegameDetail(x.Key.Trim(), x.Label.Trim(), x.Kind, x.Value.Trim(), index))
             .DistinctBy(x => x.Key)
             .Take(_maximum);
     }
+
+    private static IEnumerable<SavegameDetailDto> Sent(IEnumerable<SavegameDetailDto>? details)
+        => (details ?? []).Where(x => string.IsNullOrWhiteSpace(x.Key) is false && string.IsNullOrWhiteSpace(x.Value) is false);
 }

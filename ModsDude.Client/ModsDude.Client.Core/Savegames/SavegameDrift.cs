@@ -239,19 +239,24 @@ public static class SavegameDriftRules
             return kinds;
         }
 
-        // Strictly past, not merely different. A client holding a head number older than the binding
-        // is a client that has not refreshed, and inventing a takeover out of that would fire the
-        // notice on stale data rather than on anything that happened.
-        if (headSnapshot is int head && head > binding.Snapshot)
+        // A check-in from here whose answer was lost may be exactly what moved the head or ended the
+        // claim, so nothing is said about somebody else until the next check-in has found out.
+        if (binding.PendingCheckIn is null)
         {
-            kinds.Add(SavegameDriftKind.TakenOverAndCheckedIn);
-        }
-        // Nobody holding it counts too: this machine's binding is a claim it took, and the only way
-        // that claim ends while the binding stands is somebody taking it - and then, here, letting
-        // it go again without checking anything in.
-        else if (claim is { IsYours: false })
-        {
-            kinds.Add(SavegameDriftKind.TakenOver);
+            // Strictly past, not merely different. A client holding a head number older than the
+            // binding is a client that has not refreshed, and inventing a takeover out of that would
+            // fire the notice on stale data rather than on anything that happened.
+            if (headSnapshot is int head && head > binding.Snapshot)
+            {
+                kinds.Add(SavegameDriftKind.TakenOverAndCheckedIn);
+            }
+            // Nobody holding it counts too: this machine's binding is a claim it took, and the only
+            // way that claim ends while the binding stands is somebody taking it - and then, here,
+            // letting it go again without checking anything in.
+            else if (claim is { IsYours: false })
+            {
+                kinds.Add(SavegameDriftKind.TakenOver);
+            }
         }
 
         if (HasMovedOffItsModList(binding, appliedProfileId, appliedRevision))

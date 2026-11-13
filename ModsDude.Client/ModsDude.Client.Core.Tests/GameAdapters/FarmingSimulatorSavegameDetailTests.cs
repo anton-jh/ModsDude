@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Tests.Sync;
+using System.Globalization;
 
 namespace ModsDude.Client.Core.Tests.GameAdapters;
 
@@ -74,16 +76,17 @@ public class FarmingSimulatorSavegameDetailTests : IDisposable
     {
         WriteCareer(RealCareerFile);
 
-        // 2717 minutes, which nobody wants to read as "1.21:17:00".
-        Assert.Equal("45 h", Detail(SavegameDetail.Ids.Playtime)?.Value);
+        // Whole minutes, worded by whoever reads it rather than by whoever checked it in.
+        Assert.Equal(SavegameDetailKind.Duration, Detail(SavegameDetail.Ids.Playtime)?.Kind);
+        Assert.Equal("2717", Detail(SavegameDetail.Ids.Playtime)?.Value);
     }
 
     [Fact]
-    public void Short_playtimes_stay_in_minutes()
+    public void Playtime_is_rounded_to_whole_minutes()
     {
-        WriteCareer(CareerFile(playTime: "42.4"));
+        WriteCareer(CareerFile(playTime: "42.6"));
 
-        Assert.Equal("42 min", Detail(SavegameDetail.Ids.Playtime)?.Value);
+        Assert.Equal("43", Detail(SavegameDetail.Ids.Playtime)?.Value);
     }
 
     [Fact]
@@ -91,16 +94,48 @@ public class FarmingSimulatorSavegameDetailTests : IDisposable
     {
         WriteCareer(RealCareerFile);
 
+        Assert.Equal(SavegameDetailKind.Date, Detail(SavegameDetail.Ids.LastPlayed)?.Kind);
         Assert.Equal("2024-11-30", Detail(SavegameDetail.Ids.LastPlayed)?.Value);
     }
 
-    /// <summary>Copying a save between machines rewrites the file's timestamp; the game's own record survives that.</summary>
+    /// <summary>
+    /// Copying a save between machines rewrites the file's timestamp; the game's own record survives
+    /// that. The timestamp is a moment, so it is carried in UTC for each reader to put in their own zone.
+    /// </summary>
     [Fact]
-    public void A_save_with_no_save_date_falls_back_to_the_files_timestamp()
+    public void A_save_with_no_save_date_falls_back_to_the_files_timestamp_as_a_moment_in_utc()
     {
         WriteCareer(CareerFile(saveDate: null));
 
-        Assert.NotNull(Detail(SavegameDetail.Ids.LastPlayed));
+        var lastPlayed = Detail(SavegameDetail.Ids.LastPlayed);
+
+        Assert.Equal(SavegameDetailKind.Instant, lastPlayed?.Kind);
+        Assert.True(DateTimeOffset.TryParseExact(lastPlayed!.Value, "O", CultureInfo.InvariantCulture, DateTimeStyles.None, out var written));
+        Assert.Equal(TimeSpan.Zero, written.Offset);
+    }
+
+    [Fact]
+    public void A_save_date_in_a_shape_this_adapter_does_not_know_is_shown_as_the_game_wrote_it()
+    {
+        WriteCareer(CareerFile(saveDate: "30/11/2024"));
+
+        Assert.Equal(SavegameDetailKind.Text, Detail(SavegameDetail.Ids.LastPlayed)?.Kind);
+        Assert.Equal("30/11/2024", Detail(SavegameDetail.Ids.LastPlayed)?.Value);
+    }
+
+    /// <summary>
+    /// A career file that is there but cannot be looked at may hold somebody's save, so the slot is
+    /// occupied - never the empty slot the engine writes into without asking.
+    /// </summary>
+    [Fact]
+    public void A_career_file_that_cannot_be_looked_at_is_occupied_and_unnamed()
+    {
+        Directory.CreateDirectory(_directory.Combine("careerSavegame.xml"));
+
+        var slot = Read();
+
+        Assert.True(slot.IsOccupied);
+        Assert.Null(slot.DisplayName);
     }
 
     [Fact]

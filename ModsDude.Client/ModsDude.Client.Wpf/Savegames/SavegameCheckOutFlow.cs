@@ -28,41 +28,15 @@ public sealed class SavegameCheckOutFlow(
     ISavegameCompatibilityCheck compatibilityCheck,
     IProfileStore profileStore,
     IGameRunningGuard runningGuard,
+    ISavegameOperations operations,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
-    IBackgroundTaskReporter backgroundTasks,
     IToastService toasts) : ISavegameCheckOutFlow
 {
     // Not keyed on the head: after a lost answer the head shown is the restore's own.
     private readonly RequestIdKeeper<(Guid SavegameId, int SnapshotNumber)> _restoreRequestIds = new();
 
     public async Task CheckOutAsync(
-        Repo repo,
-        SavegameDto savegame,
-        int snapshotNumber,
-        int? playedRevision,
-        SavegameCheckOutMode mode,
-        SavegameRevisionMode? revisionMode,
-        string? currentUserId,
-        IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await StartAsync(
-                repo, savegame, snapshotNumber, playedRevision, mode, revisionMode, currentUserId, heldNames, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away. There is no page left to say anything on.
-        }
-        catch (Exception exception)
-        {
-            await errorReporter.ShowAsync(exception, "checking a savegame out");
-        }
-    }
-
-    private async Task StartAsync(
         Repo repo,
         SavegameDto savegame,
         int snapshotNumber,
@@ -90,6 +64,60 @@ public sealed class SavegameCheckOutFlow(
             return;
         }
 
+        SavegameCheckOutPlan? plan;
+
+        try
+        {
+            plan = await AskAsync(repo, game, savegame, snapshotNumber, playedRevision, mode, revisionMode, currentUserId, heldNames, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The page asking went away before anything was answered. Nothing has started.
+            return;
+        }
+        catch (Exception exception)
+        {
+            await errorReporter.ShowAsync(exception, "checking a savegame out");
+
+            return;
+        }
+
+        if (plan is null)
+        {
+            return;
+        }
+
+        var name = savegame.Name;
+
+        await operations.RunAsync(
+            new SavegameOperation(
+                game,
+                mode is SavegameCheckOutMode.TakeCopy ? $"Copying '{name}' into '{game.Name}'" : $"Checking '{name}' out into '{game.Name}'",
+                mode is SavegameCheckOutMode.TakeCopy ? "copying a savegame" : "checking a savegame out",
+                mode is SavegameCheckOutMode.TakeCopy
+                    ? $"Copying '{name}' stopped. Nothing was written into a slot."
+                    : $"Checking '{name}' out stopped before anything was written into a slot. Where it already shows as yours, Check out again finishes it.",
+                [savegame.Id, .. plan.CheckIns.Select(x => x.SavegameId)],
+                AllFolders: true)
+            {
+                Detail = $"Snapshot {snapshotNumber}"
+            },
+            (task, ct) => ExecuteAsync(repo, game, savegame, snapshotNumber, mode, plan, task, ct));
+    }
+
+    /// <summary>The questions, as one wizard. Null where the user backed out of it.</summary>
+    private async Task<SavegameCheckOutPlan?> AskAsync(
+        Repo repo,
+        Game game,
+        SavegameDto savegame,
+        int snapshotNumber,
+        int? playedRevision,
+        SavegameCheckOutMode mode,
+        SavegameRevisionMode? revisionMode,
+        string? currentUserId,
+        IReadOnlyDictionary<Guid, HeldSavegameName> heldNames,
+        CancellationToken cancellationToken)
+    {
         // A copy takes nothing, and a claim of your own is not somebody else's.
         var holder = savegame.Checkout is SavegameCheckoutDto checkout && checkout.Status is not SavegameCheckoutStatus.Ended
             ? checkout
@@ -117,12 +145,7 @@ public sealed class SavegameCheckOutFlow(
 
         var modal = new WizardModalViewModel(await wizard.FirstAsync(cancellationToken), wizard.NextAsync, cancellationToken);
 
-        if (await modal.ShowAsync(modalService.Value) is false || wizard.Plan is not SavegameCheckOutPlan plan)
-        {
-            return;
-        }
-
-        await ExecuteAsync(repo, game, savegame, snapshotNumber, mode, plan, cancellationToken);
+        return await modal.ShowAsync(modalService.Value) ? wizard.Plan : null;
     }
 
     private SavegameRevisionMode? HeldMode(Game game, SavegameDto savegame)
@@ -162,6 +185,7 @@ public sealed class SavegameCheckOutFlow(
         int snapshotNumber,
         SavegameCheckOutMode mode,
         SavegameCheckOutPlan plan,
+        IBackgroundTask task,
         CancellationToken cancellationToken)
     {
         // Before the first step, since an activation into a running game would be recorded and then
@@ -190,7 +214,7 @@ public sealed class SavegameCheckOutFlow(
         {
             foreach (var checkIn in plan.CheckIns)
             {
-                if (await CheckInFirstAsync(game, savegame, checkIn, cancellationToken) is false)
+                if (await CheckInFirstAsync(game, savegame, checkIn, task, cancellationToken) is false)
                 {
                     return;
                 }
@@ -208,7 +232,7 @@ public sealed class SavegameCheckOutFlow(
             return;
         }
 
-        await WriteAsync(repo, savegame, snapshotNumber, mode, plan.RevisionMode, game, plan.Slot, cancellationToken);
+        await WriteAsync(repo, savegame, snapshotNumber, mode, plan.RevisionMode, game, plan.Slot, task, cancellationToken);
     }
 
     /// <returns>Whether the savegame was handed back, which is what frees the folder or slot it held.</returns>
@@ -216,10 +240,11 @@ public sealed class SavegameCheckOutFlow(
         Game game,
         SavegameDto savegame,
         SavegameCheckOutCheckIn checkIn,
+        IBackgroundTask task,
         CancellationToken cancellationToken)
     {
         var outcome = await checkInFlow.CheckInAsync(
-            game, checkIn.SavegameId, checkIn.Savegame, checkIn.Label, keepPlaying: false, cancellationToken);
+            game, checkIn.SavegameId, checkIn.Savegame, checkIn.Label, keepPlaying: false, task, cancellationToken);
 
         if (outcome.ReleasedTheSlot is false)
         {
@@ -232,7 +257,7 @@ public sealed class SavegameCheckOutFlow(
             return false;
         }
 
-        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, $"the slot of {checkIn.Savegame.Quoted}") is string notRecycled)
+        if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, $"the slot of {checkIn.Savegame.Quoted}", game.Name) is string notRecycled)
         {
             toasts.Show(notRecycled, ToastSeverity.Warning);
         }
@@ -248,20 +273,17 @@ public sealed class SavegameCheckOutFlow(
         SavegameRevisionMode revisionMode,
         Game game,
         SavegameSlotOptionViewModel slot,
+        IBackgroundTask task,
         CancellationToken cancellationToken)
     {
         var name = savegame.Name;
-
-        using var task = backgroundTasks.Begin(
-            mode is SavegameCheckOutMode.TakeCopy
-                ? $"Copying '{name}' into '{game.Name}'"
-                : $"Checking '{name}' out into '{game.Name}'",
-            $"Snapshot {snapshotNumber}");
 
         task.DeclareTransfers(TransferDirection.Download);
 
         if (mode is SavegameCheckOutMode.TakeCopy)
         {
+            task.Report($"Copying snapshot {snapshotNumber}");
+
             var displacedByCopy = await savegameCheckOut.TakeCopyAsync(
                 game, savegame, snapshotNumber, slot.Ref, cancellationToken, new SavegameStripProgress(task));
 
@@ -273,35 +295,41 @@ public sealed class SavegameCheckOutFlow(
             return;
         }
 
-        // Restoring copies forward, so the check-out that follows has no stale base. Nothing in
-        // between is deleted.
-        if (snapshotNumber != savegame.Head?.Number)
+        task.Report(snapshotNumber != savegame.Head?.Number
+            ? $"Restoring snapshot {snapshotNumber} as the newest one, and taking the claim"
+            : "Taking the claim");
+
+        var result = await savegameCheckOut.CheckOutAsync(
+            game,
+            savegame,
+            snapshotNumber,
+            _restoreRequestIds.For((savegame.Id, snapshotNumber)),
+            slot.Ref,
+            revisionMode,
+            cancellationToken,
+            new SavegameStripProgress(task));
+
+        _restoreRequestIds.Forget();
+
+        ReportDisplaced(result.Displaced);
+
+        if (result.PreviousCopy is SavegameLocalCopy previous
+            && SavegameSlotWording.NotRecycled(previous, "the slot it moved out of", game.Name) is string notRecycled)
         {
-            task.Report($"Restoring snapshot {snapshotNumber} as the newest one");
-
-            savegame = await savegameCheckOut.RestoreAsync(
-                savegame, _restoreRequestIds.For((savegame.Id, snapshotNumber)), snapshotNumber, cancellationToken);
-
-            _restoreRequestIds.Forget();
+            toasts.Show(notRecycled, ToastSeverity.Warning);
         }
 
-        task.Report("Taking the claim");
-
-        var (takenFrom, displaced) = await savegameCheckOut.CheckOutAsync(game, savegame, slot.Ref, revisionMode, cancellationToken, new SavegameStripProgress(task));
-
-        ReportDisplaced(displaced);
-
-        if (takenFrom is null)
+        if (result.TakenFrom is null)
         {
             toasts.Show($"'{name}' is checked out to you, in '{game.Name}'.");
         }
         else
         {
-            toasts.Show($"'{name}' is checked out to you, in '{game.Name}'. {takenFrom.DisplayName} no longer has it, " +
+            toasts.Show($"'{name}' is checked out to you, in '{game.Name}'. {result.TakenFrom.DisplayName} no longer has it, " +
                         "and their ModsDude will tell them.");
         }
 
-        await profileActivation.ActivateCheckedOutAsync(repo, game, savegame, cancellationToken);
+        await profileActivation.ActivateCheckedOutAsync(repo, game, result.Savegame, cancellationToken);
     }
 
     /// <summary>Where the save a check-out or copy replaced went, where that is worth saying.</summary>

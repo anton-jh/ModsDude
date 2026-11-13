@@ -96,11 +96,13 @@ public class SavegameCheckInClaimTests
     }
 
     /// <summary>
-    /// Other bytes are another check-in. Repeating the old request for them would be answered with a
-    /// snapshot of bytes that are not the ones in the slot.
+    /// The keep-playing check-in landed, its answer was lost, and the user played on. Other contents
+    /// cannot repeat the old request, so the server is asked what became of it: the binding is
+    /// rebased onto the snapshot it minted, and the new check-in goes on top - not refused as stale
+    /// against the user's own snapshot.
     /// </summary>
     [Fact]
-    public async Task Playing_on_after_a_lost_answer_makes_a_new_request()
+    public async Task Playing_on_after_a_lost_answer_settles_it_and_checks_in_on_top()
     {
         using var harness = await CheckedOutAndPlayedAsync();
         harness.Server.LoseNextAnswer = true;
@@ -109,11 +111,57 @@ public class SavegameCheckInClaimTests
 
         harness.WriteSlotFile(_slot1, "a savegame, played twice");
 
-        // The first check-in moved the head, and this machine never learned it did.
-        var exception = await Assert.ThrowsAsync<ApiException<CustomProblemDetails>>(() => CheckInAsync(harness, keepPlaying: true));
+        var result = await CheckInAsync(harness, keepPlaying: true);
 
-        Assert.Equal(ProblemType.SavegameSnapshotStale, exception.Result.Type);
+        Assert.Equal(1, harness.Server.CheckInLookups);
         Assert.NotEqual(harness.Server.CheckIns[0].RequestId, harness.Server.CheckIns[1].RequestId);
+        Assert.Equal(2, harness.Server.CheckIns[1].BasedOn);
+        Assert.Equal(3, result.Snapshot.Number);
+        Assert.Equal(3, Binding(harness)!.Value.Snapshot);
+        Assert.Null(Binding(harness)!.Value.PendingCheckIn);
+    }
+
+    /// <summary>The check-in never arrived, so there is nothing to settle onto: it is dropped and a new one sent.</summary>
+    [Fact]
+    public async Task Playing_on_after_a_check_in_that_never_arrived_sends_a_new_one()
+    {
+        using var harness = await CheckedOutAndPlayedAsync();
+        harness.Server.DropNextCheckIn = true;
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => CheckInAsync(harness, keepPlaying: true));
+
+        harness.WriteSlotFile(_slot1, "a savegame, played twice");
+
+        var result = await CheckInAsync(harness, keepPlaying: true);
+
+        Assert.Equal(1, harness.Server.CheckInLookups);
+        Assert.Equal(1, Assert.Single(harness.Server.CheckIns).BasedOn);
+        Assert.Equal(2, result.Snapshot.Number);
+        Assert.Null(Binding(harness)!.Value.PendingCheckIn);
+    }
+
+    /// <summary>
+    /// The lost check-in handed the save back, and the user played on in a slot nobody holds any more.
+    /// That play is kept where it is as a save of their own; checking it in on top of an ended claim
+    /// is refused.
+    /// </summary>
+    [Fact]
+    public async Task Playing_on_after_a_lost_hand_back_keeps_the_play_and_refuses_the_check_in()
+    {
+        using var harness = await CheckedOutAndPlayedAsync();
+        harness.Server.LoseNextAnswer = true;
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => CheckInAsync(harness, keepPlaying: false));
+
+        harness.WriteSlotFile(_slot1, "a savegame, played twice");
+
+        await Assert.ThrowsAsync<Exceptions.UserFriendlyException>(() => CheckInAsync(harness, keepPlaying: true));
+
+        Assert.Single(harness.Server.CheckIns);
+        Assert.Null(Binding(harness));
+        Assert.Empty(harness.RecycleBin.Recycled);
+        Assert.Equal("a savegame, played twice", harness.ReadSlotFile(_slot1));
+        Assert.Equal(SavegameSlotAvailability.Unrecognised, await harness.Slots.ClassifySlotAsync(harness.Game, _slot1, CancellationToken.None));
     }
 
     [Fact]

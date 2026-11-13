@@ -65,7 +65,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         IRetentionUpkeep retentionUpkeep,
         CancellationToken cancellationToken)
     {
-        if ((RequestChecks.FileSize(request.SizeBytes) ?? RequestChecks.Label(request.Label, SavegameSnapshot.MaximumLabelLength)) is { } invalid)
+        if ((RequestChecks.FileSize(request.SizeBytes) ?? RequestChecks.Label(request.Label, SavegameSnapshot.MaximumLabelLength) ?? SavegameDetails.Check(request.Details)) is { } invalid)
         {
             return TypedResults.BadRequest(invalid);
         }
@@ -265,7 +265,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         }
     }
 
-    private static async Task<Results<Ok<CheckInSavegameResponse>, BadRequest<CustomProblemDetails>>> AnswerAgainAsync(
+    internal static async Task<Results<Ok<CheckInSavegameResponse>, BadRequest<CustomProblemDetails>>> AnswerAgainAsync(
         ApplicationDbContext dbContext,
         SavegameSnapshotRequest original,
         CancellationToken cancellationToken)

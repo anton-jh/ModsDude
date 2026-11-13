@@ -617,7 +617,7 @@
                                                            Style="{DynamicResource CaptionTextBlockStyle}" />
 
                                                 <TextBlock Grid.Column="1"
-                                                           Text="{Binding Value}"
+                                                           Text="{Binding Text}"
                                                            TextWrapping="Wrap"
                                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                            Style="{DynamicResource CaptionTextBlockStyle}" />

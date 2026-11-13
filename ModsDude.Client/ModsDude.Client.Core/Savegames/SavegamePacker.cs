@@ -17,10 +17,22 @@ namespace ModsDude.Client.Core.Savegames;
 /// back a second time. Delete it once the upload has been verified, or on the way out of a failure.
 /// </param>
 /// <param name="ContentHash">
-/// The SHA-256 of the file at <paramref name="FilePath"/>, lowercase hex - the address the blob is
-/// stored under and the value a check-in compares against the head.
+/// What the archive holds, as <see cref="SavegameContentHash"/> - the address the blob is stored under
+/// and the value a check-in compares against the head.
 /// </param>
-public readonly record struct PackedSavegame(string FilePath, string ContentHash, long SizeBytes);
+/// <param name="SlotHash">
+/// What the slot itself holds, which differs from <paramref name="ContentHash"/> only by the edits
+/// that were applied to the archived copy alone.
+/// </param>
+/// <param name="ArchiveHash">The SHA-256 of the file's own bytes, which is what an upload verifies.</param>
+/// <param name="EntryCount">How many files the archive holds. Zero is a slot with nothing in it.</param>
+public readonly record struct PackedSavegame(
+    string FilePath,
+    string ContentHash,
+    string SlotHash,
+    string ArchiveHash,
+    long SizeBytes,
+    int EntryCount);
 
 
 /// <summary>
@@ -28,20 +40,15 @@ public readonly record struct PackedSavegame(string FilePath, string ContentHash
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>The archive is deterministic.</b> Identical slot contents produce identical bytes and therefore
-/// an identical hash, whoever packed them and whenever. Everything else in savegames rests on that:
-/// a check-in whose hash equals the head's mints no snapshot, so launching the game and quitting must
-/// not cost a 400 MB blob and a line of history - and a drift check can only ask "has this been
-/// played?" if replaying the same bytes answers no. Two things buy it, and both are load-bearing:
-/// entries sorted <see cref="StringComparer.Ordinal"/> rather than in whatever order the filesystem
-/// enumerated them, and every entry timestamp pinned to <see cref="_fixedTimestamp"/> rather than
-/// carrying the file's own - a save copied between machines keeps its contents and loses its mtimes.
+/// <b>Identity is the contents, not the archive.</b> Every hash this hands out is a
+/// <see cref="SavegameContentHash"/> over the files the adapter says belong in a packed save, so the
+/// same slot hashes the same whoever packed it, on whatever runtime. A check-in whose hash equals the
+/// head's mints no snapshot, and a drift check can only ask "has this been played?" if replaying the
+/// same bytes answers no.
 /// </para>
 /// <para>
-/// <b>Hashing and packing walk the same code.</b> <see cref="HashSlotAsync"/> is
-/// <see cref="PackAsync"/> writing to nowhere, so a drift check cannot disagree with the packer -
-/// which would report play that is not there, or, worse, miss play that is.
-/// See docs/PLAN.md#phase-8--savegames.
+/// <b>Hashing and packing walk the same code.</b> <see cref="HashSlotAsync"/> is the pack's walk with
+/// no archive to write, so a drift check cannot disagree with the packer.
 /// </para>
 /// </remarks>
 public interface ISavegamePacker
@@ -50,43 +57,41 @@ public interface ISavegamePacker
     /// Zips everything in <paramref name="slot"/> that the adapter says belongs in a packed save,
     /// recursively, into a temporary file.
     /// </summary>
-    /// <remarks>
-    /// A slot folder that does not exist, or holds nothing that belongs, packs as an empty archive
-    /// rather than throwing. Its hash is a real hash that no played save shares, which is a more
-    /// useful answer than an exception to the one caller - the drift check - that can legitimately
-    /// ask about a slot somebody deleted from under it.
-    /// </remarks>
-    /// <param name="progress">
-    /// Bytes of the slot's own files read so far, of the total found when the walk began. Uncompressed
-    /// on purpose: the compressed size is not known until the last file is in, and a bar that was
-    /// measured against something that had not been decided yet would be a guess.
+    /// <param name="overlay">
+    /// Edits applied to the archived copy only; the slot on disk is not touched. An edit addressing a
+    /// file outside the slot, or one the archive would not hold, is left out.
     /// </param>
+    /// <param name="progress">Bytes of the slot's own files read so far, of the total found when the walk began.</param>
     Task<PackedSavegame> PackAsync(
         ILocalSavegameAdapter adapter,
         SavegameTarget target,
         SavegameSlotId slot,
+        IReadOnlyList<GameFileEdit> overlay,
         CancellationToken cancellationToken,
         IProgress<SavegameProgress>? progress = null);
 
     /// <summary>
-    /// Replaces the slot's contents with the archive's.
+    /// Replaces the slot's contents with the archive's, once they are verified to be
+    /// <paramref name="expectedContentHash"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>The slot ends up holding exactly the archive, and nothing else.</b> Whatever was there is
-    /// renamed beside it, e.g. <c>savegame3 (replaced 2026-09-30 14-02)</c>, and handed back: where it
-    /// goes from there is the caller's decision. Nothing here deletes it.
+    /// renamed beside it and handed back: where it goes from there is the caller's decision. Nothing
+    /// here deletes it.
     /// </para>
     /// <para>
-    /// Any failure before the new contents are in place leaves the slot as it was. An entry that would
-    /// resolve outside the slot folder is one such failure.
+    /// Any failure before the new contents are in place leaves the slot as it was. A kill between the
+    /// two renames leaves a displaced folder <see cref="ISavegameRecycler.RecoverSlot"/> puts right.
     /// </para>
     /// </remarks>
-    /// <param name="progress">Bytes of the archive's files written so far, of what the archive declares.</param>
     /// <returns>Where the slot's previous contents now are, or null where the slot was empty.</returns>
-    /// <exception cref="InvalidDataException">An entry names a path outside the slot folder.</exception>
+    /// <exception cref="InvalidDataException">
+    /// An entry names a path outside the slot folder, or the contents are not the ones expected.
+    /// </exception>
     Task<string?> UnpackAsync(
         string archivePath,
+        string expectedContentHash,
         ILocalSavegameAdapter adapter,
         SavegameTarget target,
         SavegameSlotId slot,
@@ -94,13 +99,9 @@ public interface ISavegamePacker
         IProgress<SavegameProgress>? progress = null);
 
     /// <summary>
-    /// What <see cref="PackAsync"/> would report as the content hash, without keeping the archive.
+    /// What <see cref="PackAsync"/> would report as the slot hash. A slot that does not exist hashes
+    /// as one holding nothing.
     /// </summary>
-    /// <remarks>
-    /// The cheap half of "has this slot been played since it was checked in?". Still reads and
-    /// compresses every byte - the hash has to be over the same bytes the packer produces or the two
-    /// could differ - but writes none of them.
-    /// </remarks>
     Task<string> HashSlotAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken);
 }
 
@@ -111,23 +112,17 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     private readonly ILogger _log = logger ?? (ILogger)NullLogger.Instance;
 
     /// <summary>
-    /// Every entry's timestamp, in place of the file's own.
+    /// Every entry's timestamp, in place of the file's own: a save copied between machines keeps its
+    /// contents and loses its mtimes, and the archive should not carry a fact the hash ignores.
     /// </summary>
-    /// <remarks>
-    /// The zero of DOS time, which is what deterministic archivers everywhere use for "no timestamp".
-    /// Written as UTC so the bytes do not depend on the machine's time zone, and a save's real mtimes
-    /// are worth nothing anyway: copying one between two members' machines rewrites all of them while
-    /// changing nothing that was played.
-    /// </remarks>
     private static readonly DateTimeOffset _fixedTimestamp = new(1980, 1, 1, 0, 0, 0, TimeSpan.Zero);
-
-    private const int _bufferSize = 64 * 1024;
 
 
     public async Task<PackedSavegame> PackAsync(
         ILocalSavegameAdapter adapter,
         SavegameTarget target,
         SavegameSlotId slot,
+        IReadOnlyList<GameFileEdit> overlay,
         CancellationToken cancellationToken,
         IProgress<SavegameProgress>? progress = null)
     {
@@ -137,14 +132,25 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
 
         try
         {
-            string hash;
+            Walk walk;
+            string archiveHash;
 
             await using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous))
             {
-                hash = await WriteArchiveAsync(adapter, target, slot, file, progress, cancellationToken);
+                // Unseekable on purpose: ZipArchive patches local headers after the fact when it can
+                // seek, and the hash taken while writing would then not be the hash of the file.
+                await using var hashing = new HashingWriteStream(file);
+
+                // leaveOpen, so the central directory has been written and counted before the hash is read.
+                using (var archive = new ZipArchive(hashing, ZipArchiveMode.Create, leaveOpen: true))
+                {
+                    walk = await WalkAsync(adapter, target, slot, overlay, archive, progress, cancellationToken);
+                }
+
+                archiveHash = hashing.GetHash();
             }
 
-            return new PackedSavegame(archivePath, hash, new FileInfo(archivePath).Length);
+            return new PackedSavegame(archivePath, walk.ContentHash, walk.SlotHash, archiveHash, new FileInfo(archivePath).Length, walk.EntryCount);
         }
         catch (Exception)
         {
@@ -156,17 +162,12 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         }
     }
 
-    public Task<string> HashSlotAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken)
-    {
-        // Literally the pack, discarding the bytes as they are produced. Sharing the writer rather
-        // than hashing the files individually is the whole point: any difference between the two -
-        // an exclusion applied in one, an ordering rule in the other - would surface as a slot that
-        // reads as played the moment it is checked in.
-        return WriteArchiveAsync(adapter, target, slot, Stream.Null, null, cancellationToken);
-    }
+    public async Task<string> HashSlotAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken)
+        => (await WalkAsync(adapter, target, slot, [], null, null, cancellationToken)).SlotHash;
 
     public async Task<string?> UnpackAsync(
         string archivePath,
+        string expectedContentHash,
         ILocalSavegameAdapter adapter,
         SavegameTarget target,
         SavegameSlotId slot,
@@ -176,17 +177,23 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         var slotPath = Path.GetFullPath(adapter.GetSlotPath(target, slot));
         var parent = Path.GetDirectoryName(slotPath)
             ?? throw new ArgumentException($"'{slotPath}' is a filesystem root, not a savegame slot.", nameof(slot));
+        var slotName = Path.GetFileName(slotPath);
 
         // Staged beside the slot rather than in the system temp folder, so landing it is a rename on
-        // one volume instead of a second copy of a save that can be hundreds of megabytes. Whatever
-        // happens, the staging folder is gone afterwards: moved into the slot, or deleted below.
-        var staging = Path.Combine(parent, $".modsdude-unpack-{Guid.NewGuid():N}");
+        // one volume instead of a second copy of a save that can be hundreds of megabytes.
+        var staging = Path.Combine(parent, $"{StagingPrefix(slotName)}{Guid.NewGuid():N}");
 
         try
         {
             Directory.CreateDirectory(staging);
 
-            await ExtractAsync(archivePath, staging, progress, cancellationToken);
+            var contentHash = await ExtractAsync(archivePath, staging, progress, cancellationToken);
+
+            if (contentHash != expectedContentHash)
+            {
+                throw new InvalidDataException(
+                    $"The archive holds contents '{contentHash}' rather than the expected '{expectedContentHash}'. Nothing was written into the slot.");
+            }
 
             if (Directory.Exists(slotPath) is false)
             {
@@ -195,8 +202,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
                 return null;
             }
 
-            var displaced = FileSystemHelper.GetUnusedPath(
-                parent, $"{Path.GetFileName(slotPath)} (replaced {DateTime.Now:yyyy-MM-dd HH-mm})");
+            var displaced = Path.Combine(parent, $"{DisplacedPrefix(slotName)}{Guid.NewGuid():N}");
 
             Directory.Move(slotPath, displaced);
 
@@ -219,6 +225,26 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         }
     }
 
+    /// <summary>What a half-extracted copy of a slot is called, beside the slot.</summary>
+    internal static string StagingPrefix(string slotFolderName) => $".modsdude-unpack-{slotFolderName}-";
+
+    /// <summary>What a slot's previous contents are called between being moved aside and being put away.</summary>
+    internal static string DisplacedPrefix(string slotFolderName) => $".modsdude-replaced-{slotFolderName}-";
+
+    /// <summary>What unpacking the archive writes. Read from its central directory, so nothing is decompressed.</summary>
+    internal static long MeasureUnpacked(string archivePath)
+    {
+        using var archive = ZipFile.OpenRead(archivePath);
+
+        return archive.Entries.Sum(x => x.Length);
+    }
+
+    internal static string TemporaryArchiveFolder => Path.Combine(Path.GetTempPath(), "modsdude", "savegames");
+
+    internal static string GetTemporaryArchivePath()
+        => Path.Combine(TemporaryArchiveFolder, $"{Guid.NewGuid():N}.zip");
+
+
     /// <summary>
     /// Returns a displaced save to its slot after the new one could not be put there. Where even that
     /// fails, the save is left where it was moved to, and the error says where.
@@ -237,33 +263,23 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         }
     }
 
-
     /// <summary>
-    /// Writes the slot as a zip into <paramref name="destination"/> and returns the SHA-256 of
-    /// exactly the bytes it wrote.
+    /// Reads every file of the slot once, hashing it and - where there is an archive - writing it in.
     /// </summary>
-    /// <remarks>
-    /// The stream is wrapped so that hashing sees the archive as it is produced, one pass, which is
-    /// what lets <see cref="HashSlotAsync"/> point it at <see cref="Stream.Null"/> and pay nothing.
-    /// The wrapper reports itself unseekable on purpose: <see cref="ZipArchive"/> patches local
-    /// headers after the fact when it can seek, and a hash taken while writing would then not be the
-    /// hash of the finished file. Refusing to seek makes the two the same by construction, at the
-    /// cost of a data descriptor per entry.
-    /// </remarks>
-    private static async Task<string> WriteArchiveAsync(
+    private async Task<Walk> WalkAsync(
         ILocalSavegameAdapter adapter,
         SavegameTarget target,
         SavegameSlotId slot,
-        Stream destination,
+        IReadOnlyList<GameFileEdit> overlay,
+        ZipArchive? archive,
         IProgress<SavegameProgress>? progress,
         CancellationToken cancellationToken)
     {
         var slotPath = Path.GetFullPath(adapter.GetSlotPath(target, slot));
+        var files = EnumerateContents(adapter, slotPath);
+        var edits = ResolveOverlay(adapter, slotPath, overlay);
 
-        await using var hashing = new HashingStream(destination);
-
-        var contents = EnumerateContents(adapter, slotPath);
-        var total = contents.Sum(x => x.Length);
+        var total = files.Sum(x => x.Length);
         var done = 0L;
 
         // A file the game is still writing may grow past what the walk saw, which is why the count is
@@ -274,41 +290,142 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
 
         progress?.Report(new SavegameProgress(SavegameStage.Packing, 0, total));
 
-        // leaveOpen, so the archive's central directory has been written and counted before the hash
-        // is read - and so disposing the archive does not dispose the caller's destination.
-        using (var archive = new ZipArchive(hashing, ZipArchiveMode.Create, leaveOpen: true))
+        var onDisk = files.ToDictionary(x => x.RelativePath, x => x.FullPath, StringComparer.Ordinal);
+        var paths = onDisk.Keys.Union(edits.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal);
+
+        var slotEntries = new List<(string, string)>();
+        var contentEntries = new List<(string, string)>();
+
+        foreach (var relativePath in paths)
         {
-            foreach (var (relativePath, fullPath, _) in contents)
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var fullPath = onDisk.GetValueOrDefault(relativePath);
+
+            if (edits.TryGetValue(relativePath, out var fileEdits))
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                var original = fullPath is null ? null : await ReadSharedAsync(fullPath, cancellationToken);
+                var edited = ApplyEdits(original, fileEdits, relativePath);
 
-                var entry = archive.CreateEntry(relativePath, CompressionLevel.Optimal);
-                entry.LastWriteTime = _fixedTimestamp;
+                if (original is not null)
+                {
+                    slotEntries.Add((relativePath, HashOf(original)));
+                    copied?.Invoke(original.Length);
+                }
 
-                // Shared for write and delete: the game may hold the save open, and a hash taken for
-                // a drift check must never be the reason it fails to save.
-                await using var source = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
-                await using var entryStream = entry.Open();
+                if (edited is not null)
+                {
+                    contentEntries.Add((relativePath, HashOf(edited)));
 
-                await ReportingCopy.CopyAsync(source, entryStream, copied, cancellationToken);
+                    if (archive is not null)
+                    {
+                        await using var entryStream = CreateEntry(archive, relativePath);
+                        await entryStream.WriteAsync(edited, cancellationToken);
+                    }
+                }
+
+                continue;
+            }
+
+            // Shared for write and delete: the game may hold the save open, and a hash taken for a
+            // drift check must never be the reason it fails to save.
+            await using (var source = new FileStream(fullPath!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                await using var entryStream = archive is null ? Stream.Null : CreateEntry(archive, relativePath);
+                await using var hashing = new HashingWriteStream(entryStream);
+
+                await ReportingCopy.CopyAsync(source, hashing, copied, cancellationToken);
+
+                var hash = hashing.GetHash();
+
+                slotEntries.Add((relativePath, hash));
+                contentEntries.Add((relativePath, hash));
             }
         }
 
-        return hashing.GetHash();
+        return new Walk(SavegameContentHash.Of(slotEntries), SavegameContentHash.Of(contentEntries), contentEntries.Count);
     }
+
+    private static Stream CreateEntry(ZipArchive archive, string relativePath)
+    {
+        var entry = archive.CreateEntry(relativePath, CompressionLevel.Optimal);
+        entry.LastWriteTime = _fixedTimestamp;
+
+        return entry.Open();
+    }
+
+    /// <summary>The bytes an edited file goes into the archive with. A failing edit leaves the file as it is.</summary>
+    private byte[]? ApplyEdits(byte[]? original, IReadOnlyList<GameFileEdit> edits, string relativePath)
+    {
+        var current = original;
+
+        foreach (var edit in edits)
+        {
+            try
+            {
+                current = edit.Transform(current) ?? current;
+            }
+            catch (Exception exception)
+            {
+                _log.LogWarning(exception, "The edit of {File} could not be applied to the packed copy; it is packed as it is.", relativePath);
+
+                return original;
+            }
+        }
+
+        return current;
+    }
+
+    /// <summary>The overlay's edits by the archive name they apply to, keeping only the ones the archive can hold.</summary>
+    private Dictionary<string, IReadOnlyList<GameFileEdit>> ResolveOverlay(
+        ILocalSavegameAdapter adapter, string slotPath, IReadOnlyList<GameFileEdit> overlay)
+    {
+        var resolved = new Dictionary<string, List<GameFileEdit>>(StringComparer.Ordinal);
+        var prefix = slotPath.EndsWith(Path.DirectorySeparatorChar) ? slotPath : slotPath + Path.DirectorySeparatorChar;
+
+        foreach (var edit in overlay)
+        {
+            var full = Path.IsPathRooted(edit.RelativePath) ? null : Path.GetFullPath(Path.Combine(slotPath, edit.RelativePath));
+            var relativePath = full is not null && full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                ? ToArchivePath(Path.GetRelativePath(slotPath, full))
+                : null;
+
+            if (relativePath is null || adapter.BelongsInPackedSave(relativePath) is false)
+            {
+                _log.LogWarning("The edit of {File} is outside what a packed save holds, so the packed copy leaves it out.", edit.RelativePath);
+
+                continue;
+            }
+
+            if (resolved.TryGetValue(relativePath, out var list) is false)
+            {
+                resolved[relativePath] = list = [];
+            }
+
+            list.Add(edit);
+        }
+
+        return resolved.ToDictionary(x => x.Key, x => (IReadOnlyList<GameFileEdit>)x.Value, StringComparer.Ordinal);
+    }
+
+    private static async Task<byte[]> ReadSharedAsync(string path, CancellationToken cancellationToken)
+    {
+        await using var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous);
+        using var buffer = new MemoryStream();
+
+        await source.CopyToAsync(buffer, cancellationToken);
+
+        return buffer.ToArray();
+    }
+
+    private static string HashOf(byte[] content) => ModContentHasher.Format(SHA256.HashData(content));
 
 
     /// <summary>
     /// Every file under the slot that belongs in a packed save, as (archive name, path on disk),
-    /// ordinal by archive name.
+    /// ordinal by archive name. The relative path is forward-slashed before the adapter is asked about
+    /// it, so an adapter sees the same string the archive will store.
     /// </summary>
-    /// <remarks>
-    /// Materialised rather than lazy, and sorted before anything is written, because the order the
-    /// filesystem hands files back is not a property of the save - it varies with the volume, with
-    /// fragmentation, and with the order somebody's game happened to write them. The relative path is
-    /// forward-slashed before the adapter is asked about it, so an adapter sees the same string the
-    /// archive will store.
-    /// </remarks>
     private static IReadOnlyList<(string RelativePath, string FullPath, long Length)> EnumerateContents(ILocalSavegameAdapter adapter, string slotPath)
     {
         if (Directory.Exists(slotPath) is false)
@@ -326,7 +443,8 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         ];
     }
 
-    private static async Task ExtractAsync(
+    /// <returns>The <see cref="SavegameContentHash"/> of what was extracted.</returns>
+    private static async Task<string> ExtractAsync(
         string archivePath,
         string root,
         IProgress<SavegameProgress>? progress,
@@ -337,6 +455,7 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
 
         var total = archive.Entries.Sum(x => x.Length);
         var done = 0L;
+        var entries = new List<(string, string)>();
 
         Action<long>? copied = progress is null
             ? null
@@ -369,23 +488,22 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
             Directory.CreateDirectory(Path.GetDirectoryName(destination.Value)!);
 
             await using var target = new FileStream(destination.Value, FileMode.Create, FileAccess.Write, FileShare.None, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous);
+            await using var hashing = new HashingWriteStream(target);
             await using var source = entry.Open();
 
-            await ReportingCopy.CopyAsync(source, target, copied, cancellationToken);
+            await ReportingCopy.CopyAsync(source, hashing, copied, cancellationToken);
+
+            entries.Add((entry.FullName, hashing.GetHash()));
         }
+
+        return SavegameContentHash.Of(entries);
     }
 
     /// <summary>
-    /// Where an entry lands, or <c>None</c> where that is anywhere but inside
-    /// <paramref name="root"/>.
-    /// </summary>
-    /// <remarks>
+    /// Where an entry lands, or <c>None</c> where that is anywhere but inside <paramref name="root"/>.
     /// Rooted names are refused before combining, because <see cref="Path.Combine(string, string)"/>
-    /// discards the root it is given when the second part is absolute - so an entry called
-    /// <c>C:\Windows\...</c> would otherwise resolve to itself and pass a naive prefix check on the
-    /// wrong string. Compared ordinally: both sides come from <see cref="Path.GetFullPath"/>, which
-    /// resolves <c>..</c> without touching the casing of what it was given.
-    /// </remarks>
+    /// discards the root it is given when the second part is absolute.
+    /// </summary>
     private static Maybe<string> ResolveWithin(string root, string entryName)
     {
         if (string.IsNullOrWhiteSpace(entryName) || Path.IsPathRooted(entryName))
@@ -406,87 +524,6 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     private static string ToArchivePath(string relativePath)
         => relativePath.Replace(Path.DirectorySeparatorChar, '/');
 
-    /// <summary>What unpacking the archive writes. Read from its central directory, so nothing is decompressed.</summary>
-    internal static long MeasureUnpacked(string archivePath)
-    {
-        using var archive = ZipFile.OpenRead(archivePath);
 
-        return archive.Entries.Sum(x => x.Length);
-    }
-
-    internal static string GetTemporaryArchivePath()
-        => Path.Combine(Path.GetTempPath(), "modsdude", "savegames", $"{Guid.NewGuid():N}.zip");
-
-
-    /// <summary>
-    /// A write-only stream that hashes everything on its way through and owns nothing.
-    /// </summary>
-    /// <remarks>
-    /// <b>Never disposes what it wraps</b>, so the caller keeps control of the file it is writing to,
-    /// and <b>never claims to seek</b> - see <see cref="WriteArchiveAsync"/> for why that is the
-    /// whole point rather than a limitation.
-    /// </remarks>
-    private sealed class HashingStream(Stream inner) : Stream
-    {
-        private readonly IncrementalHash _digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        private long _written;
-
-
-        public override bool CanRead => false;
-        public override bool CanSeek => false;
-        public override bool CanWrite => true;
-        public override long Length => _written;
-
-        /// <summary>How much has gone through. Readable because a wrapper that cannot say is harder
-        /// to debug; not settable, which is what unseekable means.</summary>
-        public override long Position
-        {
-            get => _written;
-            set => throw new NotSupportedException();
-        }
-
-
-        /// <summary>The digest so far, in the encoding the repo records hashes in.</summary>
-        public string GetHash() => ModContentHasher.Format(_digest.GetCurrentHash());
-
-        public override void Write(byte[] buffer, int offset, int count)
-            => Write(buffer.AsSpan(offset, count));
-
-        public override void Write(ReadOnlySpan<byte> buffer)
-        {
-            _digest.AppendData(buffer);
-            inner.Write(buffer);
-            _written += buffer.Length;
-        }
-
-        public override void WriteByte(byte value)
-            => Write([value]);
-
-        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-            => WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
-
-        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            _digest.AppendData(buffer.Span);
-            await inner.WriteAsync(buffer, cancellationToken);
-            _written += buffer.Length;
-        }
-
-        public override void Flush() => inner.Flush();
-        public override Task FlushAsync(CancellationToken cancellationToken) => inner.FlushAsync(cancellationToken);
-
-        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                _digest.Dispose();
-            }
-
-            // inner is deliberately left alone.
-        }
-    }
+    private readonly record struct Walk(string SlotHash, string ContentHash, int EntryCount);
 }

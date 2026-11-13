@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Savegames;
 
 namespace ModsDude.Client.Core.Tests.Savegames;
@@ -197,7 +198,7 @@ public class SavegameSlotStateTests
             new SavegameSlotId(id),
             occupied ? "Blackthorn Valley" : null,
             occupied,
-            occupied ? [new SavegameDetail(SavegameDetail.Ids.Playtime, "Played", "12 h")] : []));
+            occupied ? [new SavegameDetail(SavegameDetail.Ids.Playtime, "Played", SavegameDetailKind.Duration, "720")] : []));
 
     private static SavegameCheckoutBinding Binding(string slotId, string hash, string target = "mods") => new(
         Guid.NewGuid(),

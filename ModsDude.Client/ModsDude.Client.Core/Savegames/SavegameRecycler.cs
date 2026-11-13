@@ -20,8 +20,12 @@ public sealed class SavegameRecycler(
         [TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(750), TimeSpan.FromSeconds(2)];
 
 
-    public DisplacedSavegame PutAway(string displacedPath)
+    public DisplacedSavegame PutAway(string displacedPath, string slotPath)
     {
+        // Named for the person who finds it, wherever it ends up: in the Recycle Bin, in quarantine,
+        // or beside the slots where both refused it.
+        displacedPath = TryRenameVisibly(displacedPath, slotPath);
+
         var name = Path.GetFileName(displacedPath);
 
         if (recycleBin.TryRecycle(displacedPath) && Directory.Exists(displacedPath) is false)
@@ -47,6 +51,45 @@ public sealed class SavegameRecycler(
 
             return new DisplacedSavegame(DisplacedSavegameDestination.BesideSlots, name, displacedPath);
         }
+    }
+
+    public IReadOnlyList<DisplacedSavegame> RecoverSlot(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot)
+    {
+        var slotPath = Path.GetFullPath(adapter.GetSlotPath(target, slot));
+        var parent = Path.GetDirectoryName(slotPath);
+        var slotName = Path.GetFileName(slotPath);
+
+        if (parent is null || Directory.Exists(parent) is false)
+        {
+            return [];
+        }
+
+        // Never complete: a staging folder is what an unpack was still writing when it stopped.
+        foreach (var staging in Directory.EnumerateDirectories(parent, $"{SavegamePacker.StagingPrefix(slotName)}*"))
+        {
+            FileSystemHelper.TryDeleteDirectory(staging, logger);
+        }
+
+        var displaced = Directory.EnumerateDirectories(parent, $"{SavegamePacker.DisplacedPrefix(slotName)}*")
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        if (displaced.Count == 0)
+        {
+            return [];
+        }
+
+        // Stopped between moving the old contents aside and moving the new ones in: the slot goes
+        // back to what it held, and the operation that was interrupted can simply be run again.
+        if (Directory.Exists(slotPath) is false)
+        {
+            logger.LogWarning("Slot {Slot} was found moved aside by an interrupted write; it is put back from {Path}.", slot.Value, displaced[0]);
+
+            Directory.Move(displaced[0], slotPath);
+            displaced.RemoveAt(0);
+        }
+
+        return [.. displaced.Select(x => PutAway(x, slotPath))];
     }
 
     /// <remarks>
@@ -107,7 +150,7 @@ public sealed class SavegameRecycler(
     /// hand-back that succeeded must not be reported as failing over its last, local step.
     /// </remarks>
     public async Task<SavegameLocalCopy> HandBackAsync(
-        ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, string uploadedHash)
+        ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, string packedSlotHash)
     {
         try
         {
@@ -115,7 +158,7 @@ public sealed class SavegameRecycler(
             {
                 var current = await packer.HashSlotAsync(adapter, target, slot, CancellationToken.None);
 
-                if (ModContentHasher.Matches(current, uploadedHash) is false)
+                if (ModContentHasher.Matches(current, packedSlotHash) is false)
                 {
                     logger.LogWarning("Slot {Slot} changed after it was uploaded; it was left where it is rather than recycled.", slot.Value);
 
@@ -132,6 +175,30 @@ public sealed class SavegameRecycler(
             logger.LogWarning(exception, "Could not hand slot {Slot} back; it was left where it is.", slot.Value);
 
             return SavegameLocalCopy.LeftBehind;
+        }
+    }
+
+    /// <summary>
+    /// Renames a displaced folder to <c>savegame3 (replaced 2026-09-30 14-02)</c> beside its slot.
+    /// Where that fails it keeps its working name, which is still recognisable and still recovered.
+    /// </summary>
+    private string TryRenameVisibly(string displacedPath, string slotPath)
+    {
+        try
+        {
+            var visible = FileSystemHelper.GetUnusedPath(
+                Path.GetDirectoryName(displacedPath)!,
+                $"{Path.GetFileName(slotPath)} (replaced {time.GetLocalNow():yyyy-MM-dd HH-mm})");
+
+            Directory.Move(displacedPath, visible);
+
+            return visible;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "Could not give the replaced save {Path} a readable name; it keeps the one it has.", displacedPath);
+
+            return displacedPath;
         }
     }
 }

@@ -58,6 +58,7 @@ internal sealed class SavegameHarness : IDisposable
         Game = new Game(Keys.Game(), persisted);
 
         Uploader = new FakeSavegameUploader(Server);
+        Downloader = new FakeSavegameDownloader(Server);
         Adapter = new FakeSavegameAdapter(_slots.Path, Slot1.Slot.Value, Slot2.Slot.Value);
         Bindings = new SavegameBindingStore(State);
         ManifestStore = new SyncManifestStore(_manifests.Path);
@@ -76,7 +77,7 @@ internal sealed class SavegameHarness : IDisposable
         {
             RetryDelays = [TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero]
         };
-        var transfer = new SavegameTransfer(Server, new FakeSavegameDownloader(Server), Uploader, packer, recycler, new DiskSpaceGuard(DiskSpace), NullLogger<SavegameTransfer>.Instance);
+        var transfer = new SavegameTransfer(Server, Downloader, Uploader, packer, recycler, new DiskSpaceGuard(DiskSpace), NullLogger<SavegameTransfer>.Instance);
         var renamer = new SavegameRenamer(new GameFileEditor(RecycleBin, NullLogger<GameFileEditor>.Instance), NullLogger<SavegameRenamer>.Instance);
 
         Slots = new SavegameSlots(adapters, Bindings, packer, NullLogger<SavegameSlots>.Instance);
@@ -86,7 +87,7 @@ internal sealed class SavegameHarness : IDisposable
         DriftCheck = new SavegameDriftCheck(Reader, ManifestStore, Sightings, connection, new GoneRepos(new FakeKnownRepos(), connection));
         SavegameStore = new SavegameStore(Server, new FixedCurrentUser("me"), InlineStoreDispatcher.Instance, NullLogger<SavegameStore>.Instance);
         Holds = new SavegameHolds(Server, SavegameStore, Bindings, adapters, NullLogger<SavegameHolds>.Instance);
-        CheckOut = new SavegameCheckOut(Server, Bindings, adapters, Slots, transfer, SavegameStore, Guard, time);
+        CheckOut = new SavegameCheckOut(Server, Bindings, adapters, Slots, transfer, SavegameStore, recycler, Holds, Guard, time);
         CheckIn = new SavegameCheckIn(
             Server, SavegameStore, packer, Bindings, adapters, Slots, transfer, recycler, renamer, Holds, PlayAttribution, Guard, time,
             NullLogger<SavegameCheckIn>.Instance);
@@ -102,6 +103,7 @@ internal sealed class SavegameHarness : IDisposable
 
     public FakeSavegameServer Server { get; } = new();
     public FakeSavegameUploader Uploader { get; }
+    public FakeSavegameDownloader Downloader { get; }
     public FakeSlotRecycleBin RecycleBin { get; } = new();
     public FakeSavegameSightings Sightings { get; } = new();
     public SavegameStore SavegameStore { get; }
@@ -149,7 +151,11 @@ internal sealed class SavegameHarness : IDisposable
 
     /// <summary>Puts a savegame on the server whose bytes are a real packed slot.</summary>
     public async Task<SavegameSnapshotDto> SeedHeadAsync(string content, int? profileRevision = 1)
-        => Server.Seed(await PackedBytesAsync(content), profileRevision);
+    {
+        var packed = await PackedAsync(content);
+
+        return Server.Seed(packed.Bytes, profileRevision, packed.ContentHash);
+    }
 
     /// <summary>
     /// What applying a profile does to this game, in the sync engine's order: attribute what was played
@@ -192,17 +198,17 @@ internal sealed class SavegameHarness : IDisposable
     /// What a slot holding <paramref name="content"/> packs to, built through the real packer so a
     /// check-out followed by a check-in does not look like play.
     /// </summary>
-    public async Task<byte[]> PackedBytesAsync(string content)
+    public async Task<PackedSlot> PackedAsync(string content)
     {
         var staging = Keys.Slot($"staging-{Guid.NewGuid():N}");
 
         WriteSlotFile(staging, content);
 
-        var packed = await new SavegamePacker().PackAsync(Adapter, Target(staging), staging.Slot, CancellationToken.None);
+        var packed = await new SavegamePacker().PackAsync(Adapter, Target(staging), staging.Slot, [], CancellationToken.None);
 
         try
         {
-            return await File.ReadAllBytesAsync(packed.FilePath);
+            return new PackedSlot(await File.ReadAllBytesAsync(packed.FilePath), packed.ContentHash);
         }
         finally
         {
@@ -240,4 +246,23 @@ internal sealed class SavegameHarness : IDisposable
         _manifests.Dispose();
         _store.Dispose();
     }
+}
+
+
+/// <summary>A slot packed through the real packer: the archive, and the contents it holds.</summary>
+internal sealed record PackedSlot(byte[] Bytes, string ContentHash);
+
+
+internal static class SavegameCheckOutTestExtensions
+{
+    /// <summary>A check-out of the head, which is what nearly every test takes.</summary>
+    public static Task<SavegameCheckOutResult> CheckOutAsync(
+        this SavegameCheckOut checkOut,
+        Game game,
+        SavegameDto savegame,
+        SavegameSlotRef slot,
+        SavegameRevisionMode revisionMode,
+        CancellationToken ct,
+        IProgress<SavegameProgress>? progress = null)
+        => checkOut.CheckOutAsync(game, savegame, savegame.Head?.Number ?? 0, Guid.NewGuid(), slot, revisionMode, ct, progress);
 }

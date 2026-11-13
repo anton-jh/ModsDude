@@ -18,7 +18,7 @@ public class SavegameBindingStoreTests
         var savegameId = Guid.NewGuid();
         var binding = Binding(savegameId, "savegame3", snapshot: 7, hash: "aaaa");
 
-        store.SetBinding(_game, binding);
+        store.Bind(_game, binding);
 
         var read = store.GetBinding(_game, savegameId);
 
@@ -37,7 +37,7 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(savegameId, "savegame3"));
+        store.Bind(_game, Binding(savegameId, "savegame3"));
 
         Assert.Equal(savegameId, store.GetBindingForSlot(_game, Keys.Slot("savegame3"))?.SavegameId);
         Assert.Null(store.GetBindingForSlot(_game, Keys.Slot("savegame4")));
@@ -58,8 +58,8 @@ public class SavegameBindingStoreTests
         var (store, state) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(savegameId, "savegame3"));
-        store.SetBinding(_game, Binding(savegameId, "savegame7"));
+        store.Bind(_game, Binding(savegameId, "savegame3"));
+        store.Bind(_game, Binding(savegameId, "savegame7"));
 
         Assert.Single(Held(state).SavegameCheckouts);
         Assert.Equal(Keys.Slot("savegame7"), store.GetBinding(_game, savegameId)?.Slot);
@@ -67,23 +67,23 @@ public class SavegameBindingStoreTests
     }
 
     /// <summary>
-    /// And one slot holds at most one savegame. The invariant holds by construction rather than by
-    /// every caller remembering to clear first - which is what lets a check-in act without asking
-    /// anything.
+    /// And one slot holds at most one savegame - refused rather than replaced. Replacing it silently
+    /// would leave the first savegame's claim open on the server with nothing on this machine naming
+    /// it, so whoever writes over a held slot releases that hold first.
     /// </summary>
     [Fact]
-    public void A_second_savegame_written_into_a_slot_replaces_the_first_binding()
+    public void Binding_a_second_savegame_into_a_held_slot_is_refused()
     {
         var (store, state) = Store();
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(first, "savegame3"));
-        store.SetBinding(_game, Binding(second, "savegame3"));
+        store.Bind(_game, Binding(first, "savegame3"));
+
+        Assert.Throws<InvalidOperationException>(() => store.Bind(_game, Binding(second, "savegame3")));
 
         Assert.Single(Held(state).SavegameCheckouts);
-        Assert.Equal(second, store.GetBindingForSlot(_game, Keys.Slot("savegame3"))?.SavegameId);
-        Assert.Null(store.GetBinding(_game, first));
+        Assert.Equal(first, store.GetBindingForSlot(_game, Keys.Slot("savegame3"))?.SavegameId);
     }
 
     [Fact]
@@ -91,10 +91,87 @@ public class SavegameBindingStoreTests
     {
         var (store, state) = Store();
 
-        store.SetBinding(_game, Binding(Guid.NewGuid(), "savegame3"));
-        store.SetBinding(_game, Binding(Guid.NewGuid(), "Savegame3"));
+        store.Bind(_game, Binding(Guid.NewGuid(), "savegame3"));
 
+        Assert.Throws<InvalidOperationException>(() => store.Bind(_game, Binding(Guid.NewGuid(), "Savegame3")));
         Assert.Single(Held(state).SavegameCheckouts);
+    }
+
+    [Fact]
+    public void A_held_slot_can_be_bound_again_once_its_hold_is_released()
+    {
+        var (store, _) = Store();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+
+        store.Bind(_game, Binding(first, "savegame3"));
+        store.ClearBinding(_game, first);
+        store.Bind(_game, Binding(second, "savegame3"));
+
+        Assert.Equal(second, store.GetBindingForSlot(_game, Keys.Slot("savegame3"))?.SavegameId);
+    }
+
+    [Fact]
+    public void An_update_changes_the_binding_it_finds_and_keeps_the_rest()
+    {
+        var (store, state) = Store();
+        var savegameId = Guid.NewGuid();
+        var other = Guid.NewGuid();
+
+        store.Bind(_game, Binding(savegameId, "savegame3", snapshot: 1));
+        store.Bind(_game, Binding(other, "savegame4", snapshot: 9));
+
+        var updated = store.Update(_game, savegameId, x => x with { Snapshot = 2 });
+
+        Assert.Equal(2, updated?.Snapshot);
+        Assert.Equal(2, store.GetBinding(_game, savegameId)?.Snapshot);
+        Assert.Equal(9, store.GetBinding(_game, other)?.Snapshot);
+        Assert.Equal(2, Held(state).SavegameCheckouts.Count);
+    }
+
+    [Fact]
+    public void An_update_of_a_savegame_not_held_changes_nothing_and_says_so()
+    {
+        var (store, state) = Store();
+
+        Assert.Null(store.Update(_game, Guid.NewGuid(), x => x with { Snapshot = 2 }));
+        Assert.Equal(0, state.Saves);
+    }
+
+    /// <summary>
+    /// An update is read and written under one lock: it is what an observation from an apply and a
+    /// check-in rebasing the same binding both go through, and neither may undo the other.
+    /// </summary>
+    [Fact]
+    public void An_update_works_on_what_is_stored_rather_than_on_an_older_copy()
+    {
+        var (store, _) = Store();
+        var savegameId = Guid.NewGuid();
+
+        store.Bind(_game, Binding(savegameId, "savegame3", snapshot: 1));
+
+        var before = store.GetBinding(_game, savegameId)!.Value;
+
+        store.Update(_game, savegameId, x => x with { Snapshot = 5 });
+        store.Update(_game, savegameId, x => x with { LastObservedHash = "bbbb" });
+
+        var after = store.GetBinding(_game, savegameId)!.Value;
+
+        Assert.Equal(1, before.Snapshot);
+        Assert.Equal(5, after.Snapshot);
+        Assert.Equal("bbbb", after.LastObservedHash);
+    }
+
+    [Fact]
+    public void An_update_may_not_move_a_binding_to_another_slot()
+    {
+        var (store, _) = Store();
+        var savegameId = Guid.NewGuid();
+
+        store.Bind(_game, Binding(savegameId, "savegame3"));
+
+        Assert.Throws<InvalidOperationException>(
+            () => store.Update(_game, savegameId, x => x with { Slot = Keys.Slot("savegame4") }));
     }
 
     /// <summary>
@@ -110,8 +187,8 @@ public class SavegameBindingStoreTests
         var onTheServer = Guid.NewGuid();
         var onTheClient = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(onTheServer, "savegame1", target: "server"));
-        store.SetBinding(_game, Binding(onTheClient, "savegame1", target: "client"));
+        store.Bind(_game, Binding(onTheServer, "savegame1", target: "server"));
+        store.Bind(_game, Binding(onTheClient, "savegame1", target: "client"));
 
         Assert.Equal(2, store.GetBindings(_game).Count);
         Assert.Equal(onTheServer, store.GetBindingForSlot(_game, Keys.Slot("savegame1", "server"))?.SavegameId);
@@ -128,8 +205,8 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
         var onTheServer = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(onTheServer, "savegame1", target: "server"));
-        store.SetBinding(_game, Binding(Guid.NewGuid(), "savegame1", target: "client"));
+        store.Bind(_game, Binding(onTheServer, "savegame1", target: "server"));
+        store.Bind(_game, Binding(Guid.NewGuid(), "savegame1", target: "client"));
 
         var held = store.GetBindingsIn(new ModTargetRef(_game, new TargetKey("server")));
 
@@ -149,7 +226,7 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(savegameId, "savegame1", target: "client"));
+        store.Bind(_game, Binding(savegameId, "savegame1", target: "client"));
 
         // The settings edit happens entirely outside this store - there is no call it makes and no
         // event it hears. That is the point: nothing here has to notice, and nothing here drops it.
@@ -164,8 +241,8 @@ public class SavegameBindingStoreTests
     {
         var (store, _) = Store();
 
-        store.SetBinding(_game, Binding(Guid.NewGuid(), "savegame1"));
-        store.SetBinding(_game, Binding(Guid.NewGuid(), "savegame2"));
+        store.Bind(_game, Binding(Guid.NewGuid(), "savegame1"));
+        store.Bind(_game, Binding(Guid.NewGuid(), "savegame2"));
 
         Assert.Equal(2, store.GetBindings(_game).Count);
     }
@@ -181,7 +258,7 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(savegameId, "savegame3"));
+        store.Bind(_game, Binding(savegameId, "savegame3"));
         store.ClearBinding(_game, savegameId);
 
         Assert.Null(store.GetBinding(_game, savegameId));
@@ -195,8 +272,8 @@ public class SavegameBindingStoreTests
         var kept = Guid.NewGuid();
         var cleared = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(kept, "savegame1"));
-        store.SetBinding(_game, Binding(cleared, "savegame2"));
+        store.Bind(_game, Binding(kept, "savegame1"));
+        store.Bind(_game, Binding(cleared, "savegame2"));
 
         store.ClearBinding(_game, cleared);
 
@@ -234,7 +311,7 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(savegameId, "savegame3"));
+        store.Bind(_game, Binding(savegameId, "savegame3"));
 
         Assert.Equal(Keys.Slot("savegame3"), store.GetSlotHint(_game, savegameId));
     }
@@ -245,8 +322,8 @@ public class SavegameBindingStoreTests
         var (store, state) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(savegameId, "savegame3"));
-        store.SetBinding(_game, Binding(savegameId, "savegame7"));
+        store.Bind(_game, Binding(savegameId, "savegame3"));
+        store.Bind(_game, Binding(savegameId, "savegame7"));
 
         Assert.Single(Held(state).SavegameSlotHints);
         Assert.Equal(Keys.Slot("savegame7"), store.GetSlotHint(_game, savegameId));
@@ -263,9 +340,9 @@ public class SavegameBindingStoreTests
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(first, "savegame3"));
+        store.Bind(_game, Binding(first, "savegame3"));
         store.ClearBinding(_game, first);
-        store.SetBinding(_game, Binding(second, "savegame3"));
+        store.Bind(_game, Binding(second, "savegame3"));
 
         Assert.Equal(Keys.Slot("savegame3"), store.GetSlotHint(_game, first));
         Assert.Equal(Keys.Slot("savegame3"), store.GetSlotHint(_game, second));
@@ -282,11 +359,11 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
         var moved = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(moved, "savegame3"));
+        store.Bind(_game, Binding(moved, "savegame3"));
         store.ClearBinding(_game, moved);
 
         // Somebody else's savegame is now in slot 3.
-        store.SetBinding(_game, Binding(Guid.NewGuid(), "savegame3"));
+        store.Bind(_game, Binding(Guid.NewGuid(), "savegame3"));
 
         Assert.Equal(Keys.Slot("savegame3"), store.GetSlotHint(_game, moved));
     }
@@ -326,7 +403,7 @@ public class SavegameBindingStoreTests
         var (store, _) = Store();
 
         Assert.Throws<InvalidOperationException>(
-            () => store.SetBinding(Keys.Game("beamng"), Binding(Guid.NewGuid(), "savegame1")));
+            () => store.Bind(Keys.Game("beamng"), Binding(Guid.NewGuid(), "savegame1")));
     }
 
     /// <summary>
@@ -340,7 +417,7 @@ public class SavegameBindingStoreTests
         var (store, state) = Store();
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(savegameId, "savegame3"));
+        store.Bind(_game, Binding(savegameId, "savegame3"));
         Assert.Equal(1, state.Saves);
 
         store.ClearBinding(_game, savegameId);
@@ -356,7 +433,7 @@ public class SavegameBindingStoreTests
 
         var savegameId = Guid.NewGuid();
 
-        store.SetBinding(_game, Binding(savegameId, "savegame3"));
+        store.Bind(_game, Binding(savegameId, "savegame3"));
 
         Assert.Empty(store.GetBindings(other));
         Assert.Null(store.GetSlotHint(other, savegameId));
