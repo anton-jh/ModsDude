@@ -109,6 +109,14 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
         Apply(identity, "elsewhere", after, before, assertPlacement: false);
     }
 
+    /// <summary>Somebody else registering the very file already stored for the version.</summary>
+    public void RegisterStoredFileElsewhere(ModVersionIdentity identity)
+    {
+        var contentHash = _stored[identity] ?? throw new InvalidOperationException($"{identity} is stored without a recorded hash.");
+
+        Apply(identity, contentHash, null, null, assertPlacement: false);
+    }
+
     public string MakeLink(ModVersionIdentity identity) => $"fake://{identity.ModId}/{identity.VersionId}";
 
     /// <summary>Called by the fake uploader, which is the only thing that can make a blob appear.</summary>
@@ -184,14 +192,19 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
                 throw Problem(ProblemType.FileNotFound, null);
             }
 
-            if (IsRegistered(identity))
-            {
-                throw Problem(ProblemType.AlreadyExists, null);
-            }
-
             if (_stored[identity] != request.ContentHash)
             {
                 throw Problem(ProblemType.HashMismatch, null);
+            }
+
+            // The same file registered already is a repeat, answered as a success; anything else
+            // under the version is refused - as RegisterModV1Endpoint does.
+            if (Registered(identity) is ModDto existing)
+            {
+                var sameFile = existing.ContentHash == request.ContentHash
+                    && (_registrations.GetValueOrDefault(identity)?.FileName ?? request.FileName) == request.FileName;
+
+                return sameFile ? existing : throw Problem(ProblemType.AlreadyExists, null);
             }
 
             _registrations[identity] = request;
@@ -316,9 +329,12 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
         }
     }
 
-    private bool IsRegistered(ModVersionIdentity identity)
+    private bool IsRegistered(ModVersionIdentity identity) => Registered(identity) is not null;
+
+    private ModDto? Registered(ModVersionIdentity identity)
         => _registered.TryGetValue(identity.ModId, out var versions)
-        && versions.Any(x => ModVersionKey.From(x.VersionId) == identity.VersionId);
+            ? versions.FirstOrDefault(x => ModVersionKey.From(x.VersionId) == identity.VersionId)
+            : null;
 
     private static ApiException<CustomProblemDetails> Problem(ProblemType type, string? contentHash)
         => new(type.ToString(), 400, null, new Dictionary<string, IEnumerable<string>>(),

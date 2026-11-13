@@ -79,6 +79,7 @@ public sealed record ProfileSaveOutcome(ProfileSaveStatus Status, string Message
 /// list - which the save then wrote back as a revision that changed nothing. A snapshot cannot do
 /// either.
 /// </remarks>
+/// <param name="RequestId">Kept while the user sends this same save again, so a repeat is answered as the original was.</param>
 /// <param name="Pending">The versions the repo does not hold yet, which the import has to register first.</param>
 /// <param name="Names">What each pending version is called, for the strip line and the failure modal.</param>
 /// <param name="Catalog">
@@ -98,6 +99,7 @@ public sealed record ProfileSaveRequest(
     Repo Repo,
     Guid ProfileId,
     string ProfileName,
+    Guid RequestId,
     int BasedOn,
     string? Label,
     IReadOnlyList<ProfileModPin> Original,
@@ -606,15 +608,13 @@ public sealed class ProfileSaveService(
     {
         var basedOn = request.BasedOn;
 
-        // One per save, kept when it is sent again over a newer head: only a save the server
-        // recorded is answered again, and a refused one recorded nothing.
-        var requestId = Guid.NewGuid();
-
         while (true)
         {
             var body = new SaveProfileRevisionRequest
             {
-                RequestId = requestId,
+                // Kept when sent again over a newer head: only a save the server recorded is
+                // answered again, and a refused one recorded nothing.
+                RequestId = request.RequestId,
                 BasedOn = basedOn,
                 Label = string.IsNullOrWhiteSpace(request.Label) ? null : request.Label.Trim(),
                 Mods = [.. request.Desired.Select(x => new ProfileModPinRequest

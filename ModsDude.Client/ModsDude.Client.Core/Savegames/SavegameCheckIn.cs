@@ -161,6 +161,9 @@ public sealed class SavegameCheckIn(
         return attribution.FindPlayedRevision(game.Identity, binding)
             ?? throw new UserFriendlyException(
                 $"'{game.Name}' has no record of which mod list it is on",
-                $"Neither the sync manifest for game '{game.Identity}' nor the checkout binding records a profile revision, and a savegame that follows a mod list has to name one. Apply the profile to this game and check in again.");
+                $"Neither the sync manifest for game '{game.Identity}' nor the checkout binding records a profile revision, and a savegame that follows a mod list has to name one. Apply the profile to this game and check in again.")
+            {
+                Hint = "Apply the profile to this game and check in again."
+            };
     }
 }

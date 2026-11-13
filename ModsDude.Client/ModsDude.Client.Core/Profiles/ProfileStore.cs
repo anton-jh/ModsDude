@@ -31,6 +31,8 @@ public sealed class ProfileStore(
 
     public event Action<Guid>? Changed;
 
+    public event Action<Guid>? Reread;
+
 
     public IReadOnlyList<Guid> LoadedRepos
     {
@@ -116,7 +118,7 @@ public sealed class ProfileStore(
         {
             await RefreshAfterRefusalAsync(profile.RepoId, "a rename", cancellationToken);
 
-            throw new UserFriendlyException("Somebody else changed this profile", "Look at it again and rename it again.", exception);
+            throw new UserFriendlyException("Somebody else changed this profile", inner: exception) { Hint = "Look at it again and rename it again." };
         }
     }
 
@@ -161,9 +163,9 @@ public sealed class ProfileStore(
             () => Remove(repoId, profileId),
             cancellationToken);
 
-    public async Task<ProfileRevisionDto> RestoreRevisionAsync(Profile profile, int number, int basedOn, CancellationToken cancellationToken)
+    public async Task<ProfileRevisionDto> RestoreRevisionAsync(Profile profile, Guid requestId, int number, int basedOn, CancellationToken cancellationToken)
     {
-        var request = new RestoreProfileRevisionRequest { RequestId = Guid.NewGuid(), BasedOn = basedOn };
+        var request = new RestoreProfileRevisionRequest { RequestId = requestId, BasedOn = basedOn };
 
         try
         {
@@ -177,7 +179,7 @@ public sealed class ProfileStore(
         {
             await RefreshAfterRefusalAsync(profile.RepoId, "a revision restore", cancellationToken);
 
-            throw new UserFriendlyException("Somebody else saved this profile", "Look at its history again and restore again.", exception);
+            throw new UserFriendlyException("Somebody else saved this profile", inner: exception) { Hint = "Look at its history again and restore again." };
         }
     }
 
@@ -240,6 +242,8 @@ public sealed class ProfileStore(
             Publish();
             Changed?.Invoke(repoId);
         }
+
+        Reread?.Invoke(repoId);
     }
 
     /// <summary>Puts a profile the server just answered with into its repo's list, or updates the one there.</summary>

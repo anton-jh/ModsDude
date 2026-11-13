@@ -113,10 +113,11 @@ public class RepoStore(
         }
     }
 
-    public async Task CreateRepo(string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken)
+    public async Task CreateRepo(Guid requestId, string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken)
     {
         var request = new CreateRepoRequest()
         {
+            RequestId = requestId,
             Name = name,
             AdapterId = adapterId,
             AdapterConfiguration = baseSettings.Serialize(),
@@ -195,7 +196,7 @@ public class RepoStore(
                 logger.LogWarning(refresh, "Could not read the repos again after a change to repo {Repo} was refused.", repo.Id);
             }
 
-            throw new UserFriendlyException("Somebody else changed this repo", "Look at it again and make your change again.", exception);
+            throw new UserFriendlyException("Somebody else changed this repo", inner: exception) { Hint = "Look at it again and make your change again." };
         }
     }
 

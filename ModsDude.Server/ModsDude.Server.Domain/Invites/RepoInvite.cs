@@ -21,6 +21,12 @@ namespace ModsDude.Server.Domain.Invites;
 /// code. A leaked Admin code hands over the power to do that, which nothing can take back. Admin is
 /// therefore only ever granted deliberately, to a named person who is already in the repo.
 /// </remarks>
+/// <remarks>
+/// <b>An invite works only while its inviter could still make it</b>: still in the repo, at Member or
+/// above, and at least at the level it grants. Kicking, leaving and demoting therefore stop the
+/// inviter's codes without touching them, and regaining the access starts them again. One made by an
+/// operator on the admin pages has no inviter to lose.
+/// </remarks>
 public class RepoInvite
 {
     // ef
@@ -115,11 +121,29 @@ public class RepoInvite
     public DateTime? DismissedAt { get; private set; }
 
 
+    /// <param name="inviterLevel">
+    /// The level <see cref="CreatedBy"/> holds in the repo now, or null where they are not in it.
+    /// Unused for an invite an operator made.
+    /// </param>
+    /// <remarks>
+    /// The invite's own limits are reported ahead of its inviter's access: they are final, and the
+    /// access can come back.
+    /// </remarks>
+    public InviteStatus GetStatus(DateTime now, RepoMembershipLevel? inviterLevel)
+    {
+        var own = GetOwnStatus(now);
+
+        return own is InviteStatus.Active && IsBackedBy(inviterLevel) is false
+            ? InviteStatus.InviterLostAccess
+            : own;
+    }
+
     /// <summary>
-    /// Revocation is reported ahead of the other two because it is the one somebody chose, and the
-    /// one they will look for after choosing it.
+    /// The status by the invite's own limits alone, whatever its inviter's access. Revocation is
+    /// reported ahead of the other two because it is the one somebody chose, and the one they will
+    /// look for after choosing it.
     /// </summary>
-    public InviteStatus GetStatus(DateTime now)
+    public InviteStatus GetOwnStatus(DateTime now)
     {
         if (IsRevoked)
         {
@@ -139,11 +163,12 @@ public class RepoInvite
         return InviteStatus.Active;
     }
 
-    public void Redeem(DateTime now)
+    /// <param name="inviterLevel">See <see cref="GetStatus"/>.</param>
+    public void Redeem(DateTime now, RepoMembershipLevel? inviterLevel)
     {
-        if (GetStatus(now) is not InviteStatus.Active)
+        if (GetStatus(now, inviterLevel) is var status and not InviteStatus.Active)
         {
-            throw new InvalidOperationException($"Invite '{Id.Value}' cannot be redeemed while {GetStatus(now)}.");
+            throw new InvalidOperationException($"Invite '{Id.Value}' cannot be redeemed while {status}.");
         }
 
         Uses++;
@@ -169,13 +194,15 @@ public class RepoInvite
     /// Takes a dead invite off the list.
     /// </summary>
     /// <remarks>
-    /// <b>Refuses an active one.</b> Hiding a code that still works would leave it live, in the world,
-    /// and off the only screen from which it could be revoked. That is the one state this must never
-    /// be able to produce, which is why it is checked here and not only at the endpoint.
+    /// <b>Refuses one that is active by its own limits.</b> Hiding a code that still works would leave
+    /// it live, in the world, and off the only screen from which it could be revoked. One stopped only
+    /// by its inviter's access counts as working, because that access can come back. That is the one
+    /// state this must never be able to produce, which is why it is checked here and not only at the
+    /// endpoint.
     /// </remarks>
     public void Dismiss(DateTime now)
     {
-        if (GetStatus(now) is InviteStatus.Active)
+        if (GetOwnStatus(now) is InviteStatus.Active)
         {
             throw new DomainValidationException(
                 $"Invite '{Id.Value}' still works, so it can be revoked but not dismissed.");
@@ -184,6 +211,11 @@ public class RepoInvite
         DismissedAt = now;
         Version++;
     }
+
+
+    private bool IsBackedBy(RepoMembershipLevel? inviterLevel)
+        => CreatedBy is null
+        || (inviterLevel is RepoMembershipLevel level && level >= RepoMembershipLevel.Member && level >= GrantedLevel);
 }
 
 public readonly record struct RepoInviteId(Guid Value);
@@ -195,5 +227,8 @@ public enum InviteStatus
     Active,
     Expired,
     Exhausted,
-    Revoked
+    Revoked,
+
+    /// <summary>Its inviter left the repo, or no longer holds the access the invite grants.</summary>
+    InviterLostAccess
 }

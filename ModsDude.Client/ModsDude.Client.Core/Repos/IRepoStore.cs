@@ -30,7 +30,8 @@ public interface IRepoStore : IUserScopedState, IKnownRepos
 
     Task RefreshRepos(CancellationToken cancellationToken);
 
-    Task CreateRepo(string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken);
+    /// <param name="requestId">The same for a repeat of this request, which then returns the repo it made.</param>
+    Task CreateRepo(Guid requestId, string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken);
 
     /// <summary>
     /// Sends <paramref name="redeem"/> and puts the repo it joined into the list, so the shell can navigate

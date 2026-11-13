@@ -4,29 +4,35 @@ using ModsDude.Server.Domain.RepoMemberships;
 namespace ModsDude.Server.Api.Dtos;
 
 /// <summary>
-/// <paramref name="Code"/> is the printable form, dashed into threes of four. It is what the client
-/// shows and copies, and redemption accepts it back in whatever shape it arrives.
+/// An invite as the repo's list shows it. The code is not on it: only the person who made an invite
+/// may read its code again, from its own endpoint.
 /// </summary>
+/// <param name="CreatedBy">Who made it, or null where an operator made it on the admin pages.</param>
 public record RepoInviteDto(
     Guid Id,
-    string Code,
     RepoMembershipLevel MembershipLevel,
     DateTime Created,
     DateTime? ExpiresAt,
     int? MaximumUses,
     int Uses,
-    InviteStatus Status)
+    InviteStatus Status,
+    UserDto? CreatedBy)
 {
-    public static RepoInviteDto FromModel(RepoInvite invite, DateTime now)
+    /// <param name="inviterLevel">See <see cref="RepoInvite.GetStatus"/>.</param>
+    public static RepoInviteDto FromModel(RepoInvite invite, DateTime now, RepoMembershipLevel? inviterLevel, UserDto? createdBy)
     {
         return new(
             invite.Id.Value,
-            InviteCodes.Format(invite.Code),
             invite.GrantedLevel,
             invite.Created,
             invite.ExpiresAt,
             invite.MaximumUses,
             invite.Uses,
-            invite.GetStatus(now));
+            invite.GetStatus(now, inviterLevel),
+            createdBy);
     }
 }
+
+
+/// <summary>The printable form, dashed into threes of four. Redemption accepts it back in whatever shape it arrives.</summary>
+public record InviteCodeDto(string Code);

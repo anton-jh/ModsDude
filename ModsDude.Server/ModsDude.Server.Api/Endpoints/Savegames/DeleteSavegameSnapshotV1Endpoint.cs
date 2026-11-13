@@ -55,9 +55,10 @@ public class DeleteSavegameSnapshotV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var savegame = await dbContext.Savegames.GetAsync(new RepoId(repoId), new SavegameId(savegameId), cancellationToken);
+        // Already gone, which is what was asked for: a repeat of this request gets the same answer.
         if (savegame is null)
         {
-            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Savegame '{savegameId}' does not exist in repo '{repoId}'"));
+            return TypedResults.Ok();
         }
 
         var snapshot = new SavegameSnapshotNumber(number);
@@ -72,7 +73,7 @@ public class DeleteSavegameSnapshotV1Endpoint : IEndpoint
 
         if (deleted == 0)
         {
-            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Savegame '{savegameId}' has no snapshot {number}"));
+            return TypedResults.Ok();
         }
 
         await unitOfWork.CommitAsync(cancellationToken);

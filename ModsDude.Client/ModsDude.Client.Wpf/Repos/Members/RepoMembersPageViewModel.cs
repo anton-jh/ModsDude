@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -15,6 +16,7 @@ using ModsDude.Client.Wpf.Shell.Toasts;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Windows;
 
 namespace ModsDude.Client.Wpf.Repos.Members;
 
@@ -35,6 +37,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     private readonly IToastService _toasts;
     private readonly IUserAvatarFactory _avatarFactory;
     private readonly TimeProvider _time;
+    private readonly ILogger<RepoMembersPageViewModel> _logger;
+    private readonly RequestIdKeeper<(RepoMembershipLevel Level, int? MaximumUses, TimeSpan? Expiry)> _inviteRequestIds = new();
 
     private IReadOnlyList<RepoMemberDto> _fetchedMembers = [];
     private IReadOnlyList<RepoInviteDto> _fetchedInvites = [];
@@ -52,7 +56,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         IErrorReporter errorReporter,
         IToastService toasts,
         IUserAvatarFactory avatarFactory,
-        TimeProvider time)
+        TimeProvider time,
+        ILogger<RepoMembersPageViewModel> logger)
     {
         _repo = repo;
         _membershipService = membershipService;
@@ -65,6 +70,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         _toasts = toasts;
         _avatarFactory = avatarFactory;
         _time = time;
+        _logger = logger;
 
         Members = [];
         Invites = [];
@@ -183,11 +189,14 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
 
         await _inviteService.CreateInvite(
             _repo.Id,
+            _inviteRequestIds.For((NewInviteLevel, maximumUses, NewInviteExpiry.Duration)),
             NewInviteLevel,
             maximumUses,
             NewInviteExpiry.Duration is TimeSpan duration ? _time.GetUtcNow().UtcDateTime + duration : null,
             cancellationToken);
 
+        // Another invite with the same settings is another invite, not a repeat of this one.
+        _inviteRequestIds.Forget();
         NewInviteMaximumUses = "";
 
         await ReloadInvites(cancellationToken);
@@ -329,7 +338,14 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
             .OrderByDescending(x => x.Status is InviteStatus.Active)
             .ThenByDescending(x => x.Created))
         {
-            var row = new RepoInviteViewModel(invite, CanManageInvites, RemoveInviteAsync);
+            var isMine = invite.CreatedBy?.Id == _currentUserId;
+
+            var row = new RepoInviteViewModel(
+                invite,
+                isMine,
+                canRemove: isMine || _repo.MembershipLevel is RepoMembershipLevel.Admin,
+                CopyInviteCodeAsync,
+                RemoveInviteAsync);
 
             Invites.Add(row);
         }
@@ -402,6 +418,34 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         }
     }
 
+    private async Task CopyInviteCodeAsync(RepoInviteViewModel invite)
+    {
+        string code;
+
+        try
+        {
+            code = await _inviteService.GetInviteCode(_repo.Id, invite.Id, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            await ShowError(ex);
+            return;
+        }
+
+        // The clipboard belongs to whatever else on the machine is holding it open, and losing that
+        // race is not worth an error modal - the user can press Copy again.
+        try
+        {
+            Clipboard.SetDataObject(code, copy: true);
+            invite.IsCopied = true;
+        }
+        catch (System.Runtime.InteropServices.ExternalException exception)
+        {
+            _logger.LogInformation(exception, "The clipboard was busy; invite {Invite}'s code was not copied.", invite.Id);
+            invite.IsCopied = false;
+        }
+    }
+
     /// <summary>
     /// One handler for the row's one button, in two tenses. A code that still works is being switched
     /// off, which is worth confirming; a spent one is only being tidied away, and saying so in the
@@ -409,16 +453,16 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     /// </summary>
     private async Task RemoveInviteAsync(RepoInviteViewModel invite)
     {
-        var modal = invite.IsActive
+        var modal = invite.WillRevoke
             ? new ConfirmationModalViewModel(
                 "Revoke this invite?",
-                $"{invite.Code} will stop working for good and leave this list. Anybody who already joined with it stays a member.",
+                $"{invite.CreatedBy}'s {invite.Level} invite will stop working for good and leave this list. Anybody who already joined with it stays a member.",
                 IconKind.Warning,
                 "Revoke",
                 "Keep it")
             : new ConfirmationModalViewModel(
                 "Remove this invite?",
-                $"{invite.Code} already stopped working - it is on this list only as the record that it was made. Removing it takes it off for everybody.",
+                $"{invite.CreatedBy}'s {invite.Level} invite already stopped working - it is on this list only as the record that it was made. Removing it takes it off for everybody.",
                 IconKind.Question,
                 "Remove",
                 "Keep it");

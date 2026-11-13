@@ -5,6 +5,7 @@ using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Backups;
 using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.Statistics;
+using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 
@@ -74,7 +75,14 @@ public class OverviewPageModel(
             .AsNoTracking()
             .Where(x => !x.IsRevoked)
             .ToListAsync(cancellationToken);
-        OpenInviteCount = invites.Count(x => x.GetStatus(now) is InviteStatus.Active);
+        var levels = (await dbContext.RepoMemberships
+            .AsNoTracking()
+            .ToListAsync(cancellationToken))
+            .ToDictionary(x => (x.RepoId, x.UserId), x => x.Level);
+        OpenInviteCount = invites.Count(x => x.GetStatus(
+            now,
+            x.CreatedBy is UserId inviter && levels.TryGetValue((x.RepoId, inviter), out var level) ? level : null)
+            is InviteStatus.Active);
     }
 
     private async Task LoadStorageAsync(CancellationToken cancellationToken)

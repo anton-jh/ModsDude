@@ -33,7 +33,7 @@ public interface IErrorReporter
     /// The same, for a failure that never took the shape of an exception - a run that finished with
     /// some of its work undone, say.
     /// </summary>
-    ErrorModalViewModel Record(string message, string? details = null, string? context = null);
+    ErrorModalViewModel Record(string message, string? hint = null, string? context = null);
 
     /// <inheritdoc cref="Record(Exception, string?)"/>
     /// <summary>Logs it and shows it. What almost every caller wants.</summary>

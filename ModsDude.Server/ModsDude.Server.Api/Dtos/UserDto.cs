@@ -16,4 +16,11 @@ public record UserDto(string Id, string DisplayName, string Tag, string? AvatarH
     {
         return new(user.Id.Value, user.DisplayName.Value, UserTag.For(user.Id), user.AvatarHash);
     }
+
+    /// <summary>
+    /// Somebody a record names by id, with no foreign key holding the user in place. A name that
+    /// cannot be resolved falls back to the id rather than dropping the record.
+    /// </summary>
+    public static UserDto Of(UserId userId, UserNameplate? nameplate)
+        => new(userId.Value, nameplate?.DisplayName.Value ?? userId.Value, UserTag.For(userId), nameplate?.AvatarHash);
 }

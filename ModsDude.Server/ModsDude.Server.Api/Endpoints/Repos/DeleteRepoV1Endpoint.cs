@@ -2,10 +2,12 @@
 using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
+using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Repos;
 
@@ -23,26 +25,40 @@ namespace ModsDude.Server.Api.Endpoints.Repos;
 /// can only be deleted once it has been archived, by an Admin: two deliberate acts, and the first
 /// one is visible to every member for as long as they care to notice.
 /// </para>
+/// <para>
+/// <b>Authorized here rather than on the route.</b> A repeat of a delete that succeeded finds no repo
+/// and the caller in it no longer, which the route's check would refuse. Already gone is what was
+/// asked for, so it is answered Ok - which tells anybody only that no repo has that id.
+/// </para>
 /// </remarks>
 public class DeleteRepoV1Endpoint : IEndpoint
 {
     public RouteHandlerBuilder Map(IEndpointRouteBuilder builder)
     {
         return builder.MapDelete("repos/{repoId:guid}", DeleteRepo)
-            .WithTags("Repos")
-            .RequireRepoLevel(RepoMembershipLevel.Admin);
+            .WithTags("Repos");
     }
 
 
-    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>>> DeleteRepo(
+    private static async Task<Results<Ok, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> DeleteRepo(
         Guid repoId,
+        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         CancellationToken cancellationToken)
     {
         var repo = await dbContext.Repos.GetAsync(new RepoId(repoId), cancellationToken);
         if (repo is null)
         {
-            return TypedResults.BadRequest(Problems.NotFound);
+            return TypedResults.Ok();
+        }
+
+        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
+            .CheckIsAllowedTo(x => x
+                .AccessRepoAtLevel(repo.Id, RepoMembershipLevel.Admin))
+            .MapToForbidden();
+        if (authResult is not null)
+        {
+            return authResult;
         }
 
         // Reached from the top-level Archive and nowhere else. A repo carries the group's whole

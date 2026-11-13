@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameProcesses;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
@@ -32,6 +33,9 @@ public sealed class SavegameCheckOutFlow(
     IBackgroundTaskReporter backgroundTasks,
     IToastService toasts) : ISavegameCheckOutFlow
 {
+    // Not keyed on the head: after a lost answer the head shown is the restore's own.
+    private readonly RequestIdKeeper<(Guid SavegameId, int SnapshotNumber)> _restoreRequestIds = new();
+
     public async Task CheckOutAsync(
         Repo repo,
         SavegameDto savegame,
@@ -275,7 +279,10 @@ public sealed class SavegameCheckOutFlow(
         {
             task.Report($"Restoring snapshot {snapshotNumber} as the newest one");
 
-            savegame = await savegameCheckOut.RestoreAsync(savegame, snapshotNumber, cancellationToken);
+            savegame = await savegameCheckOut.RestoreAsync(
+                savegame, _restoreRequestIds.For((savegame.Id, snapshotNumber)), snapshotNumber, cancellationToken);
+
+            _restoreRequestIds.Forget();
         }
 
         task.Report("Taking the claim");

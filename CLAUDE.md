@@ -45,6 +45,7 @@ A change is done only when all of these hold:
 - The whole solution builds with zero warnings. Fix existing warnings too, not just new ones.
 - Relevant tests pass.
 - UI changes have been seen running. Ask first, then launch the real client; start the API if needed (`dotnet run --project ModsDude.Server/ModsDude.Server.Api`). The client logs in automatically.
+  - Drive and inspect the client with UI Automation (`System.Windows.Automation` from PowerShell) where it can do the job. Use computer use (screenshots and clicks) only when it can't.
 - The full diff has been re-read against this file.
 - On Linux (cloud sessions only): a missing `dotnet` is not a reason to skip building or testing. Install the SDK with `apt-get install -y dotnet-sdk-10.0`. Build with `-p:EnableWindowsTargeting=true` so the WPF project builds too.
 

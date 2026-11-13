@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Domain.Activity;
+using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Retention;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
@@ -219,6 +221,60 @@ public class RepoChangesTests(DatabaseFixture fixture)
 
         Assert.False(await verification.RepoChangeCounters.AnyAsync(x => x.RepoId == repoId, CancellationToken.None));
         Assert.Empty(await Read(caller));
+    }
+
+
+    /// <summary>Retention schedules and deletes revisions without touching the profile row.</summary>
+    [Fact]
+    public async Task Scheduling_and_deleting_a_revision_each_move_the_profiles_counter_only()
+    {
+        var caller = await GivenAUser();
+        var (repoId, profileId) = await GivenARepo(caller);
+        var before = await ReadOne(caller, repoId);
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.ProfileRevisions
+                .Where(x => x.RepoId == repoId && x.ProfileId == profileId)
+                .ExecuteUpdateAsync(x => x
+                    .SetProperty(r => r.DeletionScheduledFor, new DateOnly(2030, 1, 1))
+                    .SetProperty(r => r.DeletionReason, DeletionReason.OutsideWindow), CancellationToken.None);
+        }
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.ProfileRevisions
+                .Where(x => x.RepoId == repoId && x.ProfileId == profileId)
+                .ExecuteDeleteAsync(CancellationToken.None);
+        }
+
+        Assert.Equal(before with { Profiles = before.Profiles + 2 }, await ReadOne(caller, repoId));
+    }
+
+    [Fact]
+    public async Task Ignoring_a_mod_and_dismissing_a_version_and_releasing_them_move_the_profiles_counter_only()
+    {
+        var caller = await GivenAUser();
+        var (repoId, profileId) = await GivenARepo(caller);
+        var modId = new ModId("a_mod");
+        var versionId = new ModVersionId("1.0");
+        var before = await ReadOne(caller, repoId);
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            dbContext.ProfileIgnoredMods.Add(new ProfileIgnoredMod(repoId, profileId, modId));
+            dbContext.ProfileDismissedVersions.Add(new ProfileDismissedVersion(repoId, profileId, modId, versionId));
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+        }
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.ReleaseModVersionAsync(repoId, modId, versionId, CancellationToken.None);
+            await dbContext.ProfileIgnoredMods.Where(x => x.RepoId == repoId).ExecuteDeleteAsync(CancellationToken.None);
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+        }
+
+        Assert.Equal(before with { Profiles = before.Profiles + 4 }, await ReadOne(caller, repoId));
     }
 
 

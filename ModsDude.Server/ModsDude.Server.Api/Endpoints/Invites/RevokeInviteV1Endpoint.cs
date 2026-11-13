@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
+using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Invites;
@@ -8,6 +9,7 @@ using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Invites;
 
@@ -16,9 +18,8 @@ namespace ModsDude.Server.Api.Endpoints.Invites;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Any Member can do this to any of the repo's invites, including one an Admin made. Revoking only
-/// ever takes access away, and a code loose in the world is the kind of thing that wants stopping by
-/// whoever notices it rather than by whoever is senior enough.
+/// The person who made the invite may do this, and so may any Admin. Nobody else ever sees the code,
+/// so nobody else is in a position to know it has got loose.
 /// </para>
 /// <para>
 /// <b>One route for two gestures</b>, because they are the same wish - the code should stop being on
@@ -38,8 +39,9 @@ public class RevokeInviteV1Endpoint : IEndpoint
     }
 
 
-    private async Task<Results<Ok, BadRequest<CustomProblemDetails>>> RevokeInvite(
+    private async Task<Results<Ok, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> RevokeInvite(
         Guid repoId, Guid inviteId,
+        ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
@@ -54,11 +56,26 @@ public class RevokeInviteV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Invite '{inviteId}' does not exist"));
         }
 
+        var callerId = claimsPrincipal.GetUserId();
+
+        if (invite.CreatedBy != callerId)
+        {
+            var authResult = await dbContext.Users.GetAsync(callerId, cancellationToken)
+                .CheckIsAllowedTo(x => x
+                    .AccessRepoAtLevel(invite.RepoId, RepoMembershipLevel.Admin))
+                .MapToForbidden();
+            if (authResult is not null)
+            {
+                return authResult;
+            }
+        }
+
         var now = timeService.Now();
 
         // Asked of the invite rather than of the caller: a code that ran out between the list being
         // drawn and the button being pressed should not be recorded as one somebody retired.
-        if (invite.GetStatus(now) is InviteStatus.Active)
+        // One stopped only by its inviter's access is revoked too: that access can come back.
+        if (invite.GetOwnStatus(now) is InviteStatus.Active)
         {
             invite.Revoke(now);
         }

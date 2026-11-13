@@ -19,6 +19,15 @@ public static class RepoMembershipExtensions
             .ToListAsync(cancellationToken);
     }
 
+    /// <summary>Everybody's level in the repo, by who they are.</summary>
+    public static Task<Dictionary<UserId, RepoMembershipLevel>> GetLevelsAsync(this DbSet<RepoMembership> dbSet, RepoId repoId, CancellationToken cancellationToken)
+    {
+        return dbSet
+            .AsNoTracking()
+            .Where(x => x.RepoId == repoId)
+            .ToDictionaryAsync(x => x.UserId, x => x.Level, cancellationToken);
+    }
+
     public static async ValueTask<IEnumerable<RepoMembership>> GetByUserIdAsync(this DbSet<RepoMembership> dbSet, UserId userId, CancellationToken cancellationToken = default)
     {
         return await dbSet

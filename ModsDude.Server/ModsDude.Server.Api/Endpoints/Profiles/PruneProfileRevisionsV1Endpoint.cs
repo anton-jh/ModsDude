@@ -154,7 +154,7 @@ public class PruneProfileRevisionsV1Endpoint : IEndpoint
                     [.. holding.Select(x => new CheckedOutSavegameRefDto(
                         x.SavegameId.Value,
                         NameOf(x.SavegameId),
-                        ProfileRevisionReads.Describe(x.HeldBy, holderNames.TryGetValue(x.HeldBy, out var holder) ? holder : null),
+                        UserDto.Of(x.HeldBy, holderNames.TryGetValue(x.HeldBy, out var holder) ? holder : null),
                         x.TakenAt))]));
 
                 continue;

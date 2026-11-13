@@ -49,9 +49,10 @@ public class DeleteSavegameV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var savegame = await dbContext.Savegames.GetAsync(new RepoId(repoId), new SavegameId(savegameId), cancellationToken);
+        // Already gone, which is what was asked for: a repeat of this request gets the same answer.
         if (savegame is null)
         {
-            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No savegame '{savegameId}' found in repo '{repoId}'"));
+            return TypedResults.Ok();
         }
 
         // Reached from the archive and nowhere else. What goes here is somebody's backups, so it is a

@@ -12,8 +12,8 @@ namespace ModsDude.Server.Api.Endpoints.Invites;
 
 /// <summary>
 /// Every invite ever made for the repo, spent ones included: the count of who came in through which
-/// code is the only record of it there is, and it would be lost by hiding the code once it stopped
-/// working.
+/// invite is the only record of it there is, and it would be lost by hiding the invite once it
+/// stopped working. No codes: see <see cref="GetInviteCodeV1Endpoint"/>.
 /// </summary>
 public class GetInvitesV1Endpoint : IEndpoint
 {
@@ -34,6 +34,6 @@ public class GetInvitesV1Endpoint : IEndpoint
         var now = timeService.Now();
         var invites = await dbContext.RepoInvites.GetForRepoAsync(new RepoId(repoId), cancellationToken);
 
-        return TypedResults.Ok(invites.Select(x => RepoInviteDto.FromModel(x, now)));
+        return TypedResults.Ok<IEnumerable<RepoInviteDto>>(await InviteReads.ToDtosAsync(dbContext, new RepoId(repoId), invites, now, cancellationToken));
     }
 }

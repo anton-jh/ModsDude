@@ -64,7 +64,12 @@ public class DiscardSavegameCheckoutV1Endpoint : IEndpoint
         // rather than fallen into by asking to discard.
         if (checkout is null || checkout.UserId != userId)
         {
-            return TypedResults.BadRequest(Problems.SavegameNotCheckedOut(savegame.Id));
+            // A repeat of a discard that went through: the caller's latest claim is the one it ended.
+            var latest = await dbContext.SavegameCheckouts.GetLatestCheckoutOfAsync(savegame.RepoId, savegame.Id, userId, cancellationToken);
+
+            return latest?.EndedReason is SavegameCheckoutEndReason.Discarded
+                ? TypedResults.Ok()
+                : TypedResults.BadRequest(Problems.SavegameNotCheckedOut(savegame.Id));
         }
 
         checkout.End(timeService.Now(), SavegameCheckoutEndReason.Discarded);

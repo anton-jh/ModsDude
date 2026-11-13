@@ -11,6 +11,7 @@ public class RepoInviteTests
     private static readonly DateTime _created = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
     private static readonly RepoId _repo = new(Guid.NewGuid());
     private static readonly UserId _creator = new("creator");
+    private const RepoMembershipLevel CreatorLevel = RepoMembershipLevel.Member;
 
 
     [Fact]
@@ -18,7 +19,7 @@ public class RepoInviteTests
     {
         var invite = CreateInvite();
 
-        Assert.Equal(InviteStatus.Active, invite.GetStatus(_created.AddYears(10)));
+        Assert.Equal(InviteStatus.Active, invite.GetStatus(_created.AddYears(10), CreatorLevel));
     }
 
     [Fact]
@@ -26,7 +27,7 @@ public class RepoInviteTests
     {
         var invite = new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Guest, createdBy: null, _created, null, null);
 
-        invite.Redeem(_created);
+        invite.Redeem(_created, CreatorLevel);
 
         Assert.Null(invite.CreatedBy);
         Assert.Equal(1, invite.Uses);
@@ -37,8 +38,8 @@ public class RepoInviteTests
     {
         var invite = CreateInvite();
 
-        invite.Redeem(_created);
-        invite.Redeem(_created);
+        invite.Redeem(_created, CreatorLevel);
+        invite.Redeem(_created, CreatorLevel);
 
         Assert.Equal(2, invite.Uses);
     }
@@ -48,11 +49,11 @@ public class RepoInviteTests
     {
         var invite = CreateInvite(maximumUses: 2);
 
-        invite.Redeem(_created);
-        Assert.Equal(InviteStatus.Active, invite.GetStatus(_created));
+        invite.Redeem(_created, CreatorLevel);
+        Assert.Equal(InviteStatus.Active, invite.GetStatus(_created, CreatorLevel));
 
-        invite.Redeem(_created);
-        Assert.Equal(InviteStatus.Exhausted, invite.GetStatus(_created));
+        invite.Redeem(_created, CreatorLevel);
+        Assert.Equal(InviteStatus.Exhausted, invite.GetStatus(_created, CreatorLevel));
     }
 
     [Fact]
@@ -61,8 +62,8 @@ public class RepoInviteTests
         var expiry = _created.AddHours(1);
         var invite = CreateInvite(expiresAt: expiry);
 
-        Assert.Equal(InviteStatus.Active, invite.GetStatus(expiry.AddSeconds(-1)));
-        Assert.Equal(InviteStatus.Expired, invite.GetStatus(expiry));
+        Assert.Equal(InviteStatus.Active, invite.GetStatus(expiry.AddSeconds(-1), CreatorLevel));
+        Assert.Equal(InviteStatus.Expired, invite.GetStatus(expiry, CreatorLevel));
     }
 
     [Fact]
@@ -70,10 +71,10 @@ public class RepoInviteTests
     {
         var invite = CreateInvite(maximumUses: 1, expiresAt: _created.AddHours(1));
 
-        invite.Redeem(_created);
+        invite.Redeem(_created, CreatorLevel);
         invite.Revoke(_created);
 
-        Assert.Equal(InviteStatus.Revoked, invite.GetStatus(_created.AddDays(1)));
+        Assert.Equal(InviteStatus.Revoked, invite.GetStatus(_created.AddDays(1), CreatorLevel));
     }
 
     /// <summary>
@@ -107,7 +108,7 @@ public class RepoInviteTests
 
         if (byExhaustion)
         {
-            invite.Redeem(_created);
+            invite.Redeem(_created, CreatorLevel);
         }
 
         var later = _created.AddDays(1);
@@ -139,9 +140,9 @@ public class RepoInviteTests
     {
         var invite = CreateInvite(maximumUses: 1);
 
-        invite.Redeem(_created);
+        invite.Redeem(_created, CreatorLevel);
 
-        Assert.Throws<InvalidOperationException>(() => invite.Redeem(_created));
+        Assert.Throws<InvalidOperationException>(() => invite.Redeem(_created, CreatorLevel));
     }
 
     [Theory]
@@ -166,13 +167,73 @@ public class RepoInviteTests
     }
 
 
-    private static RepoInvite CreateInvite(int? maximumUses = null, DateTime? expiresAt = null)
+    [Theory]
+    [InlineData(null)]
+    [InlineData(RepoMembershipLevel.Guest)]
+    public void An_invite_whose_inviter_left_or_dropped_below_member_stops_working(RepoMembershipLevel? inviterLevel)
+    {
+        var invite = CreateInvite(level: RepoMembershipLevel.Guest);
+
+        Assert.Equal(InviteStatus.InviterLostAccess, invite.GetStatus(_created, inviterLevel));
+        Assert.Throws<InvalidOperationException>(() => invite.Redeem(_created, inviterLevel));
+        Assert.Equal(0, invite.Uses);
+    }
+
+    [Fact]
+    public void An_invite_stops_working_when_its_inviter_drops_below_the_level_it_grants()
+    {
+        var invite = CreateInvite(level: RepoMembershipLevel.Member);
+
+        Assert.Equal(InviteStatus.Active, invite.GetStatus(_created, RepoMembershipLevel.Member));
+        Assert.Equal(InviteStatus.InviterLostAccess, invite.GetStatus(_created, RepoMembershipLevel.Guest));
+    }
+
+    [Fact]
+    public void An_invite_works_again_when_its_inviter_regains_the_access()
+    {
+        var invite = CreateInvite();
+
+        Assert.Equal(InviteStatus.InviterLostAccess, invite.GetStatus(_created, null));
+
+        invite.Redeem(_created, RepoMembershipLevel.Admin);
+
+        Assert.Equal(1, invite.Uses);
+    }
+
+    [Fact]
+    public void An_invite_made_on_the_admin_pages_does_not_depend_on_anybody_in_the_repo()
+    {
+        var invite = new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Member, createdBy: null, _created, null, null);
+
+        Assert.Equal(InviteStatus.Active, invite.GetStatus(_created, null));
+    }
+
+    [Fact]
+    public void The_invites_own_limits_are_reported_ahead_of_its_inviters_access()
+    {
+        var invite = CreateInvite(expiresAt: _created.AddHours(1));
+
+        Assert.Equal(InviteStatus.Expired, invite.GetStatus(_created.AddHours(2), null));
+    }
+
+    /// <summary>Its inviter's access can come back, so hiding it could hide a code that works again later.</summary>
+    [Fact]
+    public void An_invite_stopped_only_by_its_inviters_access_cannot_be_dismissed()
+    {
+        var invite = CreateInvite();
+
+        Assert.Throws<DomainValidationException>(() => invite.Dismiss(_created));
+        Assert.Equal(InviteStatus.Active, invite.GetOwnStatus(_created));
+    }
+
+
+    private static RepoInvite CreateInvite(int? maximumUses = null, DateTime? expiresAt = null, RepoMembershipLevel level = RepoMembershipLevel.Member)
     {
         return new RepoInvite(
             _repo,
             InviteCodes.Generate(),
             new RepoInviteRequestId(Guid.NewGuid()),
-            RepoMembershipLevel.Member,
+            level,
             _creator,
             _created,
             expiresAt,

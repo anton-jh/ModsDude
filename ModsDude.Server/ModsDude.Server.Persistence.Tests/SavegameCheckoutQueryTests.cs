@@ -195,6 +195,40 @@ public class SavegameCheckoutQueryTests(DatabaseFixture fixture)
     }
 
 
+    /// <summary>What tells a repeat of a discard that went through from a discard of nothing.</summary>
+    [Fact]
+    public async Task The_latest_checkout_of_a_person_is_their_most_recent_claim_whoever_holds_it_now()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        var savegameId = await GivenASavegame(repoId, profileId);
+
+        var older = await GivenAnOpenCheckout(repoId, savegameId, _author, _takenAt);
+        await GivenTheCheckoutEnds(older, _takenAt.AddMinutes(1), SavegameCheckoutEndReason.TakenOver);
+        var discarded = await GivenAnOpenCheckout(repoId, savegameId, _author, _takenAt.AddMinutes(2));
+        await GivenTheCheckoutEnds(discarded, _takenAt.AddMinutes(3), SavegameCheckoutEndReason.Discarded);
+        await GivenAnOpenCheckout(repoId, savegameId, _otherHolder, _takenAt.AddMinutes(4));
+
+        using var dbContext = fixture.CreateDbContext();
+
+        var latest = await dbContext.SavegameCheckouts.GetLatestCheckoutOfAsync(repoId, savegameId, _author, CancellationToken.None);
+
+        Assert.Equal(discarded, latest?.Id);
+        Assert.Equal(SavegameCheckoutEndReason.Discarded, latest?.EndedReason);
+    }
+
+    [Fact]
+    public async Task Somebody_who_never_held_a_savegame_has_no_latest_checkout_of_it()
+    {
+        var (repoId, profileId) = await GivenARepoWithAProfile();
+        var savegameId = await GivenASavegame(repoId, profileId);
+        await GivenAnOpenCheckout(repoId, savegameId, _otherHolder, _takenAt);
+
+        using var dbContext = fixture.CreateDbContext();
+
+        Assert.Null(await dbContext.SavegameCheckouts.GetLatestCheckoutOfAsync(repoId, savegameId, _author, CancellationToken.None));
+    }
+
+
     private async Task<(RepoId RepoId, ProfileId ProfileId)> GivenARepoWithAProfile()
     {
         using var dbContext = fixture.CreateDbContext();

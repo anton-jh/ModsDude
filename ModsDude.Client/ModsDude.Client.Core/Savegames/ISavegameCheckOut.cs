@@ -16,8 +16,9 @@ public interface ISavegameCheckOut
 
     /// <summary>Copies an older snapshot forward as the new head, so it can be checked out.</summary>
     /// <returns>The savegame as the caller saw it, with the restored snapshot as its head.</returns>
+    /// <param name="requestId">The same for a repeat of this restore, which is then answered as the original was.</param>
     /// <exception cref="Exceptions.UserFriendlyException">The head is no longer the one the caller saw.</exception>
-    Task<SavegameDto> RestoreAsync(SavegameDto savegame, int snapshotNumber, CancellationToken ct);
+    Task<SavegameDto> RestoreAsync(SavegameDto savegame, Guid requestId, int snapshotNumber, CancellationToken ct);
 
     /// <summary>
     /// Writes a named snapshot into a slot without claiming or binding anything. The slot reads as

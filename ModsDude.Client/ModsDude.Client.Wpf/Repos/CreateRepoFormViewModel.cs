@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameAdapters.DynamicForms;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
@@ -31,6 +32,9 @@ public partial class CreateRepoFormViewModel(
     public AccountViewModel Account { get; } = account;
 
     public TrustCodeFormViewModel TrustCode { get; } = trustCode;
+
+    // A changed form is a different repo to create; the same form sent again is a repeat.
+    private readonly RequestIdKeeper<(string Name, string AdapterId, string Settings)> _requestIds = new();
 
 
     [ObservableProperty]
@@ -67,12 +71,16 @@ public partial class CreateRepoFormViewModel(
 
         navigationLockService.ReleaseLock(this);
 
+        var adapterId = SelectedGameAdapter.Id.ToString();
+        var baseSettings = BaseSettingsEditor.ExtractResults();
+
         try
         {
             await repoStore.CreateRepo(
+                _requestIds.For((Name, adapterId, baseSettings.Serialize())),
                 Name,
-                SelectedGameAdapter.Id.ToString(),
-                BaseSettingsEditor.ExtractResults(),
+                adapterId,
+                baseSettings,
                 cancellationToken);
         }
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NotTrusted)

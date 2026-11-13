@@ -557,6 +557,27 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.ToTable("Repos");
                 });
 
+            modelBuilder.Entity("ModsDude.Server.Domain.Repos.RepoCreateRequest", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RepoId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("UserId", "RequestId");
+
+                    b.HasIndex("RepoId");
+
+                    b.ToTable("RepoCreateRequests");
+                });
+
             modelBuilder.Entity("ModsDude.Server.Domain.Savegames.Savegame", b =>
                 {
                     b.Property<Guid>("RepoId")
@@ -1185,6 +1206,21 @@ namespace ModsDude.Server.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Repos.RepoCreateRequest", b =>
+                {
+                    b.HasOne("ModsDude.Server.Domain.Repos.Repo", null)
+                        .WithMany()
+                        .HasForeignKey("RepoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ModsDude.Server.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ModsDude.Server.Domain.Savegames.Savegame", b =>

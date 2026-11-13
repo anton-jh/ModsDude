@@ -8,6 +8,7 @@ using ModsDude.Server.Application.Exceptions;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.RepoMemberships;
+using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
@@ -58,13 +59,6 @@ public class RedeemInviteV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InviteNotFound);
         }
 
-        var now = timeService.Now();
-        var status = invite.GetStatus(now);
-        if (status is not InviteStatus.Active)
-        {
-            return TypedResults.BadRequest(Problems.InviteNotUsable(status));
-        }
-
         var repo = await dbContext.Repos.GetAsync(invite.RepoId, cancellationToken);
         if (repo is null)
         {
@@ -75,14 +69,24 @@ public class RedeemInviteV1Endpoint : IEndpoint
             ?? throw new NotAuthenticatedException();
 
         // Already in, so the code has done its job and must not be charged a use for saying so
-        // again. A second click, or a link redeemed twice, is not an error to the person clicking.
+        // again. A second click, or a link redeemed twice, is not an error to the person clicking -
+        // even where that join used the invite's last use up. So this comes before its status.
         if (repo.GetMembership(user.Id) is RepoMembership existing)
         {
             return TypedResults.Ok(new RepoMembershipDto(RepoDto.FromModel(repo), existing.Level));
         }
 
+        var now = timeService.Now();
+        var inviterLevel = invite.CreatedBy is UserId inviter ? repo.GetMembership(inviter)?.Level : null;
+
+        var status = invite.GetStatus(now, inviterLevel);
+        if (status is not InviteStatus.Active)
+        {
+            return TypedResults.BadRequest(Problems.InviteNotUsable(status));
+        }
+
         repo.AddMember(user, invite.GrantedLevel);
-        invite.Redeem(now);
+        invite.Redeem(now, inviterLevel);
 
         try
         {

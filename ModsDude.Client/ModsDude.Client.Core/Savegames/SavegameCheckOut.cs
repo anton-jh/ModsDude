@@ -104,19 +104,22 @@ public sealed class SavegameCheckOut(
         {
             throw new UserFriendlyException(
                 $"'{savegame.Name}' changed",
-                "Somebody checked it in or took it just now. Look at it again before checking it out.",
-                exception);
+                "Somebody checked it in or took it just now.",
+                exception)
+            {
+                Hint = "Look at it again before checking it out."
+            };
         }
     }
 
-    public async Task<SavegameDto> RestoreAsync(SavegameDto savegame, int snapshotNumber, CancellationToken ct)
+    public async Task<SavegameDto> RestoreAsync(SavegameDto savegame, Guid requestId, int snapshotNumber, CancellationToken ct)
     {
         var head = savegame.Head
             ?? throw new UserFriendlyException(
                 $"'{savegame.Name}' has nothing to restore",
                 $"Savegame '{savegame.Id}' has no head snapshot, so it has no snapshot to restore either.");
 
-        var request = new RestoreSavegameSnapshotRequest { RequestId = Guid.NewGuid(), BasedOn = head.Number };
+        var request = new RestoreSavegameSnapshotRequest { RequestId = requestId, BasedOn = head.Number };
 
         try
         {
@@ -132,8 +135,11 @@ public sealed class SavegameCheckOut(
         {
             throw new UserFriendlyException(
                 $"'{savegame.Name}' changed",
-                "Somebody checked it in or restored a snapshot just now. Look at it again before checking it out.",
-                exception);
+                "Somebody checked it in or restored a snapshot just now.",
+                exception)
+            {
+                Hint = "Look at it again before checking it out."
+            };
         }
     }
 
@@ -175,7 +181,10 @@ public sealed class SavegameCheckOut(
 
         throw new UserFriendlyException(
             "That slot holds play nobody has checked in",
-            $"Writing '{savegameName}' into slot '{slot}' would destroy a savegame that has been played since it was checked out and exists nowhere else. Check that one in first.");
+            $"Writing '{savegameName}' into slot '{slot}' would destroy a savegame that has been played since it was checked out and exists nowhere else. Check that one in first.")
+        {
+            Hint = "Check that one in first."
+        };
     }
 
     private async Task<string> ResolveSnapshotHashAsync(SavegameDto savegame, int snapshotNumber, CancellationToken ct)

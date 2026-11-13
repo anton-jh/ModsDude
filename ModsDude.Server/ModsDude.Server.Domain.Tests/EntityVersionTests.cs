@@ -99,8 +99,8 @@ public class EntityVersionTests
             new RepoId(Guid.NewGuid()), InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()),
             RepoMembershipLevel.Member, createdBy: null, _now, null, null);
 
-        invite.Redeem(_now);
-        invite.Redeem(_now);
+        invite.Redeem(_now, inviterLevel: null);
+        invite.Redeem(_now, inviterLevel: null);
         invite.Revoke(_now);
 
         Assert.Equal(3, invite.Version);

@@ -352,7 +352,10 @@ internal sealed class ModSyncPlanBuilder(
 
             SavegameApplyRefusal.AnotherProfileIsHeld => throw new UserFriendlyException(
                 "A savegame checked out here follows another mod list",
-                $"Game '{request.Game}' is holding savegame '{decision.SavegameId}', which follows profile '{decision.ProfileId}'. Applying '{request.ProfileId}' would take that savegame off the mod list it runs on. Check it in first."),
+                $"Game '{request.Game}' is holding savegame '{decision.SavegameId}', which follows profile '{decision.ProfileId}'. Applying '{request.ProfileId}' would take that savegame off the mod list it runs on. Check it in first.")
+            {
+                Hint = "Check it in first."
+            },
 
             _ => throw new UserFriendlyException(
                 "That savegame runs on one revision, and this is not it",
@@ -372,7 +375,10 @@ internal sealed class ModSyncPlanBuilder(
         {
             throw new UserFriendlyException(
                 "A savegame checked out here follows a mod list",
-                $"Game '{request.Game}' is holding savegame '{held.SavegameId}', which follows a profile. Clearing the mod folder would take that savegame off the mod list it runs on. Check it in first.");
+                $"Game '{request.Game}' is holding savegame '{held.SavegameId}', which follows a profile. Clearing the mod folder would take that savegame off the mod list it runs on. Check it in first.")
+            {
+                Hint = "Check it in first."
+            };
         }
     }
 

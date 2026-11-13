@@ -76,8 +76,11 @@ public class ReposPageModel(
             .AsNoTracking()
             .Where(x => x.DismissedAt == null && !x.IsRevoked)
             .ToListAsync(cancellationToken))
-            .Where(x => x.GetStatus(now) is InviteStatus.Active)
+            .Where(x => x.GetStatus(now, InviterLevel(x)) is InviteStatus.Active)
             .ToLookup(x => x.RepoId);
+
+        RepoMembershipLevel? InviterLevel(RepoInvite invite)
+            => membershipsByRepo[invite.RepoId].FirstOrDefault(x => x.UserId == invite.CreatedBy)?.Level;
 
         var mods = await dbContext.ModVersions
             .AsNoTracking()
@@ -363,7 +366,7 @@ public class ReposPageModel(
 
         var now = timeService.Now();
 
-        if (invite.GetStatus(now) is InviteStatus.Active)
+        if (invite.GetOwnStatus(now) is InviteStatus.Active)
         {
             invite.Revoke(now);
 

@@ -374,12 +374,13 @@ public class SavegameCheckOutTests
         var first = await harness.SeedHeadAsync("a savegame");
         var second = harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("a savegame, played once"));
 
-        var restored = await harness.CheckOut.RestoreAsync(harness.Server.Savegame, first.Number, CancellationToken.None);
+        var requestId = Guid.NewGuid();
+        var restored = await harness.CheckOut.RestoreAsync(harness.Server.Savegame, requestId, first.Number, CancellationToken.None);
         await harness.CheckOut.CheckOutAsync(harness.Game, restored, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
 
         var request = Assert.Single(harness.Server.SnapshotRestores);
         Assert.Equal(second.Number, request.BasedOn);
-        Assert.NotEqual(Guid.Empty, request.RequestId);
+        Assert.Equal(requestId, request.RequestId);
         Assert.Equal(second.Number + 1, restored.Head?.Number);
         Assert.Equal(first.ContentHash, restored.Head?.ContentHash);
         Assert.Equal("a savegame", harness.ReadSlotFile(_slot1));
@@ -398,7 +399,7 @@ public class SavegameCheckOutTests
         var moved = harness.Server.CheckInFromAnotherMachine(await harness.PackedBytesAsync("a savegame, played once"));
 
         await Assert.ThrowsAsync<UserFriendlyException>(
-            () => harness.CheckOut.RestoreAsync(seen, first.Number, CancellationToken.None));
+            () => harness.CheckOut.RestoreAsync(seen, Guid.NewGuid(), first.Number, CancellationToken.None));
 
         Assert.Equal(moved, harness.Server.Head);
     }

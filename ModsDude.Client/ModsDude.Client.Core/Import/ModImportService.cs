@@ -1260,10 +1260,10 @@ public sealed class ModImportService(
             }
             catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.AlreadyExists)
             {
-                // Registered between the link and here. A success for the same reason
-                // AlreadyRegistered is one.
-                Record(version, ModImportStatus.AlreadyRegistered);
-                Report(version, ModImportPhase.Completed);
+                // The same file registered already is answered as a success, so this is a different
+                // file or name registered under the version between the link and here.
+                Refuse(version, ModImportStatus.ContentMismatch,
+                    "A different file is already registered for this mod and version.", exception);
 
                 return VersionOutcome.Done;
             }
@@ -1388,7 +1388,7 @@ public sealed class ModImportService(
                 // decoration step would lose that fact. The loop checks the token again anyway.
                 logger.LogWarning(exception, "Imagery was not published for {Mod} {Version}.", version.ModId.Value, version.VersionId.Value);
 
-                return $"Imagery was not published: {exception.Message}";
+                return "Imagery was not published.";
             }
         }
 

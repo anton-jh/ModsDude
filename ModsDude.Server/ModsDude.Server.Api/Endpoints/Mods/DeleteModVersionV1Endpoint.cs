@@ -32,6 +32,7 @@ public class DeleteModVersionV1Endpoint : IEndpoint
         ITimeService timeService,
         IUnitOfWork unitOfWork,
         IRetentionUpkeep retentionUpkeep,
+        ILogger<DeleteModVersionV1Endpoint> logger,
         CancellationToken cancellationToken)
     {
         if (RequestChecks.ModId(modId, versionId) is { } invalidId)
@@ -42,9 +43,10 @@ public class DeleteModVersionV1Endpoint : IEndpoint
         var siblings = await dbContext.ModVersions.GetVersionsOfModAsync(new RepoId(repoId), new ModId(modId), cancellationToken);
 
         var modVersion = siblings.FirstOrDefault(x => x.Id == new ModVersionId(versionId));
+        // Already gone, which is what was asked for: a repeat of this request gets the same answer.
         if (modVersion is null)
         {
-            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No version '{versionId}' of mod '{modId}' found in repo '{repoId}'"));
+            return TypedResults.Ok();
         }
 
         // The last version has to go through the mod delete instead, because a mod that exists with
@@ -87,11 +89,7 @@ public class DeleteModVersionV1Endpoint : IEndpoint
         // One version fewer can turn a mod that was outside its window into one winding down.
         await retentionUpkeep.ReleaseModsAsync(modVersion.RepoId, [modVersion.ModId], cancellationToken);
 
-        // After the commit, never before it. A stranded blob is recoverable — the next import of the
-        // same version adopts it, and the reclamation sweep collects it otherwise — whereas a
-        // registration whose blob is gone can never be repaired, because being registered is exactly
-        // what stops an upload link from being minted for it again.
-        await storageService.DeleteMod(new RepoId(repoId), new ModId(modId), new ModVersionId(versionId), cancellationToken);
+        await ModFileCleanup.DeleteAsync(storageService, logger, modVersion.RepoId, modVersion.ModId, [modVersion.Id], cancellationToken);
 
         return TypedResults.Ok();
     }

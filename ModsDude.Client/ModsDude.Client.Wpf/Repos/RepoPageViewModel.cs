@@ -285,8 +285,8 @@ public partial class RepoPageViewModel
             return;
         }
 
-        // One per profile the user means to create, so a retry after a lost answer finds the profile it made.
-        var requestId = Guid.NewGuid();
+        // One per name asked for in this modal, so a retry after a lost answer finds the profile it made.
+        var requestIds = new RequestIdKeeper<string>();
 
         await NameModalViewModel.AskAsync(
             _modalService,
@@ -298,7 +298,7 @@ public partial class RepoPageViewModel
             {
                 try
                 {
-                    await _profileStore.CreateAsync(_repo.Id, requestId, name, copyFrom: null, cancellationToken);
+                    await _profileStore.CreateAsync(_repo.Id, requestIds.For(name), name, copyFrom: null, cancellationToken);
 
                     return null;
                 }

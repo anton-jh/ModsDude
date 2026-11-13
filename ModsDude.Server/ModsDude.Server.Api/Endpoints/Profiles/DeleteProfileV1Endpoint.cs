@@ -29,9 +29,10 @@ public class DeleteProfileV1Endpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         var profile = await dbContext.Profiles.GetAsync(new RepoId(repoId), new ProfileId(profileId), cancellationToken);
+        // Already gone, which is what was asked for: a repeat of this request gets the same answer.
         if (profile is null)
         {
-            return TypedResults.BadRequest(Problems.NotFound);
+            return TypedResults.Ok();
         }
 
         // Reached from the archive and nowhere else. Archiving first is what makes losing a profile's

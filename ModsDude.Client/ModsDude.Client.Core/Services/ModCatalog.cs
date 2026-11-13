@@ -429,11 +429,11 @@ public sealed class ModCatalog : IDisposable
         catch (Exception ex)
         {
             // An unplugged drive or a folder the user deleted marks this one source bad. The rest of
-            // the catalog is still worth showing - and the user is told, but only the message, so
-            // this is the only place the rest of it survives.
+            // the catalog is still worth showing - and the user is told in plain words, so this is
+            // the only place the exception survives.
             _logger.LogWarning(ex, "Could not scan mod source {Source} at {Path}.", source.Name, source.Path);
 
-            return new SourceScan(source, [], ex.Message);
+            return new SourceScan(source, [], ex is UserFriendlyException friendly ? friendly.Describe() : "This folder could not be read.");
         }
     }
 

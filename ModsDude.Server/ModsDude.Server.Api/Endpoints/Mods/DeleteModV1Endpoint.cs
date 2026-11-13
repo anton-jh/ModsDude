@@ -32,6 +32,7 @@ public class DeleteModV1Endpoint : IEndpoint
         ApplicationDbContext dbContext,
         IModStorageService storageService,
         IUnitOfWork unitOfWork,
+        ILogger<DeleteModV1Endpoint> logger,
         CancellationToken cancellationToken)
     {
         if (RequestChecks.ModId(modId) is { } invalidId)
@@ -40,9 +41,10 @@ public class DeleteModV1Endpoint : IEndpoint
         }
 
         var versions = await dbContext.ModVersions.GetVersionsOfModAsync(new RepoId(repoId), new ModId(modId), cancellationToken);
+        // Already gone, which is what was asked for: a repeat of this request gets the same answer.
         if (versions.Count == 0)
         {
-            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No mod '{modId}' found in repo '{repoId}'"));
+            return TypedResults.Ok();
         }
 
         if (await dbContext.ProfileRevisions.IsModPinnedAsync(new RepoId(repoId), new ModId(modId), cancellationToken))
@@ -68,10 +70,7 @@ public class DeleteModV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.ModInUse(new RepoId(repoId), new ModId(modId)));
         }
 
-        foreach (var version in versions)
-        {
-            await storageService.DeleteMod(new RepoId(repoId), new ModId(modId), version.Id, cancellationToken);
-        }
+        await ModFileCleanup.DeleteAsync(storageService, logger, new RepoId(repoId), new ModId(modId), versions.Select(x => x.Id), cancellationToken);
 
         return TypedResults.Ok();
     }

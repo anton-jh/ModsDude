@@ -82,9 +82,9 @@ public class RegisterModV1Endpoint : IEndpoint
 
         var siblings = await dbContext.ModVersions.GetVersionsOfModAsync(new RepoId(repoId), modId, cancellationToken);
 
-        if (siblings.Any(x => x.Id == versionId))
+        if (siblings.FirstOrDefault(x => x.Id == versionId) is ModVersion existing)
         {
-            return TypedResults.BadRequest(Problems.ModVersionAlreadyExists(new RepoId(repoId), modId, versionId));
+            return AnswerExisting(existing, request);
         }
 
         var after = request.Placement.After is null ? (ModVersionId?)null : new ModVersionId(request.Placement.After);
@@ -124,7 +124,12 @@ public class RegisterModV1Endpoint : IEndpoint
         }
         catch (DbUpdateException exception) when (exception.IsUniqueViolation(ModVersionConstraints.PrimaryKey))
         {
-            return TypedResults.BadRequest(Problems.ModVersionAlreadyExists(new RepoId(repoId), modId, versionId));
+            dbContext.ChangeTracker.Clear();
+
+            var concurrent = await dbContext.ModVersions.AsNoTracking()
+                .FirstAsync(x => x.RepoId == new RepoId(repoId) && x.ModId == modId && x.Id == versionId, cancellationToken);
+
+            return AnswerExisting(concurrent, request);
         }
         catch (DbUpdateException exception) when (exception.IsUniqueViolation(ModVersionConstraints.SequenceIndex) || exception is DbUpdateConcurrencyException)
         {
@@ -135,6 +140,17 @@ public class RegisterModV1Endpoint : IEndpoint
         await retentionUpkeep.ReleaseModsAsync(modVersion.RepoId, [modVersion.ModId], cancellationToken);
 
         return TypedResults.Ok(ModDto.FromModel(modVersion));
+    }
+
+    /// <summary>
+    /// The same file registered already is a repeat of this registration, or the same one by somebody
+    /// else, and is answered as a success. A different file under the same version is refused.
+    /// </summary>
+    private static Results<Ok<ModDto>, BadRequest<CustomProblemDetails>> AnswerExisting(ModVersion existing, RegisterModRequest request)
+    {
+        return existing.ContentHash == request.ContentHash && existing.FileName == request.FileName
+            ? TypedResults.Ok(ModDto.FromModel(existing))
+            : TypedResults.BadRequest(Problems.ModVersionAlreadyExists(existing.RepoId, existing.ModId, existing.Id));
     }
 
 

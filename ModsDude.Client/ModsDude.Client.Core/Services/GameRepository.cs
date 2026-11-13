@@ -147,7 +147,10 @@ public class GameRepository : IGameRepository
         {
             throw new UserFriendlyException(
                 "This game is already connected",
-                "A machine configures a game once - one active profile, one savegame hold, however many folders its adapter reaches - and this one already is. Open its settings to change where those folders are.");
+                "A machine configures a game once - one active profile, one savegame hold, however many folders its adapter reaches - and this one already is. Open its settings to change where those folders are.")
+            {
+                Hint = "Open its settings to change where its folders are."
+            };
         }
 
         var targets = GetTargets(baseAdapter, localSettings);

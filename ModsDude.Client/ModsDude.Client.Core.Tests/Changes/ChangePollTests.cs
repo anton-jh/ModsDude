@@ -519,7 +519,7 @@ public class ChangePollTests
         public bool IsGone(Guid repoId) => false;
         public void ClearUserState() { }
 
-        public Task CreateRepo(string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task CreateRepo(Guid requestId, string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<RepoMembershipDto> Join(Func<CancellationToken, Task<RepoMembershipDto>> redeem, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task Update(Repo repo, string name, DynamicForm baseSettings, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task DeleteRepo(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();

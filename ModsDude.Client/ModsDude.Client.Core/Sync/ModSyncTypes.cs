@@ -337,14 +337,14 @@ public sealed record QuarantinedFile(ModKey ModId, string OriginalPath, Quaranti
 }
 
 /// <param name="Subject">The mod or managed file that failed, as a person would name it.</param>
-public sealed record ModSyncFailure(string Subject, string Message)
+/// <param name="Exception">What went wrong, for the kind of failure it was. Logged where it was caught, never shown.</param>
+public sealed record ModSyncFailure(string Subject, Exception Exception)
 {
-    public Exception? Exception { get; init; }
 
     /// <summary>The repo has the version but the server has no file for it, so trying again cannot help.</summary>
     public bool MissingOnServer { get; init; }
 
-    public bool OutOfDiskSpace => Exception is not null && DiskFull.Is(Exception);
+    public bool OutOfDiskSpace => DiskFull.Is(Exception);
 }
 
 /// <param name="Completed">

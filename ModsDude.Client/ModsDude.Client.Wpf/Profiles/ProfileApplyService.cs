@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Disks;
@@ -164,7 +165,8 @@ public sealed class ProfileApplyService(
     IBackgroundTaskReporter backgroundTasks,
     IResourceLeases leases,
     IGoneRepos goneRepos,
-    IGameActivityReporter activity) : IProfileApplyService
+    IGameActivityReporter activity,
+    ILogger<ProfileApplyService> logger) : IProfileApplyService
 {
     /// <summary>
     /// The folder the user last chose to keep unrecognised files in, so the second apply of a session
@@ -216,9 +218,15 @@ public sealed class ProfileApplyService(
             {
                 throw;
             }
-            catch (Exception exception) when (exception is UserFriendlyException or IOException or UnauthorizedAccessException)
+            catch (UserFriendlyException exception)
             {
-                refusals.Add(exception is UserFriendlyException friendly ? friendly.DeveloperMessage : exception.Message);
+                logger.LogInformation("Folder {Target} of game {Game} was not planned: {Reason}", target.DisplayName, game.Identity, exception.DeveloperMessage);
+                refusals.Add(exception.Describe());
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(exception, "Folder {Target} of game {Game} could not be read for planning.", target.DisplayName, game.Identity);
+                refusals.Add($"'{target.DisplayName}' could not be read.");
             }
         }
 

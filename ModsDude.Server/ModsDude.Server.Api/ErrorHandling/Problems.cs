@@ -508,6 +508,7 @@ public static class Problems
             InviteStatus.Expired => "This invite has expired.",
             InviteStatus.Exhausted => "This invite has been used as many times as it was meant for.",
             InviteStatus.Revoked => "This invite has been revoked.",
+            InviteStatus.InviterLostAccess => "The person who made this invite can no longer invite at its level.",
             _ => throw new UnreachableException("An active invite is usable")
         };
 
@@ -518,6 +519,13 @@ public static class Problems
             Detail = reason + " Ask for a new one."
         };
     }
+
+    public static CustomProblemDetails InviteCodeNotYours => new()
+    {
+        Type = ProblemType.InviteCodeNotYours,
+        Title = "Not your invite",
+        Detail = "Only the person who made an invite can read its code."
+    };
 
     public static CustomProblemDetails InviteRedemptionConflict => new()
     {
@@ -708,6 +716,10 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "invite-not-usable")]
         [JsonStringEnumMemberName(_typeBaseUri + "invite-not-usable")]
         InviteNotUsable,
+
+        [EnumMember(Value = _typeBaseUri + "invite-code-not-yours")]
+        [JsonStringEnumMemberName(_typeBaseUri + "invite-code-not-yours")]
+        InviteCodeNotYours,
 
         [EnumMember(Value = _typeBaseUri + "invite-redemption-conflict")]
         [JsonStringEnumMemberName(_typeBaseUri + "invite-redemption-conflict")]

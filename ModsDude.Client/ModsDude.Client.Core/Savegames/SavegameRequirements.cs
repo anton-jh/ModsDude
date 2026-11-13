@@ -21,7 +21,10 @@ internal static class SavegameRequirements
         => adapter.SavegameTargets[slot.Target]
             ?? throw new UserFriendlyException(
                 $"'{game.Name}' no longer has the folder that save is in",
-                $"No savegame folder is configured for target '{slot.Target}' of game '{game.Identity}', so slot '{slot.Slot}' cannot be reached. Point the settings back at it, or disconnect the savegame to stop tracking it here.");
+                $"No savegame folder is configured for target '{slot.Target}' of game '{game.Identity}', so slot '{slot.Slot}' cannot be reached. Point the settings back at it, or disconnect the savegame to stop tracking it here.")
+            {
+                Hint = "Point the settings back at it, or stop tracking the savegame here."
+            };
 
     /// <summary>
     /// Refuses to take a second savegame that claims this game's mod folder. A savegame with no profile
@@ -46,7 +49,10 @@ internal static class SavegameRequirements
 
         throw new UserFriendlyException(
             $"'{game.Name}' is already holding a savegame",
-            $"Savegame '{blocking.SavegameId}' is checked out in game '{game.Identity}' and follows profile '{blocking.ProfileId}', so its mod folder is spoken for. Check that one in before taking '{savegameName}'.");
+            $"Savegame '{blocking.SavegameId}' is checked out in game '{game.Identity}' and follows profile '{blocking.ProfileId}', so its mod folder is spoken for. Check that one in before taking '{savegameName}'.")
+        {
+            Hint = "Check that one in first."
+        };
     }
 
     public static SavegameCheckoutBinding RequireBinding(this ISavegameBindingStore bindings, Game game, Guid savegameId)

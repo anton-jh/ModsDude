@@ -39,7 +39,9 @@ public class CreateInviteV1Endpoint : IEndpoint
         ILogger<CreateInviteV1Endpoint> logger,
         CancellationToken cancellationToken)
     {
-        var authResult = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
+        var user = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken);
+
+        var authResult = user
             .CheckIsAllowedTo(x => x
                 .AccessRepoAtLevel(new RepoId(repoId), RepoMembershipLevel.Member)
                 .GrantAccessToRepo(new RepoId(repoId), request.MembershipLevel))
@@ -53,9 +55,13 @@ public class CreateInviteV1Endpoint : IEndpoint
         var repo = new RepoId(repoId);
         var requestId = new RepoInviteRequestId(request.RequestId);
 
+        // The caller is the inviter, and authorization above holds them in the repo.
+        RepoInviteDto Describe(RepoInvite invite) => RepoInviteDto.FromModel(
+            invite, now, user.RepoMemberships.Single(x => x.RepoId == repo).Level, UserDto.FromModel(user));
+
         if (await dbContext.RepoInvites.GetByRequestIdAsync(repo, requestId, cancellationToken) is RepoInvite repeat)
         {
-            return TypedResults.Ok(RepoInviteDto.FromModel(repeat, now));
+            return TypedResults.Ok(Describe(repeat));
         }
 
         // Checked after authorization so that an admin asking for it is told why rather than being
@@ -84,7 +90,7 @@ public class CreateInviteV1Endpoint : IEndpoint
                 code,
                 requestId,
                 request.MembershipLevel,
-                claimsPrincipal.GetUserId(),
+                user.Id,
                 now,
                 request.ExpiresAt,
                 request.MaximumUses),
@@ -92,7 +98,7 @@ public class CreateInviteV1Endpoint : IEndpoint
             logger,
             cancellationToken);
 
-        return TypedResults.Ok(RepoInviteDto.FromModel(invite, now));
+        return TypedResults.Ok(Describe(invite));
     }
 
 

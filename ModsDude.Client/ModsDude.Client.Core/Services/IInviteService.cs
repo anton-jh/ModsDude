@@ -6,8 +6,13 @@ public interface IInviteService
 {
     Task<IReadOnlyList<RepoInviteDto>> GetInvites(Guid repoId, CancellationToken cancellationToken);
 
+    /// <summary>The code of an invite the caller made. Nobody else's can be read.</summary>
+    Task<string> GetInviteCode(Guid repoId, Guid inviteId, CancellationToken cancellationToken);
+
+    /// <param name="requestId">The same for a repeat of this request, which then returns the invite it made.</param>
     Task<RepoInviteDto> CreateInvite(
         Guid repoId,
+        Guid requestId,
         RepoMembershipLevel level,
         int? maximumUses,
         DateTime? expiresAt,

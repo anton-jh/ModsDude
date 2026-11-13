@@ -316,6 +316,10 @@
           },
           "name": {
             "type": "string"
+          },
+          "requestId": {
+            "format": "guid",
+            "type": "string"
           }
         },
         "type": "object"
@@ -687,20 +691,31 @@
         },
         "type": "object"
       },
+      "InviteCodeDto": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "InviteStatus": {
         "description": "",
         "enum": [
           "Active",
           "Expired",
           "Exhausted",
-          "Revoked"
+          "Revoked",
+          "InviterLostAccess"
         ],
         "type": "string",
         "x-enumNames": [
           "Active",
           "Expired",
           "Exhausted",
-          "Revoked"
+          "Revoked",
+          "InviterLostAccess"
         ]
       },
       "LookUpModHubModsRequest": {
@@ -1030,6 +1045,7 @@
           "https://server.modsdude.com/api/problems/invalid-cursor",
           "https://server.modsdude.com/api/problems/invite-not-found",
           "https://server.modsdude.com/api/problems/invite-not-usable",
+          "https://server.modsdude.com/api/problems/invite-code-not-yours",
           "https://server.modsdude.com/api/problems/invite-redemption-conflict",
           "https://server.modsdude.com/api/problems/invalid-invite-limits",
           "https://server.modsdude.com/api/problems/invite-cannot-grant-admin",
@@ -1091,6 +1107,7 @@
           "InvalidCursor",
           "InviteNotFound",
           "InviteNotUsable",
+          "InviteCodeNotYours",
           "InviteRedemptionConflict",
           "InvalidInviteLimits",
           "InviteCannotGrantAdmin",
@@ -1605,12 +1622,17 @@
       "RepoInviteDto": {
         "additionalProperties": false,
         "properties": {
-          "code": {
-            "type": "string"
-          },
           "created": {
             "format": "date-time",
             "type": "string"
+          },
+          "createdBy": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UserDto"
+              }
+            ]
           },
           "expiresAt": {
             "format": "date-time",
@@ -4112,6 +4134,103 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "EntraExternalId": []
+          }
+        ],
+        "tags": [
+          "Invites"
+        ]
+      }
+    },
+    "/api/v1/repos/{repoId}/invites/{inviteId}/code": {
+      "get": {
+        "operationId": "GetInviteCodeV1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repoId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "in": "path",
+            "name": "inviteId",
+            "required": true,
+            "schema": {
+              "format": "guid",
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteCodeDto"
+                }
+              }
+            },
             "description": ""
           },
           "400": {

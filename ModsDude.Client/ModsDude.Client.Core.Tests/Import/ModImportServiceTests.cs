@@ -533,8 +533,28 @@ public class ModImportServiceTests : IDisposable
             ResolveSourceConflicts = Choose("a different build of the same version")
         });
 
-        Assert.Equal(ModImportStatus.AlreadyRegistered, Assert.Single(result.Items).Status);
+        Assert.Equal(ModImportStatus.ContentMismatch, Assert.Single(result.Items).Status);
         Assert.Empty(result.Superseded);
+    }
+
+    /// <summary>The server answers a registration of the same file as a success, which is also what a repeat after a lost answer gets.</summary>
+    [Fact]
+    public async Task The_same_file_registered_first_by_somebody_else_is_a_success()
+    {
+        _server.BeforeRegister = identity =>
+        {
+            if (_server.VersionsOf(identity.ModId).Count == 0)
+            {
+                _server.RegisterStoredFileElsewhere(identity);
+            }
+
+            return Task.CompletedTask;
+        };
+
+        var result = await ImportAsync([Local("FS25_Plough", "1.0")]);
+
+        Assert.Equal(ModImportStatus.Registered, Assert.Single(result.Items).Status);
+        Assert.Equal(Vs("1.0"), _server.VersionsOf(Mod("FS25_Plough")));
     }
 
     [Fact]

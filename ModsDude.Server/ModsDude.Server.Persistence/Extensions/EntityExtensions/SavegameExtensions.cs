@@ -143,6 +143,20 @@ public static class SavegameExtensions
             .FirstOrDefaultAsync(x => x.RepoId == repoId && x.SavegameId == savegameId && x.EndedAt == null, cancellationToken);
     }
 
+    /// <summary>The claim <paramref name="userId"/> took on the savegame most recently, open or ended.</summary>
+    public static Task<SavegameCheckout?> GetLatestCheckoutOfAsync(
+        this DbSet<SavegameCheckout> dbSet,
+        RepoId repoId, SavegameId savegameId, UserId userId,
+        CancellationToken cancellationToken)
+    {
+        return dbSet
+            .AsNoTracking()
+            .Where(x => x.RepoId == repoId && x.SavegameId == savegameId && x.UserId == userId)
+            .OrderByDescending(x => x.TakenAt)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     /// <summary>
     /// Every open claim in the repo, one per savegame that has one. What the savegame list joins to
     /// its rows, in one read rather than one per row.

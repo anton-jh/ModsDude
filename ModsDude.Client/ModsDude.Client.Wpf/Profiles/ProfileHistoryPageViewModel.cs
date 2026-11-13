@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
@@ -37,7 +38,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 /// recoverable. See docs/02-domain-model.md#profile-revisions.
 /// </para>
 /// </remarks>
-public partial class ProfileHistoryPageViewModel : PageViewModel
+public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly Profile _profile;
@@ -46,10 +47,13 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     private readonly ModListItemViewModel.Factory _itemFactory;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
+    private readonly LatestLoad _historyLoad;
     private readonly LatestLoad _modsLoad;
     private readonly LatestLoad _changesLoad;
     private readonly IToastService _toasts;
     private readonly IShellNavigationService _shellNavigation;
+    // Keyed on the revision alone: after a lost answer the head shown may be the restore's own.
+    private readonly RequestIdKeeper<int> _restoreRequestIds = new();
 
     private ProfileHistory? _fetched;
 
@@ -87,6 +91,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
         IShellNavigationService shellNavigation)
     {
         _errorReporter = errorReporter;
+        _historyLoad = new LatestLoad(loading => IsLoading = loading);
         _modsLoad = new LatestLoad(loading => IsLoadingMods = loading);
         _changesLoad = new LatestLoad(loading => IsLoadingChanges = loading);
         _toasts = toasts;
@@ -377,7 +382,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
                     _profile.Name, result, GoToSavegameAsync));
             }
 
-            await ReloadAsync(null, cancellationToken);
+            await ReloadAsync(null);
         }
         catch (OperationCanceledException)
         {
@@ -490,6 +495,10 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
             _selectRevisionOnce = null;
         }
 
+        // Retention and other people's saves change the history without a word to this page; the
+        // profiles being read again is when it may have.
+        _profileStore.Reread += OnProfilesReread;
+
         IsLoading = false;
     }
 
@@ -520,16 +529,19 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
 
         try
         {
-            var restored = await _profileStore.RestoreRevisionAsync(_profile, revision.Number, _shownHead, cancellationToken);
+            var restored = await _profileStore.RestoreRevisionAsync(
+                _profile, _restoreRequestIds.For(revision.Number), revision.Number, _shownHead, cancellationToken);
+
+            _restoreRequestIds.Forget();
 
             _toasts.Show($"Restored revision {revision.Number} as revision {restored.Number}. Apply the profile to put it in your mod folder.");
 
-            await ReloadAsync(select: restored.Number, cancellationToken);
+            await ReloadAsync(select: restored.Number);
         }
         catch (UserFriendlyException exception)
         {
             // The newer revision is what the refusal is about, so it is put on screen before saying so.
-            await ReloadAsync(select: null, cancellationToken);
+            await ReloadAsync(select: null);
             await _errorReporter.ShowAsync(exception, $"restoring revision {revision.Number} of '{_profile.Name}'");
         }
         finally
@@ -553,8 +565,8 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
             return;
         }
 
-        // One per profile the user means to create, so a retry after a lost answer finds the profile it made.
-        var requestId = Guid.NewGuid();
+        // One per name asked for in this modal, so a retry after a lost answer finds the profile it made.
+        var requestIds = new RequestIdKeeper<string>();
 
         IsWorking = true;
 
@@ -572,7 +584,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
                     {
                         await _profileStore.CreateAsync(
                             _repo.Id,
-                            requestId,
+                            requestIds.For(name),
                             name,
                             new CopyProfileRevisionRequest { ProfileId = _profile.Id, Revision = revision.Number },
                             cancellationToken);
@@ -599,8 +611,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     private bool CanSaveAs() => CanEdit && IsWorking is false && HasSelection;
 
     [RelayCommand]
-    private async Task Refresh(CancellationToken cancellationToken)
-        => await ReloadAsync(Selected?.Number, cancellationToken);
+    private Task Refresh() => ReloadAsync(Selected?.Number);
 
     /// <summary>
     /// The pane switch, as commands rather than a two-way bound flag: a radio button binding
@@ -661,18 +672,23 @@ public partial class ProfileHistoryPageViewModel : PageViewModel
     }
 
 
-    private async Task ReloadAsync(int? select, CancellationToken cancellationToken)
-    {
-        IsLoading = true;
+    private Task ReloadAsync(int? select)
+        => _historyLoad.RunAsync(
+            token => _profileService.GetHistory(_repo.Id, _profile.Id, token),
+            history => Publish(history, select),
+            exception => _errorReporter.ShowAsync(exception, $"reading the history of '{_profile.Name}'"));
 
-        try
+    private void OnProfilesReread(Guid repoId)
+    {
+        if (repoId == _repo.Id)
         {
-            Publish(await _profileService.GetHistory(_repo.Id, _profile.Id, cancellationToken), select);
+            _ = ReloadAsync(Selected?.Number);
         }
-        finally
-        {
-            IsLoading = false;
-        }
+    }
+
+    public void Dispose()
+    {
+        _profileStore.Reread -= OnProfilesReread;
     }
 
     private void Publish(ProfileHistory history, int? select = null)

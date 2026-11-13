@@ -56,13 +56,6 @@ internal static class ProfileRevisionReads
         return dtos[0];
     }
 
-    /// <summary>
-    /// The author, named. A revision records who made it as a <see cref="UserId"/> and there is no
-    /// foreign key holding that user in place, so a name that cannot be resolved falls back to the
-    /// id rather than dropping the revision out of the history.
-    /// </summary>
-    public static UserDto Describe(UserId userId, UserNameplate? nameplate)
-        => new(userId.Value, nameplate?.DisplayName.Value ?? userId.Value, UserTag.For(userId), nameplate?.AvatarHash);
 
 
     private static async Task<List<ProfileRevisionDto>> ToDtosAsync(
@@ -95,7 +88,7 @@ internal static class ProfileRevisionReads
                 profileId.Value,
                 row.Number.Value,
                 row.Created,
-                Describe(row.CreatedBy, names.TryGetValue(row.CreatedBy, out var name) ? name : null),
+                UserDto.Of(row.CreatedBy, names.TryGetValue(row.CreatedBy, out var name) ? name : null),
                 row.Label,
                 row.Origin,
                 row.SourceProfileId?.Value,

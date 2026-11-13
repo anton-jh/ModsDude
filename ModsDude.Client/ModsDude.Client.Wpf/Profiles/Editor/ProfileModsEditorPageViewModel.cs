@@ -68,6 +68,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly IReadOnlyList<IRelayCommand> _commands;
 
     private readonly EditHistory<ProfileEditorSnapshot> _history = new(new(new ProfileDraft([], [], []), []));
+    private readonly RequestIdKeeper<SaveAttempt> _saveRequestIds = new();
     private readonly OtherProfilesReader _otherProfiles;
     private readonly Dictionary<ModKey, ModVersionKey> _availableChoices = [];
 
@@ -906,6 +907,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             _repo,
             _profile.Id,
             _profile.Name,
+            _saveRequestIds.For(new SaveAttempt(draft, VersionDescription)),
             _basedOn,
             VersionDescription,
             [.. draft.Saved.Values],
@@ -1405,6 +1407,16 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
 
     private static string Counted(string verb, int count) => count > 0 ? $"{verb} {count}" : verb;
+
+
+    /// <summary>A save is the same request while the draft has no edits since and the label is the same.</summary>
+    private sealed record SaveAttempt(ProfileDraft Draft, string? Label)
+    {
+        public bool Equals(SaveAttempt? other)
+            => other is not null && Draft.IsSameAs(other.Draft) && Label == other.Label;
+
+        public override int GetHashCode() => Label?.GetHashCode() ?? 0;
+    }
 
 
     public class Factory(IServiceProvider serviceProvider)

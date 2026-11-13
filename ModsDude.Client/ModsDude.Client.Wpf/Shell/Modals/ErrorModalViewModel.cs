@@ -31,7 +31,7 @@ namespace ModsDude.Client.Wpf.Shell.Modals;
 /// </remarks>
 public partial class ErrorModalViewModel(
     string message,
-    string? details,
+    string? hint,
     DateTimeOffset loggedAt,
     ILogger? logger = null)
     : ModalViewModel
@@ -49,13 +49,12 @@ public partial class ErrorModalViewModel(
     public string Message { get; } = message;
 
     /// <summary>
-    /// The developer's half - an exception message, usually. Rendered as a secondary block rather
-    /// than folded into <see cref="Message"/>, so that the sentence a user can act on is not
-    /// buried under one they cannot.
+    /// What the user can do about it, in plain words, where there is something. Never exception
+    /// text: what a developer needs is in the log the footer points at.
     /// </summary>
-    public string? Details { get; } = details;
+    public string? Hint { get; } = hint;
 
-    public bool HasDetails => string.IsNullOrWhiteSpace(Details) is false;
+    public bool HasHint => string.IsNullOrWhiteSpace(Hint) is false;
 
     public DateTimeOffset LoggedAt { get; } = loggedAt;
 
@@ -69,8 +68,8 @@ public partial class ErrorModalViewModel(
     /// <remarks>
     /// <para>
     /// <b>The whole modal, not just the sentence.</b> What somebody pastes into a chat window has to
-    /// carry the developer's half and the timestamp with it - those are the two things whoever reads
-    /// the report needs, and they are precisely the parts nobody retypes.
+    /// carry the timestamp with it - that is what finds the log line whoever reads the report needs,
+    /// and it is precisely the part nobody retypes.
     /// </para>
     /// <para>
     /// The clipboard is genuinely refusable - another process can hold it open - so a failure says so
@@ -83,7 +82,7 @@ public partial class ErrorModalViewModel(
     {
         var text = string.Join(
             Environment.NewLine + Environment.NewLine,
-            new[] { Message, Details, $"Logged {LoggedAt.ToString(TimestampFormat)}" }
+            new[] { Message, Hint, $"Logged {LoggedAt.ToString(TimestampFormat)}" }
                 .Where(x => string.IsNullOrWhiteSpace(x) is false));
 
         try

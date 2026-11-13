@@ -35,7 +35,7 @@ public class MembershipService(
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.CannotDemoteOnlyAdmin)
         {
-            throw new UserFriendlyException("A repo needs an admin", "The only admin cannot be demoted. Promote somebody else first.", ex);
+            throw new UserFriendlyException("A repo needs an admin", "The only admin cannot be demoted.", ex) { Hint = "Promote somebody else first." };
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.InsufficientRepoAccess)
         {
@@ -43,7 +43,7 @@ public class MembershipService(
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.RepoChanged)
         {
-            throw new UserFriendlyException("The members changed", "Check them and try again.", ex);
+            throw new UserFriendlyException("The members changed", inner: ex) { Hint = "Check them and try again." };
         }
     }
 
@@ -55,7 +55,7 @@ public class MembershipService(
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.CannotKickOnlyAdmin)
         {
-            throw new UserFriendlyException("A repo needs an admin", "The only admin cannot be removed. Promote somebody else first.", ex);
+            throw new UserFriendlyException("A repo needs an admin", "The only admin cannot be removed.", ex) { Hint = "Promote somebody else first." };
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.InsufficientRepoAccess)
         {
@@ -63,7 +63,7 @@ public class MembershipService(
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.RepoChanged)
         {
-            throw new UserFriendlyException("The members changed", "Check them and try again.", ex);
+            throw new UserFriendlyException("The members changed", inner: ex) { Hint = "Check them and try again." };
         }
     }
 }

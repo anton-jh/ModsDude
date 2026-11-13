@@ -102,7 +102,10 @@ public static class BeamNgModDatabase
                 "Could not read the game's mod list",
                 "ModsDude reads BeamNG.drive's mods/db.json to switch the profile's mods on, and it is not valid JSON. " +
                 "If the game is running, try again once it has closed; otherwise starting the game once rewrites it.",
-                exception);
+                exception)
+            {
+                Hint = "Close the game, or start it once, and try again."
+            };
         }
     }
 }

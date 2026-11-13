@@ -57,6 +57,13 @@ public class UpdateMembershipV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"Member '{userId}' not found"));
         }
 
+        // Already so, which is what was asked for. Before the check below, which asks for more once
+        // the subject holds the level: a repeat of a promotion would otherwise be refused.
+        if (subjectMembership.Level == request.NewLevel)
+        {
+            return TypedResults.Ok();
+        }
+
         authResult = user
             .CheckIsAllowedTo(x => x
                 .ChangeOthersMembership(subjectMembership))

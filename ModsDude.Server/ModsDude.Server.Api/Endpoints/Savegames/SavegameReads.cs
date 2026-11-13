@@ -32,15 +32,6 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 internal static class SavegameReads
 {
     /// <summary>
-    /// The person, named. A snapshot records who made it as a <see cref="UserId"/> and there is no
-    /// foreign key holding that user in place, so a name that cannot be resolved falls back to the
-    /// id rather than dropping the row out of the history.
-    /// </summary>
-    public static UserDto Describe(UserId userId, UserNameplate? nameplate)
-        => new(userId.Value, nameplate?.DisplayName.Value ?? userId.Value, UserTag.For(userId), nameplate?.AvatarHash);
-
-
-    /// <summary>
     /// Every savegame in the repo, each carrying its head snapshot and its open claim.
     /// </summary>
     /// <param name="archived">
@@ -256,7 +247,7 @@ internal static class SavegameReads
             row.ContentHash,
             row.SizeBytes,
             row.Created,
-            Describe(row.CreatedBy, names.TryGetValue(row.CreatedBy, out var name) ? name : null),
+            UserDto.Of(row.CreatedBy, names.TryGetValue(row.CreatedBy, out var name) ? name : null),
             row.Label,
             row.Origin,
             row.BaseSnapshot?.Value,
@@ -270,7 +261,7 @@ internal static class SavegameReads
     {
         return SavegameCheckoutDto.FromModel(
             checkout,
-            Describe(checkout.UserId, names.TryGetValue(checkout.UserId, out var name) ? name : null));
+            UserDto.Of(checkout.UserId, names.TryGetValue(checkout.UserId, out var name) ? name : null));
     }
 }
 

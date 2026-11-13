@@ -220,7 +220,7 @@ internal sealed class ModSyncExecutor(
 
         lock (failures)
         {
-            failures.Add(new ModSyncFailure(item.DisplayName, exception.Message) { Exception = exception });
+            failures.Add(new ModSyncFailure(item.DisplayName, exception));
         }
     }
 
@@ -410,7 +410,7 @@ internal sealed class ModSyncExecutor(
             {
                 logger.LogError(exception, "Could not update {File} during sync.", managed.FullPath);
 
-                failures.Add(new ModSyncFailure(managed.Edit.RelativePath, exception.Message) { Exception = exception });
+                failures.Add(new ModSyncFailure(managed.Edit.RelativePath, exception));
             }
         }
     }

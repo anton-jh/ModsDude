@@ -200,6 +200,23 @@ public class ProfileStoreTests
         Assert.Equal("Season 4 again", restored.Name);
     }
 
+    /// <summary>A history or an ignore list can change while the profile rows stay the same, so pages beside them are told on every read.</summary>
+    [Fact]
+    public async Task Every_read_of_a_repos_profiles_is_announced_even_when_nothing_changed()
+    {
+        var harness = new Harness();
+        harness.Add(_repoId, "Season 4", 3);
+        var reread = new List<Guid>();
+        harness.Store.Reread += reread.Add;
+
+        await harness.Store.RefreshAsync(_repoId, CancellationToken.None);
+        var changed = harness.Announced();
+        await harness.Store.RefreshAsync(_repoId, CancellationToken.None);
+
+        Assert.Equal([_repoId, _repoId], reread);
+        Assert.Empty(changed);
+    }
+
     [Fact]
     public async Task Restoring_a_revision_moves_the_head()
     {
@@ -208,28 +225,25 @@ public class ProfileStoreTests
         await harness.Store.RefreshAsync(_repoId, CancellationToken.None);
         var held = harness.Store.Find(_repoId, season.Id)!;
 
-        var restored = await harness.Store.RestoreRevisionAsync(held, 1, basedOn: 3, CancellationToken.None);
+        var restored = await harness.Store.RestoreRevisionAsync(held, Guid.NewGuid(), 1, basedOn: 3, CancellationToken.None);
 
         Assert.Equal(4, restored.Number);
         Assert.Equal(4, held.HeadRevision);
         Assert.Equal(3, Assert.Single(harness.Server.RevisionRestores).BasedOn);
     }
 
-    /// <summary>Each restore is its own action, so a second one is not mistaken for a repeat of the first.</summary>
     [Fact]
-    public async Task Two_restores_send_different_request_ids_and_each_moves_the_head()
+    public async Task A_restore_sends_the_request_id_it_is_given()
     {
         var harness = new Harness();
         var season = harness.Add(_repoId, "Season 4", 3);
         await harness.Store.RefreshAsync(_repoId, CancellationToken.None);
         var held = harness.Store.Find(_repoId, season.Id)!;
+        var requestId = Guid.NewGuid();
 
-        await harness.Store.RestoreRevisionAsync(held, 1, basedOn: 3, CancellationToken.None);
-        var second = await harness.Store.RestoreRevisionAsync(held, 2, basedOn: 4, CancellationToken.None);
+        await harness.Store.RestoreRevisionAsync(held, requestId, 1, basedOn: 3, CancellationToken.None);
 
-        Assert.Equal(5, second.Number);
-        Assert.Equal(2, harness.Server.RevisionRestores.Select(x => x.RequestId).Distinct().Count());
-        Assert.DoesNotContain(Guid.Empty, harness.Server.RevisionRestores.Select(x => x.RequestId));
+        Assert.Equal(requestId, Assert.Single(harness.Server.RevisionRestores).RequestId);
     }
 
     /// <summary>
@@ -246,7 +260,7 @@ public class ProfileStoreTests
         season.HeadRevision = 4;
 
         await Assert.ThrowsAsync<UserFriendlyException>(
-            () => harness.Store.RestoreRevisionAsync(held, 1, basedOn: 3, CancellationToken.None));
+            () => harness.Store.RestoreRevisionAsync(held, Guid.NewGuid(), 1, basedOn: 3, CancellationToken.None));
 
         Assert.Equal(4, held.HeadRevision);
         Assert.Equal(4, season.HeadRevision);

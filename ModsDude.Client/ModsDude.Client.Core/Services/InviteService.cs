@@ -20,17 +20,29 @@ public class InviteService(
         return [.. await invitesClient.GetInvitesV1Async(repoId, cancellationToken)];
     }
 
+    public async Task<string> GetInviteCode(Guid repoId, Guid inviteId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return (await invitesClient.GetInviteCodeV1Async(repoId, inviteId, cancellationToken)).Code;
+        }
+        catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.InviteCodeNotYours)
+        {
+            throw new UserFriendlyException("Only the person who made this invite can copy its code", inner: ex);
+        }
+    }
+
     public async Task<RepoInviteDto> CreateInvite(
         Guid repoId,
+        Guid requestId,
         RepoMembershipLevel level,
         int? maximumUses,
         DateTime? expiresAt,
         CancellationToken cancellationToken)
     {
-        // One per call, so a retry of this request returns the invite it made rather than a second one.
         var request = new CreateInviteRequest()
         {
-            RequestId = Guid.NewGuid(),
+            RequestId = requestId,
             MembershipLevel = level,
             MaximumUses = maximumUses,
             ExpiresAt = expiresAt

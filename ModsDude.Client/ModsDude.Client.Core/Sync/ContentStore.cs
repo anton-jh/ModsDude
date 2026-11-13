@@ -751,7 +751,10 @@ public sealed class ContentStore
         {
             throw new UserFriendlyException(
                 "The mod store folder holds other files",
-                $"'{RootPath}' is not empty and is not a ModsDude store, so nothing was written to it. Choose an empty folder for the store on {VolumeRoot} in Settings.");
+                $"'{RootPath}' is not empty and is not a ModsDude store, so nothing was written to it. Choose an empty folder for the store on {VolumeRoot} in Settings.")
+            {
+                Hint = $"Choose an empty folder for the store on {VolumeRoot} in Settings."
+            };
         }
     }
 

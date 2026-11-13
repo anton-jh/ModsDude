@@ -140,19 +140,18 @@
 
                                                 <!-- A Grid rather than a StackPanel of fixed widths.
                                                      The expiry is a formatted local date and time,
-                                                     which is as long as the locale makes it: pinned
-                                                     at 150px it was ellipsed for every invite that
-                                                     had one, and widening the number only moves the
-                                                     locale that breaks it. The code and the two
-                                                     counts are what have a knowable width, so they
-                                                     keep one and the expiry takes the rest. -->
+                                                     which is as long as the locale makes it. The
+                                                     inviter and the two counts keep a minimum width,
+                                                     and the expiry takes the rest. The code is not
+                                                     shown: only its maker can copy it. -->
                                                 <Grid ColumnDefinitions="auto auto auto auto * auto">
 
                                                     <TextBlock Grid.Column="0" VerticalAlignment="Center"
-                                                               FontFamily="Consolas" FontSize="15" FontWeight="SemiBold"
-                                                               Text="{Binding Code}" />
+                                                               MinWidth="120" FontWeight="SemiBold"
+                                                               Text="{Binding CreatedBy}" />
 
-                                                    <Button Grid.Column="1" Content="Copy" Margin="12 0 0 0"
+                                                    <Button Grid.Column="1" Content="Copy code" Margin="12 0 0 0"
+                                                            Visibility="{Binding IsMine, Converter={StaticResource BoolToVisibilityConverter}}"
                                                             Command="{Binding CopyCommand}" />
 
                                                     <TextBlock Grid.Column="2" VerticalAlignment="Center"

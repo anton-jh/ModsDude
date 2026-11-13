@@ -69,9 +69,8 @@ internal sealed class ModFetcher(IFilesClient filesClient, IModFileDownloader do
 
                     lock (failures)
                     {
-                        failures.Add(new ModSyncFailure(fetch.DisplayName, exception.Message)
+                        failures.Add(new ModSyncFailure(fetch.DisplayName, exception)
                         {
-                            Exception = exception,
                             MissingOnServer = exception is ApiException<CustomProblemDetails> { Result.Type: ProblemType.FileNotFound }
                         });
                     }

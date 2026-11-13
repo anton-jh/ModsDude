@@ -46,7 +46,10 @@ public static class FarmingSimulatorGameDataFolder
         return Find(gameVersion) ?? throw new UserFriendlyException(
             "Game folder not found",
             $"ModsDude looks for this game's data in {string.Join(" or ", Candidates(gameVersion))}, and neither exists. " +
-            "The game creates it the first time it is launched, so start it once and try again.");
+            "The game creates it the first time it is launched, so start it once and try again.")
+        {
+            Hint = "Start the game once and try again."
+        };
     }
 
 
@@ -101,7 +104,10 @@ public static class FarmingSimulatorGameDataFolder
                 "Could not read the game's settings",
                 $"ModsDude reads {settingsFile} to find out whether the game loads its mods from somewhere other than {defaultFolder}, " +
                 "and it could not be read. If the game is running, try again once it has finished saving.",
-                exception);
+                exception)
+            {
+                Hint = "Try again once the game has finished saving."
+            };
         }
     }
 

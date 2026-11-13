@@ -20,6 +20,12 @@ public interface IProfileStore : IUserScopedState, IProfileRevisions
     event Action<Guid>? Changed;
 
     /// <summary>
+    /// Raised on the store's thread with the repo whose profiles were just read from the server again,
+    /// changed or not. What a page shows beside them, such as a history, may have moved with them.
+    /// </summary>
+    event Action<Guid>? Reread;
+
+    /// <summary>
     /// The repo's live profiles. The same collection for as long as the user stays signed in, empty
     /// until the repo has been read.
     /// </summary>
@@ -72,9 +78,10 @@ public interface IProfileStore : IUserScopedState, IProfileRevisions
     /// Puts an older revision's mod list back by copying it to the front. Nothing is deleted, so the
     /// revisions in between stay readable and this is itself undoable.
     /// </summary>
+    /// <param name="requestId">The same for a repeat of this restore, which is then answered as the original was.</param>
     /// <param name="basedOn">The head the caller saw. The restore is refused when it has moved.</param>
     /// <exception cref="Exceptions.UserFriendlyException">Somebody else saved the profile since <paramref name="basedOn"/>.</exception>
-    Task<ProfileRevisionDto> RestoreRevisionAsync(Profile profile, int number, int basedOn, CancellationToken cancellationToken);
+    Task<ProfileRevisionDto> RestoreRevisionAsync(Profile profile, Guid requestId, int number, int basedOn, CancellationToken cancellationToken);
 
     /// <summary>Records the revision a save just wrote as the profile's newest.</summary>
     Task ApplyRevisionSavedAsync(Guid repoId, Guid profileId, int number);

@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Builds;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Imagery;
 using ModsDude.Client.Core;
@@ -63,6 +65,7 @@ public partial class SettingsPageViewModel
     private readonly IAutostartService _autostart;
     private readonly IAppUpdater _updater;
     private readonly IAppLifetime _lifetime;
+    private readonly ILogger<SettingsPageViewModel> _logger;
     private readonly Dictionary<string, ContentStoreViewModel> _storesByVolume = [];
 
     /// <summary>
@@ -90,9 +93,11 @@ public partial class SettingsPageViewModel
         TransferLimits transferLimits,
         IAutostartService autostart,
         IAppUpdater updater,
-        IAppLifetime lifetime)
+        IAppLifetime lifetime,
+        ILogger<SettingsPageViewModel> logger)
     {
         _lifetime = lifetime;
+        _logger = logger;
         _settingsRepository = settingsRepository;
         _maintenance = maintenance;
         _imageCache = imageCache;
@@ -721,7 +726,11 @@ public partial class SettingsPageViewModel
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            await _modalService.Show(ConfirmationModalViewModel.Refusal("That did not work", exception.Message));
+            _logger.LogWarning(exception, "Store housekeeping failed.");
+
+            await _modalService.Show(ConfirmationModalViewModel.Refusal(
+                "That did not work",
+                exception is UserFriendlyException friendly ? friendly.Describe() : "It stopped partway. Try again."));
 
             return null;
         }

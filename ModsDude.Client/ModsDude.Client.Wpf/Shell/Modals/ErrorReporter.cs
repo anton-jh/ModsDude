@@ -21,26 +21,27 @@ public sealed class ErrorReporter(
         // threw a UserFriendlyException itself has the stack that matters on the outer.
         logger.LogError(
             exception,
-            "Shown to the user at {LoggedAt} while {Context}: {UserMessage}",
+            "Shown to the user at {LoggedAt} while {Context}: {UserMessage}{DeveloperMessage}",
             loggedAt.ToString(ErrorModalViewModel.TimestampFormat),
             context ?? "working",
-            friendly.UserMessage);
+            friendly.UserMessage,
+            friendly.DeveloperMessage == friendly.UserMessage ? "" : $" ({friendly.DeveloperMessage})");
 
-        return new ErrorModalViewModel(friendly.UserMessage, friendly.DeveloperMessage, loggedAt, logger);
+        return new ErrorModalViewModel(friendly.UserMessage, friendly.Hint, loggedAt, logger);
     }
 
-    public ErrorModalViewModel Record(string message, string? details = null, string? context = null)
+    public ErrorModalViewModel Record(string message, string? hint = null, string? context = null)
     {
         var loggedAt = DateTimeOffset.Now;
 
         logger.LogError(
-            "Shown to the user at {LoggedAt} while {Context}: {UserMessage} {Details}",
+            "Shown to the user at {LoggedAt} while {Context}: {UserMessage} {Hint}",
             loggedAt.ToString(ErrorModalViewModel.TimestampFormat),
             context ?? "working",
             message,
-            details ?? "");
+            hint ?? "");
 
-        return new ErrorModalViewModel(message, details, loggedAt, logger);
+        return new ErrorModalViewModel(message, hint, loggedAt, logger);
     }
 
     public Task ShowAsync(Exception exception, string? context = null)

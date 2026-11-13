@@ -37,7 +37,7 @@
                                Margin="0 32 0 24" />
                 </Grid>
 
-                <!-- Selectable, like the details below it. Somebody about to report a failure should
+                <!-- Selectable, like the hint below it. Somebody about to report a failure should
                      never have to retype what it said, and the Copy button in the footer is the one
                      click version of the same thing rather than the only way to get at it. -->
                 <TextBox Text="{Binding Message, Mode=OneWay}"
@@ -45,20 +45,13 @@
                          Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                          Margin="0 0 0 16" />
 
-                <!-- The developer's half, kept visually secondary and scrollable: an exception
-                     message can be a paragraph, and it must not push the button off the modal. -->
-                <Border Padding="12"
-                        Margin="0 0 0 24"
-                        CornerRadius="4"
-                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                        Visibility="{Binding HasDetails, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
-                        <TextBox Text="{Binding Details, Mode=OneWay}"
-                                 Style="{StaticResource SelectableText}"
-                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                 FontSize="12" />
-                    </ScrollViewer>
-                </Border>
+                <!-- What the user can do about it, secondary to what happened. Never exception text:
+                     that is in the log the footer points at. -->
+                <TextBox Text="{Binding Hint, Mode=OneWay}"
+                         Style="{StaticResource SelectableText}"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                         Margin="0 0 0 24"
+                         Visibility="{Binding HasHint, Converter={StaticResource BoolToVisibilityConverter}}" />
 
             </StackPanel>
 
