@@ -132,6 +132,7 @@ internal sealed class ModFetcher(IFilesClient filesClient, IModFileDownloader do
             try
             {
                 await servingStore.CopyFromAsync(source, fetch.Hash, report, cancellationToken);
+                source.Touch(fetch.Hash);
 
                 return;
             }

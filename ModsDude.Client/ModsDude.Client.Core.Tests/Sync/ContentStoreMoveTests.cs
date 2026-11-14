@@ -84,6 +84,23 @@ public sealed class ContentStoreMoveTests : IDisposable
     }
 
     [Fact]
+    public async Task A_copy_cancelled_part_way_keeps_when_each_old_entry_was_last_used()
+    {
+        var first = await IngestAsync("first");
+        var second = await IngestAsync("second");
+        var lastUsed = new DateTime(2024, 10, 14, 11, 58, 0, DateTimeKind.Utc);
+        _store.SetLastUsed(first, lastUsed);
+        _store.SetLastUsed(second, lastUsed);
+        using var cancellation = new CancellationTokenSource();
+
+        var move = new ContentStoreMove(_store, _destination, () => _commits++, new CancelOnFirstReport(cancellation), NullLogger.Instance);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => move.RunAsync(sameVolume: false, cancellation.Token));
+
+        Assert.All(_store.Enumerate(), x => Assert.Equal(lastUsed, x.LastUsedUtc));
+    }
+
+    [Fact]
     public async Task A_commit_that_fails_after_a_copy_leaves_the_old_store_in_place()
     {
         var hash = await IngestAsync("a mod archive");

@@ -204,6 +204,24 @@ public class ModSyncServiceTests
     }
 
     [Fact]
+    public async Task A_hash_copied_across_from_another_disk_counts_as_used_there()
+    {
+        using var fixture = new SyncFixture();
+        fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
+
+        var hash = SyncTestContent.HashOf(Mod("1.0.0", "a"));
+        var longAgo = new DateTime(2024, 10, 14, 11, 58, 0, DateTimeKind.Utc);
+
+        await fixture.OtherStore.IngestAsync(new MemoryStream(SyncTestContent.Bytes(Mod("1.0.0", "a"))), hash, null, CancellationToken.None);
+        fixture.OtherStore.SetLastUsed(hash, longAgo);
+
+        var result = await fixture.ExecuteAsync(await fixture.PlanAsync());
+
+        Assert.True(result.Completed);
+        Assert.True(Assert.Single(fixture.OtherStore.Enumerate()).LastUsedUtc > longAgo);
+    }
+
+    [Fact]
     public async Task A_copy_on_another_disk_that_fails_verification_is_dropped_and_downloaded_instead()
     {
         using var fixture = new SyncFixture();

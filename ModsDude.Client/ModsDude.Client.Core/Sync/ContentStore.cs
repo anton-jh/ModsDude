@@ -126,8 +126,6 @@ public sealed class ContentStore
 
     public Stream OpenRead(string hash)
     {
-        Touch(hash);
-
         return new FileStream(GetBlobPath(hash), FileMode.Open, FileAccess.Read, FileShare.Read, FileSystemHelper.StreamBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
     }
 
@@ -224,6 +222,10 @@ public sealed class ContentStore
     /// blob at address <c>H</c> is by construction content that hashes to <c>H</c>, whichever disk
     /// it sits on. The bytes pass through memory anyway, so verifying costs almost nothing - and it
     /// catches an entry that has rotted or been rewritten through a hardlink.
+    /// <para>
+    /// Reading is not a use: the source entry keeps its place in its store's eviction order. A
+    /// caller that copies because it uses the entry touches the source itself.
+    /// </para>
     /// </remarks>
     public async Task<long> CopyFromAsync(ContentStore source, string hash, IProgress<long>? bytesWritten, CancellationToken cancellationToken)
     {

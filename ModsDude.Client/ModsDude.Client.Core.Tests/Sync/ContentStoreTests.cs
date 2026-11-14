@@ -150,6 +150,27 @@ public class ContentStoreTests
     }
 
     [Fact]
+    public async Task Copying_from_another_store_leaves_the_source_entry_last_used_when_it_was()
+    {
+        using var source = new TempDirectory("store-source");
+        using var target = new TempDirectory("store-target");
+
+        var from = new ContentStore("D:\\", source.Path, _oneGigabyte);
+        var to = new ContentStore("C:\\", target.Path, _oneGigabyte);
+
+        var content = Bytes("a mod both disks want");
+        var hash = HashOf(content);
+        var lastUsed = new DateTime(2025, 4, 18, 20, 32, 0, DateTimeKind.Utc);
+
+        await from.IngestAsync(new MemoryStream(content), hash, null, CancellationToken.None);
+        from.SetLastUsed(hash, lastUsed);
+
+        await to.CopyFromAsync(from, hash, null, CancellationToken.None);
+
+        Assert.Equal(lastUsed, Assert.Single(from.Enumerate()).LastUsedUtc);
+    }
+
+    [Fact]
     public async Task An_entry_hardlinked_into_a_mod_folder_is_not_uniquely_held()
     {
         using var root = new TempDirectory("store-links");

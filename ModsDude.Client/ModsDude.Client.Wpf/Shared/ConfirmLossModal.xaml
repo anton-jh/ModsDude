@@ -47,8 +47,21 @@
                     Margin="0 16 0 0"
                     Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
 
-                <!-- A uniform grid because it leaves collapsed buttons out of the count. -->
-                <UniformGrid Margin="20 24" Rows="1">
+                <!-- A uniform grid because it leaves collapsed buttons out of the count. Three
+                     phrases side by side do not fit, so an alternative stacks every answer. -->
+                <UniformGrid Margin="20 24">
+                    <UniformGrid.Style>
+                        <Style TargetType="UniformGrid">
+                            <Setter Property="Rows" Value="1" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasAlternative}" Value="True">
+                                    <Setter Property="Rows" Value="0" />
+                                    <Setter Property="Columns" Value="1" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </UniformGrid.Style>
+
                     <Button Margin="4"
                             Content="{Binding AlternativeText}"
                             HorizontalAlignment="Stretch"
