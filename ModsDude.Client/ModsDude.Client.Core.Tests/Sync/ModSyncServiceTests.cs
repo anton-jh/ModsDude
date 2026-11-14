@@ -31,7 +31,7 @@ public class ModSyncServiceTests
 
         // The manifest is what makes the next check a directory listing rather than 2,000 archives.
         Assert.True(result.ManifestWritten);
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
     }
 
     [Fact]
@@ -512,14 +512,14 @@ public class ModSyncServiceTests
 
         var plan = await fixture.PlanAsync();
 
-        Assert.Equal(["readme.txt"], plan.UnmanagedFileNames);
+        Assert.Equal(["readme.txt"], plan.UnmanagedFiles.Select(x => x.FileName));
 
         await fixture.ExecuteAsync(plan);
 
         Assert.True(File.Exists(fixture.Folder.Combine("readme.txt")));
 
         // Recorded so the next drift check does not report it as something that appeared.
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
     }
 
     [Fact]
@@ -587,7 +587,7 @@ public class ModSyncServiceTests
 
         Assert.Equal(downloadsBefore, fixture.Downloader.Downloads);
         Assert.Equal(Mod("1.0.0", "a"), fixture.ReadInstalled("fs25_a.zip"));
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
     }
 
     /// <summary>
@@ -809,12 +809,12 @@ public class ModSyncServiceTests
         fixture.Server.Pin("fs25_a", "1.0.0", Mod("1.0.0", "a"));
 
         await fixture.ExecuteAsync(await fixture.PlanAsync());
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
 
         // The user drops a mod into the folder from outside, which is what the game itself does.
         fixture.Install("fs25_b.zip", Mod("2.0.0", "b"));
 
-        var drifted = fixture.CheckDrift();
+        var drifted = await fixture.CheckDriftAsync();
         Assert.Equal(DriftStatus.Drifted, drifted.Status);
         Assert.Equal(["fs25_b.zip"], drifted.Added);
 
@@ -828,7 +828,7 @@ public class ModSyncServiceTests
 
         await fixture.Service.RecordAlreadyMatchedAsync(plan);
 
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
     }
 
     /// <summary>
@@ -846,7 +846,7 @@ public class ModSyncServiceTests
 
         Assert.True(result.Completed);
         Assert.Equal(["FS25_MyMod.zip"], fixture.FolderContents());
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
     }
 
     /// <summary>
@@ -900,7 +900,7 @@ public class ModSyncServiceTests
         Assert.Equal(Mod("1.0.0", "a"), fixture.ReadInstalled("FS25_A.zip"));
 
         // Recorded under the new name, or the next drift check reports one file added and one gone.
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
     }
 
     [Fact]

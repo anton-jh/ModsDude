@@ -80,7 +80,7 @@ public class ModSyncManagedFileTests
 
         await fixture.ExecuteAsync(await fixture.PlanAsync());
 
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class ModSyncManagedFileTests
 
         File.AppendAllText(fixture.Folder.Combine(_listName), "added by the game\n");
 
-        var drift = fixture.CheckDrift();
+        var drift = await fixture.CheckDriftAsync();
 
         Assert.Equal(DriftStatus.Drifted, drift.Status);
         Assert.Contains(_listName, drift.Changed);
@@ -107,7 +107,7 @@ public class ModSyncManagedFileTests
 
         File.WriteAllText(fixture.Folder.Combine(_listName), "added by the game\nmanaged:fs25_a\n");
 
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class ModSyncManagedFileTests
 
         fixture.Adapter.ManagedFiles = _ => [new GameFileEdit(_listName, _ => throw new InvalidDataException("Simulated: unreadable."))];
 
-        Assert.Contains(_listName, fixture.CheckDrift().Changed);
+        Assert.Contains(_listName, (await fixture.CheckDriftAsync()).Changed);
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public class ModSyncManagedFileTests
 
         File.Delete(fixture.Folder.Combine(_listName));
 
-        Assert.Contains(_listName, fixture.CheckDrift().Removed);
+        Assert.Contains(_listName, (await fixture.CheckDriftAsync()).Removed);
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public class ModSyncManagedFileTests
 
         Assert.True(rerun.Completed);
         Assert.Equal(["managed:fs25_a"], ReadList(fixture));
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
     }
 
     [Fact]

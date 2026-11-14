@@ -409,18 +409,19 @@ public class SavegameDriftTests
     /// carry both halves of "this folder is not what you think it is".
     /// </summary>
     [Fact]
-    public void Savegame_drift_rides_on_the_game_drift_report()
+    public async Task Savegame_drift_rides_on_the_game_drift_report()
     {
         using var manifests = new TempDirectory("savegame-drift-report");
         using var modFolder = new TempDirectory("savegame-drift-mods");
 
-        var service = new DriftService(new SyncManifestStore(manifests.Path), FakeManagedFileDriftCheck.None, NullLogger<DriftService>.Instance);
+        var service = new DriftService(new SyncManifestStore(manifests.Path), FakeManagedFileDriftCheck.None, FakeAddedModCheck.AllMods, NullLogger<DriftService>.Instance);
         var drift = new[] { new SavegameDrift(_repoId, _savegameId, _slot, SavegameDriftKind.UncheckedInPlay) };
 
-        var report = service.Check(
+        var report = await service.CheckAsync(
             Keys.Target(),
             new ActiveProfile(_repoId, _profileId),
             modFolder.Path,
+            CancellationToken.None,
             savegameDrift: drift);
 
         // Never synced, so the mod half has nothing to say - and the savegame half is carried anyway.

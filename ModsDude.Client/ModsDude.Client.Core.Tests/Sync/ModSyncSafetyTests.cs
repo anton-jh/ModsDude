@@ -47,7 +47,7 @@ public class ModSyncSafetyTests
         var entry = Assert.Single(fixture.Manifests.TryRead(fixture.Target)!.Entries);
 
         Assert.True(entry.ContentSuspect);
-        Assert.Equal(["fs25_a.zip"], fixture.CheckDrift().Changed);
+        Assert.Equal(["fs25_a.zip"], (await fixture.CheckDriftAsync()).Changed);
 
         // The next plan reads the file rather than trusting the hash the entry no longer vouches for.
         var next = await fixture.PlanAsync();
@@ -69,7 +69,7 @@ public class ModSyncSafetyTests
         fixture.Manifests.MarkSuspect(fixture.Target, new HashSet<string>([hash]));
 
         Assert.True(Assert.Single(fixture.Manifests.TryRead(fixture.Target)!.Entries).ContentSuspect);
-        Assert.Equal(["fs25_a.zip"], fixture.CheckDrift().Changed);
+        Assert.Equal(["fs25_a.zip"], (await fixture.CheckDriftAsync()).Changed);
 
         // The bytes are still right, so hashing them keeps the file and the re-apply clears the flag.
         var plan = await fixture.PlanAsync();
@@ -144,7 +144,7 @@ public class ModSyncSafetyTests
         var plan = await fixture.PlanAsync();
 
         Assert.Empty(fixture.FolderContents());
-        Assert.Empty(plan.UnmanagedFileNames);
+        Assert.Empty(plan.UnmanagedFiles);
         Assert.Empty(fixture.RecycleBin.Recycled);
     }
 

@@ -271,6 +271,87 @@ public class SyncManifestStoreTests
 
     private static string Name(ModTargetRef target) => StoreFileName.For(target.Game.ToString(), target.Key.Value);
 
+    [Fact]
+    public void A_version_3_manifest_is_upgraded_with_the_left_alone_files_stamped_as_they_are_now()
+    {
+        using var directory = new TempDirectory("manifests-v3");
+        using var folder = new TempDirectory("manifests-v3-mods");
+        var store = new SyncManifestStore(directory.Path);
+        var target = Keys.Target();
+        var entry = new SyncManifestEntry("fs25_a", "1.0.0", new string('a', 64), "fs25_a.zip", 4096, DateTimeOffset.UtcNow);
+        var readme = new FileInfo(folder.WriteFile("readme.txt", "notes to self"));
+
+        WriteLegacy(3, directory.Path, target, folder.Path, entry, "readme.txt", "gone.txt");
+
+        var read = store.TryRead(target);
+
+        Assert.NotNull(read);
+        Assert.Equal(SyncManifest.CurrentVersion, read.Version);
+        Assert.Equal([entry], read.Entries);
+
+        // One that is gone is dropped, so it is an addition if it comes back.
+        Assert.Equal([new UnmanagedFile("readme.txt", readme.Length, readme.LastWriteTimeUtc)], read.UnmanagedFiles);
+
+        // Written back, so the stamps are the baseline from here on and the next read is a plain one.
+        Assert.Equal(SyncManifest.CurrentVersion, JsonDocument.Parse(File.ReadAllText(Path.Combine(directory.Path, $"{Name(target)}.json"))).RootElement.GetProperty("Version").GetInt32());
+
+        folder.WriteFile("readme.txt", "notes to self, edited since");
+
+        Assert.Equal(read.UnmanagedFiles, store.TryRead(target)?.UnmanagedFiles);
+    }
+
+    [Fact]
+    public void A_version_3_manifest_for_a_folder_that_is_not_there_is_upgraded_in_memory_and_left_on_disk()
+    {
+        using var directory = new TempDirectory("manifests-v3-unreachable");
+        using var folder = new TempDirectory("manifests-v3-unreachable-mods");
+        var store = new SyncManifestStore(directory.Path);
+        var target = Keys.Target();
+        var entry = new SyncManifestEntry("fs25_a", "1.0.0", new string('a', 64), "fs25_a.zip", 4096, DateTimeOffset.UtcNow);
+        var missing = folder.Combine("unplugged");
+
+        WriteLegacy(3, directory.Path, target, missing, entry, "readme.txt");
+
+        var read = store.TryRead(target);
+
+        // Still readable, because store maintenance reads the entries to see which blobs are linked.
+        Assert.NotNull(read);
+        Assert.Equal([entry], read.Entries);
+        Assert.Empty(read.UnmanagedFiles);
+        Assert.Equal(3, JsonDocument.Parse(File.ReadAllText(Path.Combine(directory.Path, $"{Name(target)}.json"))).RootElement.GetProperty("Version").GetInt32());
+    }
+
+    [Fact]
+    public void A_manifest_older_than_version_3_reads_as_absent()
+    {
+        using var directory = new TempDirectory("manifests-v2");
+        using var folder = new TempDirectory("manifests-v2-mods");
+        var store = new SyncManifestStore(directory.Path);
+        var target = Keys.Target();
+
+        WriteLegacy(2, directory.Path, target, folder.Path, null);
+
+        Assert.Null(store.TryRead(target));
+    }
+
+
+    /// <summary>What an older client wrote: version 3 recorded the files it left alone by name only.</summary>
+    private static void WriteLegacy(
+        int version,
+        string directory,
+        ModTargetRef target,
+        string modFolder,
+        SyncManifestEntry? entry,
+        params string[] unmanagedFileNames)
+    {
+        var json = JsonSerializer.SerializeToNode(Manifest(target, modFolder, entry is null ? [] : [entry]))!.AsObject();
+        json["Version"] = version;
+        json.Remove(nameof(SyncManifest.UnmanagedFiles));
+        json["UnmanagedFileNames"] = JsonSerializer.SerializeToNode(unmanagedFileNames);
+
+        File.WriteAllText(Path.Combine(directory, $"{Name(target)}.json"), json.ToJsonString());
+    }
+
     private static SyncManifest Manifest(ModTargetRef target, string modFolder, IReadOnlyList<SyncManifestEntry> entries)
     {
         return new SyncManifest

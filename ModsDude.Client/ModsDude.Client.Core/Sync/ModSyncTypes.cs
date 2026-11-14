@@ -225,8 +225,8 @@ public sealed record ModSyncPlan
     public required IReadOnlyList<ModSyncItem> Items { get; init; }
     public required ModMaterialization Materialization { get; init; }
 
-    /// <summary>Files in the mod folder the adapter does not recognise as mods. Never touched, recorded so drift does not report them.</summary>
-    public required IReadOnlyList<string> UnmanagedFileNames { get; init; }
+    /// <summary>Files in the mod folder sync leaves alone, as the scan found them. Never touched, recorded so drift does not report them.</summary>
+    public required IReadOnlyList<UnmanagedFile> UnmanagedFiles { get; init; }
 
     /// <summary>The other files the adapter needs changed to match the mods, relative to the mod folder.</summary>
     public required IReadOnlyList<PlannedFileEdit> ManagedFiles { get; init; }

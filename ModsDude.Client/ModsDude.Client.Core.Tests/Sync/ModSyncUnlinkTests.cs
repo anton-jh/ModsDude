@@ -33,7 +33,7 @@ public class ModSyncUnlinkTests
         fixture.Adapter.Target = fixture.Adapter.Target with { SupportsHardlinks = false };
         await fixture.ExecuteAsync(await fixture.PlanAsync());
 
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
         Assert.False((await fixture.PlanAsync()).HasWork);
     }
 

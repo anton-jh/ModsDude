@@ -624,7 +624,7 @@ internal sealed class ModSyncExecutor(
             Entries = entries,
             // Only the ones still there: a file that was blocking an install has just been
             // quarantined, and recording it would describe a folder that no longer exists.
-            UnmanagedFileNames = [.. plan.UnmanagedFileNames.Where(x => File.Exists(Path.Combine(plan.ModFolder, x)))],
+            UnmanagedFiles = [.. plan.UnmanagedFiles.Where(x => File.Exists(Path.Combine(plan.ModFolder, x.FileName)))],
             ManagedFiles = [.. plan.ManagedFiles.Select(x => Path.GetRelativePath(plan.ModFolder, x.FullPath))],
             Shared = plan.Target.Shared
         };

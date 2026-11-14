@@ -15,16 +15,16 @@ public class DriftServiceTests
 
 
     [Fact]
-    public void A_folder_that_still_matches_the_manifest_is_in_sync()
+    public async Task A_folder_that_still_matches_the_manifest_is_in_sync()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "one"), ("fs25_b.zip", "two"));
 
-        Assert.Equal(DriftStatus.InSync, fixture.Check().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckAsync()).Status);
     }
 
     [Fact]
-    public void A_replaced_file_is_drift()
+    public async Task A_replaced_file_is_drift()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "one"));
@@ -33,14 +33,14 @@ public class DriftServiceTests
         // frozen at what sync installed.
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
-        var report = fixture.Check();
+        var report = await fixture.CheckAsync();
 
         Assert.Equal(DriftStatus.Drifted, report.Status);
         Assert.Equal(["fs25_a.zip"], report.Changed);
     }
 
     [Fact]
-    public void An_added_or_removed_file_is_drift()
+    public async Task An_added_or_removed_file_is_drift()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "one"), ("fs25_b.zip", "two"));
@@ -48,7 +48,7 @@ public class DriftServiceTests
         File.Delete(fixture.Folder.Combine("fs25_b.zip"));
         fixture.Folder.WriteFile("fs25_c.zip", "installed from inside the game");
 
-        var report = fixture.Check();
+        var report = await fixture.CheckAsync();
 
         Assert.Equal(DriftStatus.Drifted, report.Status);
         Assert.Equal(["fs25_c.zip"], report.Added);
@@ -56,25 +56,65 @@ public class DriftServiceTests
     }
 
     [Fact]
-    public void A_game_with_no_active_profile_has_nothing_to_drift_from()
+    public async Task An_added_file_that_is_not_a_mod_is_not_drift()
+    {
+        using var fixture = new DriftFixture("readme.txt");
+        fixture.Sync(("fs25_a.zip", "one"));
+
+        fixture.Folder.WriteFile("readme.txt", "notes to self");
+
+        var report = await fixture.CheckAsync();
+
+        Assert.Equal(DriftStatus.InSync, report.Status);
+        Assert.Empty(report.Added);
+    }
+
+    [Fact]
+    public async Task A_file_the_last_sync_left_alone_and_still_as_it_was_is_not_drift()
+    {
+        using var fixture = new DriftFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.LeaveAlone("fs25_b.zip", "half a download");
+
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckAsync()).Status);
+    }
+
+    [Fact]
+    public async Task A_different_file_under_the_name_of_one_the_last_sync_left_alone_is_an_addition()
+    {
+        using var fixture = new DriftFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.LeaveAlone("fs25_b.zip", "half a download");
+
+        fixture.Folder.WriteFile("fs25_b.zip", "the finished download, which is a mod");
+
+        var report = await fixture.CheckAsync();
+
+        Assert.Equal(DriftStatus.Drifted, report.Status);
+        Assert.Equal(["fs25_b.zip"], report.Added);
+    }
+
+    [Fact]
+    public async Task A_game_with_no_active_profile_has_nothing_to_drift_from()
     {
         using var fixture = new DriftFixture();
 
         Assert.Equal(
             DriftStatus.NoActiveProfile,
-            fixture.Service.Check(fixture.Target, null, fixture.Folder.Path).Status);
+            (await fixture.Service.CheckAsync(fixture.Target, null, fixture.Folder.Path, CancellationToken.None)).Status);
     }
 
     [Fact]
-    public void A_profile_whose_repo_is_gone_is_said_so_rather_than_reported_as_drift()
+    public async Task A_profile_whose_repo_is_gone_is_said_so_rather_than_reported_as_drift()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
-        var report = fixture.Service.Check(
+        var report = await fixture.Service.CheckAsync(
             fixture.Target,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
+            CancellationToken.None,
             profileRepoIsGone: true);
 
         Assert.Equal(DriftStatus.DanglingProfile, report.Status);
@@ -86,12 +126,12 @@ public class DriftServiceTests
     /// say nothing: see <c>TargetDrift.IsDrifted</c>, which counts this.
     /// </summary>
     [Fact]
-    public void An_active_profile_with_no_manifest_is_a_folder_nothing_was_applied_to()
+    public async Task An_active_profile_with_no_manifest_is_a_folder_nothing_was_applied_to()
     {
         using var fixture = new DriftFixture();
         fixture.Folder.WriteFile("fs25_a.zip", "one");
 
-        var report = fixture.Check();
+        var report = await fixture.CheckAsync();
 
         Assert.Equal(DriftStatus.NeverSynced, report.Status);
 
@@ -108,15 +148,16 @@ public class DriftServiceTests
     /// the dedicated server was locked and the client applied fine.
     /// </summary>
     [Fact]
-    public void A_manifest_for_a_different_profile_is_an_apply_that_did_not_land()
+    public async Task A_manifest_for_a_different_profile_is_an_apply_that_did_not_land()
     {
         using var fixture = new DriftFixture();
         fixture.Sync("Old-school", ("fs25_a.zip", "one"));
 
-        var report = fixture.Service.Check(
+        var report = await fixture.Service.CheckAsync(
             fixture.Target,
             new ActiveProfile(_repoId, Guid.NewGuid()),
-            fixture.Folder.Path);
+            fixture.Folder.Path,
+            CancellationToken.None);
 
         Assert.Equal(DriftStatus.NotApplied, report.Status);
 
@@ -130,17 +171,18 @@ public class DriftServiceTests
     /// a moment ago, and the remedy being the same does not make it the same sentence.
     /// </summary>
     [Fact]
-    public void A_manifest_for_a_different_folder_is_the_settings_having_been_repointed()
+    public async Task A_manifest_for_a_different_folder_is_the_settings_having_been_repointed()
     {
         using var fixture = new DriftFixture();
         using var elsewhere = new TempDirectory("drift-repointed");
 
         fixture.Sync(("fs25_a.zip", "one"));
 
-        var report = fixture.Service.Check(
+        var report = await fixture.Service.CheckAsync(
             fixture.Target,
             new ActiveProfile(_repoId, _profileId),
-            elsewhere.Path);
+            elsewhere.Path,
+            CancellationToken.None);
 
         Assert.Equal(DriftStatus.FolderRepointed, report.Status);
     }
@@ -150,49 +192,52 @@ public class DriftServiceTests
     /// cannot be made: the manifest is describing somewhere else entirely.
     /// </summary>
     [Fact]
-    public void A_repointed_folder_is_not_reported_as_an_apply_that_did_not_land()
+    public async Task A_repointed_folder_is_not_reported_as_an_apply_that_did_not_land()
     {
         using var fixture = new DriftFixture();
         using var elsewhere = new TempDirectory("drift-repointed-other-profile");
 
         fixture.Sync(("fs25_a.zip", "one"));
 
-        var report = fixture.Service.Check(
+        var report = await fixture.Service.CheckAsync(
             fixture.Target,
             new ActiveProfile(_repoId, Guid.NewGuid()),
-            elsewhere.Path);
+            elsewhere.Path,
+            CancellationToken.None);
 
         Assert.Equal(DriftStatus.FolderRepointed, report.Status);
     }
 
     [Fact]
-    public void An_unreachable_folder_is_unknown_not_drifted()
+    public async Task An_unreachable_folder_is_unknown_not_drifted()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
         // An unplugged drive or an offline network path. Warning about mods that may be perfectly
         // fine is worse than saying nothing.
-        var report = fixture.Service.Check(
+        var report = await fixture.Service.CheckAsync(
             fixture.Target,
             new ActiveProfile(_repoId, _profileId),
-            fixture.Folder.Combine("gone"));
+            fixture.Folder.Combine("gone"),
+            CancellationToken.None);
 
         Assert.Equal(DriftStatus.FolderUnreachable, report.Status);
     }
 
     [Fact]
-    public void Someone_else_editing_the_shared_profile_is_drift_too()
+    public async Task Someone_else_editing_the_shared_profile_is_drift_too()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
         // The folder is untouched; the profile moved on. No revision number on the profile is
         // needed - the applied mod set is what the comparison is against.
-        var report = fixture.Service.Check(
+        var report = await fixture.Service.CheckAsync(
             fixture.Target,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
+            CancellationToken.None,
             profilePins: [
                 new DesiredMod(ModKey.From("fs25_a"), ModVersionKey.From("2.0.0"), HashOf("a newer build"), Locked: true)]);
 
@@ -205,15 +250,16 @@ public class DriftServiceTests
     }
 
     [Fact]
-    public void A_profile_that_still_pins_what_was_applied_is_not_drift()
+    public async Task A_profile_that_still_pins_what_was_applied_is_not_drift()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "one"));
 
-        var report = fixture.Service.Check(
+        var report = await fixture.Service.CheckAsync(
             fixture.Target,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
+            CancellationToken.None,
             profilePins: [
                 new DesiredMod(ModKey.From("fs25_a"), ModVersionKey.From("1.0.0"), HashOf("one"), Locked: false)]);
 
@@ -222,7 +268,7 @@ public class DriftServiceTests
 
 
     [Fact]
-    public void A_locked_mod_the_game_replaced_is_named_rather_than_counted()
+    public async Task A_locked_mod_the_game_replaced_is_named_rather_than_counted()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_map.zip", "one", true, "Great Plains 16x"), ("fs25_a.zip", "two", false, "A Trailer"));
@@ -232,7 +278,7 @@ public class DriftServiceTests
         fixture.Folder.WriteFile("fs25_map.zip", "the game updated this");
         fixture.Folder.WriteFile("fs25_a.zip", "and this");
 
-        var report = fixture.Check();
+        var report = await fixture.CheckAsync();
 
         var locked = Assert.Single(report.LockedDrift);
 
@@ -243,44 +289,45 @@ public class DriftServiceTests
     }
 
     [Fact]
-    public void An_unlocked_mod_at_the_wrong_version_is_untidy_and_not_called_out()
+    public async Task An_unlocked_mod_at_the_wrong_version_is_untidy_and_not_called_out()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "two", false, "A Trailer"));
 
         fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
 
-        var report = fixture.Check();
+        var report = await fixture.CheckAsync();
 
         Assert.Equal(DriftStatus.Drifted, report.Status);
         Assert.Empty(report.LockedDrift);
     }
 
     [Fact]
-    public void A_locked_mod_that_left_the_folder_is_named_with_that_reason()
+    public async Task A_locked_mod_that_left_the_folder_is_named_with_that_reason()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_map.zip", "one", true, "Great Plains 16x"));
 
         File.Delete(fixture.Folder.Combine("fs25_map.zip"));
 
-        var locked = Assert.Single(fixture.Check().LockedDrift);
+        var locked = Assert.Single((await fixture.CheckAsync()).LockedDrift);
 
         Assert.Equal(LockedDriftReason.FileRemoved, locked.Reason);
     }
 
     [Fact]
-    public void One_locked_mod_gone_wrong_two_ways_is_still_one_problem()
+    public async Task One_locked_mod_gone_wrong_two_ways_is_still_one_problem()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_map.zip", "one", true, "Great Plains 16x"));
 
         fixture.Folder.WriteFile("fs25_map.zip", "the game updated this");
 
-        var report = fixture.Service.Check(
+        var report = await fixture.Service.CheckAsync(
             fixture.Target,
             new ActiveProfile(_repoId, _profileId),
             fixture.Folder.Path,
+            CancellationToken.None,
             profilePins: [
                 new DesiredMod(ModKey.From("fs25_map"), ModVersionKey.From("2.0.0"), HashOf("something else"), Locked: true)]);
 
@@ -341,10 +388,10 @@ public class DriftServiceTests
         private readonly TempDirectory _manifests = new("drift-manifests");
 
 
-        public DriftFixture()
+        public DriftFixture(params string[] notMods)
         {
             Manifests = new SyncManifestStore(_manifests.Path);
-            Service = new DriftService(Manifests, FakeManagedFileDriftCheck.None, NullLogger<DriftService>.Instance);
+            Service = new DriftService(Manifests, FakeManagedFileDriftCheck.None, new FakeAddedModCheck(notMods), NullLogger<DriftService>.Instance);
         }
 
 
@@ -399,8 +446,20 @@ public class DriftServiceTests
             });
         }
 
-        public DriftReport Check()
-            => Service.Check(Target, new ActiveProfile(_repoId, _profileId), Folder.Path);
+        /// <summary>Puts a file in the folder that the last sync recorded as one it leaves alone.</summary>
+        public void LeaveAlone(string name, string content)
+        {
+            var info = new FileInfo(Folder.WriteFile(name, content));
+            var manifest = Manifests.TryRead(Target)!;
+
+            Manifests.Write(manifest with
+            {
+                UnmanagedFiles = [.. manifest.UnmanagedFiles, new UnmanagedFile(name, info.Length, info.LastWriteTimeUtc)]
+            });
+        }
+
+        public Task<DriftReport> CheckAsync()
+            => Service.CheckAsync(Target, new ActiveProfile(_repoId, _profileId), Folder.Path, CancellationToken.None);
 
         public void Dispose()
         {

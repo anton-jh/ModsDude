@@ -18,7 +18,7 @@ public class ModSyncSharedTargetTests
         var plan = await fixture.PlanAsync();
 
         Assert.DoesNotContain(plan.Items, x => x.ModId.Value == "other");
-        Assert.Contains("other.zip", plan.UnmanagedFileNames);
+        Assert.Contains("other.zip", plan.UnmanagedFiles.Select(x => x.FileName));
 
         var result = await fixture.ExecuteAsync(plan);
 
@@ -95,7 +95,7 @@ public class ModSyncSharedTargetTests
 
         fixture.Install("downloaded-later.zip", Mod("1.0.0", "theirs"));
 
-        Assert.Equal(DriftStatus.InSync, fixture.CheckDrift().Status);
+        Assert.Equal(DriftStatus.InSync, (await fixture.CheckDriftAsync()).Status);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class ModSyncSharedTargetTests
 
         File.Delete(fixture.Folder.Combine("fs25_a.zip"));
 
-        Assert.Contains("fs25_a.zip", fixture.CheckDrift().Removed);
+        Assert.Contains("fs25_a.zip", (await fixture.CheckDriftAsync()).Removed);
     }
 
 

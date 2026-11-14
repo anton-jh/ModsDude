@@ -192,29 +192,28 @@ public sealed record DriftReport(
 
 /// <summary>
 /// Whether one of a game's mod folders still matches what was applied to it, answered without
-/// opening a single archive.
+/// opening any archive but the ones added since.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The expensive part of reconciliation is reading archives, not listing a directory: a single
 /// non-recursive enumeration over 2,000 entries taking name, size and modification time is
 /// milliseconds. So the cheap check is that listing compared against the manifest, which catches all
-/// three cases that matter - added, removed, and replaced.
-/// </para>
-/// <para>
-/// This detects and exposes drift. Surfacing it in the shell - the app-level notice, save-and-apply,
-/// activation - is Phase 4's, see docs/PLAN.md#phase-4--make-drift-unmissable.
+/// three cases that matter - added, removed, and replaced. Only a file that was not there at the
+/// last apply is opened, to tell a mod from anything else.
 /// </para>
 /// </remarks>
 public sealed class DriftService(
     ISyncManifestStore manifestStore,
     IManagedFileDriftCheck managedFiles,
+    IAddedModCheck addedMods,
     ILogger<DriftService> logger) : IDriftService
 {
-    public DriftReport Check(
+    public async Task<DriftReport> CheckAsync(
         ModTargetRef target,
         ActiveProfile? activeProfile,
         string? modFolder,
+        CancellationToken cancellationToken,
         bool profileRepoIsGone = false,
         IReadOnlyCollection<DesiredMod>? profilePins = null,
         int? currentRevision = null,
@@ -283,8 +282,12 @@ public sealed class DriftService(
             return DriftReport.For(DriftStatus.FolderUnreachable) with { SavegameDrift = saves };
         }
 
-        var (added, removed, changed) = CompareFolder(manifest, listing, modFolder);
+        var (newFiles, removed, changed) = CompareFolder(manifest, listing, modFolder);
         var (profileChanged, locked) = CompareProfile(manifest, profilePins);
+
+        // A new file that is not a mod is something the next apply leaves alone and records, so
+        // there is nothing to import or re-apply for it.
+        List<string> added = [.. await addedMods.FindModsAsync(manifest, newFiles, cancellationToken)];
 
         foreach (var file in managedFiles.FindOutOfLine(manifest) ?? [])
         {
@@ -376,7 +379,7 @@ public sealed class DriftService(
     {
         var byName = manifest.Entries.ToDictionary(x => x.FileName, StringComparer.OrdinalIgnoreCase);
         var present = new HashSet<string>(listing, StringComparer.OrdinalIgnoreCase);
-        var unmanaged = new HashSet<string>(manifest.UnmanagedFileNames, StringComparer.OrdinalIgnoreCase);
+        var unmanaged = manifest.UnmanagedFiles.ToDictionary(x => x.FileName, StringComparer.OrdinalIgnoreCase);
         var managed = new HashSet<string>(manifest.ManagedFiles, StringComparer.OrdinalIgnoreCase);
 
         var added = new List<string>();
@@ -386,10 +389,10 @@ public sealed class DriftService(
         {
             if (byName.TryGetValue(name, out var entry) is false)
             {
-                // A file sync never installed and was already ignoring is not an addition. One that
-                // was not there at the last sync is, whatever it turns out to be - except in a shared
-                // folder, where files come and go that were never sync's to notice.
-                if (manifest.Shared is false && unmanaged.Contains(name) is false && managed.Contains(name) is false)
+                // A file sync never installed and was already ignoring, still as it was, is not an
+                // addition. Anything else is, whatever it turns out to be - except in a shared folder,
+                // where files come and go that were never sync's to notice.
+                if (manifest.Shared is false && managed.Contains(name) is false && IsLeftAlone(name) is false)
                 {
                     added.Add(name);
                 }
@@ -406,6 +409,10 @@ public sealed class DriftService(
         var removed = byName.Keys.Where(x => present.Contains(x) is false).ToList();
 
         return (added, removed, changed);
+
+        bool IsLeftAlone(string name)
+            => unmanaged.TryGetValue(name, out var file)
+                && HasMoved(Path.Combine(modFolder, name), file.Size, file.ModifiedUtc) is false;
     }
 
     /// <summary>

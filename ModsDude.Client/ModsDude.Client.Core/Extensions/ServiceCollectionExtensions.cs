@@ -49,6 +49,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISyncManifestStore, SyncManifestStore>();
         services.AddSingleton<IDriftService, DriftService>();
         services.AddSingleton<IManagedFileDriftCheck, ManagedFileDriftCheck>();
+        services.AddSingleton<IAddedModCheck, AddedModCheck>();
         services.AddSingleton<IStoreIntegrityService, StoreIntegrityService>();
         services.AddSingleton<IModSyncService, ModSyncService>();
         services.AddSingleton<GameFiles.IGameFileEditor, GameFiles.GameFileEditor>();

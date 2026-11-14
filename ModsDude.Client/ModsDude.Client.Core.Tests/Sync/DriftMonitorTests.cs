@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.GameAdapters;
@@ -31,6 +32,18 @@ public class DriftMonitorTests
 
         Assert.True(fixture.Monitor.HasDrift);
         Assert.True(fixture.Monitor.HasAnything);
+    }
+
+    [Fact]
+    public void A_folder_that_does_not_exist_is_not_watched_and_not_warned_about()
+    {
+        using var fixture = new MonitorFixture();
+        fixture.Candidates.ModFolder = fixture.Folder.Combine("gone");
+
+        fixture.Monitor.Watch();
+
+        Assert.DoesNotContain(fixture.Log.Entries, x => x.Level >= LogLevel.Warning);
+        Assert.Contains(fixture.Log.Entries, x => x.Level == LogLevel.Information && x.Message.Contains(fixture.Candidates.ModFolder));
     }
 
     /// <summary>
@@ -843,7 +856,7 @@ public class DriftMonitorTests
             Folder = new TempDirectory("monitor-mods");
             Candidates = new FakeCandidates { ModFolder = Folder.Path };
             Manifests = new SyncManifestStore(_manifests.Path);
-            Drift = new DriftService(Manifests, FakeManagedFileDriftCheck.None, NullLogger<DriftService>.Instance);
+            Drift = new DriftService(Manifests, FakeManagedFileDriftCheck.None, FakeAddedModCheck.AllMods, NullLogger<DriftService>.Instance);
 
             if (withStore)
             {
@@ -858,11 +871,12 @@ public class DriftMonitorTests
 
             Held = new FakeHeldSavegames(Manifests);
 
-            Monitor = new DriftMonitor(Candidates, Drift, Manifests, Revisions, KnownRepos, Time, Held, Held, Integrity, Connection, NullLogger<DriftMonitor>.Instance);
+            Monitor = new DriftMonitor(Candidates, Drift, Manifests, Revisions, KnownRepos, Time, Held, Held, Integrity, Connection, Log);
         }
 
 
         public TempDirectory Folder { get; }
+        public RecordingLogger<DriftMonitor> Log { get; } = new();
         public ServerConnection Connection { get; } = new();
         public FakeCandidates Candidates { get; }
 
@@ -966,7 +980,7 @@ public class DriftMonitorTests
 
         /// <summary>A second monitor over the same state - what the next launch has.</summary>
         public DriftMonitor Restart()
-            => new(Candidates, Drift, Manifests, Revisions, KnownRepos, Time, Held, Held, Integrity, Connection, NullLogger<DriftMonitor>.Instance);
+            => new(Candidates, Drift, Manifests, Revisions, KnownRepos, Time, Held, Held, Integrity, Connection, Log);
 
         public void Dispose()
         {

@@ -146,7 +146,7 @@ internal sealed class ModSyncPlanBuilder(
             var items = await ModSyncPlanner.PlanAsync(
                 desired, layout, installed.Mods, registered, manifest, null, cancellationToken, progress);
 
-            return BuildPlan(request, revision, installed.UnmanagedFileNames, UnlinkWhereNotAllowed(target, items), layout);
+            return BuildPlan(request, revision, installed.UnmanagedFiles, UnlinkWhereNotAllowed(target, items), layout);
         }
         finally
         {
@@ -217,8 +217,8 @@ internal sealed class ModSyncPlanBuilder(
     /// already the right bytes, which the planner keeps, or something in the way, which goes the way
     /// any other replaced file does.
     /// </remarks>
-    private static (IReadOnlyList<InstalledMod> Mods, IReadOnlyList<string> UnmanagedFileNames) LeaveOthersAlone(
-        (IReadOnlyList<InstalledMod> Mods, IReadOnlyList<string> UnmanagedFileNames) scanned,
+    private static (IReadOnlyList<InstalledMod> Mods, IReadOnlyList<UnmanagedFile> UnmanagedFiles) LeaveOthersAlone(
+        (IReadOnlyList<InstalledMod> Mods, IReadOnlyList<UnmanagedFile> UnmanagedFiles) scanned,
         ModLayout layout,
         IReadOnlySet<string> recorded)
     {
@@ -227,7 +227,7 @@ internal sealed class ModSyncPlanBuilder(
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var claimed = new List<InstalledMod>();
-        var others = new List<string>();
+        var others = new List<UnmanagedFile>();
 
         foreach (var mod in scanned.Mods)
         {
@@ -239,11 +239,11 @@ internal sealed class ModSyncPlanBuilder(
             }
             else
             {
-                others.Add(name);
+                others.Add(new UnmanagedFile(name, mod.Size, mod.ModifiedUtc));
             }
         }
 
-        return (claimed, [.. scanned.UnmanagedFileNames, .. others]);
+        return (claimed, [.. scanned.UnmanagedFiles, .. others]);
     }
 
     /// <summary>
@@ -272,7 +272,7 @@ internal sealed class ModSyncPlanBuilder(
     private ModSyncPlan BuildPlan(
         ModSyncRequest request,
         int? revision,
-        IReadOnlyList<string> unmanagedFileNames,
+        IReadOnlyList<UnmanagedFile> unmanagedFiles,
         IReadOnlyList<ModSyncItem> items,
         ModLayout layout)
     {
@@ -290,9 +290,9 @@ internal sealed class ModSyncPlanBuilder(
             .Select(x => Path.GetFileName(x.FullPath))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        unmanagedFileNames = [.. unmanagedFileNames.Where(x => managedNames.Contains(x) is false)];
+        unmanagedFiles = [.. unmanagedFiles.Where(x => managedNames.Contains(x.FileName) is false)];
 
-        items = [.. items, .. FindBlockingFiles(items, unmanagedFileNames, target)];
+        items = [.. items, .. FindBlockingFiles(items, unmanagedFiles, target)];
 
         return new ModSyncPlan
         {
@@ -305,7 +305,7 @@ internal sealed class ModSyncPlanBuilder(
             Target = target,
             Items = items,
             Materialization = DecideMaterialization(target, servingStore),
-            UnmanagedFileNames = unmanagedFileNames,
+            UnmanagedFiles = unmanagedFiles,
             ManagedFiles = managedFiles,
             HashesToFetch = [.. items
                 .Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace)
@@ -430,7 +430,7 @@ internal sealed class ModSyncPlanBuilder(
     /// the rest go to the adapter, which on an ordinary activation is none of them rather than the
     /// thousand archives the folder holds.
     /// </remarks>
-    private static async Task<(IReadOnlyList<InstalledMod> Mods, IReadOnlyList<string> UnmanagedFileNames)> GetInstalledAsync(
+    private static async Task<(IReadOnlyList<InstalledMod> Mods, IReadOnlyList<UnmanagedFile> UnmanagedFiles)> GetInstalledAsync(
         ILocalModAdapter adapter,
         ModTarget target,
         SyncManifest? manifest,
@@ -481,10 +481,9 @@ internal sealed class ModSyncPlanBuilder(
         // Everything else in the folder is somebody else's business - a readme, a log, an archive
         // that is not a mod. Recorded so that drift detection does not report them as additions
         // forever, and otherwise never touched.
-        var unmanaged = Directory.EnumerateFiles(target.Path)
-            .Select(Path.GetFileName)
-            .OfType<string>()
-            .Where(x => recognised.Contains(x) is false)
+        var unmanaged = new DirectoryInfo(target.Path).EnumerateFiles()
+            .Where(x => recognised.Contains(x.Name) is false)
+            .Select(x => new UnmanagedFile(x.Name, x.Length, x.LastWriteTimeUtc))
             .ToList();
 
         return (mods, unmanaged);
@@ -497,15 +496,15 @@ internal sealed class ModSyncPlanBuilder(
     /// </summary>
     private static IReadOnlyList<ModSyncItem> FindBlockingFiles(
         IReadOnlyList<ModSyncItem> items,
-        IReadOnlyList<string> unmanagedFileNames,
+        IReadOnlyList<UnmanagedFile> unmanagedFiles,
         ModTarget target)
     {
-        if (unmanagedFileNames.Count == 0)
+        if (unmanagedFiles.Count == 0)
         {
             return [];
         }
 
-        var unmanaged = new HashSet<string>(unmanagedFileNames, StringComparer.OrdinalIgnoreCase);
+        var unmanaged = new HashSet<string>(unmanagedFiles.Select(x => x.FileName), StringComparer.OrdinalIgnoreCase);
         var blocking = new List<ModSyncItem>();
 
         foreach (var item in items.Where(x => x.Action is ModSyncAction.Install or ModSyncAction.Replace or ModSyncAction.Rename or ModSyncAction.Unlink))

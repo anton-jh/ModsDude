@@ -62,9 +62,15 @@ public sealed class SyncManifestStore : ISyncManifestStore
                     return null;
                 }
 
-                var manifest = JsonSerializer.Deserialize<SyncManifest>(File.ReadAllText(path));
+                var json = File.ReadAllText(path);
+                var manifest = JsonSerializer.Deserialize<SyncManifest>(json);
 
-                return manifest?.Version == SyncManifest.CurrentVersion ? manifest : null;
+                return manifest?.Version switch
+                {
+                    SyncManifest.CurrentVersion => manifest,
+                    3 => UpgradeFromVersion3(manifest, json),
+                    _ => null
+                };
             }
             catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
             {
@@ -180,6 +186,58 @@ public sealed class SyncManifestStore : ISyncManifestStore
         return agreed;
     }
 
+
+    /// <summary>
+    /// Version 3 recorded the files sync leaves alone by name only. Each one still in the folder is
+    /// stamped with its size and time as it is now, which is the baseline drift compares against from
+    /// here on; one that is gone is dropped, so it is an addition if it comes back.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Never null.</b> Store maintenance reads the entries to see which blobs are still linked,
+    /// so a manifest it could read before the upgrade must stay readable through it.
+    /// </para>
+    /// <para>
+    /// <b>Written back only when the folder was there to stamp from.</b> An unreachable folder gets
+    /// an in-memory upgrade with no unmanaged files, and the next read once it is back stamps them.
+    /// </para>
+    /// </remarks>
+    private SyncManifest UpgradeFromVersion3(SyncManifest manifest, string json)
+    {
+        var names = JsonSerializer.Deserialize<Version3UnmanagedFiles>(json)?.UnmanagedFileNames ?? [];
+        var reachable = Directory.Exists(manifest.ModFolder);
+
+        var upgraded = manifest with
+        {
+            Version = SyncManifest.CurrentVersion,
+            UnmanagedFiles = reachable
+                ? [.. names
+                    .Select(x => new FileInfo(Path.Combine(manifest.ModFolder, x)))
+                    .Where(x => x.Exists)
+                    .Select(x => new UnmanagedFile(x.Name, x.Length, x.LastWriteTimeUtc))]
+                : []
+        };
+
+        if (reachable is false)
+        {
+            return upgraded;
+        }
+
+        try
+        {
+            Write(upgraded);
+
+            _log.LogInformation("Upgraded the sync manifest for target {Target} to version {Version}.", manifest.Target, SyncManifest.CurrentVersion);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _log.LogWarning(exception, "Could not write the upgraded sync manifest for target {Target}; it is upgraded again on the next read.", manifest.Target);
+        }
+
+        return upgraded;
+    }
+
+    private sealed record Version3UnmanagedFiles(IReadOnlyList<string>? UnmanagedFileNames);
 
     /// <summary>
     /// Through <see cref="StoreFileName"/>, which is where what a store puts in a file name gets

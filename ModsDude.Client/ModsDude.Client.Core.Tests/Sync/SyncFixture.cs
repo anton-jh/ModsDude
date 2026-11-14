@@ -40,12 +40,12 @@ internal sealed class SyncFixture : IDisposable
         Manifests = new SyncManifestStore(_manifests.Path);
         var fileEditor = new GameFileEditor(RecycleBin, NullLogger<GameFileEditor>.Instance);
 
+        var adapters = new FakeModTargetAdapters(x => x == Target ? new ResolvedModTarget(Adapter, Adapter.Target) : null);
+
         Drift = new DriftService(
             Manifests,
-            new ManagedFileDriftCheck(
-                new FakeModTargetAdapters(x => x == Target ? new ResolvedModTarget(Adapter, Adapter.Target) : null),
-                fileEditor,
-                NullLogger<ManagedFileDriftCheck>.Instance),
+            new ManagedFileDriftCheck(adapters, fileEditor, NullLogger<ManagedFileDriftCheck>.Instance),
+            new AddedModCheck(adapters, NullLogger<AddedModCheck>.Instance),
             NullLogger<DriftService>.Instance);
         Held = new FakeHeldSavegames(Manifests);
 
@@ -136,8 +136,8 @@ internal sealed class SyncFixture : IDisposable
     /// <summary>A file where the store's quarantine folder would be created.</summary>
     public void BlockStoreQuarantine() => File.WriteAllText(ServingStore.QuarantinePath, "");
 
-    public DriftReport CheckDrift()
-        => Drift.Check(Target, new ActiveProfile(Server.RepoId, Server.ProfileId), Folder.Path);
+    public Task<DriftReport> CheckDriftAsync()
+        => Drift.CheckAsync(Target, new ActiveProfile(Server.RepoId, Server.ProfileId), Folder.Path, CancellationToken.None);
 
     /// <summary>Puts content in the serving store and answers with its address.</summary>
     public async Task<string> SeedIntoStoreAsync(string content)

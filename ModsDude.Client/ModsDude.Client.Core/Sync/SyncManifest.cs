@@ -24,10 +24,10 @@ public sealed record SyncManifest
 {
     /// <summary>
     /// Bumped when the shape changes, or when older data would answer a question wrongly rather than
-    /// not at all. There is no migration and none is needed: a manifest that cannot be read is a
-    /// manifest that is absent, which costs a full reconcile.
+    /// not at all. <see cref="SyncManifestStore"/> upgrades the version before this one as it reads
+    /// it; anything older reads as absent, which costs a full reconcile.
     /// </summary>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
 
     public int Version { get; init; } = CurrentVersion;
@@ -80,11 +80,12 @@ public sealed record SyncManifest
     public required IReadOnlyList<SyncManifestEntry> Entries { get; init; }
 
     /// <summary>
-    /// Files in the folder that the adapter does not read as mods - a readme, a log, a
-    /// <c>modsSettings.xml</c>. Sync never touches them, and they are recorded here so the cheap
-    /// drift check does not report them as additions on every launch forever.
+    /// Files in the folder that sync leaves alone - a readme, a log, an archive that is not a mod, or
+    /// in a shared folder another program's mod. Recorded so the cheap drift check does not report
+    /// them as additions on every launch, and with size and time so a different file put down under
+    /// one of their names still is one.
     /// </summary>
-    public IReadOnlyList<string> UnmanagedFileNames { get; init; } = [];
+    public IReadOnlyList<UnmanagedFile> UnmanagedFiles { get; init; } = [];
 
     /// <summary>
     /// The adapter's other files, relative to the mod folder. Not compared by size or time: the game
@@ -95,6 +96,9 @@ public sealed record SyncManifest
     /// <summary>Whether other programs keep mods here too. See <see cref="ModTarget.Shared"/>.</summary>
     public bool Shared { get; init; }
 }
+
+/// <summary>A file in the mod folder that sync leaves alone, as it was when last looked at.</summary>
+public sealed record UnmanagedFile(string FileName, long Size, DateTimeOffset ModifiedUtc);
 
 /// <param name="FileName">
 /// The file's name within the mod folder, which is what a directory listing produces - the cheap

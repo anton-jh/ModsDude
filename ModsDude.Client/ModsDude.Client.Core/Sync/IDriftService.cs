@@ -34,10 +34,11 @@ public interface IDriftService
     /// it is worth saying whatever the mod folder turned out to be, and a game whose profile's repo
     /// is gone is precisely a case where somebody wants to hear about their save.
     /// </param>
-    DriftReport Check(
+    Task<DriftReport> CheckAsync(
         ModTargetRef target,
         ActiveProfile? activeProfile,
         string? modFolder,
+        CancellationToken cancellationToken,
         bool profileRepoIsGone = false,
         IReadOnlyCollection<DesiredMod>? profilePins = null,
         int? currentRevision = null,

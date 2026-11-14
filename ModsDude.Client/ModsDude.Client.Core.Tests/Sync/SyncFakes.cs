@@ -514,3 +514,13 @@ internal sealed class FakeManagedFileDriftCheck : IManagedFileDriftCheck
 
     public IReadOnlyList<PlannedFileEdit>? FindOutOfLine(SyncManifest manifest) => null;
 }
+
+
+/// <summary>An added-file check that reads every added file as a mod, unless a test names the ones that are not.</summary>
+internal sealed class FakeAddedModCheck(params string[] notMods) : IAddedModCheck
+{
+    public static FakeAddedModCheck AllMods { get; } = new();
+
+    public Task<IReadOnlyList<string>> FindModsAsync(SyncManifest manifest, IReadOnlyList<string> fileNames, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<string>>([.. fileNames.Where(x => notMods.Contains(x, StringComparer.OrdinalIgnoreCase) is false)]);
+}

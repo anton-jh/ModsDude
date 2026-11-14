@@ -379,7 +379,7 @@ public sealed class DriftMonitor : IDriftMonitor
 
             foreach (var target in candidate.Targets)
             {
-                var report = CheckMods(candidate, target, active, SavegamesIn(savegameDrift, target));
+                var report = await CheckModsAsync(candidate, target, active, SavegamesIn(savegameDrift, target));
 
                 // Only a drifted folder needs the manifest read a second time, and only to name the
                 // profile. Everything else has nothing to say.
@@ -443,7 +443,7 @@ public sealed class DriftMonitor : IDriftMonitor
     /// that reads as quietly unreachable forever. A disk is a disk and a bug is a bug.
     /// </para>
     /// </remarks>
-    private DriftReport CheckMods(
+    private async Task<DriftReport> CheckModsAsync(
         DriftCandidate candidate,
         GameModFolder target,
         ActiveProfile active,
@@ -451,10 +451,11 @@ public sealed class DriftMonitor : IDriftMonitor
     {
         try
         {
-            return _driftService.Check(
+            return await _driftService.CheckAsync(
                 target.Target,
                 active,
                 target.ModFolder,
+                CancellationToken.None,
                 profileRepoIsGone: _knownRepos.IsGone(active.RepoId),
                 // A savegame held here in compatibility mode pins the folder to its revision, and that is what
                 // "up to date" means for this game until it is checked in. Nothing is suppressed
@@ -539,6 +540,15 @@ public sealed class DriftMonitor : IDriftMonitor
             .Where(x => x.ActiveProfile is not null)
             .SelectMany(x => x.Targets))
         {
+            // A folder that is not there is unknown rather than drifted, and the check already says
+            // so. It is watched once something calls this again with it back.
+            if (Directory.Exists(target.ModFolder) is false)
+            {
+                _logger.LogInformation("Not watching the mod folder {Folder}, which does not exist.", target.ModFolder);
+
+                continue;
+            }
+
             try
             {
                 var watcher = new FileSystemWatcher(target.ModFolder)
@@ -551,10 +561,7 @@ public sealed class DriftMonitor : IDriftMonitor
                 watcher.Created += OnFolderChanged;
                 watcher.Deleted += OnFolderChanged;
                 watcher.Renamed += OnFolderChanged;
-
-                // Its own failures are not the app's: a drive pulled out from under a watcher must
-                // not surface as an unhandled exception on a background thread.
-                watcher.Error += (_, _) => { };
+                watcher.Error += OnWatcherError;
 
                 watcher.EnableRaisingEvents = true;
 
@@ -562,9 +569,9 @@ public sealed class DriftMonitor : IDriftMonitor
             }
             catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException)
             {
-                // An unreachable folder is unknown, not drifted, and it is certainly not worth an
-                // error dialog. The activation check reports it quietly when the time comes.
-                _logger.LogWarning(exception, "Could not watch a mod folder for changes; drift there will only be noticed on a manual check.");
+                // Unknown, not drifted, and not worth an error dialog: the window-activation check
+                // still covers this folder.
+                _logger.LogWarning(exception, "Could not watch the mod folder {Folder} for changes; drift there is noticed when the window is activated.", target.ModFolder);
             }
         }
     }
@@ -598,6 +605,18 @@ public sealed class DriftMonitor : IDriftMonitor
     {
         // An update-all rewrites hundreds of files; the throttle is what keeps that from being
         // hundreds of directory listings.
+        RequestCheck(DriftCheckReason.FolderChanged);
+    }
+
+    /// <remarks>
+    /// An overflowing buffer during an update-all, or a drive pulled out from under the watcher,
+    /// means changes went unheard. A check is what finds out what they were, or that the folder is
+    /// gone.
+    /// </remarks>
+    private void OnWatcherError(object sender, ErrorEventArgs e)
+    {
+        _logger.LogWarning(e.GetException(), "Watching the mod folder {Folder} failed; checking it for drift instead.", ((FileSystemWatcher)sender).Path);
+
         RequestCheck(DriftCheckReason.FolderChanged);
     }
 
