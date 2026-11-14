@@ -10,4 +10,11 @@ public interface IPresenceReporter : IUserScopedState
     /// one that has closed. Call it after every look at the process list.
     /// </summary>
     Task ReportAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Tells the server that every game reported as playing has stopped. Called while the account
+    /// that reported them is still the one signed in. A failed stop is logged and left to the
+    /// server's timeout.
+    /// </summary>
+    Task GoOfflineAsync(CancellationToken cancellationToken);
 }

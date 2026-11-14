@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+
 namespace ModsDude.Client.Wpf.Shared;
 
 /// <summary>
@@ -7,14 +9,14 @@ namespace ModsDude.Client.Wpf.Shared;
 /// <remarks>
 /// Driven from the UI thread, so the bookkeeping needs no lock: every continuation runs there too.
 /// </remarks>
-public sealed class LatestLoad(Action<bool> setLoading, CancellationToken lifetime = default)
+public sealed class LatestLoad(Action<bool> setLoading, ILogger logger, CancellationToken lifetime = default)
 {
     private CancellationTokenSource? _current;
 
 
     /// <param name="fetch">Reads what to show. Cancelled as soon as a newer load starts, or the page goes.</param>
     /// <param name="show">Shows it. Only ever called for the newest load.</param>
-    /// <param name="fail">Says why the newest load failed. A superseded load's failure is nobody's business.</param>
+    /// <param name="fail">Says why the newest load failed. A superseded load's failure is only logged.</param>
     public async Task RunAsync<T>(Func<CancellationToken, Task<T>> fetch, Action<T> show, Func<Exception, Task> fail)
     {
         _current?.Cancel();
@@ -40,9 +42,13 @@ public sealed class LatestLoad(Action<bool> setLoading, CancellationToken lifeti
 
             await fail(exception);
         }
-        catch (Exception)
+        catch (OperationCanceledException) when (mine.IsCancellationRequested)
         {
             // Superseded or cancelled: a newer load owns the flag and the view.
+        }
+        catch (Exception exception)
+        {
+            logger.LogDebug(exception, "A load failed after a newer one replaced it.");
         }
         finally
         {

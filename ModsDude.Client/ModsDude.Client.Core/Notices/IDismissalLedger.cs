@@ -1,6 +1,8 @@
+using ModsDude.Client.Core.Services;
+
 namespace ModsDude.Client.Core.Notices;
 
-public interface IDismissalLedger
+public interface IDismissalLedger : IUserScopedState
 {
     /// <summary>Raised when something here changed, so the shell can redraw without re-checking.</summary>
     event EventHandler? Changed;
@@ -33,7 +35,4 @@ public interface IDismissalLedger
     /// again next week is announced rather than swallowed by a dismissal from a previous evening.
     /// </remarks>
     void Retain(IEnumerable<string> liveKeys);
-
-    /// <summary>Signing out, or switching accounts: none of it is this user's any more.</summary>
-    void Clear();
 }

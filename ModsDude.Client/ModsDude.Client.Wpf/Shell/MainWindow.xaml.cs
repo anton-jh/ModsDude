@@ -7,10 +7,6 @@ using System.Windows.Interop;
 namespace ModsDude.Client.Wpf.Shell;
 public partial class MainWindow : Window
 {
-    /// <summary>
-    /// Whether the user has already answered the "something is still running" question with yes. See
-    /// <see cref="OnClosing"/> for why this is a field rather than a local.
-    /// </summary>
     private bool _closeConfirmed;
 
 
@@ -201,27 +197,12 @@ public partial class MainWindow : Window
 
 
     /// <summary>
-    /// Asks before tearing the process down on top of work that is still running.
+    /// Hides to the tray where the tray says so, and otherwise hands the close to the shell's exit,
+    /// which asks first and shuts the app down itself.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// <b>Cancelled and re-raised rather than answered in place.</b> The question is a modal in the
-    /// shell's own slot, which means awaiting it - and <c>Closing</c> cannot be awaited: returning
-    /// from the handler is what lets the close proceed. So the first pass always stops the close, and
-    /// the answer closes the window itself.
-    /// </para>
-    /// <para>
-    /// <b>Queued rather than run here, which is not a nicety.</b> <c>Close</c> called while a
-    /// <c>Closing</c> dispatch is still on the stack is re-entrancy WPF answers by silently doing
-    /// nothing - so a first version of this, with nothing running and nothing to ask, made the window
-    /// unclosable. Posting it means the handler has returned and the close is a fresh one by the time
-    /// anything decides.
-    /// </para>
-    /// <para>
-    /// <b><see cref="_closeConfirmed"/> is what stops that being a loop.</b> It is set only by an
-    /// answer, so a user who said "keep working" is asked again next time rather than having quietly
-    /// spent their one refusal.
-    /// </para>
+    /// The close is always refused here and the exit posted, because <c>Closing</c> cannot be awaited
+    /// and a close or shutdown started while it is still on the stack is silently ignored.
     /// </remarks>
     private void OnClosing(object? sender, CancelEventArgs e)
     {
@@ -232,8 +213,6 @@ public partial class MainWindow : Window
 
         e.Cancel = true;
 
-        // Hiding is not leaving, so nothing that only matters on leaving is asked: whatever is
-        // running keeps running behind the tray icon, which is the point of it.
         if (HideOnClose?.Invoke() is true)
         {
             Hide();
@@ -243,19 +222,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _ = Dispatcher.InvokeAsync(() => ConfirmThenCloseAsync(shell)).Task.Unwrap();
-    }
-
-    private async Task ConfirmThenCloseAsync(MainWindowViewModel shell)
-    {
-        if (await shell.ConfirmCloseAsync() is false)
-        {
-            return;
-        }
-
-        _closeConfirmed = true;
-
-        Close();
+        Dispatcher.InvokeAsync(() => shell.QuitCommand.Execute(null));
     }
 
 
@@ -311,43 +278,7 @@ public partial class MainWindow : Window
         return shown.Task;
     }
 
-    /// <summary>
-    /// Asks whether the app may leave - to quit, restart or update - and lets the close through if so.
-    /// </summary>
-    /// <remarks>
-    /// The same question as closing, and for the same reason: leaving stops whatever is running part
-    /// way. Skipped where nothing is - an idle app in the tray leaves without a window flashing up on
-    /// the way. The question is a modal in this window's own slot, so a hidden window is brought back
-    /// before it is asked.
-    /// </remarks>
-    /// <returns>False where the user would rather it kept working.</returns>
-    public async Task<bool> PrepareToLeaveAsync()
-    {
-        if (DataContext is not MainWindowViewModel shell)
-        {
-            return true;
-        }
-
-        if (shell.NeedsCloseConfirmation)
-        {
-            ShowFromTray();
-
-            if (await shell.ConfirmCloseAsync() is false)
-            {
-                return false;
-            }
-        }
-
-        AllowClose();
-
-        return true;
-    }
-
-    /// <summary>
-    /// Lets the next close through unasked. For Windows ending the session, which is not a decision
-    /// the user is making about this app - and a close that refuses to happen is what makes Windows
-    /// stop a shutdown to say that ModsDude is preventing it.
-    /// </summary>
+    /// <summary>Lets the next close through unasked, for an exit that has already been decided.</summary>
     public void AllowClose() => _closeConfirmed = true;
 
 

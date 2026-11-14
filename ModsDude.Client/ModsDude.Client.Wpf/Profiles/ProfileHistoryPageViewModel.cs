@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
@@ -90,13 +91,14 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
         IErrorReporter errorReporter,
         IToastService toasts,
         IShellNavigationService shellNavigation,
-        TimeProvider time)
+        TimeProvider time,
+        ILogger<ProfileHistoryPageViewModel> logger)
     {
         _errorReporter = errorReporter;
         _time = time;
-        _historyLoad = new LatestLoad(loading => IsLoading = loading);
-        _modsLoad = new LatestLoad(loading => IsLoadingMods = loading);
-        _changesLoad = new LatestLoad(loading => IsLoadingChanges = loading);
+        _historyLoad = new LatestLoad(loading => IsLoading = loading, logger);
+        _modsLoad = new LatestLoad(loading => IsLoadingMods = loading, logger);
+        _changesLoad = new LatestLoad(loading => IsLoadingChanges = loading, logger);
         _toasts = toasts;
         _shellNavigation = shellNavigation;
         _repo = repo;

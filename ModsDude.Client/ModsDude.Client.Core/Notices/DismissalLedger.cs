@@ -79,7 +79,7 @@ public sealed class DismissalLedger : IDismissalLedger
         }
     }
 
-    public void Clear()
+    public void ClearUserState()
     {
         lock (_lock)
         {

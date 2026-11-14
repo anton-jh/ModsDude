@@ -87,7 +87,7 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
         _navigation = navigation;
         _toasts = toasts;
         _logger = logger;
-        _namesLoad = new(_ => { }, _lifetime.Token);
+        _namesLoad = new(_ => { }, logger, _lifetime.Token);
 
         _friends.Groups.CollectionChanged += OnCollectionChanged;
         _games.Games.CollectionChanged += OnCollectionChanged;

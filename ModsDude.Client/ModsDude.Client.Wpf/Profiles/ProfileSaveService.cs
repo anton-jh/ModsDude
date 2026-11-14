@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.Sessions;
 using ModsDude.Client.Core.Import;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -231,7 +232,8 @@ public sealed class ProfileSaveService(
     IErrorReporter errorReporter,
     IBackgroundTaskReporter backgroundTasks,
     IToastService toasts,
-    IResourceLeases leases) : IProfileSaveService
+    IResourceLeases leases,
+    ISessionWork session) : IProfileSaveService
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<Guid, ProfileSaveRun> _runs = [];
@@ -284,7 +286,7 @@ public sealed class ProfileSaveService(
         var request = run.Request;
 
         using var _ = lease;
-        using var stop = new CancellationTokenSource();
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(session.Stopping);
 
         run.Cancel = stop.Cancel;
 

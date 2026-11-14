@@ -27,6 +27,13 @@ public class LocalStateTests
 
 
     [Fact]
+    public void The_schema_reads_the_current_version()
+    {
+        Assert.Equal(LocalState.CurrentVersion, LocalState.Schema.Validate().CurrentVersion);
+        Assert.Equal(LocalState.CurrentVersion, new LocalState().Version);
+    }
+
+    [Fact]
     public void Two_games_survive_a_round_trip_keyed_by_identity()
     {
         var state = new LocalState();

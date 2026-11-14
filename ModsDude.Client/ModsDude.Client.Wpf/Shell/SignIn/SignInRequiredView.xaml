@@ -1,0 +1,46 @@
+<UserControl x:Class="ModsDude.Client.Wpf.Shell.SignIn.SignInRequiredView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:signIn="clr-namespace:ModsDude.Client.Wpf.Shell.SignIn"
+             mc:Ignorable="d"
+             Width="440"
+             d:DataContext="{d:DesignInstance signIn:SignInRequiredViewModel, IsDesignTimeCreatable=False}">
+
+    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="1">
+
+        <Grid RowDefinitions="* auto">
+            <StackPanel Grid.Row="0" Orientation="Vertical" Margin="24 32 24 24">
+
+                <TextBlock Text="Signed out"
+                           Style="{StaticResource TitleTextBlockStyle}"
+                           Margin="0 0 0 24" />
+
+                <Grid ColumnDefinitions="auto *">
+                    <TextBlock Grid.Column="0"
+                               Text="Account"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Margin="0 0 24 0" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Account.Description}"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" />
+                </Grid>
+
+            </StackPanel>
+
+            <Border Grid.Row="1"
+                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="24">
+                    <Button Content="Sign in"
+                            Style="{DynamicResource AccentButtonStyle}"
+                            Command="{Binding SignInCommand}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

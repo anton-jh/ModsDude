@@ -4,6 +4,7 @@
                     xmlns:modals="clr-namespace:ModsDude.Client.Wpf.Shell.Modals"
                     xmlns:offline="clr-namespace:ModsDude.Client.Wpf.Shell.Offline"
                     xmlns:shell="clr-namespace:ModsDude.Client.Wpf.Shell"
+                    xmlns:signIn="clr-namespace:ModsDude.Client.Wpf.Shell.SignIn"
                     xmlns:updates="clr-namespace:ModsDude.Client.Wpf.Shell.Updates">
 
     <DataTemplate DataType="{x:Type shell:MainPageViewModel}">
@@ -16,6 +17,10 @@
 
     <DataTemplate DataType="{x:Type accountBlock:AccountBlockedViewModel}">
         <accountBlock:AccountBlockedView />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type signIn:SignInRequiredViewModel}">
+        <signIn:SignInRequiredView />
     </DataTemplate>
 
     <DataTemplate DataType="{x:Type offline:OfflineViewModel}">

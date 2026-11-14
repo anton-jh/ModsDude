@@ -22,12 +22,16 @@ namespace ModsDude.Client.Wpf.Shell.Tray;
 public sealed class SingleInstance : IDisposable
 {
     /// <summary>
-    /// Passed to the copy a restart starts. It waits for the copy that started it to exit rather than
-    /// asking it to come forward.
+    /// Passed to the copy a restart starts, with the process id of the copy that started it. It waits
+    /// for that process to exit rather than asking it to come forward.
     /// </summary>
-    public const string RestartArgument = "--restarted";
+    private const string _restartArgumentPrefix = "--restarted=";
 
-    private static readonly TimeSpan _restartWait = TimeSpan.FromSeconds(15);
+    /// <summary>How long a restarted copy waits for the one that started it to finish exiting.</summary>
+    private static readonly TimeSpan _restartWait = TimeSpan.FromMinutes(2);
+
+    /// <summary>How long it then waits for the lock, which the exited copy may not have let go of yet.</summary>
+    private static readonly TimeSpan _releaseWait = TimeSpan.FromSeconds(5);
 
     // Per install, not per machine: a debug build must be able to run beside the copy somebody is
     // actually using rather than being turned into a request to bring that one forward.
@@ -47,13 +51,24 @@ public sealed class SingleInstance : IDisposable
     }
 
 
+    public static string RestartArgumentFor(int processId) => $"{_restartArgumentPrefix}{processId}";
+
+    /// <summary>The process that restarted this one, where it was.</summary>
+    public static int? FindRestartedFrom(IEnumerable<string> arguments)
+    {
+        return arguments
+            .Where(x => x.StartsWith(_restartArgumentPrefix, StringComparison.OrdinalIgnoreCase))
+            .Select(x => int.TryParse(x.AsSpan(_restartArgumentPrefix.Length), out var id) ? id : (int?)null)
+            .FirstOrDefault(x => x is not null);
+    }
+
     /// <summary>
     /// Claims the instance, or asks whoever holds it to come forward.
     /// </summary>
     /// <param name="bringExistingForward">False for a start the app made itself, which must not surface a window.</param>
-    /// <param name="restarted">Whether this copy was started by a restart, and so waits for the instance to be released.</param>
+    /// <param name="restartedFrom">The copy that restarted this one, which is waited for before the instance is claimed.</param>
     /// <returns>Null where another copy is running - it has been told, and this one should exit.</returns>
-    public static SingleInstance? TryAcquire(bool bringExistingForward, bool restarted)
+    public static SingleInstance? TryAcquire(bool bringExistingForward, int? restartedFrom)
     {
         var mutex = new Mutex(initiallyOwned: false, MutexName);
         var activate = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateName);
@@ -62,7 +77,7 @@ public sealed class SingleInstance : IDisposable
 
         try
         {
-            acquired = mutex.WaitOne(restarted ? _restartWait : TimeSpan.Zero);
+            acquired = mutex.WaitOne(restartedFrom is int processId && WaitForExit(processId) ? _releaseWait : TimeSpan.Zero);
         }
         catch (AbandonedMutexException)
         {
@@ -114,6 +129,22 @@ public sealed class SingleInstance : IDisposable
         };
 
         _listener.Start();
+    }
+
+    /// <returns>False where the process is still running after <see cref="_restartWait"/>.</returns>
+    private static bool WaitForExit(int processId)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(processId);
+
+            return process.WaitForExit(_restartWait);
+        }
+        catch (ArgumentException)
+        {
+            // Already gone.
+            return true;
+        }
     }
 
     public void Dispose()

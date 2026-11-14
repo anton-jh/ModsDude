@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.Sessions;
 using ModsDude.Client.Core.Disks;
 using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
@@ -164,6 +165,7 @@ public sealed class ProfileApplyService(
     IFilePickerService filePicker,
     IBackgroundTaskReporter backgroundTasks,
     IResourceLeases leases,
+    ISessionWork session,
     IGoneRepos goneRepos,
     IGameActivityReporter activity,
     ILogger<ProfileApplyService> logger) : IProfileApplyService
@@ -246,7 +248,7 @@ public sealed class ProfileApplyService(
             return null;
         }
 
-        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Stopping);
         using var task = backgroundTasks.Begin($"Downloading the mods '{profileName}' needs", cancel: stop.Cancel);
 
         task.DeclareTransfers(TransferDirection.Download);
@@ -370,7 +372,7 @@ public sealed class ProfileApplyService(
                 $"'{game.Name}' no longer follows a profile. Its mod folders were left exactly as they are.");
         }
 
-        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Stopping);
 
         PlanAttempt attempt;
 
@@ -502,7 +504,7 @@ public sealed class ProfileApplyService(
         // Joined with whatever the caller passed, so the strip's Cancel and a page's own Cancel are the
         // same act - and so a gesture whose page has since been navigated away from is still
         // stoppable, which is the whole reason the strip outlives the page.
-        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Stopping);
 
         PlanAttempt attempt;
 

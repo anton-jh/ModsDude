@@ -3,6 +3,7 @@ using ModsDude.Client.Core.Activity;
 using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Sessions;
 using ModsDude.Client.Core.Sync;
 using System.Windows.Threading;
 
@@ -29,6 +30,7 @@ public sealed class PlaySessionWatcher(
     IPresenceReporter presence,
     IDriftMonitor monitor,
     IRepoStore repoStore,
+    ISessionWork session,
     ILogger<PlaySessionWatcher> logger)
     : IPlaySessionWatcher
 {
@@ -72,22 +74,28 @@ public sealed class PlaySessionWatcher(
         var timer = (DispatcherTimer)sender!;
         timer.Stop();
 
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(_stopping.Token, session.Stopping);
+
         try
         {
             runningGames.Poll();
 
             // The watch raises its reminder before this returns, so the drift check below cannot put
             // the same notice up as news first.
-            if ((await watch.PollAsync(_stopping.Token)).Count > 0)
+            if ((await watch.PollAsync(stop.Token)).Count > 0)
             {
                 await monitor.CheckAsync(DriftCheckReason.Explicit);
             }
 
-            await presence.ReportAsync(_stopping.Token);
+            await presence.ReportAsync(stop.Token);
         }
         catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
         {
             return;
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+            logger.LogDebug("A look at the running games was stopped because the session ended.");
         }
         catch (Exception exception)
         {

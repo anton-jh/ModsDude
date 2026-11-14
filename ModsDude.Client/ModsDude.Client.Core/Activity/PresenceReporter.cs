@@ -85,6 +85,27 @@ public sealed class PresenceReporter(
         }
     }
 
+    public async Task GoOfflineAsync(CancellationToken cancellationToken)
+    {
+        List<GameIdentity> beating;
+
+        lock (_lock)
+        {
+            beating = [.. _beating.Keys.OrderBy(x => x.ToString(), StringComparer.Ordinal)];
+        }
+
+        foreach (var game in beating)
+        {
+            if (await SendAsync(game, isPlaying: false, cancellationToken))
+            {
+                lock (_lock)
+                {
+                    _beating.Remove(game);
+                }
+            }
+        }
+    }
+
     public void ClearUserState()
     {
         lock (_lock)

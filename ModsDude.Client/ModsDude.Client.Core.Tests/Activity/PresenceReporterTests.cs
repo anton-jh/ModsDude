@@ -137,6 +137,47 @@ public class PresenceReporterTests
     }
 
 
+    [Fact]
+    public async Task Going_offline_stops_every_game_still_playing()
+    {
+        var harness = new Harness();
+        harness.GameRunning = true;
+        await harness.Report();
+
+        await harness.Reporter.GoOfflineAsync(CancellationToken.None);
+        await harness.Reporter.GoOfflineAsync(CancellationToken.None);
+
+        Assert.Equal([true, false], harness.Client.Sent);
+    }
+
+    [Fact]
+    public async Task Going_offline_with_nothing_playing_says_nothing()
+    {
+        var harness = new Harness();
+
+        await harness.Reporter.GoOfflineAsync(CancellationToken.None);
+
+        Assert.Empty(harness.Client.Sent);
+    }
+
+    [Fact]
+    public async Task A_failed_offline_stop_is_tried_again_by_the_next_report()
+    {
+        var harness = new Harness();
+        harness.GameRunning = true;
+        await harness.Report();
+
+        harness.GameRunning = false;
+        harness.Client.Fail = true;
+        await harness.Reporter.GoOfflineAsync(CancellationToken.None);
+
+        harness.Client.Fail = false;
+        await harness.Report();
+
+        Assert.Equal([true, false, false], harness.Client.Sent);
+    }
+
+
     private sealed class Harness : IDriftCandidateSource, IGameRunningMonitor
     {
         public Harness()

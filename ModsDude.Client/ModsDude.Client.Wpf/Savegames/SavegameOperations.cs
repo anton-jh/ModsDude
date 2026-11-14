@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.Sessions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Savegames;
@@ -16,6 +17,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// </remarks>
 public sealed class SavegameOperations(
     IResourceLeases leases,
+    ISessionWork session,
     ISavegameBindingStore bindings,
     ILocalSavegameAdapters adapters,
     Lazy<IModalService> modalService,
@@ -37,7 +39,7 @@ public sealed class SavegameOperations(
             return false;
         }
 
-        using var stop = new CancellationTokenSource();
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(session.Stopping);
         using var task = backgroundTasks.Begin(operation.Title, operation.Detail, stop.Cancel);
 
         try

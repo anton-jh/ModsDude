@@ -5,11 +5,13 @@ namespace ModsDude.Client.Core.Persistence;
 public class LocalState
 {
     /// <summary>
-    /// Bumped whenever the persisted shape changes in a way an older state would be misread by. There
-    /// is no migration: state written by an older version is discarded by <see cref="StateStore"/>'s
-    /// compatibility check. A removed property needs no bump, since reading ignores it.
+    /// Bumped whenever the persisted shape changes in a way an older state would be misread by, with a
+    /// migration added to <see cref="Schema"/> for the step. A removed property needs no bump, since
+    /// reading ignores it.
     /// </summary>
     public const int CurrentVersion = 7;
+
+    public static readonly StoreSchema Schema = new(CurrentVersion, OldestVersion: 7, Migrations: []);
 
 
     public int Version { get; set; } = CurrentVersion;

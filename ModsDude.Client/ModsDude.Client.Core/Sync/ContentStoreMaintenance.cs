@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.Helpers;
+using ModsDude.Client.Core.Sessions;
 
 namespace ModsDude.Client.Core.Sync;
 
@@ -46,6 +47,7 @@ public sealed class ContentStoreMaintenance(
     IResourceLeases leases,
     IRecycleBin recycleBin,
     IStoreIntegrityService storeIntegrity,
+    ISessionWork session,
     ILogger<ContentStoreMaintenance> logger) : IContentStoreMaintenance
 {
     public IReadOnlyList<ContentStore> GetStores()
@@ -62,8 +64,12 @@ public sealed class ContentStoreMaintenance(
 
     // On the thread pool: the work is synchronous (the claim is a try, the evict walks and deletes
     // files), and some callers await this from the UI thread.
-    public Task<long> SweepAllAsync(CancellationToken cancellationToken)
-        => Task.Run(() => SweepAll(cancellationToken), cancellationToken);
+    public async Task<long> SweepAllAsync(CancellationToken cancellationToken)
+    {
+        using var stop = LinkToSession(cancellationToken);
+
+        return await Task.Run(() => SweepAll(stop.Token), stop.Token);
+    }
 
     private long SweepAll(CancellationToken cancellationToken)
     {
@@ -120,9 +126,10 @@ public sealed class ContentStoreMaintenance(
         CancellationToken cancellationToken,
         Action? onWaiting = null)
     {
-        using var lease = await Claim(store, "Reclaiming space from", onWaiting, cancellationToken);
+        using var stop = LinkToSession(cancellationToken);
+        using var lease = await Claim(store, "Reclaiming space from", onWaiting, stop.Token);
 
-        return store.Reclaim(cancellationToken);
+        return store.Reclaim(stop.Token);
     }
 
     public async Task<long?> RecycleQuarantineAsync(
@@ -130,7 +137,8 @@ public sealed class ContentStoreMaintenance(
         CancellationToken cancellationToken,
         Action? onWaiting = null)
     {
-        using var lease = await Claim(store, "Emptying the quarantine folder of", onWaiting, cancellationToken);
+        using var stop = LinkToSession(cancellationToken);
+        using var lease = await Claim(store, "Emptying the quarantine folder of", onWaiting, stop.Token);
 
         if (store.IsMarked is false || Directory.Exists(store.QuarantinePath) is false)
         {
@@ -151,15 +159,19 @@ public sealed class ContentStoreMaintenance(
         // Exclusive because the pass *repairs*: an address that no longer matches its contents is
         // dropped, and dropping it out from under a sync that is linking it into a mod folder is the
         // one way this could make things worse than it found them.
-        using var lease = await Claim(store, "Checking", onWaiting, cancellationToken);
+        using var stop = LinkToSession(cancellationToken);
+        using var lease = await Claim(store, "Checking", onWaiting, stop.Token);
 
-        var result = await store.VerifyAllAsync(progress, cancellationToken);
+        var result = await store.VerifyAllAsync(progress, stop.Token);
 
         // A hardlinked folder still runs the bad bytes, and its manifest still vouches for them.
         storeIntegrity.MarkSuspect(store, new HashSet<string>(result.Corrupt, StringComparer.OrdinalIgnoreCase));
 
         return new StoreVerificationReport(result, FindAffectedFolders(store, result.Corrupt));
     }
+
+    private CancellationTokenSource LinkToSession(CancellationToken cancellationToken)
+        => CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Stopping);
 
     /// <summary>
     /// Takes the store to itself, for as long as the housekeeping runs.

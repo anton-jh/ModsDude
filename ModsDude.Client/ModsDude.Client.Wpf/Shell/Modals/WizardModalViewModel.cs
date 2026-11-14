@@ -158,6 +158,8 @@ public sealed partial class WizardModalViewModel : ModalViewModel
 
     public override bool TryCancel() => Press(CancelCommand);
 
+    public override void Abandon() => Cancel();
+
     public override bool TryAccept()
     {
         if (Current.Choices.FirstOrDefault(x => x.IsDefault) is not WizardChoice choice || CanChoose(choice) is false)

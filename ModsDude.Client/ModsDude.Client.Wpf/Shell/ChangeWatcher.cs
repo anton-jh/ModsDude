@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Changes;
 using ModsDude.Client.Core.Repos;
+using ModsDude.Client.Core.Sessions;
 using System.Windows.Threading;
 
 namespace ModsDude.Client.Wpf.Shell;
@@ -22,6 +23,7 @@ namespace ModsDude.Client.Wpf.Shell;
 public sealed class ChangeWatcher(
     IChangePoll poll,
     IRepoStore repoStore,
+    ISessionWork session,
     ILogger<ChangeWatcher> logger)
     : IChangeWatcher
 {
@@ -66,13 +68,19 @@ public sealed class ChangeWatcher(
         timer.Stop();
         timer.Interval = Interval;
 
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(_stopping.Token, session.Stopping);
+
         try
         {
-            await poll.PollAsync(_stopping.Token);
+            await poll.PollAsync(stop.Token);
         }
         catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
         {
             return;
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+            logger.LogDebug("A change poll was stopped because the session ended.");
         }
         catch (Exception exception)
         {

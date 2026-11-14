@@ -79,10 +79,36 @@ public class ContentStoreAutoTrimTests
             new ResourceLeases(),
             new FakeRecycleBin(),
             new FakeStoreIntegrity(),
+            new TestSessionWork(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         Assert.True(await maintenance.SweepAllAsync(CancellationToken.None) > 0);
         Assert.Equal(0, store.Measure().Entries);
+    }
+
+    [Fact]
+    public async Task A_sweep_stops_when_the_session_ends()
+    {
+        using var root = new TempDirectory("trim-session-end");
+        var store = new ContentStore("C:\\", root.CreateSubdirectory("store"), maxSizeBytes: 1);
+        var session = new TestSessionWork();
+
+        await Fill(store, "one", "two");
+
+        var maintenance = new ContentStoreMaintenance(
+            new FakeStoreProvider(store),
+            new FakeModFolders(),
+            new SyncManifestStore(root.CreateSubdirectory("manifests")),
+            new ResourceLeases(),
+            new FakeRecycleBin(),
+            new FakeStoreIntegrity(),
+            session,
+            NullLogger<ContentStoreMaintenance>.Instance);
+
+        await session.StopAllAsync(CancellationToken.None);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => maintenance.SweepAllAsync(CancellationToken.None));
+        Assert.Equal(2, store.Measure().Entries);
     }
 
     /// <summary>
@@ -118,6 +144,7 @@ public class ContentStoreAutoTrimTests
             new ResourceLeases(),
             new FakeRecycleBin(),
             new FakeStoreIntegrity(),
+            new TestSessionWork(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await maintenance.SweepAllAsync(CancellationToken.None);
@@ -151,6 +178,7 @@ public class ContentStoreAutoTrimTests
             leases,
             new FakeRecycleBin(),
             new FakeStoreIntegrity(),
+            new TestSessionWork(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         // Returns rather than blocking, and leaves the store as it found it.
@@ -175,6 +203,7 @@ public class ContentStoreAutoTrimTests
             leases,
             new FakeRecycleBin(),
             new FakeStoreIntegrity(),
+            new TestSessionWork(),
             NullLogger<ContentStoreMaintenance>.Instance);
 
         await maintenance.SweepAllAsync(CancellationToken.None);
@@ -232,6 +261,7 @@ public class ContentStoreAutoTrimTests
             new ResourceLeases(),
             recycleBin ?? new FakeRecycleBin(),
             new FakeStoreIntegrity(),
+            new TestSessionWork(),
             NullLogger<ContentStoreMaintenance>.Instance);
     }
 

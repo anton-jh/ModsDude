@@ -1,4 +1,4 @@
-﻿using Microsoft.Identity.Client;
+using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Extensions.Msal;
 using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.Helpers;
@@ -7,21 +7,21 @@ using System.Windows;
 namespace ModsDude.Client.Wpf.Account;
 
 /// <summary>
-/// The app's one account, and the only control over it.
+/// The app's one account. Tokens are only ever had silently; a browser opens only for a sign-in the
+/// user asked for, through <see cref="PromptAsync"/>.
 /// </summary>
 /// <remarks>
-/// There is no signing out. Every surface in ModsDude is a server call, so a signed-out app is an
-/// app with nothing to show; the thing users actually want is to be somebody else, which is
-/// <see cref="SwitchUser"/>. It signs the new user in <i>before</i> forgetting the old one, so a
-/// cancelled switch - or a failed one - leaves the current user exactly where they were rather than
-/// stranding the app in a state it has no page for.
+/// There is no signing out. A new sign-in is prompted for and held as a <see cref="PendingSignIn"/>
+/// before the current account is forgotten, so a cancelled or refused switch leaves the current user
+/// exactly where they were.
 /// </remarks>
-public class AuthenticationService : IAuthenticationService
+public sealed class AuthenticationService : IAuthenticationService, IDisposable
 {
     private const string _redirectUri = "http://localhost";
     private readonly string[] _scopes;
     private readonly IPublicClientApplication _client;
-    private bool _tokenCacheConfigured = false;
+    private readonly SemaphoreSlim _tokenCacheGate = new(1, 1);
+    private bool _tokenCacheConfigured;
     private CancellationTokenSource? _prompt;
 
 
@@ -38,24 +38,41 @@ public class AuthenticationService : IAuthenticationService
 
     public event EventHandler<SignedInAccount>? AccountChanged;
 
+    public event EventHandler? NeedsSignInChanged;
+
 
     public SignedInAccount? CurrentAccount { get; private set; }
+
+    public bool NeedsSignIn { get; private set; }
 
 
     public async Task<string> Get(CancellationToken cancellationToken)
     {
-        await EnsureTokenCacheAsync();
+        await EnsureTokenCacheAsync(cancellationToken);
 
-        var result = await AcquireAsync(cancellationToken);
+        if (CurrentAccount is null)
+        {
+            throw new SignInRequiredException();
+        }
 
-        Adopt(result);
+        if (await FindCurrentAccountAsync() is not IAccount account)
+        {
+            throw RequireSignIn(null);
+        }
 
-        return result.AccessToken;
+        try
+        {
+            return (await _client.AcquireTokenSilent(_scopes, account).ExecuteAsync(cancellationToken)).AccessToken;
+        }
+        catch (MsalUiRequiredException exception)
+        {
+            throw RequireSignIn(exception);
+        }
     }
 
     public async Task<bool> TrySignInSilentlyAsync(CancellationToken cancellationToken)
     {
-        await EnsureTokenCacheAsync();
+        await EnsureTokenCacheAsync(cancellationToken);
 
         if (await FindCurrentAccountAsync() is not IAccount account)
         {
@@ -74,83 +91,15 @@ public class AuthenticationService : IAuthenticationService
         }
     }
 
-    public async Task<bool> SwitchUser(CancellationToken cancellationToken)
-    {
-        await EnsureTokenCacheAsync();
-
-        if (await PromptAsync(cancellationToken) is not AuthenticationResult result)
-        {
-            return false;
-        }
-
-        // Only now that there is somebody to replace them with. Clearing the cache on the way in
-        // would turn every cancelled switch into an accidental sign-out.
-        await ForgetOtherAccountsAsync(result.Account);
-
-        return Adopt(result);
-    }
-
-    public async Task<bool> ResetPassword(CancellationToken cancellationToken)
-    {
-        if (CurrentAccount is not SignedInAccount current)
-        {
-            return false;
-        }
-
-        await EnsureTokenCacheAsync();
-
-        if (await PromptAsync(cancellationToken, current.Email) is not AuthenticationResult result)
-        {
-            return false;
-        }
-
-        await ForgetOtherAccountsAsync(result.Account);
-
-        Adopt(result);
-
-        return true;
-    }
-
-
-    /// <summary>
-    /// Whether the sign-in library is saying the identity provider did not answer, in its own words
-    /// rather than as the socket error underneath - which <see cref="Core.Connectivity.ConnectionFailure"/>
-    /// already recognises wherever it is wrapped.
-    /// </summary>
-    public static bool IsUnreachable(Exception exception)
-        => exception is MsalServiceException { ErrorCode: MsalError.RequestTimeout or MsalError.ServiceNotAvailable };
-
-
-    private async Task<AuthenticationResult> AcquireAsync(CancellationToken cancellationToken)
-    {
-        var account = await FindCurrentAccountAsync();
-
-        if (account is not null)
-        {
-            try
-            {
-                return await _client.AcquireTokenSilent(_scopes, account).ExecuteAsync(cancellationToken);
-            }
-            catch (MsalUiRequiredException)
-            {
-            }
-        }
-
-        return await AcquireTokenInteractive(cancellationToken);
-    }
-
-    /// <summary>
-    /// A sign-in page the user asked for, which replaces any such page still open.
-    /// </summary>
     /// <remarks>
     /// A browser tab closed without finishing never answers, so the attempt behind it would wait
-    /// forever - and one finished much later would still sign somebody in, long after the user gave up
-    /// on it. Asking again is how the user says they gave up, so that is what ends the old attempt. A
-    /// tab finished after being replaced reaches a listener that is no longer there.
+    /// forever. Asking again is how the user says they gave up, so a new prompt ends the old one. A tab
+    /// finished after being replaced reaches a listener that is no longer there.
     /// </remarks>
-    /// <returns>Null where the user closed the page, asked for a new one before finishing it, or the caller cancelled.</returns>
-    private async Task<AuthenticationResult?> PromptAsync(CancellationToken cancellationToken, string? loginHint = null)
+    public async Task<PendingSignIn?> PromptAsync(string? loginHint, CancellationToken cancellationToken)
     {
+        await EnsureTokenCacheAsync(cancellationToken);
+
         // Called from the UI thread and resumed on it, so the one open prompt is never raced.
         using var prompt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -159,14 +108,14 @@ public class AuthenticationService : IAuthenticationService
 
         try
         {
-            return await AcquireTokenInteractive(prompt.Token, loginHint);
+            var result = await AcquireTokenInteractive(loginHint, prompt.Token);
+
+            return new PendingSignIn(result, Describe(result));
         }
-        catch (MsalClientException ex) when (ex.ErrorCode == MsalError.AuthenticationCanceledError)
+        catch (MsalClientException exception) when (exception.ErrorCode == MsalError.AuthenticationCanceledError)
         {
             return null;
         }
-        // Whoever cancelled it - this, for a newer prompt, or the command itself, which cancels its
-        // previous run when clicked again - the user did not finish the page, and that is all it means.
         catch (OperationCanceledException)
         {
             return null;
@@ -180,11 +129,55 @@ public class AuthenticationService : IAuthenticationService
         }
     }
 
+    public async Task AdoptAsync(PendingSignIn signIn)
+    {
+        await ForgetOtherAccountsAsync(signIn.Result.Account);
+
+        Adopt(signIn.Result);
+    }
+
+    public async Task DiscardAsync(PendingSignIn signIn)
+    {
+        if (signIn.Account.Id == CurrentAccount?.Id)
+        {
+            return;
+        }
+
+        await _client.RemoveAsync(signIn.Result.Account);
+    }
+
+
+    /// <summary>
+    /// Whether the sign-in library is saying the identity provider did not answer, in its own words
+    /// rather than as the socket error underneath - which <see cref="Core.Connectivity.ConnectionFailure"/>
+    /// already recognises wherever it is wrapped.
+    /// </summary>
+    public static bool IsUnreachable(Exception exception)
+        => exception is MsalServiceException { ErrorCode: MsalError.RequestTimeout or MsalError.ServiceNotAvailable };
+
+
+    public void Dispose()
+    {
+        _tokenCacheGate.Dispose();
+    }
+
+
+    private SignInRequiredException RequireSignIn(Exception? cause)
+    {
+        if (NeedsSignIn is false)
+        {
+            NeedsSignIn = true;
+            OnUiThread(() => NeedsSignInChanged?.Invoke(this, EventArgs.Empty));
+        }
+
+        return new SignInRequiredException(cause);
+    }
+
     /// <param name="loginHint">
     /// Where set, the sign-in page opens on that account's password rather than on a choice of
     /// accounts, and asks for it even where a session would have let it skip the page.
     /// </param>
-    private Task<AuthenticationResult> AcquireTokenInteractive(CancellationToken cancellationToken, string? loginHint = null)
+    private Task<AuthenticationResult> AcquireTokenInteractive(string? loginHint, CancellationToken cancellationToken)
     {
         var builder = _client.AcquireTokenInteractive(_scopes);
 
@@ -234,12 +227,9 @@ public class AuthenticationService : IAuthenticationService
                     .ExecuteAsync(cancellationToken);
     }
 
-
-
     /// <summary>
-    /// The signed-in account by identity, rather than whatever the cache happens to list first. A
-    /// completed switch leaves exactly one account behind, but a token acquisition racing one that is
-    /// still in the browser must not pick up the account being replaced.
+    /// The signed-in account by identity rather than whatever the cache lists first, so a sign-in
+    /// still pending in the browser is never picked up in its place.
     /// </summary>
     private async Task<IAccount?> FindCurrentAccountAsync()
     {
@@ -247,7 +237,7 @@ public class AuthenticationService : IAuthenticationService
 
         return CurrentAccount is SignedInAccount current
             ? accounts.FirstOrDefault(x => Identify(x) == current.Id)
-            : accounts.FirstOrDefault();
+            : accounts.OrderBy(Identify, StringComparer.Ordinal).FirstOrDefault();
     }
 
     private async Task ForgetOtherAccountsAsync(IAccount kept)
@@ -261,79 +251,84 @@ public class AuthenticationService : IAuthenticationService
         }
     }
 
-    /// <returns>True where this is a different user from the one signed in a moment ago.</returns>
-    private bool Adopt(AuthenticationResult result)
+    private void Adopt(AuthenticationResult result)
     {
-        var adopted = new SignedInAccount(Identify(result.Account), Describe(result), result.Account.Username);
+        var adopted = Describe(result);
 
-        // Get() runs on every outgoing request, so the common case here is the same account again.
+        if (NeedsSignIn)
+        {
+            NeedsSignIn = false;
+            OnUiThread(() => NeedsSignInChanged?.Invoke(this, EventArgs.Empty));
+        }
+
         if (CurrentAccount?.Id == adopted.Id)
         {
-            return false;
+            return;
         }
 
         CurrentAccount = adopted;
 
-        RaiseAccountChanged(adopted);
-
-        return true;
+        OnUiThread(() => AccountChanged?.Invoke(this, adopted));
     }
 
-    private void RaiseAccountChanged(SignedInAccount account)
+    private static void OnUiThread(Action action)
     {
-        if (AccountChanged is not EventHandler<SignedInAccount> handler)
-        {
-            return;
-        }
-
         if (Application.Current is Application app && app.CheckAccess() is false)
         {
-            _ = app.Dispatcher.InvokeAsync(() => handler(this, account));
+            app.Dispatcher.Invoke(action);
 
             return;
         }
 
-        handler(this, account);
+        action();
     }
 
-    private async Task EnsureTokenCacheAsync()
+    private async Task EnsureTokenCacheAsync(CancellationToken cancellationToken)
     {
-        if (_tokenCacheConfigured)
+        if (Volatile.Read(ref _tokenCacheConfigured))
         {
             return;
         }
 
-        var storageProperties = new StorageCreationPropertiesBuilder("msal_cache.dat", FileSystemHelper.GetAppDataDirectory())
-            .WithMacKeyChain("ModsDudeTokenCache", "MSAL")
-            .WithLinuxUnprotectedFile()
-            .Build();
+        await _tokenCacheGate.WaitAsync(cancellationToken);
 
-        var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
-        cacheHelper.RegisterCache(_client.UserTokenCache);
+        try
+        {
+            if (_tokenCacheConfigured)
+            {
+                return;
+            }
 
-        _tokenCacheConfigured = true;
+            var storageProperties = new StorageCreationPropertiesBuilder("msal_cache.dat", FileSystemHelper.GetAppDataDirectory())
+                .WithMacKeyChain("ModsDudeTokenCache", "MSAL")
+                .WithLinuxUnprotectedFile()
+                .Build();
+
+            var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
+            cacheHelper.RegisterCache(_client.UserTokenCache);
+
+            Volatile.Write(ref _tokenCacheConfigured, true);
+        }
+        finally
+        {
+            _tokenCacheGate.Release();
+        }
     }
 
     private static string Identify(IAccount account)
         => account.HomeAccountId?.Identifier ?? account.Username;
 
     /// <summary>
-    /// The <c>name</c> claim - deliberately not <see cref="IAccount.Username"/>, which despite the
-    /// word is the account's <i>identifier</i> at the provider and for this tenant is the email
-    /// address they sign in with, not a name anybody chose.
+    /// Named by the <c>name</c> claim - the one the server seeded its stored name from - rather than
+    /// <see cref="IAccount.Username"/>, which for this tenant is the email address.
     /// </summary>
-    /// <remarks>
-    /// This is the claim the server seeded its stored name from, so it is the right thing to paint
-    /// immediately and the same as the stored name until the user first renames themselves.
-    /// <see cref="AccountViewModel"/> replaces it with the server's once that has
-    /// been asked for.
-    /// </remarks>
-    private static string Describe(AuthenticationResult result)
+    private static SignedInAccount Describe(AuthenticationResult result)
     {
         var name = result.ClaimsPrincipal?.FindFirst("name")?.Value;
 
-        // Matching what the server calls a user whose claim is blank, so that the placeholder is not
-        // one more name than the system actually has.
-        return string.IsNullOrWhiteSpace(name) ? "Unnamed user" : name.Trim();
+        // Matching what the server calls a user whose claim is blank.
+        var displayName = string.IsNullOrWhiteSpace(name) ? "Unnamed user" : name.Trim();
+
+        return new SignedInAccount(Identify(result.Account), displayName, result.Account.Username);
     }
 }

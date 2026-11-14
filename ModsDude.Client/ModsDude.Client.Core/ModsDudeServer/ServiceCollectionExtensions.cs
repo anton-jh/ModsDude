@@ -46,7 +46,7 @@ public static class ServiceCollectionExtensions
     private static void AddClient<TClient>(IServiceCollection services, Func<ClientConfiguration, HttpClient, TClient> create)
         where TClient : class
     {
-        services.AddHttpClient(typeof(TClient).Name)
+        services.AddHttpClient(typeof(TClient).Name, x => x.Timeout = Timeout.InfiniteTimeSpan)
             .AddHttpMessageHandler<ServerConnectionHandler>()
             .AddHttpMessageHandler<BuildHeaderHandler>()
             .AddHttpMessageHandler<AccountStatusHandler>()

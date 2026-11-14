@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using System.Net;
@@ -24,6 +25,21 @@ public class ConnectionFailureTests
         var exception = new TaskCanceledException("The request was canceled.", new TimeoutException());
 
         Assert.True(ConnectionFailure.Is(exception));
+    }
+
+    [Fact]
+    public void A_sign_in_that_ran_out_counts_wherever_it_is_wrapped()
+    {
+        var exception = new InvalidOperationException("Request failed.", new SignInRequiredException());
+
+        Assert.True(ConnectionFailure.Is(exception));
+        Assert.True(SignInRequiredException.Is(exception));
+    }
+
+    [Fact]
+    public void Only_a_sign_in_that_ran_out_is_one()
+    {
+        Assert.False(SignInRequiredException.Is(new HttpRequestException("No connection could be made.")));
     }
 
     [Theory]

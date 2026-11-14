@@ -28,6 +28,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
 
     private readonly IUserAccountService _userAccountService;
     private readonly IAuthenticationService _authenticationService;
+    private readonly IAccountSwitcher _switcher;
     private readonly IFilePickerService _filePickerService;
     private readonly IToastService _toasts;
     private readonly ILogger<AccountPageViewModel> _logger;
@@ -37,6 +38,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
         AccountViewModel account,
         IUserAccountService userAccountService,
         IAuthenticationService authenticationService,
+        IAccountSwitcher switcher,
         IFilePickerService filePickerService,
         IToastService toasts,
         ILogger<AccountPageViewModel> logger)
@@ -44,6 +46,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
         Account = account;
         _userAccountService = userAccountService;
         _authenticationService = authenticationService;
+        _switcher = switcher;
         _filePickerService = filePickerService;
         _toasts = toasts;
         _logger = logger;
@@ -154,7 +157,13 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
     [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task ResetPassword(CancellationToken cancellationToken)
     {
-        if (await _authenticationService.ResetPassword(cancellationToken))
+        if (_authenticationService.CurrentAccount is not SignedInAccount current)
+        {
+            return;
+        }
+
+        // Signing in as somebody else on that page is a switch, and the switch says so for itself.
+        if (await _switcher.SignInAsync(current.Email, cancellationToken) && _authenticationService.CurrentAccount?.Id == current.Id)
         {
             _toasts.Show("Signed in again. If you set a new password, it is the one to use from now on.");
         }

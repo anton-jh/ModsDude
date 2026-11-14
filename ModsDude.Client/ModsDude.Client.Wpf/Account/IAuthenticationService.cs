@@ -15,36 +15,42 @@ public interface IAuthenticationService : IAccessTokenAccessor
     SignedInAccount? CurrentAccount { get; }
 
     /// <summary>
-    /// Signs in only if that takes no one at the keyboard.
+    /// Raised when <see cref="NeedsSignIn"/> changes. Always on the UI thread.
+    /// </summary>
+    event EventHandler? NeedsSignInChanged;
+
+    /// <summary>
+    /// Whether a token was asked for and could only be had by signing in again. Cleared by the next
+    /// sign-in that completes.
+    /// </summary>
+    bool NeedsSignIn { get; }
+
+    /// <summary>
+    /// Signs in as the cached account, only if that takes no one at the keyboard.
     /// </summary>
     /// <remarks>
-    /// For an app that started itself at sign-in and has no window up: <see cref="IAccessTokenAccessor.Get"/> falls back to
-    /// a browser, and a browser tab appearing unprompted at logon is the one thing a background start
-    /// must not do. What it does not swallow is anything other than "needs the user" - a network that
-    /// is not up yet arrives as an exception, and it is the caller's to decide what that means.
+    /// What it does not swallow is anything other than "needs the user" - a network that is not up
+    /// yet arrives as an exception, and it is the caller's to decide what that means.
     /// </remarks>
     /// <returns>False where the account has to be asked for interactively, or there is none.</returns>
     Task<bool> TrySignInSilentlyAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Prompts for an account and signs in as whoever is picked.
+    /// Opens the sign-in page, replacing any sign-in page still open. Nothing changes until the
+    /// result is adopted.
     /// </summary>
-    /// <returns>
-    /// False where the user cancelled the prompt, asked for another before finishing it, or picked the
-    /// account they were already on. Either way nothing changed and no event was raised.
-    /// </returns>
-    Task<bool> SwitchUser(CancellationToken cancellationToken);
+    /// <param name="loginHint">
+    /// The account to ask the password of, where set. Otherwise the page offers a choice of accounts.
+    /// </param>
+    /// <returns>Null where the user closed the page, asked for another before finishing it, or the caller cancelled.</returns>
+    Task<PendingSignIn?> PromptAsync(string? loginHint, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Opens the sign-in page on the current account, where "Forgot password?" is the way to a new
-    /// password: the identity provider has no page for changing one while signed in, and a reset by
-    /// emailed code is the change it offers.
+    /// Makes a pending sign-in the account, forgetting every other one. Raises
+    /// <see cref="AccountChanged"/> where it is a different user.
     /// </summary>
-    /// <remarks>
-    /// Finishing the page signs in again, which for the same account changes nothing here. Somebody
-    /// who signs in as a different account on it has switched user, and is treated exactly as
-    /// <see cref="SwitchUser"/> would treat them.
-    /// </remarks>
-    /// <returns>False where the user closed the page, or asked for another, without finishing it.</returns>
-    Task<bool> ResetPassword(CancellationToken cancellationToken);
+    Task AdoptAsync(PendingSignIn signIn);
+
+    /// <summary>Forgets a pending sign-in that will not be adopted, unless it is the current account.</summary>
+    Task DiscardAsync(PendingSignIn signIn);
 }

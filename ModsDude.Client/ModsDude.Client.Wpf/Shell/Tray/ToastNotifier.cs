@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Persistence;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Notices;
 using ModsDude.Client.Wpf.Shell.Toasts;
 using System.Windows;
@@ -43,7 +44,8 @@ public sealed class ToastNotifier(
     IFriendActivityEnvironment friendEnvironment,
     IDriftMonitor monitor,
     IPlaySessionWatch sessions,
-    ISystemToasts system)
+    ISystemToasts system,
+    IErrorReporter errorReporter)
     : IToastNotifier
 {
     private const string _driftGroup = "drift";
@@ -206,7 +208,13 @@ public sealed class ToastNotifier(
     /// <summary>A click, from whichever thread Windows delivered it on.</summary>
     private void OnActivated(IReadOnlyDictionary<string, string> arguments)
     {
-        Application.Current?.Dispatcher.InvokeAsync(async () =>
+        Application.Current?.Dispatcher.InvokeAsync(() => OpenAsync(arguments));
+    }
+
+    /// <remarks>Never throws: nothing awaits a click, so a failure is reported here.</remarks>
+    private async Task OpenAsync(IReadOnlyDictionary<string, string> arguments)
+    {
+        try
         {
             window.ShowFromTray();
 
@@ -214,6 +222,10 @@ public sealed class ToastNotifier(
             {
                 await notices.OpenAsync(key);
             }
-        });
+        }
+        catch (Exception exception)
+        {
+            await errorReporter.ShowAsync(exception, "opening what a notification pointed at");
+        }
     }
 }

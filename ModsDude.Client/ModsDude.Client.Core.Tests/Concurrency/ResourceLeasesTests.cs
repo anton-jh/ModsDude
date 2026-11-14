@@ -353,4 +353,57 @@ public class ResourceLeasesTests
 
         Assert.Equal(2, changes);
     }
+
+    [Fact]
+    public async Task Waiting_for_idle_with_nothing_held_completes_at_once()
+    {
+        var leases = new ResourceLeases();
+
+        await leases.WhenIdleAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Waiting_for_idle_completes_when_the_last_claim_is_released()
+    {
+        var leases = new ResourceLeases();
+        var first = leases.TryAcquireExclusive(_a, "applying")!;
+        var second = await leases.AcquireSharedAsync([_b], "syncing", CancellationToken.None);
+
+        var idle = leases.WhenIdleAsync(CancellationToken.None);
+
+        first.Dispose();
+        Assert.False(idle.IsCompleted);
+
+        second.Dispose();
+        await idle.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task Waiting_for_idle_can_be_cancelled_without_releasing_anything()
+    {
+        var leases = new ResourceLeases();
+        using var lease = leases.TryAcquireExclusive(_a, "applying");
+        using var cancellation = new CancellationTokenSource();
+
+        var idle = leases.WhenIdleAsync(cancellation.Token);
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => idle);
+        Assert.True(leases.IsHeld(_a));
+    }
+
+    [Fact]
+    public async Task Waiting_for_idle_again_after_it_was_reached_waits_for_the_new_claim()
+    {
+        var leases = new ResourceLeases();
+        leases.TryAcquireExclusive(_a, "applying")!.Dispose();
+
+        var lease = leases.TryAcquireExclusive(_a, "applying again")!;
+        var idle = leases.WhenIdleAsync(CancellationToken.None);
+
+        Assert.False(idle.IsCompleted);
+
+        lease.Dispose();
+        await idle.WaitAsync(TimeSpan.FromSeconds(5));
+    }
 }

@@ -27,7 +27,7 @@ public partial class NavigationManager(
     public MenuItemViewModel? Selected
     {
         get => _current?.Parent ?? _current;
-        set => Navigate(value);
+        set => Select(value);
     }
 
     /// <summary>
@@ -73,11 +73,23 @@ public partial class NavigationManager(
         }
     }
 
-    private async void Navigate(MenuItemViewModel? target)
+    /// <summary>
+    /// A menu's own pick, run as a command so its failure reaches the error modal. A pick made while a
+    /// navigation is still asking about unsaved changes is pushed back to what is on screen.
+    /// </summary>
+    private void Select(MenuItemViewModel? target)
     {
-        await NavigateAsync(target);
+        if (NavigateCommand.CanExecute(target) is false)
+        {
+            SetCurrent(_current);
+
+            return;
+        }
+
+        NavigateCommand.Execute(target);
     }
 
+    [RelayCommand]
     private async Task NavigateAsync(MenuItemViewModel? target)
     {
         var previous = _current;

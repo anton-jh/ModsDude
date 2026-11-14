@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Accounts;
+using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.Exceptions;
 
@@ -58,6 +59,13 @@ public sealed class ErrorReporter(
         if (AccountRefusal.Is(exception))
         {
             logger.LogWarning(exception, "Not shown while {Context}: the account is blocked.", context ?? "working");
+
+            return Task.CompletedTask;
+        }
+
+        if (SignInRequiredException.Is(exception))
+        {
+            logger.LogWarning(exception, "Not shown while {Context}: signing in again is needed.", context ?? "working");
 
             return Task.CompletedTask;
         }

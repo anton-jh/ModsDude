@@ -77,7 +77,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         // Captured once, so that work still in flight after Dispose reads a cancelled token rather
         // than an ObjectDisposedException off the source it came from.
         _lifetime = _pageLifetime.Token;
-        _statisticsLoad = new LatestLoad(_ => { }, _lifetime);
+        _statisticsLoad = new LatestLoad(_ => { }, logger, _lifetime);
 
         // Member, like the Saves list: publishing writes to the repo, and a guest is not offered a
         // button that leads to a refusal.

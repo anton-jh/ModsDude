@@ -2,9 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Users;
-using ModsDude.Client.Wpf.Shell.Modals;
-using ModsDude.Client.Wpf.Shell.Navigation;
-using ModsDude.Client.Wpf.Shell.Sidebar;
 
 namespace ModsDude.Client.Wpf.Account;
 
@@ -31,23 +28,20 @@ public partial class AccountViewModel : ObservableObject
 {
     private readonly IAuthenticationService _authenticationService;
     private readonly ICurrentUserStore _currentUser;
-    private readonly INavigationLockService _navigationLockService;
+    private readonly IAccountSwitcher _switcher;
     private readonly IUserAvatarFactory _avatarFactory;
-    private readonly Lazy<IModalService> _modalService;
 
 
     public AccountViewModel(
         IAuthenticationService authenticationService,
         ICurrentUserStore currentUser,
-        INavigationLockService navigationLockService,
-        IUserAvatarFactory avatarFactory,
-        Lazy<IModalService> modalService)
+        IAccountSwitcher switcher,
+        IUserAvatarFactory avatarFactory)
     {
         _authenticationService = authenticationService;
         _currentUser = currentUser;
-        _navigationLockService = navigationLockService;
+        _switcher = switcher;
         _avatarFactory = avatarFactory;
-        _modalService = modalService;
 
         _displayName = Describe(authenticationService.CurrentAccount);
 
@@ -100,36 +94,7 @@ public partial class AccountViewModel : ObservableObject
     // Never greyed out while running: a sign-in tab closed without finishing never answers, and
     // clicking again is how the user gets a new one - which ends the old attempt.
     [RelayCommand(AllowConcurrentExecutions = true)]
-    private async Task SwitchUser(CancellationToken cancellationToken)
-    {
-        // Everything built from the current account is thrown away by the switch, so an editor
-        // holding unsaved changes gets the same question navigating away from it would ask.
-        if (_navigationLockService.HasLock() && await ConfirmDiscardAsync() is false)
-        {
-            return;
-        }
-
-        if (await _authenticationService.SwitchUser(cancellationToken) is false)
-        {
-            return;
-        }
-
-        _navigationLockService.Clear();
-    }
-
-    private async Task<bool> ConfirmDiscardAsync()
-    {
-        var modal = new ConfirmationModalViewModel(
-            "Huh?",
-            "Are you sure you want to switch user?\nThis will discard your current changes!",
-            IconKind.Warning,
-            "Discard changes",
-            "Stay");
-
-        await _modalService.Value.Show(modal);
-
-        return modal.Result;
-    }
+    private Task SwitchUser(CancellationToken cancellationToken) => _switcher.SignInAsync(loginHint: null, cancellationToken);
 
     private void OnAccountChanged(object? sender, SignedInAccount account)
     {

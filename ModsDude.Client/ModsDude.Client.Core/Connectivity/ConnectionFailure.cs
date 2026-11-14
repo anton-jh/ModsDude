@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Accounts;
+using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using System.Net;
@@ -19,7 +20,8 @@ namespace ModsDude.Client.Core.Connectivity;
 /// <para>
 /// <b>A server that refuses this build counts too</b>: it ends by the update arriving or the server
 /// catching up, and <see cref="IServerCompatibility"/> is what says so on screen. So does a blocked
-/// account: it ends by being unblocked, and <see cref="IAccountStatus"/> says so on screen.
+/// account: it ends by being unblocked, and <see cref="IAccountStatus"/> says so on screen. So does a
+/// sign-in that has run out: it ends by signing in again, which the shell asks for.
 /// </para>
 /// <para>
 /// <b>Down the whole inner chain</b>, because the thing that failed is rarely the thing that throws:
@@ -40,6 +42,7 @@ public static class ConnectionFailure
             {
                 _ when BuildRefusal.Is(current) => true,
                 _ when AccountRefusal.Is(current) => true,
+                SignInRequiredException => true,
                 ApiException api => IsGateway(api.StatusCode),
                 HttpRequestException { StatusCode: null } => true,
                 HttpRequestException { StatusCode: HttpStatusCode status } => IsGateway((int)status),

@@ -109,7 +109,7 @@ public class DismissalLedgerTests
         var ledger = new DismissalLedger();
 
         ledger.Dismiss("drift/fs25/mods", "2 replaced");
-        ledger.Clear();
+        ledger.ClearUserState();
 
         Assert.False(ledger.IsDismissed("drift/fs25/mods", "2 replaced"));
     }

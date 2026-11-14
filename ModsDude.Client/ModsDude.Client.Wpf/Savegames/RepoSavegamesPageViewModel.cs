@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Concurrency;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
@@ -111,7 +112,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         IUserAvatarFactory avatarFactory,
         TimeProvider time,
         ISavegameOperations operations,
-        IResourceLeases leases)
+        IResourceLeases leases,
+        ILogger<RepoSavegamesPageViewModel> logger)
     {
         _time = time;
         _operations = operations;
@@ -143,8 +145,8 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
         // Captured once, so that work still in flight after Dispose reads a cancelled token rather
         // than an ObjectDisposedException off the source it came from.
         _lifetime = _pageLifetime.Token;
-        _timelineLoad = new LatestLoad(loading => IsLoadingTimeline = loading, _lifetime);
-        _publishLoad = new LatestLoad(_ => { }, _lifetime);
+        _timelineLoad = new LatestLoad(loading => IsLoadingTimeline = loading, logger, _lifetime);
+        _publishLoad = new LatestLoad(_ => { }, logger, _lifetime);
 
         IsMember = repo.MembershipLevel >= RepoMembershipLevel.Member;
 

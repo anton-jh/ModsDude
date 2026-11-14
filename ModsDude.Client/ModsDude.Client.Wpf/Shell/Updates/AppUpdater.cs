@@ -2,7 +2,6 @@ using System.IO;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.Updates;
-using System.Windows;
 using Velopack;
 using Velopack.Sources;
 
@@ -66,7 +65,7 @@ public sealed class AppUpdater : IAppUpdater
 
     private readonly UpdateManager? _manager;
     private readonly IServerCompatibility _compatibility;
-    private readonly Lazy<MainWindow> _window;
+    private readonly IAppLifetime _lifetime;
     private readonly ILogger<AppUpdater> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -79,11 +78,11 @@ public sealed class AppUpdater : IAppUpdater
         string? githubRepository,
         string? feedDirectory,
         IServerCompatibility compatibility,
-        Lazy<MainWindow> window,
+        IAppLifetime lifetime,
         ILogger<AppUpdater> logger)
     {
         _compatibility = compatibility;
-        _window = window;
+        _lifetime = lifetime;
         _logger = logger;
 
         IUpdateSource? source = feedDirectory is { Length: > 0 }
@@ -211,18 +210,11 @@ public sealed class AppUpdater : IAppUpdater
             return;
         }
 
-        // The same question closing the window asks, because it is the same thing: leaving with work
-        // still running stops it part way.
-        if (await _window.Value.PrepareToLeaveAsync() is false)
-        {
-            return;
-        }
+        var manager = _manager;
+        var ready = _ready;
 
-        // Applied after this process has exited, by the updater, and then the app is started again. A
-        // normal shutdown rather than an abrupt exit, so the tray icon and toasts are put away properly.
-        _manager.WaitExitThenApplyUpdates(_ready, silent: false, restart: true);
-
-        Application.Current.Shutdown();
+        // Applied by the updater once this process has exited, and then the app is started again.
+        await _lifetime.RestartIntoUpdateAsync(() => manager.WaitExitThenApplyUpdates(ready, silent: false, restart: true));
     }
 
     public void Dispose()

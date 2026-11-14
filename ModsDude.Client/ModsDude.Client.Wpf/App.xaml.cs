@@ -18,6 +18,7 @@ using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Core.Sessions;
 using ModsDude.Client.Core.Startup;
 using ModsDude.Client.Core.Stores;
 using ModsDude.Client.Core.Sync;
@@ -42,6 +43,7 @@ using ModsDude.Client.Wpf.Shared.Behaviors;
 using ModsDude.Client.Wpf.Shell;
 using ModsDude.Client.Wpf.Shell.AccountBlock;
 using ModsDude.Client.Wpf.Shell.Offline;
+using ModsDude.Client.Wpf.Shell.SignIn;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Diagnostics;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -97,17 +99,16 @@ public partial class App : Application
             return;
         }
 
-        var authentication = _serviceProvider.GetRequiredService<IAuthenticationService>();
-        var connection = _serviceProvider.GetRequiredService<IConnectionRetry>();
+        var loginPage = _serviceProvider.GetRequiredService<LoginPageViewModel>();
 
         if (started.InBackground)
         {
-            await SignInWithoutInterruptingAsync(authentication, connection, started.Window);
+            await SignInWithoutInterruptingAsync(loginPage, started.Window);
 
             return;
         }
 
-        await connection.RunAsync(ConnectionTarget.SignIn, authentication.Get, CancellationToken.None);
+        await loginPage.SignInQuietlyAsync();
     }
 
 
@@ -127,7 +128,7 @@ public partial class App : Application
         // has no reason to exist any longer.
         _singleInstance = SingleInstance.TryAcquire(
             bringExistingForward: background is false,
-            restarted: e.Args.Contains(SingleInstance.RestartArgument, StringComparer.OrdinalIgnoreCase));
+            restartedFrom: SingleInstance.FindRestartedFrom(e.Args));
 
         if (_singleInstance is null)
         {
@@ -262,24 +263,14 @@ public partial class App : Application
     /// only once the window has been opened.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// <b>Silent is worth having, not merely permitted.</b> The drift check runs off persisted state and
-    /// needs no account, but what a notice can say about a repo - and everything a repo-scoped toast
-    /// will offer - needs the shell built for somebody, and that is what signing in does.
-    /// </para>
-    /// <para>
-    /// <b>A failure is not a reason to open a browser.</b> Logon is exactly when the network is not up
-    /// yet, which arrives here as an exception rather than as "needs the user" - so it is logged, and the
-    /// full sign-in waits for the window like the interactive case does. Nothing is retried on a timer
-    /// while the window is closed: the next thing that needs the account, opening the window, is the
-    /// retry - and from there it is retried like any other start.
-    /// </para>
+    /// Logon is exactly when the network is not up yet, so a failure here is logged and the sign-in
+    /// waits for the window, where it is retried like any other start.
     /// </remarks>
-    private async Task SignInWithoutInterruptingAsync(IAuthenticationService authentication, IConnectionRetry connection, MainWindow window)
+    private async Task SignInWithoutInterruptingAsync(LoginPageViewModel loginPage, MainWindow window)
     {
         try
         {
-            if (await authentication.TrySignInSilentlyAsync(default))
+            if (await _serviceProvider.GetRequiredService<IAuthenticationService>().TrySignInSilentlyAsync(CancellationToken.None))
             {
                 return;
             }
@@ -292,7 +283,7 @@ public partial class App : Application
 
         await window.WaitUntilShownAsync();
 
-        await connection.RunAsync(ConnectionTarget.SignIn, authentication.Get, CancellationToken.None);
+        await loginPage.SignInQuietlyAsync();
     }
 
     /// <summary>
@@ -350,8 +341,8 @@ public partial class App : Application
     {
         _singleInstance!.ListenForActivation(() => Dispatcher.InvokeAsync(window.ShowFromTray));
 
-        // Windows ending the session must not be answered with a window that will not close.
-        SessionEnding += (_, _) => window.AllowClose();
+        var lifetime = _serviceProvider.GetRequiredService<IAppLifetime>();
+        SessionEnding += (_, sessionEnding) => lifetime.OnSessionEnding(sessionEnding);
 
         _serviceProvider.GetRequiredService<IToastNotifier>().Start();
 
@@ -495,11 +486,12 @@ public partial class App : Application
         // something is waiting, the Settings page and the shell ask it for the rest.
         services.AddSingleton(sp => new Lazy<MainWindow>(sp.GetRequiredService<MainWindow>));
         services.AddSingleton<IAppLifetime, AppLifetime>();
+        services.AddSingleton<ISessionEnd, SessionEnd>();
         services.AddSingleton<IAppUpdater>(sp => new AppUpdater(
             configuration["Updates:GithubRepository"],
             configuration["Updates:Directory"],
             sp.GetRequiredService<IServerCompatibility>(),
-            sp.GetRequiredService<Lazy<MainWindow>>(),
+            sp.GetRequiredService<IAppLifetime>(),
             sp.GetRequiredService<ILogger<AppUpdater>>()));
         services.AddSingleton<IUpdateStatus>(sp => sp.GetRequiredService<IAppUpdater>());
 
@@ -546,6 +538,7 @@ public partial class App : Application
         // here - it is the entire mechanism, since two of these would be two sets of claims that
         // cannot see each other and therefore no claims at all.
         services.AddSingleton<IResourceLeases, ResourceLeases>();
+        services.AddSingleton<ISessionWork, SessionWork>();
 
         // One notice for the whole app, and one way in to it from outside the sidebar.
         services.AddSingleton<IShellNavigationService, ShellNavigationService>();
@@ -591,6 +584,7 @@ public partial class App : Application
         services.AddSingleton<NoticeCenterViewModel>();
         services.AddSingleton<INoticeEnvironment, NoticeEnvironment>();
         services.AddSingleton<IDismissalLedger, DismissalLedger>();
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IDismissalLedger>());
 
         // Both faces of one object again: everything that absorbs a failure reports it through the
         // interface, and the column draws a notice per kind out of what those reports add up to.
@@ -615,6 +609,9 @@ public partial class App : Application
 
         // Singleton because switching user is what replaces the shell it is drawn in.
         services.AddSingleton<AccountViewModel>();
+        services.AddSingleton<IAccountSwitcher, AccountSwitcher>();
+        services.AddSingleton<LoginPageViewModel>();
+        services.AddSingleton<SignInRequiredViewModel>();
 
         services.AddSingleton<IModalService>(sp => sp.GetRequiredService<MainWindowViewModel>());
         // The shell is the modal host, so anything the shell itself is built from has to ask for the

@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Concurrency;
+using ModsDude.Client.Core.Sessions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Import;
@@ -61,7 +62,8 @@ public sealed class ModImportCoordinator(
     IContentStoreTidier storeTidier,
     Lazy<IModalService> modalService,
     IBackgroundTaskReporter backgroundTasks,
-    IResourceLeases leases) : IModImportCoordinator
+    IResourceLeases leases,
+    ISessionWork session) : IModImportCoordinator
 {
     public bool IsBusy(Guid repoId) => leases.IsHeld(ResourceKeys.Repo(repoId));
 
@@ -98,7 +100,7 @@ public sealed class ModImportCoordinator(
         // Joined rather than replaced, so the page's own Cancel button and the strip's are the same
         // act on the same run - and so an import outlives the page it was started from with a way to
         // stop it, which is the half that was missing.
-        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Stopping);
         using var task = backgroundTasks.Begin(title, cancel: cancellation.Cancel);
         task.DeclareTransfers(versions.Any(x => x.Download is not null)
             ? TransferDirection.Upload | TransferDirection.Download

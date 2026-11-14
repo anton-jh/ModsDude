@@ -114,6 +114,9 @@ public interface IResourceLeases
     /// close the window.
     /// </summary>
     IReadOnlyList<string> DescribeAll();
+
+    /// <summary>Completes once nothing is held. Immediately, where nothing is.</summary>
+    Task WhenIdleAsync(CancellationToken cancellationToken);
 }
 
 
@@ -122,6 +125,7 @@ public sealed class ResourceLeases : IResourceLeases
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<string, Resource> _resources = new(StringComparer.Ordinal);
+    private TaskCompletionSource? _idle;
 
 
     public event EventHandler? Changed;
@@ -203,6 +207,24 @@ public sealed class ResourceLeases : IResourceLeases
         {
             return [.. _resources.Values.SelectMany(x => x.Holders).Distinct(StringComparer.Ordinal)];
         }
+    }
+
+    public Task WhenIdleAsync(CancellationToken cancellationToken)
+    {
+        Task idle;
+
+        lock (_gate)
+        {
+            if (IsIdle())
+            {
+                return Task.CompletedTask;
+            }
+
+            _idle ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            idle = _idle.Task;
+        }
+
+        return idle.WaitAsync(cancellationToken);
     }
 
 
@@ -319,6 +341,7 @@ public sealed class ResourceLeases : IResourceLeases
     private void Release(string key, bool exclusive, string holder)
     {
         List<TaskCompletionSource> granted = [];
+        TaskCompletionSource? idle = null;
 
         lock (_gate)
         {
@@ -346,12 +369,20 @@ public sealed class ResourceLeases : IResourceLeases
             {
                 _resources.Remove(key);
             }
+
+            if (_idle is not null && IsIdle())
+            {
+                idle = _idle;
+                _idle = null;
+            }
         }
 
         foreach (var completion in granted)
         {
             completion.TrySetResult();
         }
+
+        idle?.TrySetResult();
 
         Raise();
     }
@@ -382,6 +413,8 @@ public sealed class ResourceLeases : IResourceLeases
             granted.Add(waiter.Completion);
         }
     }
+
+    private bool IsIdle() => _resources.Values.All(x => x.IsHeld is false);
 
     /// <summary>Whether the resource itself allows it, ignoring whoever is already queued.</summary>
     private static bool CanEnter(Resource resource, bool exclusive)

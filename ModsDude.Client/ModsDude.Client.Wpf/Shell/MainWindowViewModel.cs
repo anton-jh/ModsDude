@@ -1,5 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
-using ModsDude.Client.Core.Concurrency;
+using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Account;
 using ModsDude.Client.Wpf.Shell.AccountBlock;
@@ -8,7 +8,7 @@ using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Notices;
-using ModsDude.Client.Wpf.Shell.Sidebar;
+using ModsDude.Client.Wpf.Shell.SignIn;
 using ModsDude.Client.Wpf.Shell.Toasts;
 using ModsDude.Client.Wpf.Shell.Updates;
 
@@ -18,7 +18,7 @@ public partial class MainWindowViewModel
 {
     private readonly IFactory<MainPageViewModel> _mainPageViewModelFactory;
     private readonly IReadOnlyList<IUserScopedState> _userScopedState;
-    private readonly IResourceLeases _leases;
+    private readonly IAppLifetime _lifetime;
 
 
     public MainWindowViewModel(
@@ -30,16 +30,20 @@ public partial class MainWindowViewModel
         ToastCenterViewModel toasts,
         BuildMismatchViewModel buildMismatch,
         AccountBlockedViewModel accountBlocked,
+        SignInRequiredViewModel signInRequired,
+        LoginPageViewModel loginPage,
         OfflineViewModel offline,
-        IResourceLeases leases)
+        IAppLifetime lifetime)
     {
         BackgroundTasks = backgroundTasks;
         Toasts = toasts;
         BuildMismatch = buildMismatch;
         AccountBlocked = accountBlocked;
+        SignInRequired = signInRequired;
+        _currentPage = loginPage;
         Offline = offline;
 
-        _leases = leases;
+        _lifetime = lifetime;
         _mainPageViewModelFactory = mainPageViewModelFactory;
         _userScopedState = userScopedState.ToList();
 
@@ -75,65 +79,26 @@ public partial class MainWindowViewModel
     /// <summary>Over everything but the modal layer and the toasts, while the server refuses the account.</summary>
     public AccountBlockedViewModel AccountBlocked { get; }
 
+    /// <summary>Over everything but the modal layer and the toasts, while the account has to sign in again.</summary>
+    public SignInRequiredViewModel SignInRequired { get; }
+
     /// <summary>Over everything but the progress strip, the modal layer and the toasts, while the server does not answer.</summary>
     public OfflineViewModel Offline { get; }
 
 
     [ObservableProperty]
-    private PageViewModel _currentPage = new LoginPageViewModel();
+    private PageViewModel _currentPage;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsModalVisible))]
-    private ModalViewModel? _modal;
+    /// <summary>Every open modal, oldest first. Only the newest is drawn.</summary>
+    private readonly List<ModalViewModel> _modals = [];
+
+    public ModalViewModel? Modal => _modals.LastOrDefault();
 
     public bool IsModalVisible => Modal is not null;
 
-    /// <summary>
-    /// Whether <see cref="ConfirmCloseAsync"/> has anything to ask. Separate so that a window hidden
-    /// to the tray is only brought back for a question that exists.
-    /// </summary>
-    public bool NeedsCloseConfirmation => _leases.DescribeAll() is { Count: > 0 };
-
-
-    /// <summary>
-    /// Whether closing the window right now would kill work part way through, and the answer to give
-    /// somebody who is about to.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>Asked of the leases, not of the strip.</b> The strip is a report and knows only what
-    /// announced itself to it; the leases are what is actually being written to, which is what closing
-    /// the window would interrupt. They happen to overlap today - everything that claims also
-    /// announces - and asking the wrong one would be a guard that silently stopped covering a job
-    /// somebody forgot to put on screen.
-    /// </para>
-    /// <para>
-    /// <b>A question, not a refusal.</b> An interrupted apply leaves the previous manifest standing
-    /// and the folder reported as drifted, which re-applying repairs - so this is somebody's decision
-    /// to make, and their reason for making it may be that the app has hung. What it must not be is a
-    /// surprise.
-    /// </para>
-    /// </remarks>
-    public async Task<bool> ConfirmCloseAsync()
-    {
-        if (_leases.DescribeAll() is not { Count: > 0 } running)
-        {
-            return true;
-        }
-
-        var modal = new ConfirmationModalViewModel(
-            running.Count == 1 ? "Something is still running" : $"{running.Count} things are still running",
-            string.Join("\n", running.Select(x => $"  {x}")) +
-            "\n\nClosing now stops it part way. Nothing is lost - a mod folder left half-applied is "
-            + "reported as drifted next time, and re-applying repairs it - but the work so far is wasted.",
-            IconKind.Warning,
-            "Close anyway",
-            "Keep working");
-
-        await Show(modal);
-
-        return modal.Result;
-    }
+    /// <summary>The window's close button. Leaving goes through the one exit every way out uses.</summary>
+    [RelayCommand]
+    private Task Quit() => _lifetime.QuitAsync();
 
 
     /// <summary>
@@ -175,15 +140,31 @@ public partial class MainWindowViewModel
         {
             modal.Completed -= Handler;
 
-            Modal = null;
+            _modals.Remove(modal);
+            OnModalsChanged();
 
             tcs.SetResult();
         }
 
         modal.Completed += Handler;
 
-        Modal = modal;
+        _modals.Add(modal);
+        OnModalsChanged();
 
         return tcs.Task;
+    }
+
+    public void DismissAll()
+    {
+        foreach (var modal in Enumerable.Reverse(_modals).ToList())
+        {
+            modal.Abandon();
+        }
+    }
+
+    private void OnModalsChanged()
+    {
+        OnPropertyChanged(nameof(Modal));
+        OnPropertyChanged(nameof(IsModalVisible));
     }
 }

@@ -51,6 +51,13 @@ public partial class ModalViewModel : ObservableObject
 
 
     /// <summary>
+    /// Ends the modal without an answer, for a shell that is throwing away the session it belongs to.
+    /// Whatever it would have returned stays at its default, which every modal reads as "no".
+    /// </summary>
+    public virtual void Abandon() => Done = true;
+
+
+    /// <summary>
     /// Presses one of this modal's own buttons, if it would let itself be pressed.
     /// </summary>
     /// <remarks>

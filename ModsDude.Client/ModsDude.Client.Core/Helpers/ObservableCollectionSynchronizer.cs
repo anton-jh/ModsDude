@@ -69,16 +69,25 @@ public sealed class ObservableCollectionSynchronizer<TSource, TTarget, TKey> : I
 
         _collectionChangedHandler = (s, e) =>
         {
-            if (e.NewItems != null)
-                foreach (TSource item in e.NewItems)
-                    Add(item);
+            switch (e.Action)
+            {
+                // The target keeps its own order, so the source moving an item changes nothing in it.
+                case NotifyCollectionChangedAction.Move:
+                    break;
 
-            if (e.OldItems != null)
-                foreach (TSource item in e.OldItems)
-                    Remove(item);
+                case NotifyCollectionChangedAction.Reset:
+                    ClearAll();
+                    break;
 
-            if (e.Action == NotifyCollectionChangedAction.Reset)
-                ClearAll();
+                // Removed before added, so an item replaced by itself keeps exactly one view model.
+                default:
+                    foreach (var item in e.OldItems?.Cast<TSource>() ?? [])
+                        Remove(item);
+
+                    foreach (var item in e.NewItems?.Cast<TSource>() ?? [])
+                        Add(item);
+                    break;
+            }
         };
 
         _source.CollectionChanged += _collectionChangedHandler;
