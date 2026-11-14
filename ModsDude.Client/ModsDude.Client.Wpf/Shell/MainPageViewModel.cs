@@ -9,7 +9,6 @@ using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Repos.Archive;
 using ModsDude.Client.Wpf.Repos;
 using ModsDude.Client.Wpf.Settings;
-using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Sidebar;
 using System.Collections.ObjectModel;
@@ -49,11 +48,10 @@ public partial class MainPageViewModel
         IFactory<JoinOrCreatePageViewModel> joinOrCreatePageViewModelFactory,
         IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
         IFactory<AccountPageViewModel> accountPageViewModelFactory,
-        INavigationLockService navigationLockService,
+        NavigationManager navigationManager,
         IShellNavigationService shellNavigationService,
         AccountViewModel account,
         ICurrentUserStore currentUser,
-        IModalService modalService,
         IFactory<ArchivePageViewModel> archivePageViewModelFactory,
         IProfileSyncStatusService syncStatus,
         IConnectionRetry connection)
@@ -88,7 +86,7 @@ public partial class MainPageViewModel
 
         // Nothing until the repo list is in: Home draws from it, and showing it before then would show
         // an empty app.
-        NavManager = new(navigationLockService, modalService);
+        NavManager = navigationManager;
 
         _repoStore = repoStore;
         _repoPageViewModelFactory = repoPageViewModelFactory;

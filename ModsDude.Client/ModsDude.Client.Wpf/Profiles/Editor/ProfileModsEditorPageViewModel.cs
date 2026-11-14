@@ -9,6 +9,7 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.RemoteSources;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Mods;
@@ -37,11 +38,15 @@ namespace ModsDude.Client.Wpf.Profiles.Editor;
 /// </para>
 /// <para>
 /// <b>Nothing is uploaded until Save.</b> A pin to a version the repo does not hold is imported by the
-/// save, and a save whose import does not fully succeed writes nothing. See
-/// docs/09-mod-catalog.md#profile-mod-list-editor.
+/// save, and a save whose import does not fully succeed writes nothing.
+/// </para>
+/// <para>
+/// <b>Kept alive while it holds work.</b> Leaving with unsaved changes or a save running keeps the page
+/// hidden instead of asking, so the draft, its sources and a failed save's marks are all there on
+/// return. It is dropped once the work is done, or can no longer be saved.
 /// </para>
 /// </remarks>
-public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
+public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainablePage
 {
     private readonly Repo _repo;
     private readonly Profile _profile;
@@ -52,7 +57,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private readonly IProfilesClient _profilesClient;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
-    private readonly INavigationLockService _navigationLock;
+    private readonly IProfileStore _profileStore;
+    private readonly IRepoStore _repoStore;
     private readonly IGameRepository _gameRepository;
     private readonly IProfileApplyService _applyService;
     private readonly IModSyncService _syncService;
@@ -89,6 +95,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private bool _skipApplyOnce;
     private ProfileSaveRun? _markedRun;
     private IToast? _activationToast;
+    private bool _suspended;
 
 
     public ProfileModsEditorPageViewModel(
@@ -100,10 +107,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         IProfileModPinsClient pinsClient,
         IProfilesClient profilesClient,
         IProfileStore profileStore,
+        IRepoStore repoStore,
         IModalService modalService,
         IErrorReporter errorReporter,
         IFilePickerService filePickerService,
-        INavigationLockService navigationLock,
         IGameRepository gameRepository,
         IProfileApplyService applyService,
         IModSyncService syncService,
@@ -122,7 +129,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _profilesClient = profilesClient;
         _modalService = modalService;
         _errorReporter = errorReporter;
-        _navigationLock = navigationLock;
+        _profileStore = profileStore;
+        _repoStore = repoStore;
         _gameRepository = gameRepository;
         _applyService = applyService;
         _syncService = syncService;
@@ -152,7 +160,6 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         SearchCompleter = new ModSearchCompleter(_catalog.Attributes);
         SortAttributes = [.. _catalog.Attributes.Select(x => x.Key)];
-        ProfileName = profile.Name;
 
         AvailableSorting.Changed += Refresh;
         PinnedSorting.Changed += Refresh;
@@ -169,6 +176,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         _syncService.ModFolderChanged += OnModFolderChanged;
         _repo.Games.CollectionChanged += OnGamesChanged;
         _leases.Changed += OnLeasesChanged;
+        _profile.PropertyChanged += OnProfileChanged;
+        _repo.PropertyChanged += OnRepoChanged;
+        _repoStore.Repos.CollectionChanged += OnReposChanged;
+        _profileStore.Changed += OnProfilesChanged;
 
         // Somebody already looking at the drifted profile's mod list does not need to be told about it.
         _notices.SuppressFor(_activeProfile);
@@ -177,7 +188,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
 
-    public string ProfileName { get; }
+    public string ProfileName => _profile.Name;
 
     public EditorSourcesViewModel Sources { get; }
 
@@ -243,6 +254,18 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     private Game? _applyTarget;
 
     public bool HasUnsavedChanges => _history.Current.Draft.HasChanges;
+
+    public object RetentionKey => new ProfileModsEditorKey(_repo.Id, _profile.Id);
+
+    public bool IsWorthRetaining => CanStillSave && ((CanEdit && HasUnsavedChanges) || Phase is EditorPhase.Saving);
+
+    public string RetentionDescription => $"Unsaved changes to '{_profile.Name}'";
+
+    /// <summary>Whether this user can still save this profile's mod list at all.</summary>
+    private bool CanStillSave
+        => _repo.MembershipLevel >= RepoMembershipLevel.Member
+        && _repoStore.Repos.Contains(_repo)
+        && _profileStore.Find(_repo.Id, _profile.Id) is not null;
 
     public string UndoTooltip => _history.UndoDescription is string what ? $"Undo: {what} (Ctrl+Z)" : "Nothing to undo";
     public string RedoTooltip => _history.RedoDescription is string what ? $"Redo: {what} (Ctrl+Y)" : "Nothing to redo";
@@ -329,9 +352,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         OnPropertyChanged(nameof(RedoTooltip));
         OnSaveBlockChanged();
 
-        _navigationLock.SetLock(this, HasUnsavedChanges);
-
         NotifyCommands();
+
+        OnPropertyChanged(nameof(IsWorthRetaining));
     }
 
     private ProfileModsEditorSummary Summarize() => new(
@@ -1007,7 +1030,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         await ReloadAsync();
 
-        if (applied && outcome.ApplyMessage is null && CanEdit)
+        if (applied && outcome.ApplyMessage is null && CanEdit && _suspended is false)
         {
             OfferActivation();
         }
@@ -1426,13 +1449,67 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     #endregion
 
 
+    #region Kept alive
+
+    public void Suspend()
+    {
+        _suspended = true;
+
+        RetireActivationOffer();
+        _notices.Release(_activeProfile);
+    }
+
+    public void Resume()
+    {
+        _suspended = false;
+
+        _notices.SuppressFor(_activeProfile);
+    }
+
+    private void OnProfileChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(Profile.Name))
+        {
+            _ = OnPageAsync(() => OnPropertyChanged(nameof(ProfileName)));
+        }
+    }
+
+    private void OnRepoChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(Repo.MembershipLevel))
+        {
+            _ = OnPageAsync(() => OnPropertyChanged(nameof(IsWorthRetaining)));
+        }
+    }
+
+    private void OnReposChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => _ = OnPageAsync(() => OnPropertyChanged(nameof(IsWorthRetaining)));
+
+    private void OnProfilesChanged(Guid repoId)
+    {
+        if (repoId == _repo.Id)
+        {
+            _ = OnPageAsync(() => OnPropertyChanged(nameof(IsWorthRetaining)));
+        }
+    }
+
+    #endregion
+
+
     public void Dispose()
     {
-        _navigationLock.ReleaseLock(this);
-        _notices.Release(_activeProfile);
+        if (_suspended is false)
+        {
+            _notices.Release(_activeProfile);
+        }
+
         _leases.Changed -= OnLeasesChanged;
         _syncService.ModFolderChanged -= OnModFolderChanged;
         _repo.Games.CollectionChanged -= OnGamesChanged;
+        _profile.PropertyChanged -= OnProfileChanged;
+        _repo.PropertyChanged -= OnRepoChanged;
+        _repoStore.Repos.CollectionChanged -= OnReposChanged;
+        _profileStore.Changed -= OnProfilesChanged;
 
         // The save belongs to the profile, not to this page, so it is not stopped here.
         RetireActivationOffer();
@@ -1462,12 +1539,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
 
-    public class Factory(IServiceProvider serviceProvider)
+    public class Factory(IServiceProvider serviceProvider, IRetainedPages retainedPages)
     {
+        /// <summary>The page kept for this profile where there is one, and a new one otherwise.</summary>
         /// <param name="scanTarget">A folder to load from the start. Null reads no disk until a source is switched on.</param>
         public ProfileModsEditorPageViewModel Create(Repo repo, Profile profile, ModTargetRef? scanTarget = null)
         {
-            var page = ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, repo, profile);
+            var page = retainedPages.Take<ProfileModsEditorPageViewModel>(new ProfileModsEditorKey(repo.Id, profile.Id))
+                ?? ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, repo, profile);
 
             // Here rather than through the constructor: a nullable struct does not survive
             // ActivatorUtilities' positional matching.
@@ -1480,6 +1559,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
     }
 }
+
+
+/// <summary>Which profile's mod list an editor page is for, as <see cref="IRetainedPages"/> keeps it.</summary>
+public sealed record ProfileModsEditorKey(Guid RepoId, Guid ProfileId);
 
 
 public enum EditorPhase

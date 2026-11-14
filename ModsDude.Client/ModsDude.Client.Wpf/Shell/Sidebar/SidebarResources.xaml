@@ -167,16 +167,6 @@
                                 </TextBlock.Style>
                             </TextBlock>
 
-                            <!-- Something here wants a look. Sits on the glyph's top-right corner, so the row
-                                 keeps its height; what it means is in the tooltip. -->
-                            <Ellipse Grid.Column="0"
-                                     Width="7" Height="7"
-                                     Margin="14 0 0 14"
-                                     HorizontalAlignment="Center"
-                                     VerticalAlignment="Center"
-                                     Fill="{DynamicResource AccentFillColorDefaultBrush}"
-                                     Visibility="{Binding HasAttention, Converter={StaticResource BoolToVisibilityConverter}}" />
-
                             <ContentControl Grid.Column="0"
                                             Width="28" Height="28"
                                             Margin="0 14"
@@ -187,6 +177,26 @@
                                             Content="{Binding}"
                                             ContentTemplate="{StaticResource EntityTile}"
                                             Visibility="{Binding IsEntity, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <!-- Something here wants a look. Sits on the top-right corner of the glyph or the
+                                 entity's tile, so the row keeps its height; what it means is in the tooltip. -->
+                            <Ellipse Grid.Column="0"
+                                     Width="7" Height="7"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center"
+                                     Fill="{DynamicResource AccentFillColorDefaultBrush}"
+                                     Visibility="{Binding HasAttention, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Margin" Value="14 0 0 14" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsEntity}" Value="True">
+                                                <Setter Property="Margin" Value="26 0 0 26" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
 
                             <TextBlock Grid.Column="1"
                                        Text="{Binding Path=Title}"

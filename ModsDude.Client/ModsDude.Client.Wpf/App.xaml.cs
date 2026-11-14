@@ -533,6 +533,8 @@ public partial class App : Application
 
         services.AddSingleton<INavigationLockService, NavigationLockService>();
         services.AddTransient<NavigationManager>();
+        services.AddSingleton<IRetainedPages, RetainedPages>();
+        services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<IRetainedPages>());
 
         // One table of who is touching what, for the whole process. A singleton is not a convenience
         // here - it is the entire mechanism, since two of these would be two sets of claims that

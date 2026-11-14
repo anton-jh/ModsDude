@@ -746,7 +746,8 @@
 
     <!-- The pages of one thing, side by side along a bar: an item list of MenuItemViewModels, selected the
          way a sidebar list is. Each tab is the bar's full height, so the accent underline of the selected
-         one sits on the bar's bottom edge. A closed entry is dimmed and says why in its tooltip. -->
+         one sits on the bar's bottom edge. A closed entry is dimmed and says why in its tooltip; one that
+         wants a look wears the sidebar's accent dot on its glyph. -->
     <Style x:Key="PageTabs" TargetType="ListBox">
         <Setter Property="SelectionMode" Value="Single" />
         <Setter Property="behaviors:DragSelection.Suppressed" Value="True" />
@@ -768,7 +769,7 @@
             <Setter.Value>
                 <Style TargetType="ListBoxItem">
                     <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
-                    <Setter Property="ToolTip" Value="{Binding UnavailableReason}" />
+                    <Setter Property="ToolTip" Value="{Binding TabToolTip}" />
                     <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
                     <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
                     <Setter Property="Cursor" Value="Hand" />
@@ -782,13 +783,20 @@
                                             Background="{DynamicResource SubtleFillColorSecondaryBrush}"
                                             Visibility="Hidden" />
                                     <StackPanel Margin="16 0" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock x:Name="Icon"
-                                                   Text="{Binding Icon}"
-                                                   Margin="0 0 10 0"
-                                                   VerticalAlignment="Center"
-                                                   FontFamily="{DynamicResource SymbolThemeFontFamily}"
-                                                   FontSize="16"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        <Grid Margin="0 0 10 0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="Icon"
+                                                       Text="{Binding Icon}"
+                                                       VerticalAlignment="Center"
+                                                       FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                                       FontSize="16"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            <Ellipse Width="7" Height="7"
+                                                     Margin="0 -3 -4 0"
+                                                     HorizontalAlignment="Right"
+                                                     VerticalAlignment="Top"
+                                                     Fill="{DynamicResource AccentFillColorDefaultBrush}"
+                                                     Visibility="{Binding HasAttention, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        </Grid>
                                         <TextBlock x:Name="Title"
                                                    Text="{Binding Title}"
                                                    VerticalAlignment="Center"

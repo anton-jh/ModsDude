@@ -46,14 +46,8 @@ public enum ProfileSaveStatus
 }
 
 
-/// <param name="Saved">What the profile holds now, so a page can move its own baseline onto it.</param>
-/// <param name="Changes">The diff the summary is worded from, or null where nothing was written.</param>
 public sealed record ProfileSaveOutcome(ProfileSaveStatus Status, string Message)
 {
-    public int Revision { get; init; }
-    public ProfileModListChanges? Changes { get; init; }
-    public IReadOnlyList<ProfileModPin> Saved { get; init; } = [];
-
     /// <summary>
     /// Whether a revision was written. False for a save that only changed what is ignored, which is
     /// not an event a folder can have drifted from.
@@ -126,16 +120,11 @@ public sealed record ProfileSaveRequest(
 
 
 /// <summary>
-/// One save in flight, and everything a page that arrives part way through needs to draw it.
+/// One save in flight, and what it has reported so far, so the editor that started it marks its own rows.
 /// </summary>
 /// <remarks>
-/// <b>What is retained is the draft, not the page.</b> Keeping the view model alive would need a
-/// show/hide lifecycle the page model has never had - the notice suppression, the catalog, the games
-/// subscription and the navigation lock are all acquired on construction and released on dispose, and
-/// a retained page holds every one of them while somebody is three screens away. A rebuilt page
-/// reading this instead gets back the list, its marks and the certainty that nothing was lost. What
-/// it does not get back is the scroll position, the selection, the undo bar and the version
-/// description, which is the price.
+/// The editor is kept alive while its save runs, and a failed save leaves its draft there. See
+/// <see cref="Shell.Navigation.IRetainablePage"/>.
 /// </remarks>
 public sealed class ProfileSaveRun
 {
@@ -167,10 +156,7 @@ public sealed class ProfileSaveRun
     /// <summary>The strip entry the whole gesture is drawn on, for the steps that have none of their own.</summary>
     internal IBackgroundTask? Strip { get; set; }
 
-    /// <summary>
-    /// Everything the run has reported so far, so a page built half way through starts where the run
-    /// is rather than at the beginning.
-    /// </summary>
+    /// <summary>Everything the run has reported so far, by version.</summary>
     public IReadOnlyList<ModImportProgress> Progress => [.. _progress.Values];
 
     /// <inheritdoc cref="Progress"/>
@@ -215,8 +201,7 @@ public sealed class ProfileSaveRun
 /// </para>
 /// <para>
 /// <b>It reports per version rather than into rows it does not own.</b> A page subscribes to
-/// <see cref="ProfileSaveRun"/> and marks its own rows, which is what lets an editor rebuilt half way
-/// through a save show the marks the run has already made.
+/// <see cref="ProfileSaveRun"/> and marks its own rows.
 /// </para>
 /// <para>
 /// The modal host is taken lazily for the reason it is everywhere else: it is the shell, and the
@@ -426,9 +411,6 @@ public sealed class ProfileSaveService(
             ProfileSaveStatus.Saved,
             string.Join(" ", new[] { Describe(changes), Describe(import.Decisions, request.Names), ignoredNote }.OfType<string>()))
         {
-            Revision = revision,
-            Changes = changes,
-            Saved = request.Desired,
             RevisionWritten = true,
             ApplyMessage = applied?.Message,
             ApplySeverity = applied?.Severity ?? ToastSeverity.Info
@@ -456,12 +438,7 @@ public sealed class ProfileSaveService(
             ProfileSaveStatus.Saved,
             ignored == 0 && dismissed == 0
                 ? "Saved. Nothing is ignored or dismissed in this profile now."
-                : $"Saved. {Counted(ignored, "mod", "ignored")} · {Counted(dismissed, "version", "dismissed")}.")
-        {
-            // Unchanged: no revision was written, and the page's baseline must stay on the one it has.
-            Revision = request.BasedOn,
-            Saved = request.Desired
-        };
+                : $"Saved. {Counted(ignored, "mod", "ignored")} · {Counted(dismissed, "version", "dismissed")}.");
     }
 
     private static string Counted(int count, string noun, string what) => count == 1 ? $"1 {noun} {what}" : $"{count} {noun}s {what}";
@@ -719,7 +696,7 @@ public sealed class ProfileSaveService(
     {
         await OnUiThreadAsync(() => errorReporter.ShowAsync(exception, $"saving '{request.ProfileName}'"));
 
-        return "The save did not finish. Nothing about the list was lost; try again.";
+        return "The save did not finish. Your changes are kept.";
     }
 
     /// <summary>

@@ -8,6 +8,7 @@ namespace ModsDude.Client.Wpf.Shell.Navigation;
 
 public partial class NavigationManager(
     INavigationLockService navigationLockService,
+    IRetainedPages retainedPages,
     IModalService modalService)
     : ObservableObject, IDisposable
 {
@@ -48,18 +49,14 @@ public partial class NavigationManager(
             return;
         }
 
-        (CurrentPage as IDisposable)?.Dispose();
+        retainedPages.Release(CurrentPage);
 
-        CurrentPage = _current.GetPage();
-        CurrentPage.TriggerInit();
+        Show(_current.GetPage());
     }
 
     public void Dispose()
     {
-        if (CurrentPage is IDisposable disposable)
-        {
-            disposable.Dispose();
-        }
+        retainedPages.Release(CurrentPage);
     }
 
 
@@ -108,13 +105,23 @@ public partial class NavigationManager(
             navigationLockService.Clear();
         }
 
-        if (CurrentPage is IDisposable disposable)
-            disposable.Dispose();
+        retainedPages.Release(CurrentPage);
 
         SetCurrent(target);
 
-        CurrentPage = target?.GetPage();
-        CurrentPage?.TriggerInit();
+        Show(target?.GetPage());
+    }
+
+    /// <summary>Puts a page on screen: a new one, or a kept one its menu entry took back.</summary>
+    private void Show(PageViewModel? page)
+    {
+        CurrentPage = page;
+
+        if (page is not null)
+        {
+            retainedPages.Show(page);
+            page.TriggerInit();
+        }
     }
 
     /// <summary>

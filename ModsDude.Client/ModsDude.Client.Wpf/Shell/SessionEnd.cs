@@ -10,6 +10,7 @@ namespace ModsDude.Client.Wpf.Shell;
 public sealed class SessionEnd(
     IResourceLeases leases,
     INavigationLockService navigationLock,
+    IRetainedPages retainedPages,
     ISessionWork session,
     IBackgroundTaskReporter backgroundTasks,
     Lazy<MainWindow> window,
@@ -19,7 +20,7 @@ public sealed class SessionEnd(
     {
         IEnumerable<string> unsaved = navigationLock.HasLock() ? ["Unsaved changes"] : [];
 
-        return [.. leases.DescribeAll().Order(StringComparer.Ordinal).Concat(unsaved)];
+        return [.. leases.DescribeAll().Order(StringComparer.Ordinal).Concat(retainedPages.DescribeAtStake()).Concat(unsaved)];
     }
 
     public async Task<bool> ConfirmAsync(string title, string confirmText)

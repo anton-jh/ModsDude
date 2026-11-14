@@ -91,6 +91,7 @@ public partial class MenuItemViewModel
     /// <summary>Why the entry is unavailable, shown in its place. Null while it is available.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ToolTip))]
+    [NotifyPropertyChangedFor(nameof(TabToolTip))]
     private string? _unavailableReason;
 
     /// <summary>
@@ -121,6 +122,7 @@ public partial class MenuItemViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasAttention))]
     [NotifyPropertyChangedFor(nameof(ToolTip))]
+    [NotifyPropertyChangedFor(nameof(TabToolTip))]
     private string? _attention;
 
     public bool HasAttention => Attention is not null;
@@ -145,6 +147,9 @@ public partial class MenuItemViewModel
     /// what the attention dot means.
     /// </summary>
     public string ToolTip => UnavailableReason ?? (Attention is null ? $"{Title}{TagText}" : $"{Title}{TagText} - {Attention}");
+
+    /// <summary>A page tab's tooltip: its title is never trimmed there, so only the reason or what the dot means.</summary>
+    public string? TabToolTip => UnavailableReason ?? Attention;
 
     /// <summary>
     /// The menu entry a sub-page is opened from. The menus keep it highlighted while the sub-page is
@@ -206,7 +211,7 @@ public partial class MenuItemViewModel
         return this;
     }
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         _source?.PropertyChanged -= OnSourcePropertyChanged;
     }

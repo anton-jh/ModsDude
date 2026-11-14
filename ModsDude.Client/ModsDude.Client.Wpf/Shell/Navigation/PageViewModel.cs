@@ -6,8 +6,22 @@ using System.Windows.Threading;
 namespace ModsDude.Client.Wpf.Shell.Navigation;
 public abstract class PageViewModel : ObservableObject
 {
+    private bool _initTriggered;
+
+
+    /// <summary>
+    /// Initializes the page the first time it is shown. A kept page shown again is left as it is - see
+    /// <see cref="IRetainablePage"/>.
+    /// </summary>
     public void TriggerInit()
     {
+        if (_initTriggered)
+        {
+            return;
+        }
+
+        _initTriggered = true;
+
         // Quick, UI-related initialization on the UI thread.
         _ = Application.Current.Dispatcher.BeginInvoke(
             (Action)(() =>

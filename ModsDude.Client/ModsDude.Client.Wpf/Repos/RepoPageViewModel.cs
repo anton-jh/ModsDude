@@ -29,6 +29,7 @@ public partial class RepoPageViewModel
 {
     private readonly Repo _repo;
     private readonly ProfilePageViewModel.Factory _profilePageViewModelFactory;
+    private readonly IRetainedPages _retainedPages;
     private readonly IProfileStore _profileStore;
     private readonly IProfileService _profileService;
     private readonly ConnectGamePageViewModel.Factory _connectGamePageViewModelFactory;
@@ -67,6 +68,7 @@ public partial class RepoPageViewModel
         RepoOverviewPageViewModel.Factory repoOverviewPageViewModelFactory,
         RepoMembersPageViewModel.Factory repoMembersPageViewModelFactory,
         ProfilePageViewModel.Factory profilePageViewModelFactory,
+        IRetainedPages retainedPages,
         GameSettingsPageViewModel.Factory gameSettingsPageViewModelFactory,
         ConnectGamePageViewModel.Factory connectGamePageViewModelFactory,
         RepoModsPageViewModel.Factory repoModsPageViewModelFactory,
@@ -78,7 +80,7 @@ public partial class RepoPageViewModel
         IProfileStore profileStore,
         IProfileService profileService,
         IGameRepository gameRepository,
-        INavigationLockService navigationLockService,
+        NavigationManager navigationManager,
         IModalService modalService,
         ILogger<RepoPageViewModel> logger)
     {
@@ -101,11 +103,12 @@ public partial class RepoPageViewModel
         _bindings = bindings;
         _syncStatus = syncStatus;
         _profilePageViewModelFactory = profilePageViewModelFactory;
+        _retainedPages = retainedPages;
         _profileStore = profileStore;
         _profileService = profileService;
         _connectGamePageViewModelFactory = connectGamePageViewModelFactory;
         _gameSettingsPageViewModelFactory = gameSettingsPageViewModelFactory;
-        NavManager = new(navigationLockService, modalService);
+        NavManager = navigationManager;
 
         var overviewLinks = new RepoOverviewLinks(ConnectGame, ConfigureGame);
 
@@ -522,7 +525,7 @@ public partial class RepoPageViewModel
 
         ClearArchivedProfile();
 
-        var entry = new ProfileItemViewModel(_repo, new Profile(archived), _profilePageViewModelFactory);
+        var entry = new ProfileItemViewModel(_repo, new Profile(archived), _profilePageViewModelFactory, _retainedPages);
         entry.SyncState = _syncStatus.StateOf(_repo, entry.Id);
 
         ArchivedProfiles.Add(entry);
@@ -592,7 +595,7 @@ public partial class RepoPageViewModel
 
     private ProfileItemViewModel MapProfileToVm(Profile profile)
     {
-        var entry = new ProfileItemViewModel(_repo, profile, _profilePageViewModelFactory);
+        var entry = new ProfileItemViewModel(_repo, profile, _profilePageViewModelFactory, _retainedPages);
         entry.SyncState = _syncStatus.StateOf(_repo, entry.Id);
 
         return entry;

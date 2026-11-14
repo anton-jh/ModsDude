@@ -16,7 +16,6 @@ using ModsDude.Client.Wpf.Shell.Sidebar;
 using ModsDude.Client.Wpf.Shell.Toasts;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.ComponentModel;
 using System.Windows;
 
 namespace ModsDude.Client.Wpf.Profiles;
@@ -52,10 +51,10 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
     private readonly IProfileSyncStatusService _syncStatus;
     private readonly IResourceLeases _leases;
     private readonly IToastService _toasts;
+    private readonly IRetainedPages _retainedPages;
+    private readonly ProfileModsEditorKey _modsEditorKey;
     private readonly MenuItemViewModel _modsMenuItem;
     private readonly MenuItemViewModel _historyMenuItem;
-
-    private ProfileModsEditorPageViewModel? _openModsEditor;
 
     /// <summary>Set by a drift deep link, consumed by the next page the Mods entry builds.</summary>
     private ModTargetRef? _scanTargetOnce;
@@ -80,6 +79,7 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
         IProfileSyncStatusService syncStatus,
         IResourceLeases leases,
         IToastService toasts,
+        IRetainedPages retainedPages,
         ProfileOverviewPageViewModel.Factory profileOverviewPageViewModelFactory,
         ProfileModsEditorPageViewModel.Factory profileModsEditorPageViewModelFactory,
         ProfileModsPageViewModel.Factory profileModsPageViewModelFactory,
@@ -95,6 +95,8 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
         _syncStatus = syncStatus;
         _leases = leases;
         _toasts = toasts;
+        _retainedPages = retainedPages;
+        _modsEditorKey = new ProfileModsEditorKey(repo.Id, profile.Id);
 
         _syncStatus.Changed += OnSyncStatusChanged;
         _bindings.BindingsChanged += OnBindingsChanged;
@@ -144,7 +146,9 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
         ];
 
         NavManager.Selected = MenuItems.First();
-        NavManager.PropertyChanged += OnNavigationChanged;
+
+        _retainedPages.Changed += OnRetainedPagesChanged;
+        OnRetainedPagesChanged();
 
         _repo.Games.CollectionChanged += OnGamesChanged;
 
@@ -572,9 +576,7 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
     /// </summary>
     public void Dispose()
     {
-        DetachModsEditor();
-
-        NavManager.PropertyChanged -= OnNavigationChanged;
+        _retainedPages.Changed -= OnRetainedPagesChanged;
         _repo.Games.CollectionChanged -= OnGamesChanged;
         _leases.Changed -= OnLeasesChanged;
         _syncStatus.Changed -= OnSyncStatusChanged;
@@ -614,41 +616,11 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
         OnPropertyChanged(nameof(ActivationKind));
     }
 
-    private void OnNavigationChanged(object? sender, PropertyChangedEventArgs e)
+    /// <summary>The mod list editor holds work on screen or kept hidden, which blocks activating and marks its entry.</summary>
+    private void OnRetainedPagesChanged()
     {
-        if (e.PropertyName != nameof(NavigationManager.CurrentPage))
-        {
-            return;
-        }
-
-        DetachModsEditor();
-
-        if (NavManager.CurrentPage is ProfileModsEditorPageViewModel editor)
-        {
-            _openModsEditor = editor;
-            _openModsEditor.PropertyChanged += OnModsEditorChanged;
-
-            BlockedByUnsavedChanges = editor.HasUnsavedChanges;
-        }
-    }
-
-    private void OnModsEditorChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(ProfileModsEditorPageViewModel.HasUnsavedChanges) && _openModsEditor is not null)
-        {
-            BlockedByUnsavedChanges = _openModsEditor.HasUnsavedChanges;
-        }
-    }
-
-    private void DetachModsEditor()
-    {
-        if (_openModsEditor is not null)
-        {
-            _openModsEditor.PropertyChanged -= OnModsEditorChanged;
-            _openModsEditor = null;
-        }
-
-        BlockedByUnsavedChanges = false;
+        BlockedByUnsavedChanges = _retainedPages.HoldsWork(_modsEditorKey);
+        _modsMenuItem.Attention = _retainedPages.IsKept(_modsEditorKey) ? "Unsaved changes" : null;
     }
 
 
