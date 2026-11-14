@@ -242,47 +242,17 @@ public partial class SettingsPageViewModel
 
     private bool CanCheckForUpdates() => _updater.CanCheck;
 
-    /// <summary>Restarts into the downloaded version. Asks first if something is still running.</summary>
+    /// <summary>
+    /// Leaving goes through the app lifetime, which asks once about running work and unsaved settings alike.
+    /// </summary>
     [RelayCommand]
-    private async Task RestartToUpdate()
-    {
-        if (await ConfirmLeavingAsync("restart"))
-        {
-            await _updater.RestartAsync();
-        }
-    }
+    private Task RestartToUpdate() => _updater.RestartAsync();
 
     [RelayCommand]
-    private async Task Restart()
-    {
-        if (await ConfirmLeavingAsync("restart"))
-        {
-            await _lifetime.RestartAsync();
-        }
-    }
+    private Task Restart() => _lifetime.RestartAsync();
 
     [RelayCommand]
-    private async Task Quit()
-    {
-        if (await ConfirmLeavingAsync("quit"))
-        {
-            await _lifetime.QuitAsync();
-        }
-    }
-
-    /// <summary>Asks before unsaved settings are lost to the app leaving. True where there are none.</summary>
-    private async Task<bool> ConfirmLeavingAsync(string leaving)
-    {
-        if (HasUnsavedChanges is false)
-        {
-            return true;
-        }
-
-        var modal = ConfirmationModalViewModel.ConfirmDiscardChanges(leaving);
-        await _modalService.Show(modal);
-
-        return modal.Result;
-    }
+    private Task Quit() => _lifetime.QuitAsync();
 
     /// <summary>
     /// The updater reports from whichever thread it happened to be on; everything bound here is the UI's.
