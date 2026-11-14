@@ -28,6 +28,29 @@ public class ProfileEditorStateTests
     }
 
     [Fact]
+    public void Rows_and_updates_come_out_in_the_same_order_whatever_order_the_catalog_and_draft_arrive_in()
+    {
+        CatalogModVersion[] catalog =
+        [
+            Registered("c", "1.0", 0) with { Name = "Same" }, Local("c", "2.0") with { Name = "Same" },
+            Registered("a", "1.0", 0) with { Name = "Same" }, Local("a", "2.0") with { Name = "Same" },
+            Registered("b", "1.0", 0) with { Name = "Same" }, Local("b", "2.0") with { Name = "Same" },
+            Registered("z", "1.0", 0) with { Name = "Same" }, Registered("y", "1.0", 0) with { Name = "Same" }
+        ];
+
+        var forwards = Compute(Inputs(Draft(Pin("c", "1.0"), Pin("a", "1.0"), Pin("b", "1.0")), catalog));
+        var backwards = Compute(Inputs(Draft(Pin("b", "1.0"), Pin("a", "1.0"), Pin("c", "1.0")), [.. catalog.Reverse()]));
+
+        Assert.Equal(["a", "b", "c"], forwards.PinnedShown.Shown());
+        Assert.Equal(["y", "z"], forwards.AvailableShown.Shown());
+        Assert.Equal(forwards.Pinned.Shown(), backwards.Pinned.Shown());
+        Assert.Equal(forwards.Available.Shown(), backwards.Available.Shown());
+        Assert.Equal(forwards.PinnedShown.Shown(), backwards.PinnedShown.Shown());
+        Assert.Equal(forwards.AvailableShown.Shown(), backwards.AvailableShown.Shown());
+        Assert.Equal(forwards.Updates.Available.Select(x => x.ModId), backwards.Updates.Available.Select(x => x.ModId));
+    }
+
+    [Fact]
     public void The_left_list_leaves_out_what_the_profile_pins_and_what_it_held()
     {
         var draft = Draft(Pin("kept", "1.0"), Pin("taken", "1.0")).Remove([Mod("taken")]);

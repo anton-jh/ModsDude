@@ -82,6 +82,7 @@ public partial class ModVersionReorderModalViewModel : ModalViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CloseCommand))]
     private bool _isSaving;
 
 
@@ -160,11 +161,14 @@ public partial class ModVersionReorderModalViewModel : ModalViewModel
         }
     }
 
-    [RelayCommand]
+    /// <summary>Not while saving: the page behind reads the order again once the modal closes, and a save still moving versions would leave it reading a half-moved one.</summary>
+    [RelayCommand(CanExecute = nameof(CanClose))]
     private void Close()
     {
         Done = true;
     }
+
+    private bool CanClose() => IsSaving is false;
 
 
     /// <summary>Closes without saving, which is what the button beside Save does.</summary>

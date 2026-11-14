@@ -7,6 +7,7 @@ using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Tests.GameAdapters;
+using ModsDude.Client.Core.Tests.Services;
 using ModsDude.Client.Core.Tests.Stores;
 using ModsDude.Client.Core.Tests.Sync;
 
@@ -146,17 +147,6 @@ public class RepoStoreTests
 
             _manifests.Dispose();
         }
-    }
-
-    private sealed class MemoryStateStore : IStateStore
-    {
-        private readonly LocalState _state = new();
-
-        public TResult Read<TResult>(Func<LocalState, TResult> read) => read(_state);
-
-        public void Update(Action<LocalState> update) => update(_state);
-
-        public bool UpdateIf(Func<LocalState, bool> update) => update(_state);
     }
 
     private sealed class FakeReposServer : IReposClient

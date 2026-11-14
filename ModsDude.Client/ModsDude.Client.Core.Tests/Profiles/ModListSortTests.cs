@@ -18,6 +18,22 @@ public class ModListSortTests
         Assert.Equal(["Mod 10", "Mod 9", "alpha"], Sorted(new ModListSort(ModListSortKind.Name, Ascending: false), keys));
     }
 
+    [Theory]
+    [InlineData(ModListSortKind.Name, true)]
+    [InlineData(ModListSortKind.Name, false)]
+    [InlineData(ModListSortKind.Date, true)]
+    [InlineData(ModListSortKind.Date, false)]
+    public void Mods_alike_in_every_sorted_value_fall_back_to_their_id(ModListSortKind kind, bool ascending)
+    {
+        var first = new ModListSortKey(ModKey.From("FS25_A"), "Same", _now, []);
+        var second = new ModListSortKey(ModKey.From("FS25_B"), "Same", _now, []);
+        var sort = new ModListSort(kind, Ascending: ascending);
+        var comparer = Comparer<ModListSortKey>.Create(sort.Compare);
+
+        Assert.Equal([first.Id, second.Id], new[] { first, second }.Order(comparer).Select(x => x.Id));
+        Assert.Equal([first.Id, second.Id], new[] { second, first }.Order(comparer).Select(x => x.Id));
+    }
+
     [Fact]
     public void Dates_run_oldest_first_ascending_and_newest_first_descending()
     {
@@ -103,10 +119,12 @@ public class ModListSortTests
     }
 
 
-    private static ModListSortKey Key(string name, DateTimeOffset? date = null) => new(name, date, []);
+    private static ModListSortKey Key(string name, DateTimeOffset? date = null) => new(IdOf(name), name, date, []);
 
     private static ModListSortKey Tagged(string name, params (string Key, string Value)[] attributes)
-        => new(name, null, [.. attributes.Select(x => new ModAttribute(x.Key, x.Value))]);
+        => new(IdOf(name), name, null, [.. attributes.Select(x => new ModAttribute(x.Key, x.Value))]);
+
+    private static ModKey IdOf(string name) => ModKey.From(new string([.. name.Where(char.IsLetterOrDigit)]));
 
     private static IEnumerable<string> Sorted(ModListSort sort, params ModListSortKey[] keys)
         => keys.Order(Comparer<ModListSortKey>.Create(sort.Compare)).Select(x => x.Name);

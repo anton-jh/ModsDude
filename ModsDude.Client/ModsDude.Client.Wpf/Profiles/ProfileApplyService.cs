@@ -177,6 +177,19 @@ public sealed class ProfileApplyService(
     /// </summary>
     private string? _lastQuarantineFolder;
 
+    /// <summary>
+    /// Writes down wherever the game's folders are now, so the manifest an apply writes names the same
+    /// folder the drift check goes on to look in. Before the apply's lease, which the refresh takes
+    /// itself; left as it is where something else holds the folders.
+    /// </summary>
+    private void CatchUpTargets(Repo repo, Game game)
+    {
+        if (games.RefreshTargets(game, repo.Adapter) is (TargetRefresh.Busy or TargetRefresh.HoldsSavegame) and var outcome)
+        {
+            logger.LogInformation("Left the folders of {Game} as they were before applying: {Outcome}", game.Identity, outcome);
+        }
+    }
+
     public async Task<PlanAttempt> TryPlanAsync(
         Repo repo,
         Game game,
@@ -187,10 +200,6 @@ public sealed class ProfileApplyService(
         IProgress<ModSyncProgress>? progress = null,
         bool clearAll = false)
     {
-        // First, so that the manifest this apply writes names the same folder the drift check will
-        // go on to look in.
-        games.RefreshTargets(game, repo.Adapter);
-
         if (GetAdapter(repo, game) is not ILocalModAdapter adapter)
         {
             return PlanAttempt.None;
@@ -341,6 +350,8 @@ public sealed class ProfileApplyService(
         IProgress<ModSyncProgress>? progress,
         CancellationToken cancellationToken)
     {
+        CatchUpTargets(repo, game);
+
         using var lease = leases.TryAcquireExclusive(
             TargetRefs(repo, game).Select(ResourceKeys.Target),
             clearMods ? $"Clearing the mods from '{game.Name}'" : $"Deactivating '{game.Name}'");
@@ -473,6 +484,8 @@ public sealed class ProfileApplyService(
         int? pinned,
         Guid? checkedOutSavegame)
     {
+        CatchUpTargets(repo, game);
+
         using var lease = leases.TryAcquireExclusive(
             TargetRefs(repo, game).Select(ResourceKeys.Target),
             $"{(activate ? "Activating" : "Applying")} '{profileName ?? "a profile"}' on '{game.Name}'");

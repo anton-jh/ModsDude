@@ -78,6 +78,9 @@ public interface IGameRepository : IModFolders, IDriftCandidateSource
     /// <see cref="Create(IBaseGameAdapter, DynamicForm)"/>, so an adapter release that renames
     /// either catches up the next time anything is saved rather than needing the game reconnected.
     /// </remarks>
+    /// <exception cref="UserFriendlyException">
+    /// A folder is claimed, something is working in the game's folders, or it holds a savegame.
+    /// </exception>
     void Update(Game game, IBaseGameAdapter baseAdapter, DynamicForm localSettings);
 
     /// <summary>
@@ -96,11 +99,16 @@ public interface IGameRepository : IModFolders, IDriftCandidateSource
     /// A no-op, with nothing saved or raised, when nothing moved - which is nearly always, so it is
     /// cheap enough to call before every apply and on every load of the repo list.
     /// </para>
+    /// <para>
+    /// Left as it is while something works in the game's folders or it holds a savegame; the outcome
+    /// says which, and the next call tries again. A caller holding one of those folders' leases asks
+    /// before taking it.
+    /// </para>
     /// </remarks>
     /// <exception cref="UserFriendlyException">
     /// The adapter cannot be hydrated, or a folder it now reaches already belongs to another game.
     /// </exception>
-    void RefreshTargets(Game game, IBaseGameAdapter baseAdapter);
+    TargetRefresh RefreshTargets(Game game, IBaseGameAdapter baseAdapter);
 
     /// <param name="pinnedRevision">
     /// The revision to hold the game on, or null - nearly always - to follow head. See
@@ -148,4 +156,18 @@ public interface IGameRepository : IModFolders, IDriftCandidateSource
     /// The game being edited, whose own folders are not a conflict with themselves.
     /// </param>
     FolderClaim? FindFolderConflict(IBaseGameAdapter baseAdapter, DynamicForm localSettings, GameIdentity? ignoredGame = null);
+}
+
+
+/// <summary>What <see cref="IGameRepository.RefreshTargets"/> did with a game's folders.</summary>
+public enum TargetRefresh
+{
+    Unchanged,
+    Updated,
+
+    /// <summary>Something is working in the game's folders, so they were left as they are.</summary>
+    Busy,
+
+    /// <summary>The game holds a checked-out savegame, so its folders were left as they are.</summary>
+    HoldsSavegame
 }

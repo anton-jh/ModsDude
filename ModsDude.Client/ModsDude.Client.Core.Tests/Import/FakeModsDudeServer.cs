@@ -31,6 +31,9 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
     /// <summary>Runs before every read of the mod list, where a test can make one fail.</summary>
     public Func<Task>? BeforeGetMods { get; set; }
 
+    /// <summary>Runs before every read of which versions profiles pin, where a test can make one fail.</summary>
+    public Func<Task>? BeforeGetUsage { get; set; }
+
     /// <summary>What each version was registered with, by whichever import registered it.</summary>
     public IReadOnlyDictionary<ModVersionIdentity, RegisterModRequest> Registrations
     {
@@ -263,8 +266,18 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
         => throw new NotSupportedException();
     public Task<ModDependentsDto> GetModVersionDependentsV1Async(Guid repoId, string modId, string versionId, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
-    public Task<GetModUsageResponse> GetModUsageV1Async(Guid repoId, string? cursor = null, int? limit = null, CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
+    /// <summary>No version is pinned by any profile.</summary>
+    public async Task<GetModUsageResponse> GetModUsageV1Async(Guid repoId, string? cursor = null, int? limit = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (BeforeGetUsage is not null)
+        {
+            await BeforeGetUsage();
+        }
+
+        return new GetModUsageResponse() { Usage = [] };
+    }
 
     public Task<GetModVersionsResponse> GetModVersionsV1Async(Guid repoId, string modId, CancellationToken cancellationToken = default)
         => throw new NotSupportedException();

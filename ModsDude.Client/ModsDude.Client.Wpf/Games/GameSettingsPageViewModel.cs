@@ -1,5 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shared;
@@ -22,6 +24,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     private readonly Game _subject;
     private readonly IModalService _modalService;
     private readonly IToastService _toasts;
+    private readonly ILogger<GameSettingsPageViewModel> _logger;
 
 
     public GameSettingsPageViewModel(
@@ -32,8 +35,10 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
         IFilePickerService filePickerService,
         IModalService modalService,
         IToastService toasts,
-        INavigationLockService navigationLockService)
+        INavigationLockService navigationLockService,
+        ILogger<GameSettingsPageViewModel> logger)
     {
+        _logger = logger;
         _repo = repo;
         _subject = subject;
         BackCommand = back;
@@ -83,7 +88,19 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
             return;
         }
 
-        _gameRepository.Update(_subject, _repo.Adapter, LocalSettingsEditor.ExtractResults());
+        try
+        {
+            _gameRepository.Update(_subject, _repo.Adapter, LocalSettingsEditor.ExtractResults());
+        }
+        catch (UserFriendlyException exception)
+        {
+            _logger.LogInformation("Settings of {Game} were not saved: {Reason}", _subject.Identity, exception.DeveloperMessage);
+
+            await _modalService.Show(ConfirmationModalViewModel.Refusal("Settings not saved", exception.Describe()));
+
+            return;
+        }
+
         LocalSettingsEditor.MarkSaved();
 
         _toasts.Show($"Saved the settings for {GameName}.");

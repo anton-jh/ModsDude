@@ -178,14 +178,14 @@ public sealed class ModImageCache(Func<ImageCacheSettings> getSettings, ILogger<
         }
     }
 
-    public long Clear()
+    public long Clear() => Clear(getSettings().Path);
+
+    public long Clear(string path)
     {
         long reclaimed = 0;
 
         try
         {
-            var path = getSettings().Path;
-
             if (Directory.Exists(path) is false)
             {
                 return 0;

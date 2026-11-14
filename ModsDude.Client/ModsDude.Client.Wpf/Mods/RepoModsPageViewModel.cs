@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Services;
+using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shared.Behaviors;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -112,6 +113,9 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     /// <summary>A batch delete is running. It reports to the progress strip, not to the page.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteVersionCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteModCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ReorderVersionsCommand))]
     private bool _isDeleting;
 
     /// <summary>The repo's mods, filtered by the search and the unused toggle.</summary>
@@ -179,7 +183,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     /// concurrency cannot catch, such as a comparer that guessed badly or an arbitration someone
     /// regrets. The same control the arbitration modal uses, over the same operation.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(CanModify))]
+    [RelayCommand(CanExecute = nameof(CanModifyNow))]
     private async Task ReorderVersions(ModListItemViewModel? row)
     {
         if (row is null)
@@ -203,7 +207,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         }
     }
 
-    [RelayCommand(CanExecute = nameof(CanModify))]
+    [RelayCommand(CanExecute = nameof(CanModifyNow))]
     private async Task DeleteVersion(ModListItemViewModel? row)
     {
         if (row is null || row.IsOnServer is false)
@@ -252,7 +256,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         await ReloadAfterServerChangeAsync();
     }
 
-    [RelayCommand(CanExecute = nameof(CanModify))]
+    [RelayCommand(CanExecute = nameof(CanModifyNow))]
     private async Task DeleteMod(ModListItemViewModel? row)
     {
         if (row is null || row.IsOnServer is false)
@@ -308,6 +312,9 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     [RelayCommand(CanExecute = nameof(CanDeleteSelected))]
     private async Task DeleteSelected()
     {
+        // Only what the user can see goes: a version picked under an earlier search is not part of this one.
+        Selection.DeselectHidden();
+
         var picked = Selection.Picked().OfType<ModListItemViewModel>().ToList();
 
         if (picked.Count == 0)
@@ -316,20 +323,19 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         }
 
         var steps = PlanDelete(picked);
-        var wholeMods = steps.Count(x => x.WholeMod);
 
-        var confirmation = new ConfirmationModalViewModel(
-            "Really?",
-            $"Delete {Versions(picked.Count)} from the repo?\n"
-                + (wholeMods == 0 ? "" : $"That is every version of {Mods(wholeMods)}, so {(wholeMods == 1 ? "the mod goes" : "the mods go")} too.\n")
-                + "The files go with them, and this cannot be undone.",
-            IconKind.Warning,
+        var confirmation = new ConfirmLossModalViewModel(
+            $"Delete {Versions(picked.Count)} from the repo?",
+            "The files go with them, and this cannot be undone.",
+            [.. steps
+                .Select(x => x.WholeMod ? $"{x.Row.Name} - every version" : $"{x.Row.Name} {x.Row.Version}")
+                .Order(StringComparer.CurrentCultureIgnoreCase)],
             DescribeDelete(picked),
             "Keep");
 
         await _modalService.Show(confirmation);
 
-        if (confirmation.Result is false)
+        if (confirmation.Choice is not ConfirmLossChoice.Confirm)
         {
             return;
         }
@@ -417,7 +423,10 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     [RelayCommand]
     private void DeselectHidden() => Selection.DeselectHidden();
 
-    private bool CanDeleteSelected() => CanModify && IsDeleting is false && Selection.HasSelection;
+    private bool CanDeleteSelected() => CanModifyNow && Selection.HasSelection;
+
+    /// <summary>Whether a change to the repo's mods may start now: not while a batch delete is changing them.</summary>
+    private bool CanModifyNow => CanModify && IsDeleting is false;
 
     /// <summary>One call a batch delete makes, and how many of the picked versions it takes.</summary>
     private sealed record DeleteStep(ModListItemViewModel Row, int Versions, bool WholeMod);
@@ -455,8 +464,6 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         => CanModify && row is ModListItemViewModel { Mod.IsUnused: true };
 
     private static string Versions(int count) => count == 1 ? "1 version" : $"{count:N0} versions";
-
-    private static string Mods(int count) => count == 1 ? "1 mod" : $"{count:N0} mods";
 
     private Task ShowRefusal(string title, string message)
     {

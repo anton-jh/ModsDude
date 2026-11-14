@@ -27,6 +27,9 @@ public sealed class ModStore(
         }
     }
 
+    public Task RefreshAsync(Guid repoId, CancellationToken cancellationToken)
+        => _loads.RefreshAsync(repoId, ct => ReadChangesAsync(repoId, ct), changes => Apply(repoId, changes), cancellationToken);
+
     public bool IsLoaded(Guid repoId)
     {
         lock (_lock)

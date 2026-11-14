@@ -12,7 +12,7 @@ public enum ModListSortKind
 }
 
 
-public readonly record struct ModListSortKey(string Name, DateTimeOffset? Date, IReadOnlyList<ModAttribute> Attributes);
+public readonly record struct ModListSortKey(ModKey Id, string Name, DateTimeOffset? Date, IReadOnlyList<ModAttribute> Attributes);
 
 
 /// <summary>How a list names the date it sorts by: "Added 3 Mar", or "Unsaved" where there is none.</summary>
@@ -27,7 +27,7 @@ public sealed record ModListDateWording(string Verb, string Missing, string Full
 
 
 /// <summary>
-/// Ties fall back to the name, always ascending. A missing date sorts as the newest there is, and a
+/// Ties fall back to the name, then the mod id, always ascending. A missing date sorts as the newest there is, and a
 /// missing attribute sorts last in both directions.
 /// </summary>
 public sealed record ModListSort(ModListSortKind Kind = ModListSortKind.Name, string? Attribute = null, bool Ascending = true)
@@ -47,7 +47,14 @@ public sealed record ModListSort(ModListSortKind Kind = ModListSortKind.Name, st
             _ => Directed(NaturalOrder.Compare(left.Name, right.Name))
         };
 
-        return primary != 0 ? primary : NaturalOrder.Compare(left.Name, right.Name);
+        if (primary != 0)
+        {
+            return primary;
+        }
+
+        var byName = NaturalOrder.Compare(left.Name, right.Name);
+
+        return byName != 0 ? byName : string.CompareOrdinal(left.Id.Value, right.Id.Value);
     }
 
     public string? Caption(ModListSortKey key, DateTimeOffset now, ModListDateWording wording) => Kind switch

@@ -35,7 +35,7 @@ namespace ModsDude.Client.Wpf.Repos.Archive;
 /// away - and two pages called Archive under one repo would be two places to look.
 /// </para>
 /// </remarks>
-public partial class RepoArchivePageViewModel : PageViewModel
+public partial class RepoArchivePageViewModel : PageViewModel, IDisposable
 {
     private readonly Repo _repo;
     private readonly IProfileService _profileService;
@@ -136,6 +136,11 @@ public partial class RepoArchivePageViewModel : PageViewModel
         Notify();
     }
 
+    public void Dispose()
+    {
+        _lifetime.Cancel();
+    }
+
     /// <summary>
     /// Reported here rather than rethrown, so the modal names what was being read - and so a page
     /// that failed to load stops claiming it is still loading.
@@ -234,7 +239,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
     {
         await RunAsync(async name =>
         {
-            await _profileStore.RestoreAsync(_repo.Id, item.Id, name, _lifetime.Token);
+            await _profileStore.RestoreAsync(_repo.Id, item.Id, name, CancellationToken.None);
 
             _toasts.Show($"'{name ?? item.Name}' is back in the sidebar.");
         }, item, "profile");
@@ -247,7 +252,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
             await _savegames.WriteAsync(
                 _repo.Id,
                 token => _savegamesClient.RestoreSavegameV1Async(_repo.Id, item.Id, new RestoreRequest { Name = name }, token),
-                _lifetime.Token);
+                CancellationToken.None);
 
             _toasts.Show($"'{name ?? item.Name}' is back in the repo's saves.");
         }, item, "savegame");
@@ -296,10 +301,6 @@ public partial class RepoArchivePageViewModel : PageViewModel
 
             await ReloadAsync();
         }
-        catch (OperationCanceledException)
-        {
-            // Navigated away.
-        }
         catch (Exception exception)
         {
             await _errorReporter.ShowAsync(exception, $"restoring an archived {what}");
@@ -321,7 +322,7 @@ public partial class RepoArchivePageViewModel : PageViewModel
 
         try
         {
-            await _profileStore.DeleteAsync(_repo.Id, item.Id, _lifetime.Token);
+            await _profileStore.DeleteAsync(_repo.Id, item.Id, CancellationToken.None);
 
             // The profile is gone, so no game can still be pointed at it. Local state, which the
             // server has no idea about: a game whose active profile is a dangling id reports
@@ -341,10 +342,6 @@ public partial class RepoArchivePageViewModel : PageViewModel
                 "A savegame still needs it",
                 $"'{item.Name}' cannot be deleted while a savegame follows it or was played on one of "
                     + "its revisions. Archive or delete those savegames first."));
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away.
         }
         catch (Exception exception)
         {
@@ -367,15 +364,11 @@ public partial class RepoArchivePageViewModel : PageViewModel
 
         try
         {
-            await _savegames.WriteAsync(_repo.Id, token => _savegamesClient.DeleteSavegameV1Async(_repo.Id, item.Id, token), _lifetime.Token);
+            await _savegames.WriteAsync(_repo.Id, token => _savegamesClient.DeleteSavegameV1Async(_repo.Id, item.Id, token), CancellationToken.None);
 
             _toasts.Show($"'{item.Name}' is gone for good.");
 
             await ReloadAsync();
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away.
         }
         catch (Exception exception)
         {

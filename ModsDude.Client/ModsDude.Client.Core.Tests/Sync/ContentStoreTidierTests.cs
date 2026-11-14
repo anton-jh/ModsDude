@@ -142,6 +142,9 @@ public class ContentStoreTidierTests
         public Task<long?> RecycleQuarantineAsync(ContentStore store, CancellationToken cancellationToken, Action? onWaiting = null)
             => throw new NotSupportedException();
 
+        public Task MoveAsync(ContentStore store, string destination, Action commit, IProgress<ContentStoreMoveProgress>? progress, CancellationToken cancellationToken, Action? onWaiting = null)
+            => throw new NotSupportedException();
+
         public Task<StoreVerificationReport> VerifyAsync(
             ContentStore store,
             IProgress<ContentStoreVerificationProgress>? progress,

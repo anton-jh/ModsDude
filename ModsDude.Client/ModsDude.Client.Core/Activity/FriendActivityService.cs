@@ -102,7 +102,7 @@ public sealed class FriendActivityService : IFriendActivityService, IDisposable
 
 
     public Task RefreshAsync(CancellationToken cancellationToken)
-        => _loads.ReadAsync(default, ReadAsync, Apply, cancellationToken);
+        => _loads.RefreshAsync(default, ReadAsync, Apply, cancellationToken);
 
     public void ClearUserState()
     {

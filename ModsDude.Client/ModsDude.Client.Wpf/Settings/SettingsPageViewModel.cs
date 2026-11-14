@@ -307,6 +307,13 @@ public partial class SettingsPageViewModel
 
         await ApplyAutostartAsync();
 
+        if (await MoveStoresAsync(cancellationToken) is false)
+        {
+            return;
+        }
+
+        var previousImageCache = _saved.ImageCache.Path;
+
         _settingsRepository.Update(settings =>
         {
             foreach (var volume in ModFolderVolumes)
@@ -344,6 +351,11 @@ public partial class SettingsPageViewModel
 
         _saved = _settingsRepository.Snapshot();
         OnSettingEdited();
+
+        if (FileSystemHelper.ArePathsEqual(previousImageCache, _saved.ImageCache.Path) is false)
+        {
+            await Task.Run(() => _imageCache.Clear(previousImageCache), cancellationToken);
+        }
 
         _toasts.Show("Saved settings.");
 
@@ -521,9 +533,23 @@ public partial class SettingsPageViewModel
             return;
         }
 
-        using var task = Announce($"Reclaiming space from the store on {row.VolumeRoot}");
+        using var cancellation = new CancellationTokenSource();
+        using var task = Announce($"Reclaiming space from the store on {row.VolumeRoot}", cancellation.Cancel);
 
-        var ran = await RunAsync(() => _maintenance.ReclaimAsync(store, CancellationToken.None, Waiting(task)));
+        Ran<ContentStoreClearResult>? ran;
+
+        try
+        {
+            ran = await RunAsync(() => _maintenance.ReclaimAsync(store, cancellation.Token, Waiting(task)));
+        }
+        catch (OperationCanceledException)
+        {
+            // Each file dropped before the stop was dropped whole, and every one of them downloads again.
+            _toasts.Show($"Stopped reclaiming space from the store on {row.VolumeRoot}.", ToastSeverity.Warning);
+            await RefreshUsageAsync();
+
+            return;
+        }
 
         if (ran?.Value is not ContentStoreClearResult result)
         {
@@ -570,9 +596,22 @@ public partial class SettingsPageViewModel
             return;
         }
 
-        using var task = Announce($"Emptying the quarantine folder on {row.VolumeRoot}");
+        using var cancellation = new CancellationTokenSource();
+        using var task = Announce($"Emptying the quarantine folder on {row.VolumeRoot}", cancellation.Cancel);
 
-        var ran = await RunAsync(() => _maintenance.RecycleQuarantineAsync(store, CancellationToken.None, Waiting(task)));
+        Ran<long?>? ran;
+
+        try
+        {
+            ran = await RunAsync(() => _maintenance.RecycleQuarantineAsync(store, cancellation.Token, Waiting(task)));
+        }
+        catch (OperationCanceledException)
+        {
+            // Only the wait for the store can be stopped: the move to the Recycle Bin is one step.
+            _toasts.Show($"Stopped emptying the quarantine folder on {row.VolumeRoot}.", ToastSeverity.Warning);
+
+            return;
+        }
 
         if (ran is null)
         {
@@ -667,6 +706,73 @@ public partial class SettingsPageViewModel
             }
 
             imageCache.Usage = _imageCache.Measure();
+        });
+    }
+
+    /// <summary>
+    /// Moves every store whose folder was changed, one at a time, writing each new folder down as its
+    /// move completes.
+    /// </summary>
+    /// <returns>False where a move was refused, failed or stopped; the rest of the page is then left unsaved.</returns>
+    private async Task<bool> MoveStoresAsync(CancellationToken cancellationToken)
+    {
+        foreach (var row in Stores.Where(StorePathDiffersFromSaved).ToList())
+        {
+            if (FindStore(row) is not ContentStore store)
+            {
+                continue;
+            }
+
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using var task = Announce($"Moving the store on {row.VolumeRoot}", cancellation.Cancel);
+
+            var progress = new Progress<ContentStoreMoveProgress>(x => task.Report(
+                null,
+                x.BytesCopied,
+                x.TotalBytes,
+                $"{ByteSize.Describe(x.BytesCopied)} / {ByteSize.Describe(x.TotalBytes)}"));
+
+            var destination = row.Path;
+
+            try
+            {
+                var moved = await RunAsync(async () =>
+                {
+                    await _maintenance.MoveAsync(store, destination, () => WriteStorePath(row.VolumeRoot, destination), progress, cancellation.Token, Waiting(task));
+
+                    return true;
+                });
+
+                if (moved is null)
+                {
+                    return false;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _toasts.Show($"Stopped moving the store on {row.VolumeRoot}. It is still in {store.RootPath}.", ToastSeverity.Warning);
+
+                return false;
+            }
+            finally
+            {
+                _saved = _settingsRepository.Snapshot();
+                OnSettingEdited();
+            }
+        }
+
+        await RefreshUsageAsync();
+
+        return true;
+    }
+
+    /// <summary>Writes a moved store's folder down, keeping its saved size: the rest of the page is saved after every move is done.</summary>
+    private void WriteStorePath(string volumeRoot, string path)
+    {
+        _settingsRepository.Update(settings => settings.Stores[volumeRoot] = new ContentStoreSettings()
+        {
+            Path = path,
+            MaxSizeBytes = settings.Stores.GetValueOrDefault(volumeRoot)?.MaxSizeBytes ?? ContentStoreSettings.DefaultMaxSizeBytes
         });
     }
 
@@ -846,9 +952,13 @@ public partial class SettingsPageViewModel
     {
         var saved = _saved.Stores.GetValueOrDefault(store.VolumeRoot);
 
-        return store.Path != (saved?.Path ?? ContentStoreSettings.GetDefaultPath(store.VolumeRoot))
+        return StorePathDiffersFromSaved(store)
             || ToBytes(store.MaxSizeGigabytes) != (saved?.MaxSizeBytes ?? ContentStoreSettings.DefaultMaxSizeBytes);
     }
+
+    /// <inheritdoc cref="StoreDiffersFromSaved"/>
+    private bool StorePathDiffersFromSaved(ContentStoreViewModel store)
+        => store.Path != (_saved.Stores.GetValueOrDefault(store.VolumeRoot)?.Path ?? ContentStoreSettings.GetDefaultPath(store.VolumeRoot));
 
     private static long ToBytes(double gigabytes)
     {

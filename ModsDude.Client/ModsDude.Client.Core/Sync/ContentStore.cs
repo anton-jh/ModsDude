@@ -340,6 +340,28 @@ public sealed class ContentStore
         }
     }
 
+    /// <summary>Carries an entry's place in the eviction order over from the store it was copied out of.</summary>
+    public void SetLastUsed(string hash, DateTime lastUsedUtc)
+    {
+        try
+        {
+            var marker = GetUsedMarkerPath(hash);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
+
+            if (File.Exists(marker) is false)
+            {
+                File.WriteAllBytes(marker, []);
+            }
+
+            File.SetLastWriteTimeUtc(marker, lastUsedUtc);
+        }
+        catch (Exception exception)
+        {
+            Log.LogDebug(exception, "Could not carry over when the store blob {Hash} was last used.", hash);
+        }
+    }
+
     /// <summary>
     /// Re-reads every blob in the store and drops the ones that no longer hash to their own address.
     /// </summary>
@@ -632,6 +654,30 @@ public sealed class ContentStore
         foreach (var file in Directory.EnumerateFiles(temporary).Where(x => x.Contains(_linkProbeExtension, StringComparison.OrdinalIgnoreCase) is false))
         {
             FileSystemHelper.TryDeleteFile(file, Log);
+        }
+    }
+
+    /// <summary>
+    /// Removes the store's own folders and its marker, and then the folder itself where nothing else is
+    /// left in it. Anything else somebody put in the folder stays.
+    /// </summary>
+    public void RemoveOwnFiles()
+    {
+        if (IsMarked is false)
+        {
+            return;
+        }
+
+        foreach (var directory in new[] { _blobsDirectory, _temporaryDirectory, _usedDirectory, _quarantineDirectory })
+        {
+            FileSystemHelper.TryDeleteDirectory(Path.Combine(RootPath, directory), Log);
+        }
+
+        FileSystemHelper.TryDeleteFile(Path.Combine(RootPath, _markerFile), Log);
+
+        if (Directory.Exists(RootPath) && Directory.EnumerateFileSystemEntries(RootPath).Any() is false)
+        {
+            FileSystemHelper.TryDeleteDirectory(RootPath, Log);
         }
     }
 

@@ -573,6 +573,7 @@ public partial class App : Application
         services.AddSingleton<IHeldSavegameNames, HeldSavegameNames>();
         services.AddSingleton<ISavegameOperations, SavegameOperations>();
         services.AddSingleton<ISavegameCheckInFlow, SavegameCheckInFlow>();
+        services.AddSingleton<IRepoDeparture, RepoDeparture>();
         services.AddSingleton<ISavegameDisconnectFlow, SavegameDisconnectFlow>();
         services.AddSingleton<ISavegameProfileActivation, SavegameProfileActivation>();
         services.AddSingleton<ISavegameCheckOutContextBuilder, SavegameCheckOutContextBuilder>();
@@ -687,6 +688,7 @@ public partial class App : Application
         services.AddSingleton<ISavegameSightings>(sp => sp.GetRequiredService<ISavegameStore>());
         services.AddSingleton<IUserScopedState>(sp => sp.GetRequiredService<ISavegameStore>());
         services.AddSingleton<IHeldSavegameClaims, HeldSavegameClaims>();
+        services.AddSingleton<IRepoWork, RepoWork>();
 
         // Which processes are which game comes off the repos' adapters, for the same reason the
         // savegame adapters do: a game does not carry the base settings that hydrate one.

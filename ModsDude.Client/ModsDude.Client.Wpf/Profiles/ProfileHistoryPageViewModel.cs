@@ -57,6 +57,9 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
     // Keyed on the revision alone: after a lost answer the head shown may be the restore's own.
     private readonly RequestIdKeeper<int> _restoreRequestIds = new();
 
+    /// <summary>Stops the page's reads when it is closed. What it writes is one short request each, and finishes.</summary>
+    private readonly CancellationTokenSource _lifetime = new();
+
     private ProfileHistory? _fetched;
 
     /// <summary>The head of the history on screen, which is what a restore is based on.</summary>
@@ -96,9 +99,9 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
     {
         _errorReporter = errorReporter;
         _time = time;
-        _historyLoad = new LatestLoad(loading => IsLoading = loading, logger);
-        _modsLoad = new LatestLoad(loading => IsLoadingMods = loading, logger);
-        _changesLoad = new LatestLoad(loading => IsLoadingChanges = loading, logger);
+        _historyLoad = new LatestLoad(loading => IsLoading = loading, logger, _lifetime.Token);
+        _modsLoad = new LatestLoad(loading => IsLoadingMods = loading, logger, _lifetime.Token);
+        _changesLoad = new LatestLoad(loading => IsLoadingChanges = loading, logger, _lifetime.Token);
         _toasts = toasts;
         _shellNavigation = shellNavigation;
         _repo = repo;
@@ -345,30 +348,26 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
     /// </para>
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanPruneNow))]
-    private async Task Prune(CancellationToken cancellationToken)
+    private async Task Prune()
     {
-        var marked = Picked().Where(x => x.CanPrune).Select(x => x.Number).ToList();
+        var rows = Picked().Where(x => x.CanPrune).OrderByDescending(x => x.Number).ToList();
+        var marked = rows.Select(x => x.Number).ToList();
 
         if (marked.Count == 0)
         {
             return;
         }
 
-        var confirmation = new ConfirmationModalViewModel(
+        var confirmation = new ConfirmLossModalViewModel(
             marked.Count == 1 ? "Delete this revision?" : $"Delete {marked.Count} revisions?",
-            marked.Count == 1
-                ? "The mod list it recorded goes with it and cannot be brought back. Anything it was "
-                    + "the last revision to pin becomes deletable from the repo."
-                : $"The mod lists those {marked.Count} revisions recorded go with them and cannot be "
-                    + "brought back. Anything they were the last revisions to pin becomes deletable "
-                    + "from the repo.",
-            IconKind.Warning,
+            "The mod lists they recorded cannot be brought back. Anything only they pinned becomes deletable from the repo.",
+            [.. rows.Select(x => x.Title)],
             marked.Count == 1 ? "Delete it" : "Delete them",
             "Keep them");
 
         await _modalService.Show(confirmation);
 
-        if (confirmation.Result is false)
+        if (confirmation.Choice is not ConfirmLossChoice.Confirm)
         {
             return;
         }
@@ -377,7 +376,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            var result = await _profileService.PruneRevisions(_repo.Id, _profile.Id, marked, cancellationToken);
+            var result = await _profileService.PruneRevisions(_repo.Id, _profile.Id, marked, CancellationToken.None);
 
             _toasts.Show(Describe(result));
 
@@ -388,10 +387,6 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
             }
 
             await ReloadAsync(null);
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away.
         }
         catch (Exception exception)
         {
@@ -489,11 +484,25 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
     protected override async Task InitAsync()
     {
-        _fetched = await _profileService.GetHistory(_repo.Id, _profile.Id, CancellationToken.None);
+        _fetched = await _profileService.GetHistory(_repo.Id, _profile.Id, _lifetime.Token);
+    }
+
+    protected override void OnInitFailed(Exception ex)
+    {
+        if (ex is not OperationCanceledException)
+        {
+            base.OnInitFailed(ex);
+        }
     }
 
     protected override void OnInitCompleted()
     {
+        // Closed while the first read was out: nothing is left to show it on.
+        if (_lifetime.IsCancellationRequested)
+        {
+            return;
+        }
+
         if (_fetched is not null)
         {
             Publish(_fetched, _selectRevisionOnce);
@@ -509,7 +518,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
 
     [RelayCommand(CanExecute = nameof(CanRestore))]
-    private async Task Restore(CancellationToken cancellationToken)
+    private async Task Restore()
     {
         if (Selected is not ProfileRevisionViewModel revision)
         {
@@ -535,7 +544,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
         try
         {
             var restored = await _profileStore.RestoreRevisionAsync(
-                _profile, _restoreRequestIds.For(revision.Number), revision.Number, _shownHead, cancellationToken);
+                _profile, _restoreRequestIds.For(revision.Number), revision.Number, _shownHead, CancellationToken.None);
 
             _restoreRequestIds.Forget();
 
@@ -563,7 +572,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
     /// anything: taking it somewhere it can be edited is one modal away.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanSaveAs))]
-    private async Task SaveAs(CancellationToken cancellationToken)
+    private async Task SaveAs()
     {
         if (Selected is not ProfileRevisionViewModel revision)
         {
@@ -592,7 +601,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
                             requestIds.For(name),
                             name,
                             new CopyProfileRevisionRequest { ProfileId = _profile.Id, Revision = revision.Number },
-                            cancellationToken);
+                            CancellationToken.None);
 
                         return null;
                     }
@@ -694,6 +703,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
     public void Dispose()
     {
         _profileStore.Reread -= OnProfilesReread;
+        _lifetime.Cancel();
     }
 
     private void Publish(ProfileHistory history, int? select = null)

@@ -226,7 +226,12 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         {
             if (_gameRepository.Find(_repo.Scope) is Game game)
             {
-                _gameRepository.RefreshTargets(game, _repo.Adapter);
+                GameError = _gameRepository.RefreshTargets(game, _repo.Adapter) switch
+                {
+                    TargetRefresh.Busy => $"'{game.Name}' is busy.",
+                    TargetRefresh.HoldsSavegame => "Check in the savegame first.",
+                    _ => null
+                };
             }
             else
             {

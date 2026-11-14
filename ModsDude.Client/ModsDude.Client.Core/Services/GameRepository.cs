@@ -175,9 +175,55 @@ public class GameRepository : IGameRepository
 
     public void Update(Game game, IBaseGameAdapter baseAdapter, DynamicForm localSettings)
     {
+        switch (TryUpdate(game, baseAdapter, localSettings, GetTargets(baseAdapter, localSettings)))
+        {
+            case TargetRefresh.Busy:
+                throw new UserFriendlyException(
+                    $"'{game.Name}' is busy",
+                    $"Something is working on the folders of '{game.Name}', so its settings were not changed.");
+
+            case TargetRefresh.HoldsSavegame:
+                throw new UserFriendlyException(
+                    "Check in the savegame first",
+                    $"'{game.Name}' holds a checked-out savegame, so its settings were not changed.");
+        }
+    }
+
+    public TargetRefresh RefreshTargets(Game game, IBaseGameAdapter baseAdapter)
+    {
+        var localSettings = game.GetLocalSettings(baseAdapter);
         var targets = GetTargets(baseAdapter, localSettings);
 
+        if (targets.SequenceEqual(game.Targets))
+        {
+            return TargetRefresh.Unchanged;
+        }
+
+        return TryUpdate(game, baseAdapter, localSettings, targets);
+    }
+
+    /// <summary>
+    /// Writes the settings down unless something is working in the game's folders or it holds a
+    /// savegame - a save held in a folder that moves is checked in from whatever sits at its slot in
+    /// the new one.
+    /// </summary>
+    private TargetRefresh TryUpdate(Game game, IBaseGameAdapter baseAdapter, DynamicForm localSettings, IReadOnlyList<PersistedModTarget> targets)
+    {
         EnsureFoldersAreUnclaimed(targets, game.Identity);
+
+        using var lease = _leases.TryAcquireExclusive(
+            FolderKeys(game, baseAdapter, localSettings, targets),
+            $"Changing the folders of '{game.Name}'");
+
+        if (lease is null)
+        {
+            return TargetRefresh.Busy;
+        }
+
+        if (HoldsSavegame(game.Identity))
+        {
+            return TargetRefresh.HoldsSavegame;
+        }
 
         _store.Update(_ => game.Update(baseAdapter.GameDisplayName, localSettings, targets));
         game.NotifySettingsChanged();
@@ -189,20 +235,32 @@ public class GameRepository : IGameRepository
 
         // The mod folders may have moved, which makes every answer about the old ones meaningless.
         GameChanged?.Invoke(this, EventArgs.Empty);
+
+        return TargetRefresh.Updated;
     }
 
-    public void RefreshTargets(Game game, IBaseGameAdapter baseAdapter)
+    /// <summary>Every mod and savegame folder the game reaches now, and every one it would reach with <paramref name="localSettings"/>.</summary>
+    private static IEnumerable<string> FolderKeys(
+        Game game,
+        IBaseGameAdapter baseAdapter,
+        DynamicForm localSettings,
+        IReadOnlyList<PersistedModTarget> targets)
     {
-        var localSettings = game.GetLocalSettings(baseAdapter);
-        var targets = GetTargets(baseAdapter, localSettings);
+        var modKeys = game.Targets.Concat(targets)
+            .Select(x => ResourceKeys.Target(new ModTargetRef(game.Identity, x.Key)));
 
-        if (targets.SequenceEqual(game.Targets))
-        {
-            return;
-        }
+        var savegameKeys = SavegameTargetsOf(game.GetAdapter(baseAdapter))
+            .Concat(SavegameTargetsOf(baseAdapter.WithLocalSettings(localSettings)))
+            .Select(x => ResourceKeys.SavegameFolder(game.Identity, x.Key));
 
-        Update(game, baseAdapter, localSettings);
+        return modKeys.Concat(savegameKeys).Distinct(StringComparer.Ordinal);
     }
+
+    private static SavegameTargets SavegameTargetsOf(ILocalGameAdapter adapter)
+        => adapter.GetLocalCapabilityAdapterFactory<ILocalSavegameAdapter>()?.Invoke().SavegameTargets ?? SavegameTargets.None;
+
+    private bool HoldsSavegame(GameIdentity identity)
+        => _store.Read(state => state.Games.TryGetValue(identity, out var persisted) && persisted.SavegameCheckouts.Count > 0);
 
     public void SetActiveProfile(Game game, ActiveProfile? activeProfile, int? pinnedRevision = null)
     {

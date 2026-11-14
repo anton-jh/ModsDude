@@ -54,10 +54,70 @@ public class StoreLoadsTests
         var harness = new Harness();
         harness.Server.OnRead = () => harness.Loads.ApplyAsync(default, () => { });
 
-        await harness.ReadAsync();
+        await Assert.ThrowsAsync<StoreReadSupersededException>(() => harness.ReadAsync());
 
         Assert.Empty(harness.Applied);
         Assert.Equal(5, harness.Server.Reads);
+    }
+
+    [Fact]
+    public async Task A_refresh_asked_for_while_a_read_is_out_is_answered_by_a_read_started_after_it()
+    {
+        var harness = new Harness();
+        var early = harness.Server.Hold();
+
+        var read = harness.ReadAsync();
+        var refresh = harness.RefreshAsync();
+
+        early.SetResult(1);
+        await Task.WhenAll(read, refresh);
+
+        Assert.Equal(2, harness.Server.Reads);
+        Assert.Equal([1, Harness.Fresh], harness.Applied);
+    }
+
+    [Fact]
+    public async Task A_refresh_with_nothing_out_reads_once()
+    {
+        var harness = new Harness();
+
+        await harness.RefreshAsync();
+
+        Assert.Equal(1, harness.Server.Reads);
+        Assert.Equal([Harness.Fresh], harness.Applied);
+    }
+
+    [Fact]
+    public async Task A_refresh_waits_out_a_failing_read_and_still_reads()
+    {
+        var harness = new Harness();
+        var early = harness.Server.Hold();
+
+        var read = harness.ReadAsync();
+        var refresh = harness.RefreshAsync();
+
+        early.SetException(new HttpRequestException("blip"));
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => read);
+        await refresh;
+
+        Assert.Equal([Harness.Fresh], harness.Applied);
+    }
+
+    [Fact]
+    public async Task A_read_joining_a_refresh_shares_it()
+    {
+        var harness = new Harness();
+        var gate = harness.Server.Hold();
+
+        var refresh = harness.RefreshAsync();
+        var read = harness.ReadAsync();
+
+        gate.SetResult(3);
+        await Task.WhenAll(refresh, read);
+
+        Assert.Equal(1, harness.Server.Reads);
+        Assert.Equal([3], harness.Applied);
     }
 
     [Fact]
@@ -156,6 +216,9 @@ public class StoreLoadsTests
 
         public Task ReadAsync(CancellationToken cancellationToken = default)
             => Loads.ReadAsync(default, Server.ReadAsync, Applied.Add, cancellationToken);
+
+        public Task RefreshAsync(CancellationToken cancellationToken = default)
+            => Loads.RefreshAsync(default, Server.ReadAsync, Applied.Add, cancellationToken);
     }
 
     private sealed class FakeServer

@@ -24,7 +24,7 @@ namespace ModsDude.Client.Wpf.Repos.Archive;
 /// a repo that vanished from the sidebar has to be explainable to whoever noticed.
 /// </para>
 /// </remarks>
-public partial class ArchivePageViewModel : PageViewModel
+public partial class ArchivePageViewModel : PageViewModel, IDisposable
 {
     private readonly IRepoStore _repoStore;
     private readonly IModalService _modalService;
@@ -76,6 +76,11 @@ public partial class ArchivePageViewModel : PageViewModel
 
         IsLoading = false;
         OnPropertyChanged(nameof(IsEmpty));
+    }
+
+    public void Dispose()
+    {
+        _lifetime.Cancel();
     }
 
     /// <summary>
@@ -165,15 +170,11 @@ public partial class ArchivePageViewModel : PageViewModel
 
         try
         {
-            await _repoStore.RestoreRepo(item.Id, _lifetime.Token);
+            await _repoStore.RestoreRepo(item.Id, CancellationToken.None);
 
             _toasts.Show($"'{item.Name}' is back in your repos.");
 
             await ReloadAsync();
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away.
         }
         catch (Exception exception)
         {
@@ -200,15 +201,11 @@ public partial class ArchivePageViewModel : PageViewModel
 
         try
         {
-            await _repoStore.DeleteRepo(item.Id, _lifetime.Token);
+            await _repoStore.DeleteRepo(item.Id, CancellationToken.None);
 
             _toasts.Show($"'{item.Name}' is gone for good.");
 
             await ReloadAsync();
-        }
-        catch (OperationCanceledException)
-        {
-            // Navigated away.
         }
         catch (Exception exception)
         {
