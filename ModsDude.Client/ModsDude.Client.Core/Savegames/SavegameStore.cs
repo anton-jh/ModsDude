@@ -55,23 +55,23 @@ public sealed class SavegameStore(
         => Live(repoId).FirstOrDefault(x => x.Id == savegameId);
 
     public Task EnsureLoadedAsync(Guid repoId, CancellationToken cancellationToken)
-        => IsHeld(_live, repoId) ? Task.CompletedTask : ReadLiveAsync(repoId, cancellationToken);
+        => IsHeld(_live, repoId) ? Task.CompletedTask : ReadLiveAsync(repoId, fresh: false, cancellationToken);
 
     public Task EnsureArchivedLoadedAsync(Guid repoId, CancellationToken cancellationToken)
-        => IsHeld(_archived, repoId) ? Task.CompletedTask : ReadArchivedAsync(repoId, cancellationToken);
+        => IsHeld(_archived, repoId) ? Task.CompletedTask : ReadArchivedAsync(repoId, fresh: false, cancellationToken);
 
     public async Task RefreshAsync(Guid repoId, CancellationToken cancellationToken)
     {
-        await ReadLiveAsync(repoId, cancellationToken);
+        await ReadLiveAsync(repoId, fresh: true, cancellationToken);
 
         if (IsHeld(_archived, repoId))
         {
-            await ReadArchivedAsync(repoId, cancellationToken);
+            await ReadArchivedAsync(repoId, fresh: true, cancellationToken);
         }
     }
 
     public Task RefreshArchivedAsync(Guid repoId, CancellationToken cancellationToken)
-        => ReadArchivedAsync(repoId, cancellationToken);
+        => ReadArchivedAsync(repoId, fresh: true, cancellationToken);
 
     public async Task<T> WriteAsync<T>(Guid repoId, Func<CancellationToken, Task<T>> send, CancellationToken cancellationToken)
     {
@@ -178,19 +178,36 @@ public sealed class SavegameStore(
     }
 
 
-    private Task ReadLiveAsync(Guid repoId, CancellationToken cancellationToken)
-        => _liveLoads.ReadAsync(
+    /// <param name="fresh">Whether the answer has to come from a read started after this call.</param>
+    private Task ReadLiveAsync(Guid repoId, bool fresh, CancellationToken cancellationToken)
+        => Read(
+            _liveLoads,
+            fresh,
             repoId,
             ct => savegamesClient.GetSavegamesV1Async(repoId, ct),
             savegames => Hold(_live, repoId, savegames),
             cancellationToken);
 
-    private Task ReadArchivedAsync(Guid repoId, CancellationToken cancellationToken)
-        => _archivedLoads.ReadAsync(
+    /// <inheritdoc cref="ReadLiveAsync"/>
+    private Task ReadArchivedAsync(Guid repoId, bool fresh, CancellationToken cancellationToken)
+        => Read(
+            _archivedLoads,
+            fresh,
             repoId,
             ct => savegamesClient.GetArchivedSavegamesV1Async(repoId, ct),
             savegames => Hold(_archived, repoId, savegames),
             cancellationToken);
+
+    private static Task Read<T>(
+        StoreLoads<Guid> loads,
+        bool fresh,
+        Guid repoId,
+        Func<CancellationToken, Task<T>> read,
+        Action<T> apply,
+        CancellationToken cancellationToken)
+        => fresh
+            ? loads.RefreshAsync(repoId, read, apply, cancellationToken)
+            : loads.ReadAsync(repoId, read, apply, cancellationToken);
 
     /// <remarks>
     /// Compared as JSON, because the generated records hold collections, which compare by reference:

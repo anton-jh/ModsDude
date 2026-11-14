@@ -13,6 +13,7 @@ using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Tests.Profiles;
+using ModsDude.Client.Core.Tests.Repos;
 using ModsDude.Client.Core.Tests.Savegames;
 using ModsDude.Client.Core.Tests.Stores;
 using ModsDude.Client.Core.Tests.Users;
@@ -500,44 +501,19 @@ public class ChangePollTests
         }
     }
 
-    /// <summary>The repo list, which a poll only ever reads again.</summary>
-    private sealed class FakeRepoStore : IRepoStore
-    {
-        public event Action<Guid>? RepoCreated { add { } remove { } }
-
-        public ObservableCollection<Repo> Repos { get; } = [];
-        public bool HasLoaded => true;
-        public int Refreshes { get; private set; }
-
-        public Task RefreshRepos(CancellationToken cancellationToken)
-        {
-            Refreshes++;
-
-            return Task.CompletedTask;
-        }
-
-        public bool IsGone(Guid repoId) => false;
-        public void ClearUserState() { }
-
-        public Task CreateRepo(Guid requestId, string name, string adapterId, DynamicForm baseSettings, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<RepoMembershipDto> Join(Func<CancellationToken, Task<RepoMembershipDto>> redeem, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task Update(Repo repo, string name, DynamicForm baseSettings, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task DeleteRepo(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task ArchiveRepo(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task RestoreRepo(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<IReadOnlyList<RepoMembershipDto>> GetArchivedRepos(CancellationToken cancellationToken) => throw new NotSupportedException();
-    }
-
     private sealed class FakeModStore : IModStore
     {
         public HashSet<Guid> Loaded { get; } = [];
         public int Reads { get; private set; }
 
         public Task<IReadOnlyList<ModDto>> GetAsync(Guid repoId, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task RefreshAsync(Guid repoId, CancellationToken cancellationToken)
         {
             Reads++;
 
-            return Task.FromResult<IReadOnlyList<ModDto>>([]);
+            return Task.CompletedTask;
         }
 
         public bool IsLoaded(Guid repoId) => Loaded.Contains(repoId);

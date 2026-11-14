@@ -6,9 +6,11 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Repos;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Users;
 using ModsDude.Client.Wpf.Account;
+using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Sidebar;
@@ -38,6 +40,8 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     private readonly IUserAvatarFactory _avatarFactory;
     private readonly TimeProvider _time;
     private readonly ILogger<RepoMembersPageViewModel> _logger;
+    private readonly ISavegameStore _savegames;
+    private readonly IRepoDeparture _departure;
     private readonly RequestIdKeeper<(RepoMembershipLevel Level, int? MaximumUses, TimeSpan? Expiry)> _inviteRequestIds = new();
 
     private IReadOnlyList<RepoMemberDto> _fetchedMembers = [];
@@ -57,9 +61,14 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         IToastService toasts,
         IUserAvatarFactory avatarFactory,
         TimeProvider time,
-        ILogger<RepoMembersPageViewModel> logger)
+        ILogger<RepoMembersPageViewModel> logger,
+        ISavegameStore savegames,
+        IRepoDeparture departure)
     {
         _repo = repo;
+        _savegames = savegames;
+        _departure = departure;
+
         _membershipService = membershipService;
         _inviteService = inviteService;
         _repoStore = repoStore;
@@ -381,41 +390,73 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
 
     private async Task KickAsync(RepoMemberViewModel member)
     {
-        var modal = member.IsSelf
-            ? new ConfirmationModalViewModel(
-                $"Leave {_repo.Name}?",
-                "You lose access to its mods and profiles. Getting back in needs a new invite from somebody still in it.",
-                IconKind.Warning,
-                "Leave",
-                "Stay")
-            : ConfirmationModalViewModel.ConfirmDelete(member.DisplayName);
-
-        await _modalService.Show(modal);
-
-        if (!modal.Result)
-        {
-            return;
-        }
-
         try
         {
-            await _membershipService.KickMember(_repo.Id, member.UserId, CancellationToken.None);
-
             if (member.IsSelf)
             {
                 // This page and the repo it belongs to are about to stop existing for this user, so
                 // there is nothing here to reload - refreshing the shell's list is what takes them
                 // both away.
-                await _repoStore.RefreshRepos(CancellationToken.None);
+                await _departure.RunAsync(
+                    _repo,
+                    RepoDepartureKind.Leave,
+                    async ct =>
+                    {
+                        await _membershipService.KickMember(_repo.Id, member.UserId, ct);
+                        await _repoStore.RefreshRepos(ct);
+                    },
+                    CancellationToken.None);
+
                 return;
             }
 
+            if (await ConfirmRemoveAsync(member) is false)
+            {
+                return;
+            }
+
+            await _membershipService.KickMember(_repo.Id, member.UserId, CancellationToken.None);
             await ReloadMembers(CancellationToken.None);
         }
         catch (Exception ex)
         {
             await ShowError(ex);
         }
+    }
+
+    /// <summary>Names what the member loses, and the savegames that stay checked out to them.</summary>
+    private async Task<bool> ConfirmRemoveAsync(RepoMemberViewModel member)
+    {
+        await _savegames.EnsureLoadedAsync(_repo.Id, CancellationToken.None);
+
+        var held = _savegames.Live(_repo.Id)
+            .Where(x => x.Checkout is { EndedAt: null } checkout && checkout.User.Id == member.UserId)
+            .Select(x => x.Name)
+            .Order(StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        var title = $"Remove {member.DisplayName} from {_repo.Name}?";
+        var message = $"{member.DisplayName} loses access to its mods, profiles and savegames.";
+
+        if (held.Count == 0)
+        {
+            var confirmation = new ConfirmationModalViewModel(title, message, IconKind.Warning, "Remove", "Keep");
+
+            await _modalService.Show(confirmation);
+
+            return confirmation.Result;
+        }
+
+        var withHeld = new ConfirmLossModalViewModel(
+            title,
+            $"{message} These savegames stay checked out to them:",
+            held,
+            "Remove",
+            "Keep");
+
+        await _modalService.Show(withHeld);
+
+        return withHeld.Choice is ConfirmLossChoice.Confirm;
     }
 
     private async Task CopyInviteCodeAsync(RepoInviteViewModel invite)

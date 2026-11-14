@@ -32,4 +32,8 @@ public interface IModImageCache
     /// </remarks>
     /// <returns>The bytes reclaimed.</returns>
     long Clear();
+
+    /// <summary>Empties the cache's files out of <paramref name="path"/>, a folder it used to live in.</summary>
+    /// <inheritdoc cref="Clear()"/>
+    long Clear(string path);
 }

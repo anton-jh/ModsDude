@@ -52,6 +52,22 @@ public class ModImageCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task The_folder_the_cache_moved_away_from_is_emptied_and_the_new_one_is_left_alone()
+    {
+        var cache = CreateCache();
+        var old = _directory;
+
+        await cache.WriteAsync("old", [1, 2], CancellationToken.None);
+
+        _settings.Path = Path.Combine(_directory, "moved");
+        await cache.WriteAsync("new", [3], CancellationToken.None);
+
+        Assert.Equal(2, cache.Clear(old));
+        Assert.Empty(Directory.EnumerateFiles(old));
+        Assert.Equal<byte[]>([3], await cache.TryReadAsync("new", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task A_key_that_was_never_written_reads_as_a_miss()
     {
         var cache = CreateCache();

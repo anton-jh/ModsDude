@@ -441,7 +441,7 @@ public sealed class ModCatalog : IDisposable
     {
         lock (_lock)
         {
-            return _registeredLoad ??= LoadRegisteredModsAsync();
+            return _registeredLoad = Reusable(_registeredLoad) ?? LoadRegisteredModsAsync();
         }
     }
 
@@ -452,9 +452,12 @@ public sealed class ModCatalog : IDisposable
     {
         lock (_lock)
         {
-            return _usageLoad ??= LoadUsageAsync();
+            return _usageLoad = Reusable(_usageLoad) ?? LoadUsageAsync();
         }
     }
+
+    /// <summary>A read still running or answered, which every caller shares. A failed one is read again.</summary>
+    private static Task<T>? Reusable<T>(Task<T>? load) => load is { IsFaulted: false, IsCanceled: false } ? load : null;
 
     /// <summary>
     /// Which registered versions the repo's profiles pin, and how many pin each - in their newest

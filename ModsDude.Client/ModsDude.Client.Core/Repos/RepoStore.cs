@@ -39,7 +39,7 @@ public class RepoStore(
         => _knownIds is FrozenSet<Guid> known && known.Contains(repoId) is false;
 
     public Task RefreshRepos(CancellationToken cancellationToken)
-        => _loads.ReadAsync(default, repoClient.GetMyReposV1Async, ApplyList, cancellationToken);
+        => _loads.RefreshAsync(default, repoClient.GetMyReposV1Async, ApplyList, cancellationToken);
 
     private void ApplyList(ICollection<RepoMembershipDto> reposFromApi)
     {
@@ -96,7 +96,10 @@ public class RepoStore(
         {
             if (gameRepository.Find(repo.Scope) is Game game)
             {
-                gameRepository.RefreshTargets(game, repo.Adapter);
+                if (gameRepository.RefreshTargets(game, repo.Adapter) is (TargetRefresh.Busy or TargetRefresh.HoldsSavegame) and var outcome)
+                {
+                    logger.LogInformation("Left the folders of the game of repo {Repo} as they were: {Outcome}", repo.Id, outcome);
+                }
             }
             else
             {

@@ -157,7 +157,7 @@ public sealed class ChangePoll(
     {
         foreach (var repo in poll.Answer.Where(x => poll.Moved(x, c => c.Mods) && modStore.IsLoaded(x.RepoId)))
         {
-            await poll.AttemptAsync(ct => modStore.GetAsync(repo.RepoId, ct), $"the mods of repo {repo.RepoId}");
+            await poll.AttemptAsync(ct => modStore.RefreshAsync(repo.RepoId, ct), $"the mods of repo {repo.RepoId}");
         }
     }
 

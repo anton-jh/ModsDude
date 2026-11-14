@@ -67,6 +67,9 @@ public sealed record ProfileSaveOutcome(ProfileSaveStatus Status, string Message
     public ToastSeverity ApplySeverity { get; init; } = ToastSeverity.Info;
 
     public bool Succeeded => Status is ProfileSaveStatus.Saved;
+
+    /// <summary>Whether the draft the save was made from is no longer worth keeping: the page reads the profile again.</summary>
+    public bool NeedsReload => Status is ProfileSaveStatus.Superseded;
 }
 
 

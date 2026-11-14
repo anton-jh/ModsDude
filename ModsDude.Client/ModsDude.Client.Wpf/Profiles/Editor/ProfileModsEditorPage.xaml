@@ -268,6 +268,20 @@
                     <TextBlock Text="This profile is being saved. The editor opens for changes when the save is done." />
                 </Border>
 
+                <Border Grid.Row="1"
+                        Margin="0 0 0 12"
+                        Padding="12 8"
+                        CornerRadius="4"
+                        Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                        Visibility="{Binding HasLoadFailed, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right"
+                                Content="Load again"
+                                Command="{Binding LoadAgainCommand}" />
+                        <TextBlock VerticalAlignment="Center" Text="The mod list could not be loaded." />
+                    </DockPanel>
+                </Border>
+
                 <Grid Grid.Row="2" ColumnDefinitions="* 16 *">
 
                     <!-- What the profile does not hold: everything the enabled sources offer. -->

@@ -6,4 +6,8 @@
         <shared:NameModal />
     </DataTemplate>
 
+    <DataTemplate DataType="{x:Type shared:ConfirmLossModalViewModel}">
+        <shared:ConfirmLossModal />
+    </DataTemplate>
+
 </ResourceDictionary>

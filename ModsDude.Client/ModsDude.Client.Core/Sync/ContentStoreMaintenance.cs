@@ -170,6 +170,25 @@ public sealed class ContentStoreMaintenance(
         return new StoreVerificationReport(result, FindAffectedFolders(store, result.Corrupt));
     }
 
+    public async Task MoveAsync(
+        ContentStore store,
+        string destination,
+        Action commit,
+        IProgress<ContentStoreMoveProgress>? progress,
+        CancellationToken cancellationToken,
+        Action? onWaiting = null)
+    {
+        // Held until the new folder is written down and the old one is gone, so no sync reads from or
+        // writes into either half of a store in motion.
+        using var stop = LinkToSession(cancellationToken);
+        using var lease = await Claim(store, "Moving", onWaiting, stop.Token);
+
+        await Task.Run(
+            () => new ContentStoreMove(store, destination, commit, progress, logger)
+                .RunAsync(FileSystemHelper.CanRenameDirectory(store.RootPath, destination), stop.Token),
+            stop.Token);
+    }
+
     private CancellationTokenSource LinkToSession(CancellationToken cancellationToken)
         => CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Stopping);
 

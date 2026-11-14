@@ -213,25 +213,27 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     [ObservableProperty]
     private PinnedModFilter _pinnedFilter;
 
+    /// <summary>Whether the catalog is being read. The draft may still be edited meanwhile.</summary>
     [ObservableProperty]
     private bool _isLoading = true;
 
-    [ObservableProperty]
-    private bool _isSaving;
-
-    /// <summary>A save of this profile that this page did not start is running; the page waits for it.</summary>
-    [ObservableProperty]
-    private bool _isWaitingForSave;
-
     /// <summary>
-    /// Whether nothing may change the draft. The lists stay scrollable and readable; every control that
-    /// writes binds to <see cref="CanEdit"/>.
+    /// What the page is doing with the draft. Only <see cref="EditorPhase.Editing"/> lets anything change
+    /// it; the lists stay scrollable and readable, and every control that writes binds to <see cref="CanEdit"/>.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEdit))]
-    private bool _isReadOnly;
+    [NotifyPropertyChangedFor(nameof(IsWaitingForSave))]
+    [NotifyPropertyChangedFor(nameof(HasLoadFailed))]
+    private EditorPhase _phase = EditorPhase.Loading;
 
-    public bool CanEdit => IsReadOnly is false;
+    public bool CanEdit => Phase is EditorPhase.Editing;
+
+    /// <summary>A save of this profile that this page did not start is running; the page waits for it.</summary>
+    public bool IsWaitingForSave => Phase is EditorPhase.WaitingForSave;
+
+    /// <summary>The profile could not be read, so there is no draft to edit until it is read again.</summary>
+    public bool HasLoadFailed => Phase is EditorPhase.LoadFailed;
 
     /// <summary>What to call this save in the profile's history. Optional.</summary>
     [ObservableProperty]
@@ -305,7 +307,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     {
         _state = ProfileEditorState.Compute(Inputs());
 
-        var pickable = IsReadOnly is false;
+        var pickable = CanEdit;
 
         Sync(AvailableRows, _availableRows, _state.Available, _state.AvailableShown, x => x.ModId,
             x => Watched(new AvailableModRowViewModel(_repo.Id, x, _itemFactory, OnVersionPicked), AvailableSelection),
@@ -338,10 +340,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         ShowIgnored,
         ApplyTarget is not null);
 
-    /// <summary>Records an edit of the draft as one step, then shows it.</summary>
+    /// <summary>Records an edit of the draft as one step, then shows it. Nothing is recorded while the draft may not change.</summary>
     private void Commit(ProfileDraft draft, string description)
     {
-        if (draft.IsSameAs(Draft))
+        if (CanEdit is false || draft.IsSameAs(Draft))
         {
             return;
         }
@@ -378,7 +380,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             var snapshot = await _catalog.GetAsync(_cancellation.Token);
             var catalogView = new ProfileEditorCatalog(snapshot, _repo.Adapter.VersionComparer);
 
-            await OnUiThreadAsync(() =>
+            await OnPageAsync(() =>
             {
                 // A later read was asked for while this one ran, and it is the one that describes now.
                 if (generation != _recomposeGeneration)
@@ -513,7 +515,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     partial void OnPinnedFilterChanged(PinnedModFilter value) => Refresh();
 
-    partial void OnIsReadOnlyChanged(bool value) => Refresh();
+    partial void OnPhaseChanged(EditorPhase value) => Refresh();
 
     partial void OnApplyTargetChanged(Game? value) => Summary = Summarize();
 
@@ -534,6 +536,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     private Task Step(Func<ProfileEditorSnapshot> move)
     {
+        if (CanEdit is false)
+        {
+            return Task.CompletedTask;
+        }
+
         var loaded = Current.Loaded;
 
         move();
@@ -702,7 +709,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     private void OnLockToggled(PinnedModRowViewModel row, bool locked)
     {
-        if (row.IsTakenOut || IsReadOnly)
+        if (row.IsTakenOut || CanEdit is false)
         {
             row.RestoreLock();
 
@@ -725,7 +732,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
         if (row is not PinnedModRowViewModel pinned
             || pinned.IsTakenOut
-            || IsReadOnly
+            || CanEdit is false
             || (pinned.IsLocked && await ConfirmLockedVersionChangeAsync(pinned, option.Version.VersionId) is false))
         {
             return;
@@ -957,42 +964,56 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     private bool CanSaveOnly() => CanSave() && Summary.WillApply;
 
+    /// <summary>
+    /// Follows a save to its end. The save belongs to the profile rather than to this page, so a page
+    /// closed meanwhile stops following it and touches nothing.
+    /// </summary>
     private async Task WatchAsync(Task<ProfileSaveOutcome> completion, bool applied)
     {
-        IsSaving = true;
-        IsReadOnly = true;
+        Phase = EditorPhase.Saving;
+
+        ProfileSaveOutcome outcome;
 
         try
         {
-            var outcome = await completion;
+            outcome = await completion.WaitAsync(_cancellation.Token);
+        }
+        catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
+        {
+            return;
+        }
 
-            // A failed save leaves the draft as it is, still unsaved, with the rows that did not make it
-            // marked - so pressing Save again once the cause is fixed is the whole recovery.
-            if (outcome.Succeeded is false)
-            {
-                return;
-            }
-
-            if (outcome.RevisionWritten)
-            {
-                VersionDescription = "";
-            }
-
+        // The newer list was chosen over this draft, so it is what the page edits from now on.
+        if (outcome.NeedsReload)
+        {
             await ReloadAsync();
 
-            if (applied && outcome.ApplyMessage is null)
-            {
-                OfferActivation();
-            }
+            return;
         }
-        finally
+
+        // A failed save leaves the draft as it is, still unsaved, with the rows that did not make it
+        // marked - so pressing Save again once the cause is fixed is the whole recovery.
+        if (outcome.Succeeded is false)
         {
-            IsSaving = false;
-            IsReadOnly = false;
+            Phase = EditorPhase.Editing;
+
+            return;
+        }
+
+        if (outcome.RevisionWritten)
+        {
+            VersionDescription = "";
+        }
+
+        await ReloadAsync();
+
+        if (applied && outcome.ApplyMessage is null && CanEdit)
+        {
+            OfferActivation();
         }
     }
 
-    private void OnRunAdvanced() => _ = OnUiThreadAsync(StampMarks);
+    private void OnRunAdvanced() => _ = OnPageAsync(StampMarks);
 
     /// <summary>Puts what the last save reported onto the rows of the versions it imported.</summary>
     private void StampMarks()
@@ -1047,6 +1068,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     {
         try
         {
+            // Not stopped by closing the page: the apply has its own place on the strip.
             var outcome = await _applyService.ActivateAsync(
                 _repo,
                 game,
@@ -1058,7 +1080,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
             if (outcome.Activated)
             {
-                RefreshApplyTargets();
+                await OnPageAsync(RefreshApplyTargets);
             }
 
             _toasts.Show(outcome.Message, outcome.ToastSeverity);
@@ -1071,7 +1093,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
         }
     }
 
-    private void OnLeasesChanged(object? sender, EventArgs e) => _ = OnUiThreadAsync(() =>
+    private void OnLeasesChanged(object? sender, EventArgs e) => _ = OnPageAsync(() =>
     {
         OnSaveBlockChanged();
         NotifyCommands();
@@ -1270,27 +1292,31 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 
     #region Loading
 
-    protected override async Task InitAsync()
+    protected override Task InitAsync() => Application.Current.Dispatcher.InvokeAsync(LoadAsync).Task.Unwrap();
+
+    /// <summary>On the UI thread, like everything else that changes the page.</summary>
+    private async Task LoadAsync()
     {
         // A save of this profile that this page did not start: wait it out read-only, then read what it wrote.
         if (_saveService.Find(_profile.Id) is ProfileSaveRun run)
         {
-            IsWaitingForSave = true;
-            IsReadOnly = true;
+            Phase = EditorPhase.WaitingForSave;
 
             try
             {
-                await run.Completion;
+                await run.Completion.WaitAsync(_cancellation.Token);
             }
-            finally
+            catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
             {
-                IsWaitingForSave = false;
-                IsReadOnly = false;
+                return;
             }
         }
 
         await ReloadAsync();
     }
+
+    [RelayCommand(CanExecute = nameof(HasLoadFailed))]
+    private Task LoadAgain() => ReloadAsync();
 
     protected override void OnInitFailed(Exception ex)
     {
@@ -1301,11 +1327,16 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// Reads the profile from the server and starts a new draft from it: on opening, and after a save.
-    /// What is loaded stays loaded.
+    /// Reads the profile from the server and starts a new draft from it: on opening, after a save, and
+    /// when asked again after a read failed. What is loaded stays loaded. Runs on the UI thread.
     /// </summary>
+    /// <remarks>
+    /// A failed read leaves nothing to edit: a draft based on no revision would save over everything
+    /// the profile pins.
+    /// </remarks>
     private async Task ReloadAsync()
     {
+        Phase = EditorPhase.Loading;
         IsLoading = true;
 
         try
@@ -1316,36 +1347,48 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
             var modList = await modListRead;
             var ignored = await ignoredRead;
 
-            await OnUiThreadAsync(() =>
-            {
-                _basedOn = modList.Revision;
-                _ignoredVersion = ignored.Version;
-                _markedRun = null;
-                _savedDates = modList.Pins.ToDictionary(
-                    x => ModKey.From(x.ModId),
-                    x => new SavedPinDate(ModVersionKey.From(x.ModVersionId), x.Added));
+            _basedOn = modList.Revision;
+            _ignoredVersion = ignored.Version;
+            _markedRun = null;
+            _savedDates = modList.Pins.ToDictionary(
+                x => ModKey.From(x.ModId),
+                x => new SavedPinDate(ModVersionKey.From(x.ModVersionId), x.Added));
 
-                _history.Reset(Current with
-                {
-                    Draft = new ProfileDraft(
-                        OtherProfilesReader.ToPins(modList),
-                        ignored.ModIds.Select(ModKey.From),
-                        ignored.DismissedVersions.Select(x => new ModVersionIdentity(ModKey.From(x.ModId), ModVersionKey.From(x.VersionId))))
-                });
+            _history.Reset(Current with
+            {
+                Draft = new ProfileDraft(
+                    OtherProfilesReader.ToPins(modList),
+                    ignored.ModIds.Select(ModKey.From),
+                    ignored.DismissedVersions.Select(x => new ModVersionIdentity(ModKey.From(x.ModId), ModVersionKey.From(x.VersionId))))
             });
 
-            await RecomposeAsync();
+            Phase = EditorPhase.Editing;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
         {
+            return;
         }
-        finally
+        catch (Exception exception)
         {
+            Phase = EditorPhase.LoadFailed;
             IsLoading = false;
+
+            await _errorReporter.ShowAsync(exception, $"reading the mod list of '{_profile.Name}'");
+
+            return;
         }
+
+        await RecomposeAsync();
     }
 
-    private static Task OnUiThreadAsync(Action work) => Application.Current.Dispatcher.InvokeAsync(work).Task;
+    /// <summary>Runs <paramref name="work"/> on the UI thread, unless the page has been closed by then.</summary>
+    private Task OnPageAsync(Action work) => Application.Current.Dispatcher.InvokeAsync(() =>
+    {
+        if (_cancellation.IsCancellationRequested is false)
+        {
+            work();
+        }
+    }).Task;
 
     #endregion
 
@@ -1439,3 +1482,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IDisposable
 }
 
 
+public enum EditorPhase
+{
+    Loading,
+    LoadFailed,
+    Editing,
+    WaitingForSave,
+    Saving
+}

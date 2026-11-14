@@ -105,4 +105,17 @@ public interface IContentStoreMaintenance
         IProgress<ContentStoreVerificationProgress>? progress,
         CancellationToken cancellationToken,
         Action? onWaiting = null);
+
+    /// <summary>
+    /// Moves the store to <paramref name="destination"/>, calling <paramref name="commit"/> to write the
+    /// new folder down once everything is there and before the old folder is removed.
+    /// </summary>
+    /// <exception cref="Exceptions.UserFriendlyException">The destination holds other files, or lies inside the store.</exception>
+    Task MoveAsync(
+        ContentStore store,
+        string destination,
+        Action commit,
+        IProgress<ContentStoreMoveProgress>? progress,
+        CancellationToken cancellationToken,
+        Action? onWaiting = null);
 }

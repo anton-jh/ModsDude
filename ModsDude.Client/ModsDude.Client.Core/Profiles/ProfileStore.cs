@@ -75,14 +75,12 @@ public sealed class ProfileStore(
         => Find(profile.RepoId, profile.ProfileId)?.HeadRevision;
 
     public Task EnsureLoadedAsync(Guid repoId, CancellationToken cancellationToken)
-        => IsLoaded(repoId) ? Task.CompletedTask : RefreshAsync(repoId, cancellationToken);
+        => IsLoaded(repoId)
+            ? Task.CompletedTask
+            : _loads.ReadAsync(repoId, ct => profilesClient.GetProfilesV1Async(repoId, ct), profiles => Reconcile(repoId, profiles), cancellationToken);
 
     public Task RefreshAsync(Guid repoId, CancellationToken cancellationToken)
-        => _loads.ReadAsync(
-            repoId,
-            ct => profilesClient.GetProfilesV1Async(repoId, ct),
-            profiles => Reconcile(repoId, profiles),
-            cancellationToken);
+        => _loads.RefreshAsync(repoId, ct => profilesClient.GetProfilesV1Async(repoId, ct), profiles => Reconcile(repoId, profiles), cancellationToken);
 
     public async Task<Profile> CreateAsync(
         Guid repoId,

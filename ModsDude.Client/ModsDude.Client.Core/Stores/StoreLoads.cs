@@ -10,6 +10,7 @@ namespace ModsDude.Client.Core.Stores;
 /// <item>One read per key at a time. A caller arriving while one is out waits for that one.</item>
 /// <item>A read never lands on top of a write the store applied while the read was out. It is read
 /// again instead, because its answer may predate the write.</item>
+/// <item>A refresh is answered by a read that started after it was asked for.</item>
 /// <item>Answers are applied on the <see cref="IStoreDispatcher"/> thread, and only for the user who
 /// asked: <see cref="Reset"/> cancels every read and drops every answer still on its way.</item>
 /// </list>
@@ -63,6 +64,38 @@ public sealed class StoreLoads<TKey>(IStoreDispatcher dispatcher, ILogger logger
         }
 
         return running.WaitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads <paramref name="key"/> with an answer from after this call: a read already out may have
+    /// been answered before whatever made this necessary, so it is waited out and the key read again.
+    /// </summary>
+    public async Task RefreshAsync<T>(
+        TKey key,
+        Func<CancellationToken, Task<T>> read,
+        Action<T> apply,
+        CancellationToken cancellationToken)
+    {
+        Task? running;
+
+        lock (_lock)
+        {
+            running = _running.GetValueOrDefault(key);
+        }
+
+        if (running is not null)
+        {
+            try
+            {
+                await running.WaitAsync(cancellationToken);
+            }
+            catch (Exception) when (cancellationToken.IsCancellationRequested is false)
+            {
+                // Its outcome is its own callers'; this one only needed it out of the way.
+            }
+        }
+
+        await ReadAsync(key, read, apply, cancellationToken);
     }
 
     /// <summary>
@@ -221,12 +254,9 @@ public sealed class StoreLoads<TKey>(IStoreDispatcher dispatcher, ILogger logger
 
             if (attempt == _maxAttempts)
             {
-                logger.LogWarning(
-                    "Gave up reading {Key} after {Attempts} reads that each crossed a write; the next read brings it in.",
-                    key,
-                    attempt);
+                logger.LogWarning("Gave up reading {Key} after {Attempts} reads that each crossed a write.", key, attempt);
 
-                return;
+                throw new StoreReadSupersededException($"Gave up reading {key} after {attempt} reads that each crossed a write.");
             }
         }
     }
@@ -271,3 +301,7 @@ public sealed class StoreLoads<TKey>(IStoreDispatcher dispatcher, ILogger logger
         UserChanged
     }
 }
+
+
+/// <summary>Every read of a key crossed a write to it, so nothing was applied. The next read brings it in.</summary>
+public sealed class StoreReadSupersededException(string message) : Exception(message);

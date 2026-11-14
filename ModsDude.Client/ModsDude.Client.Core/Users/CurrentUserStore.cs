@@ -26,13 +26,13 @@ public sealed class CurrentUserStore(
             return held;
         }
 
-        await RefreshAsync(cancellationToken);
+        await _loads.ReadAsync(default, usersClient.GetCurrentUserV1Async, Set, cancellationToken);
 
         return _user ?? throw new OperationCanceledException("The user changed while they were being read.");
     }
 
     public Task RefreshAsync(CancellationToken cancellationToken)
-        => _loads.ReadAsync(default, usersClient.GetCurrentUserV1Async, Set, cancellationToken);
+        => _loads.RefreshAsync(default, usersClient.GetCurrentUserV1Async, Set, cancellationToken);
 
     public Task<CurrentUserDto> WriteAsync(Func<CancellationToken, Task<CurrentUserDto>> send, CancellationToken cancellationToken)
         => _loads.WriteAsync(default, send, Set, cancellationToken);

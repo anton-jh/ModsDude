@@ -48,7 +48,10 @@ public sealed class RemoteSourceLookup(IRemoteModSource source, IErrorReporter e
 
     public RemoteSourceAnswers Answers(bool isEnabled) => new(source, isEnabled, [.. _current.Values], [.. _retained.Values]);
 
-    /// <summary>Asks about whichever of <paramref name="mods"/> it has not been asked about.</summary>
+    /// <summary>
+    /// Asks about whichever of <paramref name="mods"/> it has not been asked about. Mods asked for while a
+    /// lookup is out are asked about once it is answered.
+    /// </summary>
     public void LookUp(IReadOnlyCollection<ModKey> mods)
     {
         _known = mods;
@@ -120,5 +123,8 @@ public sealed class RemoteSourceLookup(IRemoteModSource source, IErrorReporter e
         }
 
         Changed?.Invoke();
+
+        // Whatever was asked for while this lookup was out.
+        LookUp(_known);
     }
 }

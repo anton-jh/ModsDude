@@ -49,6 +49,8 @@ public sealed record ProfileEditorState
     public int DownloadCount => Pinned.Count(x => x.IsPending && x.Version.Download is not null);
 
 
+    private static readonly IComparer<ModKey> _byModId = Comparer<ModKey>.Create((left, right) => string.CompareOrdinal(left.Value, right.Value));
+
     public static ProfileEditorState Compute(ProfileEditorInputs inputs)
     {
         var offered = OfferedVersions(inputs);
@@ -84,9 +86,9 @@ public sealed record ProfileEditorState
     /// What the enabled sources offer, by mod: what they hold, what the enabled remote sources offer, and
     /// what the enabled profiles pin.
     /// </summary>
-    private static Dictionary<ModKey, HashSet<ModVersionKey>> OfferedVersions(ProfileEditorInputs inputs)
+    private static SortedDictionary<ModKey, HashSet<ModVersionKey>> OfferedVersions(ProfileEditorInputs inputs)
     {
-        var offered = new Dictionary<ModKey, HashSet<ModVersionKey>>();
+        var offered = new SortedDictionary<ModKey, HashSet<ModVersionKey>>(_byModId);
 
         void Offer(ModKey modId, ModVersionKey versionId)
         {
@@ -116,7 +118,7 @@ public sealed record ProfileEditorState
 
     private static List<AvailableModRow> AvailableRows(
         ProfileEditorInputs inputs,
-        Dictionary<ModKey, HashSet<ModVersionKey>> offered)
+        SortedDictionary<ModKey, HashSet<ModVersionKey>> offered)
     {
         var catalog = inputs.Catalog;
         var draft = inputs.Draft;
@@ -144,7 +146,7 @@ public sealed record ProfileEditorState
                     ? AvailableModStatus.NewVersion
                     : AvailableModStatus.New;
 
-            var key = new ModListSortKey(selected.Name, selected.Registered, selected.Attributes);
+            var key = new ModListSortKey(modId, selected.Name, selected.Registered, selected.Attributes);
 
             rows.Add(new AvailableModRow(
                 modId,
@@ -164,12 +166,13 @@ public sealed record ProfileEditorState
 
     private static (List<PinnedModRow> Rows, ProfileModUpdatePlan Updates) PinnedRows(
         ProfileEditorInputs inputs,
-        Dictionary<ModKey, HashSet<ModVersionKey>> offered)
+        SortedDictionary<ModKey, HashSet<ModVersionKey>> offered)
     {
         var catalog = inputs.Catalog;
         var draft = inputs.Draft;
 
         var effective = draft.Pins.Values
+            .Order(Comparer<ProfileModPin>.Create((left, right) => _byModId.Compare(left.ModId, right.ModId)))
             .Select(x => x with { Lock = new ProfileModLock(Resolve(catalog, x).Locked, x.Lock.ByProfile) })
             .ToList();
 
@@ -182,7 +185,7 @@ public sealed record ProfileEditorState
 
         var rows = new List<PinnedModRow>();
 
-        foreach (var modId in draft.AllMods)
+        foreach (var modId in draft.AllMods.Order(_byModId))
         {
             var pin = effectiveByMod.GetValueOrDefault(modId);
             var saved = draft.Saved.GetValueOrDefault(modId);
@@ -208,7 +211,7 @@ public sealed record ProfileEditorState
                     && catalog.IsVisible(x)
                     && set.CouldNotCompareToNewest(x.VersionId));
 
-            var key = new ModListSortKey(version.Name, added, version.Attributes);
+            var key = new ModListSortKey(modId, version.Name, added, version.Attributes);
 
             rows.Add(new PinnedModRow(
                 modId,
@@ -313,8 +316,8 @@ public sealed record ProfileEditorState
     }
 
     private static ModListSortKey SortKey(AvailableModRow row)
-        => new(row.Version.Name, row.Version.Registered, row.Version.Attributes);
+        => new(row.ModId, row.Version.Name, row.Version.Registered, row.Version.Attributes);
 
     private static ModListSortKey SortKey(PinnedModRow row)
-        => new(row.Version.Name, row.Added, row.Version.Attributes);
+        => new(row.ModId, row.Version.Name, row.Added, row.Version.Attributes);
 }

@@ -137,12 +137,7 @@ public static class FileSystemHelper
     /// <exception cref="Exception">The folder was not moved, and is still at <paramref name="source"/>.</exception>
     public static void MoveDirectory(string source, string destination, ILogger log)
     {
-        var fullSource = Path.GetFullPath(source);
-        var fullDestination = Path.GetFullPath(destination);
-
-        // Directory.Move refuses paths whose roots differ as text, even when a junction or subst drive puts them on one volume.
-        if (string.Equals(Path.GetPathRoot(fullSource), Path.GetPathRoot(fullDestination), StringComparison.OrdinalIgnoreCase)
-            && AreOnSameVolume(fullSource, Path.GetDirectoryName(fullDestination)!))
+        if (CanRenameDirectory(source, destination))
         {
             Directory.Move(source, destination);
 
@@ -168,6 +163,17 @@ public static class FileSystemHelper
         {
             log.LogWarning(exception, "Moved {Source} to {Destination}, but could not remove what was left at {Source}.", source, destination, source);
         }
+    }
+
+    /// <summary>Whether moving a folder from <paramref name="source"/> to <paramref name="destination"/> is a rename.</summary>
+    public static bool CanRenameDirectory(string source, string destination)
+    {
+        var fullSource = Path.GetFullPath(source);
+        var fullDestination = Path.GetFullPath(destination);
+
+        // Directory.Move refuses paths whose roots differ as text, even when a junction or subst drive puts them on one volume.
+        return string.Equals(Path.GetPathRoot(fullSource), Path.GetPathRoot(fullDestination), StringComparison.OrdinalIgnoreCase)
+            && AreOnSameVolume(fullSource, Path.GetDirectoryName(fullDestination)!);
     }
 
     private static void CopyDirectory(string source, string destination)

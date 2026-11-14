@@ -1,9 +1,8 @@
-using ModsDude.Client.Core.Repos;
-
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Games;
 using ModsDude.Client.Wpf.Shared;
@@ -20,6 +19,7 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
     private readonly INavigationLockService _navigationLockService;
     private readonly IModalService _modalService;
     private readonly IToastService _toasts;
+    private readonly IRepoDeparture _departure;
 
 
     public RepoAdminPageViewModel(
@@ -28,9 +28,11 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         INavigationLockService navigationLockService,
         IModalService modalService,
         IToastService toasts,
-        IFilePickerService filePickerService)
+        IFilePickerService filePickerService,
+        IRepoDeparture departure)
     {
         _repo = repo;
+        _departure = departure;
         _repoStore = repoStore;
         _navigationLockService = navigationLockService;
         _modalService = modalService;
@@ -81,11 +83,16 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
     [RelayCommand]
     public async Task ArchiveRepo(CancellationToken cancellationToken)
     {
-        if (await ConfirmArchive())
-        {
-            _navigationLockService.ReleaseLock(this);
-            await _repoStore.ArchiveRepo(_repo.Id, cancellationToken);
-        }
+        await _departure.RunAsync(
+            _repo,
+            RepoDepartureKind.Archive,
+            ct =>
+            {
+                _navigationLockService.ReleaseLock(this);
+
+                return _repoStore.ArchiveRepo(_repo.Id, ct);
+            },
+            cancellationToken);
     }
 
     public void Dispose()
@@ -121,14 +128,6 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         return errors;
     }
 
-    private async Task<bool> ConfirmArchive()
-    {
-        var modal = ConfirmationModalViewModel.ConfirmArchive(OriginalName, "repo");
-
-        await _modalService.Show(modal);
-
-        return modal.Result;
-    }
 
     private void OnBaseSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
