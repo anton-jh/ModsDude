@@ -2,14 +2,17 @@ using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Accounts;
 using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.Builds;
+using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Exceptions;
+using ModsDude.Client.Wpf.Account;
 
 namespace ModsDude.Client.Wpf.Shell.Modals;
 
 /// <inheritdoc cref="IErrorReporter"/>
 public sealed class ErrorReporter(
     ILogger<ErrorReporter> logger,
-    Lazy<IModalService> modalService)
+    Lazy<IModalService> modalService,
+    IServerConnection serverConnection)
     : IErrorReporter
 {
     public ErrorModalViewModel Record(Exception exception, string? context = null)
@@ -66,6 +69,15 @@ public sealed class ErrorReporter(
         if (SignInRequiredException.Is(exception))
         {
             logger.LogWarning(exception, "Not shown while {Context}: signing in again is needed.", context ?? "working");
+
+            return Task.CompletedTask;
+        }
+
+        // The offline state already covers the window. Only while it is up: a sign-in server that
+        // does not answer never raises it, and that failure must still be seen.
+        if (serverConnection.IsOnline is false && ConnectionFailure.Is(exception, AuthenticationService.IsUnreachable))
+        {
+            logger.LogWarning(exception, "Not shown while {Context}: the server is unreachable.", context ?? "working");
 
             return Task.CompletedTask;
         }
