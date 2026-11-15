@@ -62,8 +62,8 @@ public partial class ModSourceViewModel : ObservableObject
     public string Name => Source.Name;
     public string Path => Source.Path;
 
-    /// <summary>A folder the user added for this session. Never persisted, and removable.</summary>
-    public bool IsAdHoc => Source.Kind is ModSourceKind.AdHoc;
+    /// <summary>Whether this chip is a folder on this machine, which can be opened in Explorer.</summary>
+    public bool IsFolder => Source.Kind is ModSourceKind.Game or ModSourceKind.Downloads or ModSourceKind.AdHoc;
 
     public bool CanRemove { get; }
 
@@ -72,12 +72,6 @@ public partial class ModSourceViewModel : ObservableObject
     /// nothing to rescan, and what it contributes is every version the repo has registered.
     /// </summary>
     public bool IsRepo => Source.Kind is ModSourceKind.Repo;
-
-    /// <summary>
-    /// Whether this chip is another profile. Like the repo it costs no scan - a profile's pins are
-    /// registered versions, so the catalog already holds every one of them.
-    /// </summary>
-    public bool IsProfile => Source.Kind is ModSourceKind.Profile;
 
     /// <summary>Whether this chip is a remote source, whose versions a save downloads.</summary>
     public bool IsRemote => Source.Kind is ModSourceKind.Remote;

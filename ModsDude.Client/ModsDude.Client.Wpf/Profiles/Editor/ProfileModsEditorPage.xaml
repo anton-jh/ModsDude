@@ -340,7 +340,9 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </Grid>
 
-                        <!-- The sources. A ✕ unloads one, taking everything it supplied. -->
+                        <!-- The sources. A ✕ unloads one, taking everything it supplied. A folder
+                             opens in Explorer from its menu, even while editing is locked, since
+                             that changes nothing. -->
                         <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0 0 0 8" IsEnabled="{Binding CanEdit}">
 
                             <ItemsControl ItemsSource="{Binding Sources.Chips}">
@@ -355,7 +357,17 @@
                                                       Margin="0 0 6 6"
                                                       ToolTip="{Binding Tooltip}"
                                                       ToolTipService.ShowDuration="20000"
-                                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}">
+                                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                                      Tag="{Binding DataContext.Sources, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                      ContextMenuService.IsEnabled="{Binding IsFolder}"
+                                                      ContextMenuService.ShowOnDisabled="True">
+                                            <ToggleButton.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Open in Explorer"
+                                                              Command="{Binding PlacementTarget.Tag.OpenInExplorerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              CommandParameter="{Binding}" />
+                                                </ContextMenu>
+                                            </ToggleButton.ContextMenu>
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding Name}"
                                                            MaxWidth="160"

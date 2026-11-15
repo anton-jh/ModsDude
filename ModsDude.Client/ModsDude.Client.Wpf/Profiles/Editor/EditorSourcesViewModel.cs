@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
@@ -307,6 +308,26 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
         await _commit(
             new ProfileEditorSnapshot(snapshot.Draft.Remove(dependent), snapshot.Loaded.Remove(chip.Source.Id)),
             $"Unloaded {chip.Name}");
+    }
+
+    [RelayCommand]
+    private async Task OpenInExplorer(ModSourceViewModel? chip)
+    {
+        if (chip is not { IsFolder: true })
+        {
+            return;
+        }
+
+        try
+        {
+            ExplorerFolder.Open(chip.Path);
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(
+                new UserFriendlyException($"Could not open {chip.Name}", inner: exception),
+                $"opening the source folder {chip.Path} in Explorer");
+        }
     }
 
 
