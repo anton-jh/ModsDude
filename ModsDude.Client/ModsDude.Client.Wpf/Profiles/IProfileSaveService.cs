@@ -16,10 +16,10 @@ public interface IProfileSaveService
     bool IsSaving(Guid profileId);
 
     /// <summary>
-    /// Whether an import into this repo would be refused right now, and by what. Read by an editor of
-    /// a <em>different</em> profile, whose Save is only blocked if it has mods to import.
+    /// Whether an import into this repo would be refused right now. An editor's Save is only blocked
+    /// by it while the draft has mods to import.
     /// </summary>
-    string? DescribeImportBusy(Guid repoId);
+    bool IsImportBusy(Guid repoId);
 
     /// <summary>
     /// Imports whatever the draft pins and the repo does not hold, writes the revision, re-applies,

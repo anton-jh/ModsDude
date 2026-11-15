@@ -237,7 +237,7 @@ public sealed class ProfileSaveService(
 
     public bool IsSaving(Guid profileId) => leases.IsHeld(ResourceKeys.Profile(profileId));
 
-    public string? DescribeImportBusy(Guid repoId) => imports.DescribeBusy(repoId);
+    public bool IsImportBusy(Guid repoId) => imports.IsBusy(repoId);
 
     public ProfileSaveRun Start(ProfileSaveRequest request)
     {

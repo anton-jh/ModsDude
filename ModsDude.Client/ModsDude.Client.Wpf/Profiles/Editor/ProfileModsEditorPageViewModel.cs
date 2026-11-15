@@ -294,12 +294,11 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     }
 
     /// <summary>Whether a save could import what the draft holds, which another import into this repo can block.</summary>
-    public bool CanImportHere => _state.PendingCount == 0 || _saveService.DescribeImportBusy(_repo.Id) is null;
+    public bool CanImportHere => _state.PendingCount == 0 || _saveService.IsImportBusy(_repo.Id) is false;
 
+    /// <summary>Only while editing: during this page's own save, the import holding the repo is the save's.</summary>
     public string? SaveBlockedReason
-        => _state.PendingCount > 0 && _saveService.DescribeImportBusy(_repo.Id) is string holder
-            ? $"{(_state.PendingCount == 1 ? "1 mod here needs importing" : $"{_state.PendingCount} mods here need importing")}, and {holder.ToLowerInvariant()}."
-            : null;
+        => CanEdit && CanImportHere is false ? "Another import into this repo is currently running." : null;
 
     public bool HasSaveBlockedReason => SaveBlockedReason is not null;
 
