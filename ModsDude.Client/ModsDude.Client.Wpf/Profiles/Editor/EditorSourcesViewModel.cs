@@ -16,8 +16,8 @@ using System.Collections.ObjectModel;
 namespace ModsDude.Client.Wpf.Profiles.Editor;
 
 /// <summary>
-/// Where the profile mod editor's versions come from: the repo, the game's remote sources, the game's
-/// folders, Downloads, folders added for the session, and other profiles - as a row of chips.
+/// Where the profile mod editor's versions come from: the repo, the game's folders, the game's remote
+/// sources, Downloads, folders added for the session, and other profiles - as a row of chips.
 /// </summary>
 /// <remarks>
 /// Which sources are loaded is part of the editor's undo history, so it is read from the page and
@@ -137,6 +137,11 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
                 null),
             OnChipToggled));
 
+        var scanned = view.Snapshot.Sources.ToDictionary(x => x.Source.Id);
+        var folders = _catalog.GetSources();
+
+        AddFolderChips(folders.Where(x => x.Kind is ModSourceKind.Game), scanned);
+
         foreach (var lookup in _remote)
         {
             var enabled = _standby.Contains(lookup.Id) is false;
@@ -152,9 +157,20 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
                 detail: lookup.Status));
         }
 
-        var scanned = view.Snapshot.Sources.ToDictionary(x => x.Source.Id);
+        AddFolderChips(folders.Where(x => x.Kind is not ModSourceKind.Game), scanned);
 
-        foreach (var source in _catalog.GetSources())
+        foreach (var profile in _profiles.Values.Where(x => Loaded.Contains(x.Source.Id)))
+        {
+            Chips.Add(new ModSourceViewModel(
+                new ModSourceStatus(profile.Source, IsEnabled(profile.Source.Id), profile.Pins.Count, null),
+                OnChipToggled,
+                canUnload: true));
+        }
+    }
+
+    private void AddFolderChips(IEnumerable<ModSource> sources, IReadOnlyDictionary<ModSourceId, ModSourceStatus> scanned)
+    {
+        foreach (var source in sources)
         {
             var loaded = Loaded.Contains(source.Id);
 
@@ -170,14 +186,6 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
                 OnChipToggled,
                 hasCount: IsEnabled(source.Id),
                 canUnload: loaded));
-        }
-
-        foreach (var profile in _profiles.Values.Where(x => Loaded.Contains(x.Source.Id)))
-        {
-            Chips.Add(new ModSourceViewModel(
-                new ModSourceStatus(profile.Source, IsEnabled(profile.Source.Id), profile.Pins.Count, null),
-                OnChipToggled,
-                canUnload: true));
         }
     }
 
