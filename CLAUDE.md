@@ -98,7 +98,7 @@ A change is done only when all of these hold:
 
 - Game-specific knowledge belongs in client game adapters as much as possible. Adapters are compiled into `Client.Core`.
 - Server modules for a single game (such as the ModHub crawler) are allowed and need not be generic. They count as part of the adapter, and only adapter code may talk to them.
-- Games to design for: Farming Simulator and BeamNG.drive (+BeamMP) for mods and savegames; Minecraft, Stationeers and Space Engineers for savegames only. More will be added. Load order and dependencies between mods are planned for later.
+- Games to design for: Farming Simulator for mods and savegames; BeamNG.drive (+BeamMP) for mods only, since it has no savegames; Minecraft, Stationeers and Space Engineers for savegames only. More will be added. Load order and dependencies between mods are planned for later.
 - Adapters read and compute; they don't write. All writes go through the general engine as:
   - file placements: a mod version is one file (on the server and on disk), and the layout names the file it gets directly in the target's mod folder. Mod folders stay flat; a game whose mods are folders would need them packed like savegames;
   - pure transforms of an existing file (`GameFileEdit`): `current content + desired state → new content`, idempotent, and preserving entries the adapter doesn't manage. Addressed by a path relative to the mod folder or save slot, which may climb out of it with `..`. The adapter flags whether replaced content goes to the Recycle Bin; the engine does the recycling.
@@ -164,7 +164,8 @@ A change is done only when all of these hold:
 
 - Keep comments to a minimum. Use descriptive names instead of doc-comment essays on every member.
 - A comment only describes what the code does now, never what it used to do or how it got here.
-- Use CRLF line endings, except where `.gitattributes` says otherwise (`openapi/*.json` is LF). Correct any wrong line endings you find.
+- On the user's Windows PC: use CRLF line endings, except where `.gitattributes` says otherwise (`openapi/*.json` is LF). Correct any wrong line endings you find.
+  - Elsewhere (cloud sessions on Linux): write LF. The repository stores LF, and Git converts to CRLF on the Windows checkout.
 
 ### Changing existing code
 
