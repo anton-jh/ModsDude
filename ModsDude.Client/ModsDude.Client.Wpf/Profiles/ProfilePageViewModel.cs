@@ -60,11 +60,11 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
     private PinnedModFilter? _reviewOnce;
 
     /// <summary>
-    /// Which revision a deep link into the history asked for. Same one-shot shape as
+    /// Where a deep link into the history asked to arrive. Same one-shot shape as
     /// <see cref="_reviewOnce"/>, and for the same reason: it describes an arrival, not a
     /// standing preference.
     /// </summary>
-    private int? _selectRevisionOnce;
+    private HistoryArrival? _historyArrivalOnce;
 
 
     public ProfilePageViewModel(
@@ -131,10 +131,10 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
         // controls rather than closing the entry.
         _historyMenuItem = new MenuItemViewModel("History", () =>
         {
-            var selectRevision = _selectRevisionOnce;
-            _selectRevisionOnce = null;
+            var arrival = _historyArrivalOnce;
+            _historyArrivalOnce = null;
 
-            return profileHistoryPageViewModelFactory.Create(repo, profile, selectRevision);
+            return profileHistoryPageViewModelFactory.Create(repo, profile, arrival);
         }).WithIcon(MenuIcons.History);
 
         NavManager = navigationManager;
@@ -543,13 +543,13 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
     }
 
     /// <summary>
-    /// Selects the History sub-page, for a deep link from a savegame - whose snapshots each name the
-    /// revision they were played on, and whose "what changed under this save" is exactly the question
-    /// that page already answers.
+    /// Selects the History sub-page, for a deep link from a savegame, a mod or a drift notice.
     /// </summary>
-    public bool TrySelectHistory(int? selectRevision = null)
+    public bool TrySelectHistory(HistoryArrival arrival)
     {
-        _selectRevisionOnce = selectRevision;
+        // Read and cleared by the menu item's factory, so it applies to the page this call opens and
+        // not to the next one somebody reaches through the tabs.
+        _historyArrivalOnce = arrival;
 
         if (ReferenceEquals(NavManager.Current, _historyMenuItem) is false)
         {
@@ -558,12 +558,15 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
 
         var selected = ReferenceEquals(NavManager.Current, _historyMenuItem);
 
-        if (selected is false)
+        // Unread where the page was already open, so the factory never ran.
+        if (selected && _historyArrivalOnce is HistoryArrival unread)
         {
-            // Refused, so nothing read the value and it must not be waiting for whoever opens the
-            // history next.
-            _selectRevisionOnce = null;
+            (NavManager.CurrentPage as ProfileHistoryPageViewModel)?.Arrive(unread);
         }
+
+        // Read, handed to the open page, or refused: either way it must not be waiting for whoever
+        // opens the history next.
+        _historyArrivalOnce = null;
 
         return selected;
     }

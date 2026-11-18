@@ -6,7 +6,7 @@ namespace ModsDude.Client.Core.Tests.Profiles.Editor;
 
 public class DriftReviewFilterTests
 {
-    private static readonly DriftReport _updated = new(DriftStatus.Drifted, [], [], ["a.zip"], []);
+    private static readonly DriftReport _updated = new(DriftStatus.Drifted, [], [], ["a.zip"]);
 
 
     [Fact]
@@ -20,11 +20,10 @@ public class DriftReviewFilterTests
     {
         _updated with { Added = ["new.zip"] },
         _updated with { Removed = ["gone.zip"] },
-        _updated with { ProfileChangedMods = [ModKey.From("x")] },
         _updated with { EditedGameFiles = ["mods.xml"] },
         _updated with { AppliedRevision = 1, CurrentRevision = 2 },
         _updated with { LockedDrift = [new(ModKey.From("a"), "A", null, LockedDriftReason.FileChanged)] },
-        new DriftReport(DriftStatus.Drifted, [], [], [], []) with { AppliedRevision = 1, CurrentRevision = 2 },
+        new DriftReport(DriftStatus.Drifted, [], [], []) with { AppliedRevision = 1, CurrentRevision = 2 },
         _updated with { Status = DriftStatus.NotApplied }
     };
 

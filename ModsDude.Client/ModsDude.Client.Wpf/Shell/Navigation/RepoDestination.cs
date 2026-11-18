@@ -27,5 +27,8 @@ public abstract record RepoDestination
     public sealed record ProfileMods(Guid ProfileId, PinnedModFilter? Review) : RepoDestination;
 
     /// <param name="Revision">The revision to open at, or null for the latest.</param>
-    public sealed record ProfileHistory(Guid ProfileId, int? Revision) : RepoDestination;
+    /// <param name="CompareWith">
+    /// Opens the revision's changes compared with this revision. Null opens its contents.
+    /// </param>
+    public sealed record ProfileHistory(Guid ProfileId, int? Revision, int? CompareWith) : RepoDestination;
 }

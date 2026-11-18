@@ -16,14 +16,9 @@ public interface IDriftService
     /// <param name="profileRepoIsGone">
     /// Whether the active profile's repo is gone. The caller knows; this cannot ask.
     /// </param>
-    /// <param name="profilePins">
-    /// What the profile pins right now, where the caller already had it. Null skips the
-    /// profile-changed comparison and leaves the folder check to stand on its own.
-    /// </param>
     /// <param name="currentRevision">
-    /// Which revision the profile is on now, where the caller knew - the same "where you already had
-    /// it" bargain as <paramref name="profilePins"/>, and the cheap half of it. Null leaves
-    /// the question unasked rather than answered "unchanged".
+    /// Which revision the profile is on now, where the caller knew. Null leaves the question unasked
+    /// rather than answered "unchanged".
     /// </param>
     /// <param name="savegameDrift">
     /// What the savegame check found for this <em>game</em>, where the caller ran one - the hold is
@@ -40,7 +35,6 @@ public interface IDriftService
         string? modFolder,
         CancellationToken cancellationToken,
         bool profileRepoIsGone = false,
-        IReadOnlyCollection<DesiredMod>? profilePins = null,
         int? currentRevision = null,
         IReadOnlyList<Savegames.SavegameDrift>? savegameDrift = null);
 }

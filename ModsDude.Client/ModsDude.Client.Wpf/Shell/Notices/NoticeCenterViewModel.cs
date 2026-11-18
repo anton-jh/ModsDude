@@ -443,14 +443,21 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         if (notice.Subject is not NoticeSubject subject
             || subject.RepoId is not Guid repoId
             || subject.ProfileId is not Guid profileId
-            || subject.ReviewFilter is not PinnedModFilter filter)
+            || subject.Review is not NoticeReview review)
         {
             card?.ReportStatus("There is no mod folder on this one to look at.");
 
             return;
         }
 
-        if (await _navigation.GoToAsync(repoId, new RepoDestination.ProfileMods(profileId, filter)) is false)
+        RepoDestination destination = review switch
+        {
+            NoticeReview.ModList list => new RepoDestination.ProfileMods(profileId, list.Filter),
+            NoticeReview.RevisionChanges changes => new RepoDestination.ProfileHistory(profileId, changes.To, CompareWith: changes.From),
+            _ => throw new ArgumentOutOfRangeException(nameof(notice), review, null)
+        };
+
+        if (await _navigation.GoToAsync(repoId, destination) is false)
         {
             card?.ReportStatus("That profile could not be opened from here - pick it in the sidebar.");
         }

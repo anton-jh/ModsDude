@@ -1,6 +1,5 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
-using ModsDude.Client.Core.Profiles.Editor;
 
 namespace ModsDude.Client.Core.Notices;
 
@@ -45,7 +44,7 @@ public enum NoticeSeverity
 /// </remarks>
 public enum NoticeActionKind
 {
-    /// <summary>Open the drifted profile's mod list, which is also where what the game downloaded gets imported.</summary>
+    /// <summary>Open what <see cref="NoticeSubject.Review"/> names: the profile's mod list or its history.</summary>
     Review,
 
     /// <summary>Put the mod folder back onto its profile, in one click.</summary>
@@ -109,8 +108,8 @@ public sealed record NoticeSubject(GameIdentity Game, string GameName)
     /// <summary>A specific revision of the profile, where the notice is about one rather than about head.</summary>
     public int? Revision { get; init; }
 
-    /// <summary>Which pinned mods Review shows, where the notice offers Review.</summary>
-    public PinnedModFilter? ReviewFilter { get; init; }
+    /// <summary>Where Review goes, where the notice offers Review.</summary>
+    public NoticeReview? Review { get; init; }
 }
 
 

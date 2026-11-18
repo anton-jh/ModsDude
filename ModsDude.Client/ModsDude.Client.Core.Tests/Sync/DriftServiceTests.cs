@@ -228,42 +228,59 @@ public class DriftServiceTests
     }
 
     [Fact]
-    public async Task Someone_else_editing_the_shared_profile_is_drift_too()
+    public async Task Someone_else_saving_the_profile_is_drift_with_nothing_on_disk_to_show()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "one"));
+        fixture.SetAppliedRevision(3);
 
-        // The folder is untouched; the profile moved on. No revision number on the profile is
-        // needed - the applied mod set is what the comparison is against.
-        var report = await fixture.Service.CheckAsync(
-            fixture.Target,
-            new ActiveProfile(_repoId, _profileId),
-            fixture.Folder.Path,
-            CancellationToken.None,
-            profilePins: [
-                new DesiredMod(ModKey.From("fs25_a"), ModVersionKey.From("2.0.0"), HashOf("a newer build"), Locked: true)]);
+        var report = await fixture.CheckAsync(currentRevision: 5);
 
         Assert.Equal(DriftStatus.Drifted, report.Status);
-        Assert.Equal([ModKey.From("fs25_a")], report.ProfileChangedMods);
-
-        // A locked mod at the wrong version is a damaged savegame waiting to happen, so it is named
-        // rather than folded into a count.
-        Assert.Equal([ModKey.From("fs25_a")], report.LockedMods);
+        Assert.True(report.ProfileHasMoved);
+        Assert.True(report.IsProfileMoveOnly);
+        Assert.Equal(0, report.DifferenceCount);
+        Assert.Equal(3, report.AppliedRevision);
+        Assert.Equal(5, report.CurrentRevision);
     }
 
     [Fact]
-    public async Task A_profile_that_still_pins_what_was_applied_is_not_drift()
+    public async Task A_profile_on_the_applied_revision_is_not_drift()
     {
         using var fixture = new DriftFixture();
         fixture.Sync(("fs25_a.zip", "one"));
+        fixture.SetAppliedRevision(3);
 
-        var report = await fixture.Service.CheckAsync(
-            fixture.Target,
-            new ActiveProfile(_repoId, _profileId),
-            fixture.Folder.Path,
-            CancellationToken.None,
-            profilePins: [
-                new DesiredMod(ModKey.From("fs25_a"), ModVersionKey.From("1.0.0"), HashOf("one"), Locked: false)]);
+        var report = await fixture.CheckAsync(currentRevision: 3);
+
+        Assert.Equal(DriftStatus.InSync, report.Status);
+        Assert.False(report.IsProfileMoveOnly);
+    }
+
+    [Fact]
+    public async Task A_moved_profile_with_a_changed_folder_is_not_only_behind()
+    {
+        using var fixture = new DriftFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.SetAppliedRevision(3);
+
+        fixture.Folder.WriteFile("fs25_a.zip", "the game updated this");
+
+        var report = await fixture.CheckAsync(currentRevision: 5);
+
+        Assert.Equal(DriftStatus.Drifted, report.Status);
+        Assert.True(report.ProfileHasMoved);
+        Assert.False(report.IsProfileMoveOnly);
+    }
+
+    [Fact]
+    public async Task An_unknown_current_revision_is_not_drift()
+    {
+        using var fixture = new DriftFixture();
+        fixture.Sync(("fs25_a.zip", "one"));
+        fixture.SetAppliedRevision(3);
+
+        var report = await fixture.CheckAsync(currentRevision: null);
 
         Assert.Equal(DriftStatus.InSync, report.Status);
     }
@@ -315,29 +332,6 @@ public class DriftServiceTests
         var locked = Assert.Single((await fixture.CheckAsync()).LockedDrift);
 
         Assert.Equal(LockedDriftReason.FileRemoved, locked.Reason);
-    }
-
-    [Fact]
-    public async Task One_locked_mod_gone_wrong_two_ways_is_still_one_problem()
-    {
-        using var fixture = new DriftFixture();
-        fixture.Sync(("fs25_map.zip", "one", true, "Great Plains 16x"));
-
-        fixture.Folder.WriteFile("fs25_map.zip", "the game updated this");
-
-        var report = await fixture.Service.CheckAsync(
-            fixture.Target,
-            new ActiveProfile(_repoId, _profileId),
-            fixture.Folder.Path,
-            CancellationToken.None,
-            profilePins: [
-                new DesiredMod(ModKey.From("fs25_map"), ModVersionKey.From("2.0.0"), HashOf("something else"), Locked: true)]);
-
-        var locked = Assert.Single(report.LockedDrift);
-
-        // The file is the half already on disk, so that is the one reported.
-        Assert.Equal(LockedDriftReason.FileChanged, locked.Reason);
-        Assert.Equal([ModKey.From("fs25_map")], report.LockedMods);
     }
 
 
@@ -460,8 +454,17 @@ public class DriftServiceTests
             });
         }
 
-        public Task<DriftReport> CheckAsync()
-            => Service.CheckAsync(Target, new ActiveProfile(_repoId, _profileId), Folder.Path, CancellationToken.None);
+        /// <summary>Records which revision of the profile the last sync installed.</summary>
+        public void SetAppliedRevision(int revision)
+            => Manifests.Write(Manifests.TryRead(Target)! with { ProfileRevision = revision });
+
+        public Task<DriftReport> CheckAsync(int? currentRevision = null)
+            => Service.CheckAsync(
+                Target,
+                new ActiveProfile(_repoId, _profileId),
+                Folder.Path,
+                CancellationToken.None,
+                currentRevision: currentRevision);
 
         public void Dispose()
         {

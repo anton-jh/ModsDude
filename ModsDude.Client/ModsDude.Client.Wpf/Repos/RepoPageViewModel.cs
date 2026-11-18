@@ -337,7 +337,7 @@ public partial class RepoPageViewModel
                     && modsPage.TrySelectMods(mods.Review);
             case RepoDestination.ProfileHistory history:
                 return await TrySelectProfileAsync(history.ProfileId) is ProfilePageViewModel historyPage
-                    && historyPage.TrySelectHistory(history.Revision);
+                    && historyPage.TrySelectHistory(new HistoryArrival(history.Revision, history.CompareWith));
             default:
                 throw new ArgumentOutOfRangeException(nameof(destination), destination, null);
         }

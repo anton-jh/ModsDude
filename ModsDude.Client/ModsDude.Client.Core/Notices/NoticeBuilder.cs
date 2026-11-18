@@ -163,8 +163,22 @@ public static class NoticeBuilder
         var profile = entry.ProfileName is string name ? $"'{name}'" : "the applied profile";
         var inFolder = named is string it ? $" in the '{it}' folder" : "";
 
+        // The folder is exactly what was applied and the profile has a new revision: nothing on disk
+        // to look at, so Review shows what changed between the two revisions and updating leads.
+        NoticeReview review = report.IsProfileMoveOnly
+            && report.AppliedRevision is int appliedRevision
+            && report.CurrentRevision is int currentRevision
+                ? new NoticeReview.RevisionChanges(appliedRevision, currentRevision)
+                : new NoticeReview.ModList(DriftReviewFilter.For(report));
+
         (string Headline, string? Body, IReadOnlyList<NoticeFact> Facts, NoticeSeverity Severity) shown = report.Status switch
         {
+            DriftStatus.Drifted when review is NoticeReview.RevisionChanges(var from, var to) => (
+                $"'{game.Name}' is behind {profile}{inFolder}",
+                null,
+                [new NoticeFact("Applied", $"rev {from}"), new NoticeFact("Current", $"rev {to}")],
+                NoticeSeverity.Pending),
+
             DriftStatus.Drifted => (
                 $"'{game.Name}' no longer matches {profile}{inFolder}",
                 null,
@@ -194,12 +208,17 @@ public static class NoticeBuilder
                 NoticeSeverity.Pending)
         };
 
-        var canReview = CanReview(entry, repo);
+        var canReview = CanReview(entry, repo, review);
 
-        // Review leads wherever it is offered: what the folder holds now is usually what the user
-        // meant to end up with, and re-applying before looking throws it away. The pending statuses
-        // have nothing in the folder to look at yet, so re-apply leads there.
-        var reviewLeads = canReview && report.Status is DriftStatus.Drifted;
+        // Review leads wherever the folder holds something to look at: what it holds now is usually
+        // what the user meant to end up with, and re-applying before looking throws it away. The
+        // pending statuses and a folder that is only behind have nothing on disk to look at, so
+        // re-applying leads there.
+        var reviewLeads = canReview && report.Status is DriftStatus.Drifted && review is NoticeReview.ModList;
+
+        var reapplyLabel = review is NoticeReview.RevisionChanges(var fromRevision, var toRevision)
+            ? toRevision > fromRevision ? $"Update to rev {toRevision}" : $"Re-apply rev {toRevision}"
+            : ReapplyLabel(game, environment);
 
         return Make(
             $"drift/{game.Identity}/{entry.Target?.Target.Key.Value ?? "-"}",
@@ -209,8 +228,8 @@ public static class NoticeBuilder
             footnote: report.Added.Count + report.Changed.Count > 0 && canReview
                 ? "Versions now on disk can be imported from the mod list."
                 : null,
-            actions: ModActions(entry, repo, reviewLeads, canReview, environment),
-            subject: Subject(entry, repo, DriftReviewFilter.For(report)),
+            actions: ModActions(entry, canReview, reviewLeads, reapplyLabel),
+            subject: Subject(entry, repo, review),
             facts: shown.Facts);
     }
 
@@ -239,12 +258,14 @@ public static class NoticeBuilder
             ? first.Reason switch
             {
                 LockedDriftReason.FileRemoved => $"'{first.DisplayName}' is locked{version} and is no longer installed{inFolder}",
-                LockedDriftReason.ProfileMoved => $"'{first.DisplayName}' is locked and the profile has moved off it{inFolder}",
                 _ => $"'{first.DisplayName}' is locked{version} and its file has changed{inFolder}"
             }
             : $"{locked.Count} locked mods in '{game.Name}' are not what they were locked at{inFolder}";
 
-        var canReview = CanReview(entry, repo);
+        // Locked pins never show under Updates, and one whose file changed is still offered by the
+        // folder, so it would not show under Not in sources either.
+        NoticeReview review = new NoticeReview.ModList(PinnedModFilter.Locked);
+        var canReview = CanReview(entry, repo, review);
 
         return Make(
             $"locked/{game.Identity}/{entry.Target?.Target.Key.Value ?? "-"}",
@@ -254,10 +275,8 @@ public static class NoticeBuilder
             footnote: null,
             // No revision on this one's re-apply: the folder card beside it owns the mod half, and
             // two buttons in one column disagreeing about a number would be worse.
-            actions: ModActions(entry, repo, reviewLeads: canReview, canReview, environment: null),
-            // Locked pins never show under Updates, and one whose file changed is still offered by
-            // the folder, so it would not show under Not in sources either.
-            subject: Subject(entry, repo, PinnedModFilter.Locked),
+            actions: ModActions(entry, canReview, reviewLeads: canReview, "Re-apply now"),
+            subject: Subject(entry, repo, review),
             facts: LockedFacts(locked));
     }
 
@@ -275,7 +294,6 @@ public static class NoticeBuilder
             .. ordered.Take(shown).Select(x => new NoticeFact(x.DisplayName, x.Reason switch
             {
                 LockedDriftReason.FileRemoved => "Missing",
-                LockedDriftReason.ProfileMoved => "Profile moved",
                 _ => "Wrong version"
             }))
         ];
@@ -334,13 +352,9 @@ public static class NoticeBuilder
         // re-apply actually fixes, and the button names the number it is going to install rather than
         // offering a latest the apply table refuses.
         if (kinds.Any(x => x.Kind is SavegameDriftKind.PlayedOnAnotherModList && x.RunsOnAnotherProfile is false)
-            && game.ActiveProfile is ActiveProfile active)
+            && game.ActiveProfile is not null)
         {
-            actions.Add(new(
-                NoticeActionKind.Reapply,
-                environment.RequiredRevision(game.Identity, active.ProfileId) is int revision
-                    ? $"Re-apply rev {revision}"
-                    : "Re-apply now"));
+            actions.Add(new(NoticeActionKind.Reapply, ReapplyLabel(game, environment)));
         }
 
         return Make(
@@ -503,18 +517,12 @@ public static class NoticeBuilder
     /// <summary>
     /// The two mod actions, in the order they should be offered.
     /// </summary>
-    /// <param name="environment">
-    /// Null where the caller does not want a revision on the re-apply - the locked card, whose
-    /// re-apply is the same one the folder card beside it offers.
-    /// </param>
     private static IReadOnlyList<NoticeAction> ModActions(
         TargetDrift entry,
-        NoticeRepo repo,
-        bool reviewLeads,
         bool canReview,
-        INoticeEnvironment? environment)
+        bool reviewLeads,
+        string reapplyLabel)
     {
-        var game = entry.Game;
         var actions = new List<NoticeAction>();
 
         if (canReview)
@@ -525,39 +533,43 @@ public static class NoticeBuilder
         // Re-applying needs somewhere to apply to. A game reported purely because it is holding a
         // savegame may follow no profile at all, and a button that returns the moment it is pressed
         // is worse than no button.
-        if (game.ActiveProfile is ActiveProfile active && entry.Target is not null)
+        if (entry.Game.ActiveProfile is not null && entry.Target is not null)
         {
-            var label = environment?.RequiredRevision(game.Identity, active.ProfileId) is int revision
-                ? $"Re-apply rev {revision}"
-                : "Re-apply now";
-
-            actions.Add(new(NoticeActionKind.Reapply, label) { IsPrimary = reviewLeads is false });
+            actions.Add(new(NoticeActionKind.Reapply, reapplyLabel) { IsPrimary = reviewLeads is false });
         }
 
         return actions;
     }
 
+    /// <summary>The re-apply button, naming the revision a held savegame pins the game to.</summary>
+    private static string ReapplyLabel(DriftCandidate game, INoticeEnvironment environment)
+        => game.ActiveProfile is ActiveProfile active
+            && environment.RequiredRevision(game.Identity, active.ProfileId) is int revision
+                ? $"Re-apply rev {revision}"
+                : "Re-apply now";
+
     /// <summary>
     /// Whether reviewing is a thing this user can do at all.
     /// </summary>
     /// <remarks>
-    /// A guest cannot import, and the mod list they would land on is the read-only one - so the
+    /// A guest cannot import, and the mod list they would land on is the read-only one - so that
     /// button is not offered rather than offered and refused, and the prompt that sends them there is
-    /// not written either. Re-applying is theirs, which is why their card still has something to do.
+    /// not written either. A profile's history is readable at Guest, so reviewing revision changes is
+    /// offered to everyone.
     /// </remarks>
-    private static bool CanReview(TargetDrift entry, NoticeRepo repo)
+    private static bool CanReview(TargetDrift entry, NoticeRepo repo, NoticeReview review)
         => entry.Game.ActiveProfile is not null
             && entry.Target is not null
-            && repo.MembershipLevel >= RepoMembershipLevel.Member;
+            && (review is NoticeReview.RevisionChanges || repo.MembershipLevel >= RepoMembershipLevel.Member);
 
-    private static NoticeSubject Subject(TargetDrift entry, NoticeRepo repo, PinnedModFilter reviewFilter) =>
+    private static NoticeSubject Subject(TargetDrift entry, NoticeRepo repo, NoticeReview review) =>
         new(entry.Game.Identity, entry.Game.Name)
         {
             Target = entry.Target?.Target,
             RepoId = repo.Id,
             ProfileId = entry.Game.ActiveProfile?.ProfileId,
             ProfileName = entry.ProfileName,
-            ReviewFilter = reviewFilter
+            Review = review
         };
 
     /// <summary>

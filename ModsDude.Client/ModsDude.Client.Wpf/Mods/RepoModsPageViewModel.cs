@@ -513,7 +513,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     }
 
     private Task<bool> GoToRevisionAsync(Guid profileId, int revision)
-        => _shellNavigation.GoToAsync(_repo.Id, new RepoDestination.ProfileHistory(profileId, revision));
+        => _shellNavigation.GoToAsync(_repo.Id, new RepoDestination.ProfileHistory(profileId, revision, CompareWith: null));
 
     private async Task ReloadAfterServerChangeAsync()
     {

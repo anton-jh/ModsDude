@@ -694,7 +694,6 @@ public sealed class DriftMonitor : IDriftMonitor
                     string.Join(',', x.Report.Added),
                     string.Join(',', x.Report.Removed),
                     string.Join(',', x.Report.Changed),
-                    string.Join(',', x.Report.ProfileChangedMods.Select(m => m.Value)),
                     x.Report.AppliedRevision,
                     x.Report.CurrentRevision,
                     string.Join(',', x.Report.SavegameDrift.Select(s => $"{s.SavegameId}:{s.Kind}")))));

@@ -649,7 +649,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             return;
         }
 
-        if (await _shellNavigation.GoToAsync(_repo.Id, new RepoDestination.ProfileHistory(profileId, null)) is false)
+        if (await _shellNavigation.GoToAsync(_repo.Id, new RepoDestination.ProfileHistory(profileId, null, CompareWith: null)) is false)
         {
             _toasts.Show($"'{row.ProfileName}' could not be opened from here.", ToastSeverity.Warning);
         }

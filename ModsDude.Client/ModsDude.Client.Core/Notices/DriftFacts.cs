@@ -13,7 +13,6 @@ public static class DriftFacts
         Count("Missing", report.Removed.Count);
         Count("Wrong version", report.Changed.Count);
         Count("Added", report.Added.Count);
-        Count("Changed in profile", report.ProfileChangedMods.Count);
 
         if (report.ProfileHasMoved)
         {

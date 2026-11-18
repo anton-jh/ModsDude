@@ -19,6 +19,12 @@ using System.Collections.ObjectModel;
 
 namespace ModsDude.Client.Wpf.Profiles;
 
+/// <summary>Where a link into a profile's history arrives.</summary>
+/// <param name="Revision">The revision to select, or null for the latest.</param>
+/// <param name="CompareWith">Shows the selected revision's changes compared with this revision. Null shows its contents.</param>
+public sealed record HistoryArrival(int? Revision, int? CompareWith);
+
+
 /// <summary>
 /// A profile's history: every revision on the left, what the selected one pinned on the right.
 /// </summary>
@@ -66,22 +72,29 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
     private int _shownHead;
 
     /// <summary>
-    /// Which revision a deep link asked for, used once and then forgotten - a later refresh keeps
+    /// Where a deep link asked to arrive, used once and then forgotten - a later refresh keeps
     /// whatever the user has since selected rather than jumping back to where they arrived.
     /// </summary>
-    private int? _selectRevisionOnce;
+    private HistoryArrival? _arrival;
 
 
     /// <summary>
-    /// Which revision to open at, for a page reached by a link rather than by the sidebar.
+    /// Arrives where a link asked: applied now when the history is on screen, or when it next is.
     /// </summary>
     /// <remarks>
     /// A method rather than a constructor parameter: <c>ActivatorUtilities</c> matches the arguments
-    /// it is handed by type, and a nullable int that is sometimes absent is exactly the shape it
-    /// cannot match. Called by the factory before the page initializes, which is well before
-    /// anything reads it.
+    /// it is handed by type, and a value that is sometimes absent is exactly the shape it cannot
+    /// match. The factory calls it before the page initializes.
     /// </remarks>
-    public void SelectOnArrival(int? revision) => _selectRevisionOnce = revision;
+    public void Arrive(HistoryArrival arrival)
+    {
+        _arrival = arrival;
+
+        if (IsLoading is false)
+        {
+            ApplyArrival();
+        }
+    }
 
 
     public ProfileHistoryPageViewModel(
@@ -505,8 +518,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
         if (_fetched is not null)
         {
-            Publish(_fetched, _selectRevisionOnce);
-            _selectRevisionOnce = null;
+            Publish(_fetched);
         }
 
         // Retention and other people's saves change the history without a word to this page; the
@@ -708,7 +720,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
     private void Publish(ProfileHistory history, int? select = null)
     {
-        var wanted = select ?? Selected?.Number ?? history.HeadRevision;
+        var wanted = select ?? _arrival?.Revision ?? Selected?.Number ?? history.HeadRevision;
 
         _shownHead = history.HeadRevision;
 
@@ -743,6 +755,40 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
         else
         {
             Selection.Recount();
+        }
+
+        ApplyArrival();
+    }
+
+    /// <summary>
+    /// Selects the revision a link asked for and, where it asked for a comparison, shows the changes
+    /// against that revision. A revision that has been pruned or is older than the listing is left
+    /// out: the selection then stays on what is shown and the comparison on its default.
+    /// </summary>
+    private void ApplyArrival()
+    {
+        if (_arrival is not HistoryArrival arrival)
+        {
+            return;
+        }
+
+        _arrival = null;
+
+        if (arrival.Revision is int number
+            && Revisions.FirstOrDefault(x => x.Number == number) is { } row
+            && ReferenceEquals(row, Selected) is false)
+        {
+            Selection.Click(row);
+        }
+
+        if (arrival.CompareWith is int other)
+        {
+            if (ComparisonTargets.FirstOrDefault(x => x.Number == other) is { } against)
+            {
+                ComparedWith = against;
+            }
+
+            ShowChanges = true;
         }
     }
 
@@ -817,11 +863,14 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
     public class Factory(IServiceProvider serviceProvider)
     {
-        public ProfileHistoryPageViewModel Create(Repo repo, Profile profile, int? selectRevision = null)
+        public ProfileHistoryPageViewModel Create(Repo repo, Profile profile, HistoryArrival? arrival)
         {
             var page = ActivatorUtilities.CreateInstance<ProfileHistoryPageViewModel>(serviceProvider, repo, profile);
 
-            page.SelectOnArrival(selectRevision);
+            if (arrival is not null)
+            {
+                page.Arrive(arrival);
+            }
 
             return page;
         }

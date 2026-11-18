@@ -127,7 +127,8 @@ manifest is only an optimisation and the drift baseline.
 
 ### Drift
 
-`DriftService` compares each target with its manifest and the profile:
+`DriftService` compares each target with its manifest and the profile's current revision (the one a
+held savegame pins, or the head while online):
 
 | Status | Meaning |
 | --- | --- |
@@ -155,19 +156,33 @@ warning drift, held back while a game is being played (see [Client](client.md#fe
 notice offers to apply.
 
 A drifted folder's notice lists what it differs by as label/value rows (`DriftFacts`), leaving out
-empty rows: Missing, Wrong version, Added, Changed in profile, Revision (applied → current), Game files
-edited. The locked-mods notice lists each locked mod with Wrong version, Missing or Profile moved, up to
-five rows, the last becoming a count of the rest. The game overview shows the same rows under a
-drifted folder.
+empty rows: Missing, Wrong version, Added, Revision (applied → current), Game files edited. The
+locked-mods notice lists each locked mod with Wrong version or Missing, up to five rows, the last
+becoming a count of the rest. The game overview shows the same rows under a drifted folder.
 
-Review opens the profile's mod editor with every one of the game's mod folders as the only sources
-(remote sources and the repo off) and a pinned-list filter picked by `DriftReviewFilter`:
+A folder whose only difference is the profile's revision (`IsProfileMoveOnly`) gets its own card:
+
+- headline "'Game' is behind 'Profile'", severity Pending;
+- rows Applied and Current (revision numbers);
+- primary button "Update to rev N", or "Re-apply rev N" when the needed revision is older than the
+  applied one (a savegame in compatibility mode);
+- Review opens the profile's history with the current revision selected and its changes compared
+  with the applied revision. Offered to guests too, since the history is readable at Guest. A revision
+  that has been pruned or is older than the listing can't be compared with; the page then shows the
+  current revision against its default comparison.
+
+On every other drifted card, Review leads and opens the profile's mod editor with every one of the
+game's mod folders as the only sources (remote sources and the repo off) and a pinned-list filter
+picked by `DriftReviewFilter`:
 
 | Drift | Filter |
 | --- | --- |
 | Only mods replaced with other versions (`IsUpdatesOnly`), as an in-game update leaves it | Updates |
 | Anything else | Not in sources |
 | The locked-mods notice | Locked |
+
+Where a notice's Review goes is `NoticeSubject.Review`: `NoticeReview.ModList` (a filter) or
+`NoticeReview.RevisionChanges` (two revisions).
 
 ### Leases
 

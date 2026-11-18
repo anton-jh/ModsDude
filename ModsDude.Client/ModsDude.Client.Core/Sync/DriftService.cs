@@ -87,10 +87,7 @@ public enum LockedDriftReason
     FileChanged,
 
     /// <summary>Its file is gone from the mod folder entirely.</summary>
-    FileRemoved,
-
-    /// <summary>The profile now pins a different version than the one applied here.</summary>
-    ProfileMoved
+    FileRemoved
 }
 
 /// <param name="AppliedVersion">What the last sync put there, which is the version the save was built against.</param>
@@ -99,19 +96,13 @@ public sealed record DriftedLockedMod(ModKey ModId, string DisplayName, string? 
 /// <param name="Added">Names in the folder that the last sync did not put there.</param>
 /// <param name="Removed">Names the last sync installed that are no longer in the folder.</param>
 /// <param name="Changed">Names whose size or modification time no longer match - a mod was replaced or updated.</param>
-/// <param name="ProfileChangedMods">
-/// Mods the profile pins differently from what was applied - named, which needs the profile's
-/// current pins in hand. <see cref="ProfileHasMoved"/> answers the same question from two
-/// integers when they are not.
-/// </param>
 public sealed record DriftReport(
     DriftStatus Status,
     IReadOnlyList<string> Added,
     IReadOnlyList<string> Removed,
-    IReadOnlyList<string> Changed,
-    IReadOnlyList<ModKey> ProfileChangedMods)
+    IReadOnlyList<string> Changed)
 {
-    public static DriftReport For(DriftStatus status) => new(status, [], [], [], []);
+    public static DriftReport For(DriftStatus status) => new(status, [], [], []);
 
     /// <summary>
     /// Which revision of the profile the last sync installed, from the manifest. Null for a manifest
@@ -141,9 +132,7 @@ public sealed record DriftReport(
     public string? AppliedProfileName { get; init; }
 
     /// <summary>
-    /// Somebody has saved the profile since this folder was made to match it. Two integers rather
-    /// than a mod-by-mod comparison, which is what lets the startup check say it at all: naming the
-    /// mods needs the profile's pins, and the cheap check deliberately talks to no server.
+    /// Somebody has saved the profile since this folder was made to match it.
     /// </summary>
     /// <remarks>
     /// A save that changes nothing mints no revision, so a moved number always means a different
@@ -161,7 +150,7 @@ public sealed record DriftReport(
     /// </summary>
     public IReadOnlyList<string> EditedGameFiles { get; init; } = [];
 
-    public int DifferenceCount => Added.Count + Removed.Count + Changed.Count + ProfileChangedMods.Count + EditedGameFiles.Count;
+    public int DifferenceCount => Added.Count + Removed.Count + Changed.Count + EditedGameFiles.Count;
 
     /// <summary>
     /// Whether every difference is a mod file replaced with another version, which is what updating
@@ -171,10 +160,18 @@ public sealed record DriftReport(
         && Changed.Count > 0
         && Added.Count == 0
         && Removed.Count == 0
-        && ProfileChangedMods.Count == 0
         && EditedGameFiles.Count == 0
         && LockedDrift.Count == 0
         && ProfileHasMoved is false;
+
+    /// <summary>
+    /// Whether the folder is exactly what was applied and the only difference is that the profile
+    /// has a different revision now.
+    /// </summary>
+    public bool IsProfileMoveOnly => Status is DriftStatus.Drifted
+        && ProfileHasMoved
+        && DifferenceCount == 0
+        && LockedDrift.Count == 0;
 
     /// <summary>
     /// The locked mods among the differences, named. An unlocked mod at the wrong version is untidy;
@@ -182,10 +179,6 @@ public sealed record DriftReport(
     /// with the consequence - rather than folded into a count.
     /// </summary>
     public IReadOnlyList<DriftedLockedMod> LockedDrift { get; init; } = [];
-
-    public IReadOnlyList<ModKey> LockedMods => [.. LockedDrift.Select(x => x.ModId)];
-
-    public bool HasLockedDrift => LockedDrift.Count > 0;
 
     /// <summary>
     /// The savegames this game is holding that have stopped agreeing with the server.
@@ -235,7 +228,6 @@ public sealed class DriftService(
         string? modFolder,
         CancellationToken cancellationToken,
         bool profileRepoIsGone = false,
-        IReadOnlyCollection<DesiredMod>? profilePins = null,
         int? currentRevision = null,
         IReadOnlyList<Savegames.SavegameDrift>? savegameDrift = null)
     {
@@ -303,7 +295,6 @@ public sealed class DriftService(
         }
 
         var (newFiles, removed, changed) = CompareFolder(manifest, listing, modFolder);
-        var (profileChanged, locked) = CompareProfile(manifest, profilePins);
 
         // A new file that is not a mod is something the next apply leaves alone and records, so
         // there is nothing to import or re-apply for it.
@@ -323,27 +314,24 @@ public sealed class DriftService(
             && currentRevision is int current
             && applied != current;
 
-        var status = added.Count + removed.Count + changed.Count + profileChanged.Count + editedGameFiles.Count > 0 || profileHasMoved
+        var status = added.Count + removed.Count + changed.Count + editedGameFiles.Count > 0 || profileHasMoved
             ? DriftStatus.Drifted
             : DriftStatus.InSync;
 
-        return new DriftReport(status, added, removed, changed, profileChanged)
+        return new DriftReport(status, added, removed, changed)
         {
             AppliedRevision = manifest.ProfileRevision,
             CurrentRevision = currentRevision,
             EditedGameFiles = editedGameFiles,
             SavegameDrift = saves,
-            // One entry per mod. A locked map whose file the game replaced and whose pin somebody
-            // then moved is one problem, and the file is the half that is already on disk.
-            LockedDrift = [.. NameLockedFiles(manifest, removed, changed).Concat(locked).DistinctBy(x => x.ModId)]
+            LockedDrift = NameLockedFiles(manifest, removed, changed)
         };
     }
 
 
     /// <summary>
     /// The locked mods behind the changed and removed file names. The manifest carries the lock, so
-    /// this needs neither the profile's current pins nor a single archive opened - which is
-    /// what lets the startup check say "your map moved" rather than "3 files differ".
+    /// this needs no archive opened.
     /// </summary>
     private static List<DriftedLockedMod> NameLockedFiles(
         SyncManifest manifest,
@@ -468,46 +456,5 @@ public sealed class DriftService(
             // in a folder of two thousand, and the drift it reports is the visible half.
             return true;
         }
-    }
-
-    /// <summary>
-    /// The mod set that was applied against what the profile pins now. Any difference means somebody
-    /// edited the shared profile since this game synced.
-    /// </summary>
-    private static (List<ModKey> Changed, List<DriftedLockedMod> Locked) CompareProfile(
-        SyncManifest manifest,
-        IReadOnlyCollection<DesiredMod>? pins)
-    {
-        if (pins is null)
-        {
-            return ([], []);
-        }
-
-        var applied = manifest.Entries.ToDictionary(x => ModKey.From(x.ModId));
-        var changed = new List<ModKey>();
-        var locked = new List<DriftedLockedMod>();
-
-        foreach (var pin in pins)
-        {
-            if (applied.Remove(pin.ModId, out var entry) is false ||
-                ModContentHasher.Matches(entry.ContentHash, pin.ContentHash) is false)
-            {
-                changed.Add(pin.ModId);
-
-                if (pin.Locked)
-                {
-                    locked.Add(new DriftedLockedMod(
-                        pin.ModId,
-                        pin.DisplayName ?? entry?.DisplayName ?? pin.ModId.Value,
-                        entry?.VersionId,
-                        LockedDriftReason.ProfileMoved));
-                }
-            }
-        }
-
-        // Whatever is left was applied and is no longer pinned - the profile lost a mod.
-        changed.AddRange(applied.Keys);
-
-        return (changed, locked);
     }
 }

@@ -114,7 +114,7 @@ public class NoticeBuilderTests
                 new(ModKey.From("b"), "Bravo", null, LockedDriftReason.FileRemoved),
                 new(ModKey.From("a"), "Alpha", null, LockedDriftReason.FileChanged),
                 new(ModKey.From("e"), "Echo", null, LockedDriftReason.FileChanged),
-                new(ModKey.From("c"), "Charlie", null, LockedDriftReason.ProfileMoved),
+                new(ModKey.From("c"), "Charlie", null, LockedDriftReason.FileRemoved),
                 new(ModKey.From("d"), "Delta", null, LockedDriftReason.FileChanged)
             ]));
 
@@ -125,7 +125,7 @@ public class NoticeBuilderTests
             [
                 new NoticeFact("Alpha", "Wrong version"),
                 new NoticeFact("Bravo", "Missing"),
-                new NoticeFact("Charlie", "Profile moved"),
+                new NoticeFact("Charlie", "Missing"),
                 new NoticeFact("Delta", "Wrong version"),
                 new NoticeFact("More", "2")
             ],
@@ -147,7 +147,7 @@ public class NoticeBuilderTests
     [Fact]
     public void A_drifted_folder_lists_every_kind_of_difference_in_a_fixed_order()
     {
-        var report = new DriftReport(DriftStatus.Drifted, ["new.zip"], ["gone1.zip", "gone2.zip"], ["moved.zip"], [ModKey.From("x")])
+        var report = new DriftReport(DriftStatus.Drifted, ["new.zip"], ["gone1.zip", "gone2.zip"], ["moved.zip"])
         {
             AppliedRevision = 12,
             CurrentRevision = 14,
@@ -161,22 +161,75 @@ public class NoticeBuilderTests
                 new NoticeFact("Missing", "2"),
                 new NoticeFact("Wrong version", "1"),
                 new NoticeFact("Added", "1"),
-                new NoticeFact("Changed in profile", "1"),
                 new NoticeFact("Revision", "12 → 14"),
                 new NoticeFact("Game files edited", "1")
             ],
             notice.Facts);
     }
 
+    /// <summary>
+    /// Somebody saved the profile and the folder is exactly what was applied: there is nothing on
+    /// disk to look at, so updating leads and Review shows what changed between the two revisions.
+    /// </summary>
     [Fact]
-    public void A_folder_whose_only_difference_is_a_moved_profile_lists_the_revisions()
+    public void A_folder_that_is_only_behind_its_profile_leads_with_update()
     {
-        var report = DriftReport.For(DriftStatus.Drifted) with { AppliedRevision = 3, CurrentRevision = 4 };
+        var notice = Assert.Single(Build(Behind(applied: 3, current: 6)));
+
+        Assert.Equal(NoticeSeverity.Pending, notice.Severity);
+        Assert.Equal("'Farming Simulator 25' is behind 'Season 4' in the 'mods' folder", notice.Headline);
+        Assert.Equal([new NoticeFact("Applied", "rev 3"), new NoticeFact("Current", "rev 6")], notice.Facts);
+        Assert.Null(notice.Body);
+        Assert.Null(notice.Footnote);
+
+        Assert.Equal(
+            [
+                new NoticeAction(NoticeActionKind.Review, "Review"),
+                new NoticeAction(NoticeActionKind.Reapply, "Update to rev 6") { IsPrimary = true }
+            ],
+            notice.Actions);
+
+        Assert.Equal(new NoticeReview.RevisionChanges(3, 6), notice.Subject?.Review);
+    }
+
+    /// <summary>
+    /// A savegame in compatibility mode can hold the game on an older revision than the one applied,
+    /// and going back is not an update.
+    /// </summary>
+    [Fact]
+    public void A_folder_ahead_of_the_revision_it_needs_offers_re_apply()
+    {
+        var notice = Assert.Single(Build(Behind(applied: 6, current: 4)));
+
+        Assert.Equal("Re-apply rev 4", notice.Actions.Single(x => x.IsPrimary).Label);
+        Assert.Equal(new NoticeReview.RevisionChanges(6, 4), notice.Subject?.Review);
+    }
+
+    /// <summary>A profile's history is readable at Guest, so reviewing revision changes is theirs too.</summary>
+    [Fact]
+    public void A_guest_can_review_what_changed_between_revisions()
+    {
+        var notice = Assert.Single(Build(
+            Behind(applied: 3, current: 6),
+            environment: new FakeEnvironment { Membership = RepoMembershipLevel.Guest }));
+
+        Assert.Contains(notice.Actions, x => x.Kind is NoticeActionKind.Review && x.IsPrimary is false);
+        Assert.Equal(NoticeActionKind.Reapply, notice.Actions.Single(x => x.IsPrimary).Kind);
+    }
+
+    [Fact]
+    public void A_folder_behind_its_profile_with_changes_on_disk_leads_with_review_of_the_mod_list()
+    {
+        var report = new DriftReport(DriftStatus.Drifted, [], [], ["fs25_a.zip"]) with { AppliedRevision = 3, CurrentRevision = 4 };
 
         var notice = Assert.Single(Build(Entry(report)));
 
-        Assert.Equal([new NoticeFact("Revision", "3 → 4")], notice.Facts);
-        Assert.Equal(PinnedModFilter.NotInSources, notice.Subject?.ReviewFilter);
+        Assert.Equal(NoticeSeverity.Warning, notice.Severity);
+        Assert.Contains("no longer matches", notice.Headline);
+        Assert.Contains(new NoticeFact("Revision", "3 → 4"), notice.Facts);
+        Assert.Equal(NoticeActionKind.Review, notice.Actions.Single(x => x.IsPrimary).Kind);
+        Assert.Equal("Re-apply now", notice.Actions.Single(x => x.Kind is NoticeActionKind.Reapply).Label);
+        Assert.Equal(new NoticeReview.ModList(PinnedModFilter.NotInSources), notice.Subject?.Review);
     }
 
     [Fact]
@@ -192,17 +245,17 @@ public class NoticeBuilderTests
     {
         var notice = Assert.Single(Build(Drifted(changed: ["fs25_a.zip"])));
 
-        Assert.Equal(PinnedModFilter.Updates, notice.Subject?.ReviewFilter);
+        Assert.Equal(new NoticeReview.ModList(PinnedModFilter.Updates), notice.Subject?.Review);
     }
 
     [Fact]
     public void Reviewing_a_folder_with_anything_but_updates_shows_what_is_not_in_the_sources()
     {
-        var report = new DriftReport(DriftStatus.Drifted, ["new.zip"], [], ["fs25_a.zip"], []);
+        var report = new DriftReport(DriftStatus.Drifted, ["new.zip"], [], ["fs25_a.zip"]);
 
         var notice = Assert.Single(Build(Entry(report)));
 
-        Assert.Equal(PinnedModFilter.NotInSources, notice.Subject?.ReviewFilter);
+        Assert.Equal(new NoticeReview.ModList(PinnedModFilter.NotInSources), notice.Subject?.Review);
     }
 
     /// <summary>
@@ -216,8 +269,8 @@ public class NoticeBuilderTests
             changed: ["bigmap.zip"],
             locked: [new(ModKey.From("bigmap"), "Big Map", "1.4.2", LockedDriftReason.FileChanged)]));
 
-        Assert.Equal(PinnedModFilter.Locked, notices.Single(x => x.Key.StartsWith("locked/")).Subject?.ReviewFilter);
-        Assert.Equal(PinnedModFilter.NotInSources, notices.Single(x => x.Key.StartsWith("drift/")).Subject?.ReviewFilter);
+        Assert.Equal(new NoticeReview.ModList(PinnedModFilter.Locked), notices.Single(x => x.Key.StartsWith("locked/")).Subject?.Review);
+        Assert.Equal(new NoticeReview.ModList(PinnedModFilter.NotInSources), notices.Single(x => x.Key.StartsWith("drift/")).Subject?.Review);
     }
 
     /// <summary>
@@ -330,7 +383,7 @@ public class NoticeBuilderTests
     public void A_game_no_repo_serves_still_says_so_beside_a_gone_save_when_more_is_wrong()
     {
         var notices = Build(
-            Entry(new DriftReport(DriftStatus.Drifted, [], [], ["a.zip"], []) with
+            Entry(new DriftReport(DriftStatus.Drifted, [], [], ["a.zip"]) with
             {
                 SavegameDrift = [Save("one", SavegameDriftKind.RepoGone)]
             }),
@@ -565,7 +618,7 @@ public class NoticeBuilderTests
     [Fact]
     public void A_folder_that_only_lost_mods_has_nothing_to_import()
     {
-        var notice = Assert.Single(Build(Entry(new DriftReport(DriftStatus.Drifted, [], ["gone.zip"], [], []))));
+        var notice = Assert.Single(Build(Entry(new DriftReport(DriftStatus.Drifted, [], ["gone.zip"], []))));
 
         Assert.Null(notice.Footnote);
     }
@@ -586,8 +639,8 @@ public class NoticeBuilderTests
     [Fact]
     public void A_count_moving_from_one_row_to_another_changes_the_signature()
     {
-        var replaced = Assert.Single(Build(Entry(new DriftReport(DriftStatus.Drifted, [], [], ["a.zip"], []))));
-        var missing = Assert.Single(Build(Entry(new DriftReport(DriftStatus.Drifted, [], ["a.zip"], [], []))));
+        var replaced = Assert.Single(Build(Entry(new DriftReport(DriftStatus.Drifted, [], [], ["a.zip"]))));
+        var missing = Assert.Single(Build(Entry(new DriftReport(DriftStatus.Drifted, [], ["a.zip"], []))));
 
         Assert.NotEqual(replaced.Signature, missing.Signature);
     }
@@ -611,7 +664,7 @@ public class NoticeBuilderTests
         return
         [
             Entry(
-                new DriftReport(DriftStatus.Drifted, [], [], changed, []) with
+                new DriftReport(DriftStatus.Drifted, [], [], changed) with
                 {
                     LockedDrift = locked ?? []
                 },
@@ -620,6 +673,9 @@ public class NoticeBuilderTests
                 name)[0]
         ];
     }
+
+    private static IReadOnlyList<TargetDrift> Behind(int applied, int current)
+        => Entry(DriftReport.For(DriftStatus.Drifted) with { AppliedRevision = applied, CurrentRevision = current });
 
     private static IReadOnlyList<TargetDrift> Entry(
         DriftReport report,
