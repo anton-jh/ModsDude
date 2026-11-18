@@ -6,8 +6,8 @@ only holds what doesn't exist yet.
 ## Planned
 
 **Savegames for more games.** Minecraft, Stationeers and Space Engineers, as savegame-only adapters.
-The general savegame code already handles adapters without mods: no profile, no compatibility mode, no
-mod targets.
+The savegame flows already handle adapters without mods: no profile, no compatibility mode, no mod
+targets. The repo page still always shows its profile list, which such a game wouldn't need.
 
 **Load order and dependencies between mods.** Not modelled at all yet. It will need its own design:
 where the data comes from (adapter or user), how it shows in the editor, and how it affects apply.

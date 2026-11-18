@@ -7,9 +7,9 @@ fixes it.
 
 **The space check can under-count when an uninstalled file must be moved into the store.**
 `ModSyncSpaceNeeds.AddRemoval` skips the space for a recoverable file whenever *any* store holds its
-hash. But the executor only deletes such a file when the *serving* store holds it, and otherwise moves
-it into the serving store. When the only copy is in another disk's store, that move needs space the
-check never counted.
+hash. But the executor only deletes such a file when it *is* the serving store's blob, and otherwise
+moves it into the serving store. When the serving store is on another disk than the mod folder and the
+only copy is in yet another store, that move needs space the check never counted.
 
 **Some removals bypass the Recycle Bin.** A recoverable file whose bytes are in the serving store is
 deleted directly, or moved into the store (`ModSyncExecutor.RemoveOneAsync`). The bytes are kept and can
@@ -38,6 +38,9 @@ of a typed problem.
 gone repo have their own card. But the unreachable notice offers no action, and a game can only be
 disconnected from inside a repo.
 
+**The repo page always shows profiles.** Its profile list and Create button show even when the adapter
+has no mod support, where profiles mean nothing.
+
 **Profile history doesn't page.** The server windows revisions with skip and limit, but the client only
 shows that there are more (`ProfileHistoryPageViewModel`).
 
@@ -54,7 +57,7 @@ it beforehand.
 can, rarely, also share a tag.
 
 **Invite codes are stored in plain text.** Only their creator can read them, but anyone with database
-access can too. Accepted for now, because codes are short-lived and revocable.
+access can too. Accepted for now, because codes are revocable and can be limited by time and uses.
 
 **EF owned collections always load.** `ProfileRevision.Pins` and `ModVersion` attributes and images are
 owned, so loading the owner loads them all. Query projections, not entities, when only the owner is
@@ -66,6 +69,9 @@ sequence.
 
 ## Hygiene
 
+- Some pages read detail data straight from the API instead of a store, so the change poll doesn't
+  update it: savegame snapshots and check-outs, mod dependents, the editor's pins and ignore list, and
+  archived profiles.
 - `GET users` has no caller in the client.
 - `ModsDude.Server.Domain/Mods/ModTag.cs` is unused.
 - Time types are mixed: `ITimeService` returns `DateTime`, while some entities use `DateTimeOffset`.
