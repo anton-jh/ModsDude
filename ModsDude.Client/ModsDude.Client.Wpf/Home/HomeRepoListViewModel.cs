@@ -202,7 +202,7 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
             case HomeRepoAction.Review when state.FollowedProfileId is Guid profileId:
                 await _navigation.GoToAsync(state.RepoId, new RepoDestination.ProfileMods(profileId, state.ReviewFilter));
                 break;
-            case HomeRepoAction.Apply when state.FollowedProfileId is Guid profileId:
+            case HomeRepoAction.Apply or HomeRepoAction.Update when state.FollowedProfileId is Guid profileId:
                 await ApplyAsync(state.RepoId, profileId, state.FollowedProfileName);
                 break;
             case HomeRepoAction.OpenProfile when state.FollowedProfileId is Guid profileId:
@@ -391,10 +391,16 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
         var syncState = _syncStatus.StateOf(repo);
         var canPickProfile = game is not null && repo.Adapter.CanSupportMods;
 
+        var drifted = syncState is ProfileSyncState.Drifted && game is not null ? DriftedReports(game) : [];
+        var behind = RevisionGap.Of(drifted);
+
+        // A game that is only behind its profile has nothing on disk to review, so the next step is
+        // the update itself. What changed between the revisions is the notice's Review.
         var action = game is null
             ? GameRepository.ConnectsAutomatically(repo.Adapter) ? HomeRepoAction.None : HomeRepoAction.ConnectGame
             : syncState switch
             {
+                ProfileSyncState.Drifted when behind is not null => HomeRepoAction.Update,
                 ProfileSyncState.Drifted => HomeRepoAction.Review,
                 ProfileSyncState.NotApplied or ProfileSyncState.Applying => HomeRepoAction.Apply,
                 ProfileSyncState.InSync => HomeRepoAction.OpenProfile,
@@ -426,7 +432,8 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
             _profiles.Find(repo.Id, followedId)?.Name,
             game?.PinnedRevision,
             syncState,
-            syncState is ProfileSyncState.Drifted && game is not null ? FindReviewFilter(game) : null,
+            drifted.Count > 0 ? DriftReviewFilter.For(drifted) : null,
+            behind,
             action,
             game is not null && _applyService.IsBusy(repo, game),
             canPickProfile,
@@ -437,18 +444,13 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
             held);
     }
 
-    /// <summary>What Review shows, from every folder of the game that has moved. Null where none has.</summary>
-    private PinnedModFilter? FindReviewFilter(Game game)
-    {
-        List<DriftReport> reports =
-        [
-            .. _driftMonitor.Drifted
-                .Where(x => x.Game.Identity == game.Identity && (x.Report.Status is DriftStatus.Drifted || x.Report.HasSavegameDrift))
-                .Select(x => x.Report)
-        ];
-
-        return reports.Count > 0 ? DriftReviewFilter.For(reports) : null;
-    }
+    /// <summary>Every folder of the game that has moved from what was applied, or holds a drifted savegame.</summary>
+    private List<DriftReport> DriftedReports(Game game) =>
+    [
+        .. _driftMonitor.Drifted
+            .Where(x => x.Game.Identity == game.Identity && (x.Report.Status is DriftStatus.Drifted || x.Report.HasSavegameDrift))
+            .Select(x => x.Report)
+    ];
 
 
     public sealed class Factory(IServiceProvider serviceProvider)

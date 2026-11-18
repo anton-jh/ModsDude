@@ -160,7 +160,9 @@ empty rows: Missing, Wrong version, Added, Revision (applied → current), Game 
 locked-mods notice lists each locked mod with Wrong version or Missing, up to five rows, the last
 becoming a count of the rest. The game overview shows the same rows under a drifted folder.
 
-A folder whose only difference is the profile's revision (`IsProfileMoveOnly`) gets its own card:
+A folder whose only difference is the profile's revision (`IsProfileMoveOnly`) is behind it, by a
+`RevisionGap` (applied → needed revision; across a game's folders, the oldest applied one). It gets its
+own card:
 
 - headline "'Game' is behind 'Profile'", severity Pending;
 - rows Applied and Current (revision numbers);
@@ -182,7 +184,11 @@ picked by `DriftReviewFilter`:
 | The locked-mods notice | Locked |
 
 Where a notice's Review goes is `NoticeSubject.Review`: `NoticeReview.ModList` (a filter) or
-`NoticeReview.RevisionChanges` (two revisions).
+`NoticeReview.RevisionChanges` (a revision gap).
+
+Home's repo row follows the same split: a game whose drifted folders are all only behind offers
+"Update to rev N" as its one button; any other drift offers Review into the mod editor. The sync chip
+says Drifted in both cases.
 
 ### Leases
 

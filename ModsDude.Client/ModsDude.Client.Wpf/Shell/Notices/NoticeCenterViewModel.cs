@@ -453,7 +453,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         RepoDestination destination = review switch
         {
             NoticeReview.ModList list => new RepoDestination.ProfileMods(profileId, list.Filter),
-            NoticeReview.RevisionChanges changes => new RepoDestination.ProfileHistory(profileId, changes.To, CompareWith: changes.From),
+            NoticeReview.RevisionChanges changes => new RepoDestination.ProfileHistory(profileId, changes.Gap.To, CompareWith: changes.Gap.From),
             _ => throw new ArgumentOutOfRangeException(nameof(notice), review, null)
         };
 

@@ -1,6 +1,7 @@
 using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Friends;
 using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Repos;
@@ -14,6 +15,7 @@ public enum HomeRepoAction
     ConnectGame,
     Review,
     Apply,
+    Update,
     OpenProfile
 }
 
@@ -41,6 +43,7 @@ public sealed record HomeHeldSavegame(Game Game, Guid SavegameId, string? Name)
 /// <param name="FollowedProfileId">The profile of this repo the game follows, or null where it follows none here.</param>
 /// <param name="FollowedProfileName">Its name, or null where it is archived or not read yet.</param>
 /// <param name="ReviewFilter">What Review shows of the drifted folders, which it opens already scanned.</param>
+/// <param name="Behind">The revisions the game is behind by, where that is the only way its folders drifted.</param>
 /// <param name="IsBusy">Whether an apply holds the game right now.</param>
 /// <param name="CanPickProfile">Whether the game is connected and its adapter has mods to put a profile's on.</param>
 /// <param name="ProfilesLoaded">Whether the repo's profiles have been read, so an empty picker means there are none.</param>
@@ -55,6 +58,7 @@ public sealed record HomeRepoState(
     int? PinnedRevision,
     ProfileSyncState SyncState,
     PinnedModFilter? ReviewFilter,
+    RevisionGap? Behind,
     HomeRepoAction Action,
     bool IsBusy,
     bool CanPickProfile,
@@ -96,6 +100,7 @@ public sealed record HomeRepoState(
         HomeRepoAction.ConnectGame => "Connect game",
         HomeRepoAction.Review => "Review",
         HomeRepoAction.Apply => "Apply",
+        HomeRepoAction.Update => Behind?.ActionLabel ?? "Update",
         HomeRepoAction.OpenProfile => "Open profile",
         _ => ""
     };

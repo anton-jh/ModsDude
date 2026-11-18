@@ -165,18 +165,18 @@ public static class NoticeBuilder
 
         // The folder is exactly what was applied and the profile has a new revision: nothing on disk
         // to look at, so Review shows what changed between the two revisions and updating leads.
-        NoticeReview review = report.IsProfileMoveOnly
-            && report.AppliedRevision is int appliedRevision
-            && report.CurrentRevision is int currentRevision
-                ? new NoticeReview.RevisionChanges(appliedRevision, currentRevision)
-                : new NoticeReview.ModList(DriftReviewFilter.For(report));
+        var gap = RevisionGap.Of(report);
+
+        NoticeReview review = gap is not null
+            ? new NoticeReview.RevisionChanges(gap)
+            : new NoticeReview.ModList(DriftReviewFilter.For(report));
 
         (string Headline, string? Body, IReadOnlyList<NoticeFact> Facts, NoticeSeverity Severity) shown = report.Status switch
         {
-            DriftStatus.Drifted when review is NoticeReview.RevisionChanges(var from, var to) => (
+            DriftStatus.Drifted when gap is not null => (
                 $"'{game.Name}' is behind {profile}{inFolder}",
                 null,
-                [new NoticeFact("Applied", $"rev {from}"), new NoticeFact("Current", $"rev {to}")],
+                [new NoticeFact("Applied", $"rev {gap.From}"), new NoticeFact("Current", $"rev {gap.To}")],
                 NoticeSeverity.Pending),
 
             DriftStatus.Drifted => (
@@ -214,11 +214,9 @@ public static class NoticeBuilder
         // what the user meant to end up with, and re-applying before looking throws it away. The
         // pending statuses and a folder that is only behind have nothing on disk to look at, so
         // re-applying leads there.
-        var reviewLeads = canReview && report.Status is DriftStatus.Drifted && review is NoticeReview.ModList;
+        var reviewLeads = canReview && report.Status is DriftStatus.Drifted && gap is null;
 
-        var reapplyLabel = review is NoticeReview.RevisionChanges(var fromRevision, var toRevision)
-            ? toRevision > fromRevision ? $"Update to rev {toRevision}" : $"Re-apply rev {toRevision}"
-            : ReapplyLabel(game, environment);
+        var reapplyLabel = gap?.ActionLabel ?? ReapplyLabel(game, environment);
 
         return Make(
             $"drift/{game.Identity}/{entry.Target?.Target.Key.Value ?? "-"}",

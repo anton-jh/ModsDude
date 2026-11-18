@@ -189,7 +189,7 @@ public class NoticeBuilderTests
             ],
             notice.Actions);
 
-        Assert.Equal(new NoticeReview.RevisionChanges(3, 6), notice.Subject?.Review);
+        Assert.Equal(new NoticeReview.RevisionChanges(new RevisionGap(3, 6)), notice.Subject?.Review);
     }
 
     /// <summary>
@@ -202,7 +202,7 @@ public class NoticeBuilderTests
         var notice = Assert.Single(Build(Behind(applied: 6, current: 4)));
 
         Assert.Equal("Re-apply rev 4", notice.Actions.Single(x => x.IsPrimary).Label);
-        Assert.Equal(new NoticeReview.RevisionChanges(6, 4), notice.Subject?.Review);
+        Assert.Equal(new NoticeReview.RevisionChanges(new RevisionGap(6, 4)), notice.Subject?.Review);
     }
 
     /// <summary>A profile's history is readable at Guest, so reviewing revision changes is theirs too.</summary>

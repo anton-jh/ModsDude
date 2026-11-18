@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Profiles.Editor;
+using ModsDude.Client.Core.Sync;
 
 namespace ModsDude.Client.Core.Notices;
 
@@ -13,6 +14,6 @@ public abstract record NoticeReview
     /// <summary>The profile's mod list, reviewing the game's mod folders with this filter.</summary>
     public sealed record ModList(PinnedModFilter Filter) : NoticeReview;
 
-    /// <summary>The profile's history, with <paramref name="To"/> selected and compared with <paramref name="From"/>.</summary>
-    public sealed record RevisionChanges(int From, int To) : NoticeReview;
+    /// <summary>The profile's history, with the gap's target revision selected and compared with its applied one.</summary>
+    public sealed record RevisionChanges(RevisionGap Gap) : NoticeReview;
 }

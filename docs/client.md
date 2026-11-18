@@ -56,7 +56,10 @@ and History.
   profile and Create repo work this way.
 - Entries the user's level doesn't allow are **disabled with a tooltip, not hidden**
   (`MenuItemViewModel.Restrict`).
-- Home shows the user's repos, with friends' activity grouped by profile.
+- Home shows the user's repos, with friends' activity grouped by profile. Each repo row offers one next
+  step: Connect game, Apply (nothing applied yet), Review (drifted; opens the mod editor like the
+  notice), "Update to rev N" (every drifted folder only behind its profile, `RevisionGap`) or Open
+  profile.
 - Names sort naturally (`Mod 2` before `Mod 10`), but only names people read; machine data sorts
   ordinally.
 
