@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Notices;
 using ModsDude.Client.Core.Sync;
 
 namespace ModsDude.Client.Wpf.Games;
@@ -12,7 +13,11 @@ namespace ModsDude.Client.Wpf.Games;
 /// <param name="IsProblem">Whether the value itself is the problem, and is drawn as one.</param>
 public sealed record GameDetailLine(string Label, string Value, string? Note = null, bool IsProblem = false)
 {
+    /// <summary>What a drifted mod folder differs by, under the note.</summary>
+    public IReadOnlyList<NoticeFact> Facts { get; init; } = [];
+
     public bool HasNote => Note is not null;
+    public bool HasFacts => Facts.Count > 0;
 }
 
 
@@ -40,12 +45,17 @@ public class GameOverviewViewModel
         Problem = installation.Problem;
         HoldingSummary = holdingSummary;
 
-        Folders = [.. installation.Folders.Select(folder => new GameDetailLine(
-            Label(folder),
-            folder.Path,
-            folder.Kind is GameFolderKind.Mods
-                ? Describe(drift.FirstOrDefault(x => x.Target?.Target.Key == folder.Key)?.Report)
-                : null))];
+        Folders = [.. installation.Folders.Select(folder =>
+        {
+            var report = folder.Kind is GameFolderKind.Mods
+                ? drift.FirstOrDefault(x => x.Target?.Target.Key == folder.Key)?.Report
+                : null;
+
+            return new GameDetailLine(Label(folder), folder.Path, Describe(report))
+            {
+                Facts = report is { Status: DriftStatus.Drifted } drifted ? DriftFacts.For(drifted) : []
+            };
+        })];
 
         Details = activeProfile is null ? Folders : [activeProfile, .. Folders];
     }
@@ -88,54 +98,24 @@ public class GameOverviewViewModel
     }
 
     /// <summary>
-    /// What the last check found in this folder, or null where it found nothing worth saying.
+    /// What the last check found in this folder, or null where it found nothing worth saying. A
+    /// drifted folder lists what it differs by in <see cref="GameDetailLine.Facts"/>.
     /// </summary>
     /// <remarks>
     /// Every status the monitor reports, not only <see cref="DriftStatus.Drifted"/>: an apply that
     /// never landed and a folder that was repointed are both things somebody opens an overview to
     /// find. A game with no profile, or one that is gone, is already said by its profile row.
     /// </remarks>
-    private static string? Describe(DriftReport? report)
+    private static string? Describe(DriftReport? report) => report?.Status switch
     {
-        if (report is not DriftReport drift)
-        {
-            return null;
-        }
-
-        return drift.Status switch
-        {
-            DriftStatus.Drifted => DescribeDrifted(drift),
-            DriftStatus.NotApplied => drift.AppliedProfileName is string applied
-                ? $"Still on '{applied}'. This profile has not been applied here yet."
-                : "Still on the profile it was last applied to, not this one.",
-            DriftStatus.NeverSynced => "This profile has not been applied here yet.",
-            DriftStatus.FolderRepointed => "The settings have been pointed somewhere else, and nothing has been applied there yet.",
-            _ => null
-        };
-    }
-
-    private static string DescribeDrifted(DriftReport drift)
-    {
-        // The dangerous case gets its own words: an unlocked mod at the wrong version is untidy, a
-        // locked map at the wrong version is a damaged savegame waiting to happen.
-        if (drift.LockedDrift.Count > 0)
-        {
-            return $"{drift.DifferenceCount} differences, including the locked '{drift.LockedDrift[0].DisplayName}'. Hosting a savegame may damage it.";
-        }
-
-        // A profile that moved on is drift with nothing in the folder to count, so a difference
-        // count would read "0 differences" - which is both false and unhelpful.
-        var moved = drift.ProfileHasMoved
-            ? $"Applied at revision {drift.AppliedRevision}; the profile is now at revision {drift.CurrentRevision}."
-            : null;
-
-        if (drift.DifferenceCount == 0)
-        {
-            return moved ?? "Differs from what was last applied here.";
-        }
-
-        var differences = $"{drift.DifferenceCount} differences from what was last applied here.";
-
-        return moved is null ? differences : $"{differences} {moved}";
-    }
+        DriftStatus.Drifted => report.LockedDrift.Count > 0
+            ? "Includes locked mods. Hosting a savegame may damage it."
+            : "Differs from what was last applied here.",
+        DriftStatus.NotApplied => report.AppliedProfileName is string applied
+            ? $"Still on '{applied}'. This profile has not been applied here yet."
+            : "Still on the profile it was last applied to, not this one.",
+        DriftStatus.NeverSynced => "This profile has not been applied here yet.",
+        DriftStatus.FolderRepointed => "The settings have been pointed somewhere else, and nothing has been applied there yet.",
+        _ => null
+    };
 }

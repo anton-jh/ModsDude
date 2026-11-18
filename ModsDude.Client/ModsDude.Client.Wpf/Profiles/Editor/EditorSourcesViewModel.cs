@@ -190,25 +190,41 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Makes one source the only one enabled, for an editor opened at that folder by the drift notice.
+    /// Makes the game's mod folders the only sources enabled, for an editor opened to review drift.
     /// Answers with what should then be loaded.
     /// </summary>
-    public ImmutableHashSet<ModSourceId> FocusOn(ModSourceId id)
+    public ImmutableHashSet<ModSourceId> FocusOnTargets()
     {
-        foreach (var other in Loaded.Where(x => x != id))
+        var targets = _catalog.GetSources()
+            .Where(x => x.Kind is ModSourceKind.Game)
+            .Select(x => x.Id)
+            .ToImmutableHashSet();
+
+        foreach (var other in Loaded.Except(targets))
         {
             _standby.Add(other);
         }
 
-        _standby.Remove(id);
-        IncludeRegistered = false;
-
-        if (Loaded.Contains(id) is false)
+        // Whatever the remote sources offer is not on disk, and would both add updates the game did
+        // not make and hide missing mods they happen to offer.
+        foreach (var lookup in _remote)
         {
-            _catalog.Rescan(id);
+            _standby.Add(lookup.Id);
         }
 
-        return Loaded.Add(id);
+        foreach (var target in targets)
+        {
+            _standby.Remove(target);
+
+            if (Loaded.Contains(target) is false)
+            {
+                _catalog.Rescan(target);
+            }
+        }
+
+        IncludeRegistered = false;
+
+        return Loaded.Union(targets);
     }
 
     [RelayCommand]

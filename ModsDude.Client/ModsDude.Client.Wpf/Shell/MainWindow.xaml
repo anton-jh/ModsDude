@@ -222,6 +222,11 @@
 
                                         <StackPanel Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}">
 
+                                            <ItemsControl ItemsSource="{Binding Facts}"
+                                                          Margin="0 4 0 0"
+                                                          Style="{StaticResource FactList}"
+                                                          Visibility="{Binding HasFacts, Converter={StaticResource BoolToVisibilityConverter}}" />
+
                                             <TextBlock Text="{Binding Body}"
                                                        Margin="0 8 0 0"
                                                        TextWrapping="Wrap"

@@ -2,6 +2,7 @@ using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Notices;
+using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 
@@ -27,7 +28,8 @@ public class NoticeBuilderTests
 
         Assert.Equal(NoticeSeverity.Warning, notice.Severity);
         Assert.Contains("'Farming Simulator 25' no longer matches 'Season 4'", notice.Headline);
-        Assert.Contains("1 replaced", notice.Body);
+        Assert.Equal([new NoticeFact("Wrong version", "1")], notice.Facts);
+        Assert.Null(notice.Body);
 
         // What the folder holds now is usually what the user meant to end up with, and re-applying
         // before looking throws it away.
@@ -92,33 +94,130 @@ public class NoticeBuilderTests
         Assert.Equal(NoticeSeverity.Critical, locked.Severity);
         Assert.Equal(NoticeSeverity.Warning, folder.Severity);
 
-        Assert.Contains("'Big Map' is locked at 1.4.2 and is no longer installed", locked.Headline);
-        Assert.Contains("Hosting a savegame on it may damage that save.", locked.Body);
+        Assert.Equal("'Big Map' is locked at 1.4.2 and is no longer installed in the 'mods' folder", locked.Headline);
+        Assert.Equal([new NoticeFact("Big Map", "Missing")], locked.Facts);
+        Assert.Equal("Hosting a savegame on the wrong version may damage it.", locked.Body);
     }
 
     /// <summary>
-    /// Twenty locked mods are one update-all with one remedy. They are named in the body rather than
-    /// drawn as twenty cards, which is the wall the single card was right to be afraid of.
+    /// Twenty locked mods are one update-all with one remedy, so they stay one card and list the
+    /// first few by name.
     /// </summary>
     [Fact]
-    public void Many_locked_mods_stay_one_notice_and_name_the_first_few()
+    public void Many_locked_mods_stay_one_notice_and_list_the_first_few()
     {
         var notices = Build(Drifted(
             changed: ["a.zip"],
             locked:
             [
+                new(ModKey.From("f"), "Foxtrot", null, LockedDriftReason.FileChanged),
+                new(ModKey.From("b"), "Bravo", null, LockedDriftReason.FileRemoved),
                 new(ModKey.From("a"), "Alpha", null, LockedDriftReason.FileChanged),
-                new(ModKey.From("b"), "Bravo", null, LockedDriftReason.FileChanged),
-                new(ModKey.From("c"), "Charlie", null, LockedDriftReason.FileChanged),
-                new(ModKey.From("d"), "Delta", null, LockedDriftReason.FileChanged),
-                new(ModKey.From("e"), "Echo", null, LockedDriftReason.FileChanged)
+                new(ModKey.From("e"), "Echo", null, LockedDriftReason.FileChanged),
+                new(ModKey.From("c"), "Charlie", null, LockedDriftReason.ProfileMoved),
+                new(ModKey.From("d"), "Delta", null, LockedDriftReason.FileChanged)
             ]));
 
         var locked = Assert.Single(notices, x => x.Key.StartsWith("locked/"));
 
-        Assert.Equal("5 locked mods in 'Farming Simulator 25' are not what they were locked at", locked.Headline);
-        Assert.Contains("'Bravo', 'Charlie' and 'Delta'", locked.Body);
-        Assert.Contains("1 more", locked.Body);
+        Assert.Equal("6 locked mods in 'Farming Simulator 25' are not what they were locked at in the 'mods' folder", locked.Headline);
+        Assert.Equal(
+            [
+                new NoticeFact("Alpha", "Wrong version"),
+                new NoticeFact("Bravo", "Missing"),
+                new NoticeFact("Charlie", "Profile moved"),
+                new NoticeFact("Delta", "Wrong version"),
+                new NoticeFact("More", "2")
+            ],
+            locked.Facts);
+    }
+
+    [Fact]
+    public void Five_locked_mods_are_all_listed()
+    {
+        var notices = Build(Drifted(
+            changed: ["a.zip"],
+            locked: [.. "abcde".Select(x => new DriftedLockedMod(ModKey.From(x.ToString()), x.ToString(), null, LockedDriftReason.FileChanged))]));
+
+        var locked = Assert.Single(notices, x => x.Key.StartsWith("locked/"));
+
+        Assert.Equal(["a", "b", "c", "d", "e"], locked.Facts.Select(x => x.Label));
+    }
+
+    [Fact]
+    public void A_drifted_folder_lists_every_kind_of_difference_in_a_fixed_order()
+    {
+        var report = new DriftReport(DriftStatus.Drifted, ["new.zip"], ["gone1.zip", "gone2.zip"], ["moved.zip"], [ModKey.From("x")])
+        {
+            AppliedRevision = 12,
+            CurrentRevision = 14,
+            EditedGameFiles = ["mods.xml"]
+        };
+
+        var notice = Assert.Single(Build(Entry(report)));
+
+        Assert.Equal(
+            [
+                new NoticeFact("Missing", "2"),
+                new NoticeFact("Wrong version", "1"),
+                new NoticeFact("Added", "1"),
+                new NoticeFact("Changed in profile", "1"),
+                new NoticeFact("Revision", "12 → 14"),
+                new NoticeFact("Game files edited", "1")
+            ],
+            notice.Facts);
+    }
+
+    [Fact]
+    public void A_folder_whose_only_difference_is_a_moved_profile_lists_the_revisions()
+    {
+        var report = DriftReport.For(DriftStatus.Drifted) with { AppliedRevision = 3, CurrentRevision = 4 };
+
+        var notice = Assert.Single(Build(Entry(report)));
+
+        Assert.Equal([new NoticeFact("Revision", "3 → 4")], notice.Facts);
+        Assert.Equal(PinnedModFilter.NotInSources, notice.Subject?.ReviewFilter);
+    }
+
+    [Fact]
+    public void A_repointed_folder_names_the_folder()
+    {
+        var notice = Assert.Single(Build(Entry(DriftReport.For(DriftStatus.FolderRepointed))));
+
+        Assert.Equal([new NoticeFact("Folder", @"C:\games\mods")], notice.Facts);
+    }
+
+    [Fact]
+    public void Reviewing_a_folder_the_game_only_updated_shows_updates()
+    {
+        var notice = Assert.Single(Build(Drifted(changed: ["fs25_a.zip"])));
+
+        Assert.Equal(PinnedModFilter.Updates, notice.Subject?.ReviewFilter);
+    }
+
+    [Fact]
+    public void Reviewing_a_folder_with_anything_but_updates_shows_what_is_not_in_the_sources()
+    {
+        var report = new DriftReport(DriftStatus.Drifted, ["new.zip"], [], ["fs25_a.zip"], []);
+
+        var notice = Assert.Single(Build(Entry(report)));
+
+        Assert.Equal(PinnedModFilter.NotInSources, notice.Subject?.ReviewFilter);
+    }
+
+    /// <summary>
+    /// Locked pins never show under Updates, and one whose file changed is still offered by the
+    /// folder, so neither filter would show it.
+    /// </summary>
+    [Fact]
+    public void Reviewing_locked_mods_shows_the_locked_ones()
+    {
+        var notices = Build(Drifted(
+            changed: ["bigmap.zip"],
+            locked: [new(ModKey.From("bigmap"), "Big Map", "1.4.2", LockedDriftReason.FileChanged)]));
+
+        Assert.Equal(PinnedModFilter.Locked, notices.Single(x => x.Key.StartsWith("locked/")).Subject?.ReviewFilter);
+        Assert.Equal(PinnedModFilter.NotInSources, notices.Single(x => x.Key.StartsWith("drift/")).Subject?.ReviewFilter);
     }
 
     /// <summary>
@@ -452,15 +551,23 @@ public class NoticeBuilderTests
     }
 
     /// <summary>
-    /// The drifted files are by definition versions the user now has and the repo may not, so the
-    /// warning doubles as the first step of the flow they came back to perform anyway.
+    /// The drifted files are versions the user now has and the repo may not, so the warning doubles
+    /// as an import prompt.
     /// </summary>
     [Fact]
     public void A_drifted_folder_doubles_as_an_import_prompt()
     {
         var notice = Assert.Single(Build(Drifted(changed: ["fs25_a.zip"])));
 
-        Assert.Contains("Opening the mod list is where they get imported.", notice.Footnote);
+        Assert.Equal("Versions now on disk can be imported from the mod list.", notice.Footnote);
+    }
+
+    [Fact]
+    public void A_folder_that_only_lost_mods_has_nothing_to_import()
+    {
+        var notice = Assert.Single(Build(Entry(new DriftReport(DriftStatus.Drifted, [], ["gone.zip"], [], []))));
+
+        Assert.Null(notice.Footnote);
     }
 
     /// <summary>
@@ -474,6 +581,15 @@ public class NoticeBuilderTests
 
         Assert.Equal(one.Key, two.Key);
         Assert.NotEqual(one.Signature, two.Signature);
+    }
+
+    [Fact]
+    public void A_count_moving_from_one_row_to_another_changes_the_signature()
+    {
+        var replaced = Assert.Single(Build(Entry(new DriftReport(DriftStatus.Drifted, [], [], ["a.zip"], []))));
+        var missing = Assert.Single(Build(Entry(new DriftReport(DriftStatus.Drifted, [], ["a.zip"], [], []))));
+
+        Assert.NotEqual(replaced.Signature, missing.Signature);
     }
 
 

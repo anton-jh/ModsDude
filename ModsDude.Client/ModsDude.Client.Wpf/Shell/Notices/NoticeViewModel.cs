@@ -51,6 +51,10 @@ public partial class NoticeViewModel : ObservableObject
     private string _headline = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFacts))]
+    private IReadOnlyList<NoticeFact> _facts = [];
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasBody))]
     private string? _body;
 
@@ -93,6 +97,7 @@ public partial class NoticeViewModel : ObservableObject
 
     public ObservableCollection<NoticeActionViewModel> Actions { get; } = [];
 
+    public bool HasFacts => Facts.Count > 0;
     public bool HasBody => string.IsNullOrWhiteSpace(Body) is false;
     public bool HasFootnote => string.IsNullOrWhiteSpace(Footnote) is false;
     public bool HasStatus => string.IsNullOrWhiteSpace(Status) is false;
@@ -115,6 +120,13 @@ public partial class NoticeViewModel : ObservableObject
         Model = notice;
 
         Headline = notice.Headline;
+
+        // Every check builds a new list, and replacing an equal one would redraw the rows for nothing.
+        if (Facts.SequenceEqual(notice.Facts) is false)
+        {
+            Facts = notice.Facts;
+        }
+
         Body = notice.Body;
         Footnote = notice.Footnote;
         Severity = notice.Severity;

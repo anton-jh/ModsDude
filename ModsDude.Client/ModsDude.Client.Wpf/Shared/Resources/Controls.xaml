@@ -2,7 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:converters="clr-namespace:ModsDude.Client.Wpf.Shared.Converters"
                     xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
-                    xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors">
+                    xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
+                    xmlns:notices="clr-namespace:ModsDude.Client.Core.Notices;assembly=ModsDude.Client.Core">
 
     <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
     <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
@@ -144,6 +145,26 @@
     <Style x:Key="FieldValue" TargetType="TextBlock">
         <Setter Property="Margin" Value="0 4 0 0" />
         <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- A list of NoticeFact as label/value pairs, the labels sharing one column. -->
+    <Style x:Key="FactList" TargetType="ItemsControl">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Grid.IsSharedSizeScope" Value="True" />
+        <Setter Property="ItemTemplate">
+            <Setter.Value>
+                <DataTemplate DataType="{x:Type notices:NoticeFact}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="FactLabel" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Style="{StaticResource FieldLabel}" Text="{Binding Label}" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource FieldValue}" Text="{Binding Value}" />
+                    </Grid>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- See SplitButton. The chrome is drawn behind two bare buttons, once per half and split down the

@@ -1,10 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ModsDude.Client.Core.Concurrency;
-using ModsDude.Client.Core.GameAdapters;
 using Microsoft.Extensions.DependencyInjection;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
@@ -57,11 +57,11 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
     private readonly MenuItemViewModel _historyMenuItem;
 
     /// <summary>Set by a drift deep link, consumed by the next page the Mods entry builds.</summary>
-    private ModTargetRef? _scanTargetOnce;
+    private PinnedModFilter? _reviewOnce;
 
     /// <summary>
     /// Which revision a deep link into the history asked for. Same one-shot shape as
-    /// <see cref="_scanTargetOnce"/>, and for the same reason: it describes an arrival, not a
+    /// <see cref="_reviewOnce"/>, and for the same reason: it describes an arrival, not a
     /// standing preference.
     /// </summary>
     private int? _selectRevisionOnce;
@@ -119,10 +119,10 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
                 return profileModsPageViewModelFactory.Create(repo, profile);
             }
 
-            var scanTarget = _scanTargetOnce;
-            _scanTargetOnce = null;
+            var review = _reviewOnce;
+            _reviewOnce = null;
 
-            return profileModsEditorPageViewModelFactory.Create(repo, profile, scanTarget);
+            return profileModsEditorPageViewModelFactory.Create(repo, profile, review);
         }).WithIcon(MenuIcons.Mods);
 
         // Open to a guest, like the read-only mod list and for the same reason: somebody who syncs
@@ -517,27 +517,26 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
 
 
     /// <summary>Selects the Mods sub-page, for a deep link from the drift notice.</summary>
-    /// <param name="scanTarget">
-    /// A folder the editor should open already scanning. Sources are off by
-    /// default because opening a page must not read a disk - but arriving here from a drift notice
-    /// <em>is</em> the user asking about that folder's contents, so the one it is about is on.
+    /// <param name="review">
+    /// Opens the editor reviewing the game's mod folders with this filter. Sources are off by default
+    /// because opening a page must not read a disk, but arriving from a drift notice <em>is</em> the
+    /// user asking about those folders.
     /// </param>
-    public bool TrySelectMods(ModTargetRef? scanTarget = null)
+    public bool TrySelectMods(PinnedModFilter? review = null)
     {
         // Read and cleared by the menu item's factory, so it applies to the page this call opens and
         // not to the next one somebody reaches through the tabs.
-        _scanTargetOnce = scanTarget;
+        _reviewOnce = review;
 
         if (ReferenceEquals(NavManager.Current, _modsMenuItem) is false)
         {
             NavManager.Selected = _modsMenuItem;
         }
-        else if (scanTarget is not null)
+        else if (review is PinnedModFilter filter)
         {
             // Already open, so selecting it again constructs nothing and the factory never runs.
-            // Enable the folder on the page the user is looking at instead.
-            (NavManager.CurrentPage as ProfileModsEditorPageViewModel)?.ScanTarget(scanTarget.Value);
-            _scanTargetOnce = null;
+            (NavManager.CurrentPage as ProfileModsEditorPageViewModel)?.Review(filter);
+            _reviewOnce = null;
         }
 
         return ReferenceEquals(NavManager.Current, _modsMenuItem);

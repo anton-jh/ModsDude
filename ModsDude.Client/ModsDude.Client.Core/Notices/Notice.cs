@@ -1,5 +1,6 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles.Editor;
 
 namespace ModsDude.Client.Core.Notices;
 
@@ -107,36 +108,23 @@ public sealed record NoticeSubject(GameIdentity Game, string GameName)
 
     /// <summary>A specific revision of the profile, where the notice is about one rather than about head.</summary>
     public int? Revision { get; init; }
+
+    /// <summary>Which pinned mods Review shows, where the notice offers Review.</summary>
+    public PinnedModFilter? ReviewFilter { get; init; }
 }
 
 
+/// <summary>One labelled value in a notice, such as how many mods are missing.</summary>
+public sealed record NoticeFact(string Label, string Value);
+
+
 /// <summary>
-/// One thing worth telling the user about, in the column on the right.
+/// One thing worth telling the user about, in the column on the right: one problem with one remedy.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>One notice is one problem with one remedy.</b> That is the whole of the model, and it is a
-/// deliberate reversal: for several slices the shell drew a single drift card that multiplexed the
-/// mod half, the locked half, the savegame half and the shared cache into one bordered box, and
-/// closed the lists it could not fit with <em>2 more savegame problems here as well</em>. Those
-/// tails were list items flattened into a sentence because there was only ever one card to put them
-/// in. The column is the place that was missing, and the trailing counts go away by having somewhere
-/// to be drawn.
-/// </para>
-/// <para>
-/// <b>The old argument against this is on the record and is being overruled, not forgotten.</b> The
-/// single card said that "two notices racing to say one each is how a warning becomes noise" and
-/// that "a person acts on one problem at a time". Both are true of a corner with room for one card
-/// in it. They stop being true of a list that sorts by what is at stake, collapses everything below
-/// the fold, and groups a game's folders under the game - which is what this model exists to let the
-/// shell do. If the column ever reads as a wall, the old shape was right.
-/// </para>
-/// <para>
-/// <b>Keyed and signed, because dismissal is per notice now.</b> <see cref="Key"/> is what a
-/// dismissal is filed under and is stable for as long as the problem is the same problem;
-/// <see cref="Signature"/> is what the notice currently says, so that waving away two stray mods
-/// does not also wave away the third one that arrives afterwards. See <see cref="DismissalLedger"/>.
-/// </para>
+/// <see cref="Key"/> is what a dismissal is filed under and is stable for as long as the problem is
+/// the same problem; <see cref="Signature"/> is what the notice currently says, so that waving away
+/// two stray mods does not also wave away a third that arrives afterwards. See <see cref="DismissalLedger"/>.
 /// </remarks>
 /// <param name="Key">
 /// Identity across rebuilds. The column rebuilds from scratch on every check, so this is what lets a
@@ -153,7 +141,10 @@ public sealed record Notice(
     NoticeSeverity Severity,
     string Headline)
 {
-    /// <summary>The paragraph under the headline. Null where the headline is the whole of it.</summary>
+    /// <summary>Label/value rows under the headline, in the order they are drawn.</summary>
+    public IReadOnlyList<NoticeFact> Facts { get; init; } = [];
+
+    /// <summary>The line under the facts. Null where the headline and facts are the whole of it.</summary>
     public string? Body { get; init; }
 
     /// <summary>

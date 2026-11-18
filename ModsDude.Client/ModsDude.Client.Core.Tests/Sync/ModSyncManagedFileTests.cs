@@ -95,7 +95,8 @@ public class ModSyncManagedFileTests
         var drift = await fixture.CheckDriftAsync();
 
         Assert.Equal(DriftStatus.Drifted, drift.Status);
-        Assert.Contains(_listName, drift.Changed);
+        Assert.Equal([_listName], drift.EditedGameFiles);
+        Assert.Empty(drift.Changed);
     }
 
     [Fact]
@@ -119,7 +120,7 @@ public class ModSyncManagedFileTests
 
         fixture.Adapter.ManagedFiles = _ => [new GameFileEdit(_listName, _ => throw new InvalidDataException("Simulated: unreadable."))];
 
-        Assert.Contains(_listName, (await fixture.CheckDriftAsync()).Changed);
+        Assert.Equal([_listName], (await fixture.CheckDriftAsync()).EditedGameFiles);
     }
 
     [Fact]
@@ -131,7 +132,7 @@ public class ModSyncManagedFileTests
 
         File.Delete(fixture.Folder.Combine(_listName));
 
-        Assert.Contains(_listName, (await fixture.CheckDriftAsync()).Removed);
+        Assert.Equal([_listName], (await fixture.CheckDriftAsync()).EditedGameFiles);
     }
 
     [Fact]

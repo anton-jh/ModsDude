@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
@@ -130,7 +131,7 @@ public sealed class SavegameProfileActivation(
 
         if (choice.Result)
         {
-            await shellNavigation.GoToAsync(repo.Id, new RepoDestination.ProfileMods(profile.Id, plan.TargetRef));
+            await shellNavigation.GoToAsync(repo.Id, new RepoDestination.ProfileMods(profile.Id, PinnedModFilter.NotInSources));
         }
     }
 }

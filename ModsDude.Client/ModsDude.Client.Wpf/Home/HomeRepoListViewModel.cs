@@ -1,11 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Profiles;
+using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
@@ -200,7 +200,7 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
                 await _navigation.GoToAsync(state.RepoId, new RepoDestination.ConnectGame());
                 break;
             case HomeRepoAction.Review when state.FollowedProfileId is Guid profileId:
-                await _navigation.GoToAsync(state.RepoId, new RepoDestination.ProfileMods(profileId, state.ReviewTarget));
+                await _navigation.GoToAsync(state.RepoId, new RepoDestination.ProfileMods(profileId, state.ReviewFilter));
                 break;
             case HomeRepoAction.Apply when state.FollowedProfileId is Guid profileId:
                 await ApplyAsync(state.RepoId, profileId, state.FollowedProfileName);
@@ -426,7 +426,7 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
             _profiles.Find(repo.Id, followedId)?.Name,
             game?.PinnedRevision,
             syncState,
-            syncState is ProfileSyncState.Drifted && game is not null ? FindDriftedTarget(game) : null,
+            syncState is ProfileSyncState.Drifted && game is not null ? FindReviewFilter(game) : null,
             action,
             game is not null && _applyService.IsBusy(repo, game),
             canPickProfile,
@@ -437,15 +437,18 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
             held);
     }
 
-    /// <summary>The first folder of the game that has moved, for Review to open already scanned.</summary>
-    private ModTargetRef? FindDriftedTarget(Game game)
-        => _driftMonitor.Drifted
-            .Where(x => x.Game.Identity == game.Identity && (x.Report.Status is DriftStatus.Drifted || x.Report.HasSavegameDrift))
-            .Select(x => x.Target)
-            .OfType<GameModFolder>()
-            .OrderBy(x => x.ModFolder, StringComparer.OrdinalIgnoreCase)
-            .Select(x => (ModTargetRef?)x.Target)
-            .FirstOrDefault();
+    /// <summary>What Review shows, from every folder of the game that has moved. Null where none has.</summary>
+    private PinnedModFilter? FindReviewFilter(Game game)
+    {
+        List<DriftReport> reports =
+        [
+            .. _driftMonitor.Drifted
+                .Where(x => x.Game.Identity == game.Identity && (x.Report.Status is DriftStatus.Drifted || x.Report.HasSavegameDrift))
+                .Select(x => x.Report)
+        ];
+
+        return reports.Count > 0 ? DriftReviewFilter.For(reports) : null;
+    }
 
 
     public sealed class Factory(IServiceProvider serviceProvider)

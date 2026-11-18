@@ -8,7 +8,7 @@ namespace ModsDude.Client.Core.Notices;
 /// What one Windows toast should say about the notices that are up.
 /// </summary>
 /// <param name="Title">The headline of the notice, or a count where there are several.</param>
-/// <param name="Body">One line per notice, or the notice's own first sentence where there is one.</param>
+/// <param name="Body">One line per notice; for a single notice its first sentence, or else one line per fact.</param>
 /// <param name="NoticeKey">
 /// The notice a click should take the user to, where the toast is about exactly one. Null for a toast
 /// that summarises several: there is no single place to send somebody, so it opens the window and lets
@@ -179,7 +179,11 @@ public sealed class DriftToastPlanner
         {
             var only = ordered[0];
 
-            return new DriftToast(only.Headline, Shorten(only.Body ?? ""), only.Key);
+            var body = only.Body is string text
+                ? Shorten(text)
+                : string.Join('\n', only.Facts.Select(x => $"{x.Label}: {x.Value}"));
+
+            return new DriftToast(only.Headline, body, only.Key);
         }
 
         var lines = ordered.Take(MaxListed).Select(x => x.Headline).ToList();

@@ -190,6 +190,20 @@ public class DriftToastPlannerTests
     }
 
 
+    [Fact]
+    public void A_notice_without_a_body_lists_its_facts()
+    {
+        var notice = Make("a", NoticeSeverity.Warning, body: null) with
+        {
+            Facts = [new("Missing", "2"), new("Wrong version", "3")]
+        };
+
+        var toast = Observe(new DriftToastPlanner(), [notice]);
+
+        Assert.Equal("Missing: 2\nWrong version: 3", toast!.Body);
+    }
+
+
     private static readonly Guid _savegameId = Guid.NewGuid();
 
     private static Notice SaveNotice() => Make(NoticeBuilder.SavegameKey(_savegameId), NoticeSeverity.Critical, "'My farm' holds play") with

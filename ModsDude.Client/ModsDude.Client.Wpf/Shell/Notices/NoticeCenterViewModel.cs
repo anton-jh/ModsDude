@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Notices;
+using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
@@ -442,14 +443,14 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         if (notice.Subject is not NoticeSubject subject
             || subject.RepoId is not Guid repoId
             || subject.ProfileId is not Guid profileId
-            || subject.Target is not { } target)
+            || subject.ReviewFilter is not PinnedModFilter filter)
         {
             card?.ReportStatus("There is no mod folder on this one to look at.");
 
             return;
         }
 
-        if (await _navigation.GoToAsync(repoId, new RepoDestination.ProfileMods(profileId, target)) is false)
+        if (await _navigation.GoToAsync(repoId, new RepoDestination.ProfileMods(profileId, filter)) is false)
         {
             card?.ReportStatus("That profile could not be opened from here - pick it in the sidebar.");
         }

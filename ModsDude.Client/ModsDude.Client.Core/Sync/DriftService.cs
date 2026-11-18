@@ -154,7 +154,27 @@ public sealed record DriftReport(
         && CurrentRevision is int current
         && applied != current;
 
-    public int DifferenceCount => Added.Count + Removed.Count + Changed.Count + ProfileChangedMods.Count;
+    /// <summary>
+    /// Files an adapter manages (<see cref="GameFileEdit"/>) that no longer say what the last
+    /// apply made them say, or are gone. Relative to the mod folder. Never mods, so never in the three
+    /// file lists.
+    /// </summary>
+    public IReadOnlyList<string> EditedGameFiles { get; init; } = [];
+
+    public int DifferenceCount => Added.Count + Removed.Count + Changed.Count + ProfileChangedMods.Count + EditedGameFiles.Count;
+
+    /// <summary>
+    /// Whether every difference is a mod file replaced with another version, which is what updating
+    /// mods from inside the game leaves behind.
+    /// </summary>
+    public bool IsUpdatesOnly => Status is DriftStatus.Drifted
+        && Changed.Count > 0
+        && Added.Count == 0
+        && Removed.Count == 0
+        && ProfileChangedMods.Count == 0
+        && EditedGameFiles.Count == 0
+        && LockedDrift.Count == 0
+        && ProfileHasMoved is false;
 
     /// <summary>
     /// The locked mods among the differences, named. An unlocked mod at the wrong version is untidy;
@@ -289,12 +309,12 @@ public sealed class DriftService(
         // there is nothing to import or re-apply for it.
         List<string> added = [.. await addedMods.FindModsAsync(manifest, newFiles, cancellationToken)];
 
-        foreach (var file in managedFiles.FindOutOfLine(manifest) ?? [])
-        {
-            var name = Path.GetRelativePath(modFolder, file.FullPath);
-
-            (File.Exists(file.FullPath) ? changed : removed).Add(name);
-        }
+        List<string> editedGameFiles =
+        [
+            .. (managedFiles.FindOutOfLine(manifest) ?? [])
+                .Select(x => Path.GetRelativePath(modFolder, x.FullPath))
+                .Order(StringComparer.OrdinalIgnoreCase)
+        ];
 
         // A profile that has moved on is drift even when the folder is exactly what was installed:
         // the folder matches a list nobody is using any more. It is the one kind of drift that
@@ -303,7 +323,7 @@ public sealed class DriftService(
             && currentRevision is int current
             && applied != current;
 
-        var status = added.Count + removed.Count + changed.Count + profileChanged.Count > 0 || profileHasMoved
+        var status = added.Count + removed.Count + changed.Count + profileChanged.Count + editedGameFiles.Count > 0 || profileHasMoved
             ? DriftStatus.Drifted
             : DriftStatus.InSync;
 
@@ -311,6 +331,7 @@ public sealed class DriftService(
         {
             AppliedRevision = manifest.ProfileRevision,
             CurrentRevision = currentRevision,
+            EditedGameFiles = editedGameFiles,
             SavegameDrift = saves,
             // One entry per mod. A locked map whose file the game replaced and whose pin somebody
             // then moved is one problem, and the file is the half that is already on disk.

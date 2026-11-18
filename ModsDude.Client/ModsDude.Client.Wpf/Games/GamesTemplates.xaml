@@ -12,7 +12,7 @@
     <!-- A label/value row. The label column is shared across the rows of one list, so the values line
          up; the list sets Grid.IsSharedSizeScope. -->
     <DataTemplate DataType="{x:Type games:GameDetailLine}">
-        <Grid RowDefinitions="Auto, Auto">
+        <Grid RowDefinitions="Auto, Auto, Auto">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" SharedSizeGroup="GameDetailLabel" />
                 <ColumnDefinition Width="*" />
@@ -40,6 +40,10 @@
                        TextWrapping="Wrap"
                        Text="{Binding Note}"
                        Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibilityConverter}}" />
+            <ItemsControl Grid.Row="2" Grid.Column="1"
+                          ItemsSource="{Binding Facts}"
+                          Style="{StaticResource FactList}"
+                          Visibility="{Binding HasFacts, Converter={StaticResource BoolToVisibilityConverter}}" />
         </Grid>
     </DataTemplate>
 

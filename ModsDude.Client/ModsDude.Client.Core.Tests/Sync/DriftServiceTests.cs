@@ -37,6 +37,7 @@ public class DriftServiceTests
 
         Assert.Equal(DriftStatus.Drifted, report.Status);
         Assert.Equal(["fs25_a.zip"], report.Changed);
+        Assert.True(report.IsUpdatesOnly);
     }
 
     [Fact]
@@ -53,6 +54,7 @@ public class DriftServiceTests
         Assert.Equal(DriftStatus.Drifted, report.Status);
         Assert.Equal(["fs25_c.zip"], report.Added);
         Assert.Equal(["fs25_b.zip"], report.Removed);
+        Assert.False(report.IsUpdatesOnly);
     }
 
     [Fact]

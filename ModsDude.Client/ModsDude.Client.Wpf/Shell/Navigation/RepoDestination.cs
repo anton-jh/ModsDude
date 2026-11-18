@@ -1,4 +1,4 @@
-using ModsDude.Client.Core.GameAdapters;
+using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Wpf.Repos;
 
 namespace ModsDude.Client.Wpf.Shell.Navigation;
@@ -20,8 +20,11 @@ public abstract record RepoDestination
 
     public sealed record Profile(Guid ProfileId) : RepoDestination;
 
-    /// <param name="ScanTarget">The folder to open with already scanned, or null for none.</param>
-    public sealed record ProfileMods(Guid ProfileId, ModTargetRef? ScanTarget) : RepoDestination;
+    /// <param name="Review">
+    /// Opens the editor to review the game's mod folders: every one of them is the only source, and
+    /// the pinned list shows this filter. Null opens it as it is.
+    /// </param>
+    public sealed record ProfileMods(Guid ProfileId, PinnedModFilter? Review) : RepoDestination;
 
     /// <param name="Revision">The revision to open at, or null for the latest.</param>
     public sealed record ProfileHistory(Guid ProfileId, int? Revision) : RepoDestination;

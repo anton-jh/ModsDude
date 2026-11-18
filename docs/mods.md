@@ -34,7 +34,7 @@ keeps current. The local half comes from **sources**:
 
 Scans are cached as one task per source and composed on demand. They start 150 ms after a source is
 switched on, so flicking through the chips doesn't scan everything. Arriving from a drift notice switches
-on only the folder that drifted.
+on every one of the game's mod folders and nothing else (see [Sync](sync.md#drift)).
 
 A source folder is never a sync target. The only files removed from sources are rejected copies the user
 chose against in a conflict (outside game folders, to the Recycle Bin once the revision is written) and

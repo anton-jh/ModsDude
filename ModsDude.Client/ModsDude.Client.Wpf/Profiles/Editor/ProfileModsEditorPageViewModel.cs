@@ -1275,14 +1275,14 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     #region Sources
 
     /// <summary>
-    /// Makes one of a game's mod folders the only source, for a page opened at that folder - which means
-    /// arriving from the drift notice. Called before the page loads, and again if it is already open.
+    /// Makes the game's mod folders the only sources and shows <paramref name="filter"/>, for a page
+    /// opened to review drift. Called before the page loads, and again if it is already open.
     /// </summary>
-    public void ScanTarget(ModTargetRef target)
+    public void Review(PinnedModFilter filter)
     {
-        var loaded = Sources.FocusOn(ModSourceId.ForTarget(target));
+        var loaded = Sources.FocusOnTargets();
 
-        PinnedFilter = PinnedModFilter.NotInSources;
+        PinnedFilter = filter;
 
         if (IsLoading && _history.CanUndo is false)
         {
@@ -1294,7 +1294,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         }
         else
         {
-            _ = CommitAsync(Current with { Loaded = loaded }, "Loaded the game's mod folder");
+            _ = CommitAsync(Current with { Loaded = loaded }, "Loaded the game's mod folders");
         }
     }
 
@@ -1541,17 +1541,17 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     public class Factory(IServiceProvider serviceProvider, IRetainedPages retainedPages)
     {
         /// <summary>The page kept for this profile where there is one, and a new one otherwise.</summary>
-        /// <param name="scanTarget">A folder to load from the start. Null reads no disk until a source is switched on.</param>
-        public ProfileModsEditorPageViewModel Create(Repo repo, Profile profile, ModTargetRef? scanTarget = null)
+        /// <param name="review">Opens the page reviewing the game's mod folders. Null reads no disk until a source is switched on.</param>
+        public ProfileModsEditorPageViewModel Create(Repo repo, Profile profile, PinnedModFilter? review = null)
         {
             var page = retainedPages.Take<ProfileModsEditorPageViewModel>(new ProfileModsEditorKey(repo.Id, profile.Id))
                 ?? ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, repo, profile);
 
-            // Here rather than through the constructor: a nullable struct does not survive
+            // Here rather than through the constructor: a nullable value does not survive
             // ActivatorUtilities' positional matching.
-            if (scanTarget is ModTargetRef target)
+            if (review is PinnedModFilter filter)
             {
-                page.ScanTarget(target);
+                page.Review(filter);
             }
 
             return page;

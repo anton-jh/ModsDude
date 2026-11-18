@@ -144,7 +144,8 @@ The check is cheap:
 
 - Known files are compared by size and time, and by whether they are marked suspect.
 - Only files added since the last apply are opened, so that a non-mod file doesn't count as drift.
-- Managed files are checked by re-running their edit and seeing whether anything would change.
+- Managed files are checked by re-running their edit and seeing whether anything would change. They are
+  reported apart from mods (`EditedGameFiles`).
 
 `DriftMonitor` runs checks at startup, on window activation, on a timer, on resume and unlock, and
 when a folder watcher fires. Watcher failures are logged and trigger a check. Checks don't overlap.
@@ -152,6 +153,21 @@ when a folder watcher fires. Watcher failures are logged and trigger a check. Ch
 Drift is shown as a notice and, when the window isn't in front, as a Windows toast for critical and
 warning drift, held back while a game is being played (see [Client](client.md#feedback-channels)). Nothing ever reverts drift automatically. The
 notice offers to apply.
+
+A drifted folder's notice lists what it differs by as label/value rows (`DriftFacts`), leaving out
+empty rows: Missing, Wrong version, Added, Changed in profile, Revision (applied → current), Game files
+edited. The locked-mods notice lists each locked mod with Wrong version, Missing or Profile moved, up to
+five rows, the last becoming a count of the rest. The game overview shows the same rows under a
+drifted folder.
+
+Review opens the profile's mod editor with every one of the game's mod folders as the only sources
+(remote sources and the repo off) and a pinned-list filter picked by `DriftReviewFilter`:
+
+| Drift | Filter |
+| --- | --- |
+| Only mods replaced with other versions (`IsUpdatesOnly`), as an in-game update leaves it | Updates |
+| Anything else | Not in sources |
+| The locked-mods notice | Locked |
 
 ### Leases
 

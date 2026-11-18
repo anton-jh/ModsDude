@@ -1,6 +1,7 @@
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
+using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using System.Globalization;
@@ -35,6 +36,9 @@ public static class NoticeBuilder
 {
     /// <summary>Separates the parts of a signature. Anything that cannot occur inside one would do.</summary>
     private const string SignatureSeparator = "|~|";
+
+    /// <summary>How many rows a locked card lists, the last one becoming a count of the rest.</summary>
+    private const int MaxLockedFacts = 5;
 
 
     /// <summary>The key of the notice about one held savegame, for whatever needs to point at it from outside.</summary>
@@ -157,104 +161,65 @@ public static class NoticeBuilder
 
         var named = FolderName(entry, folders);
         var profile = entry.ProfileName is string name ? $"'{name}'" : "the applied profile";
-        var files = report.Added.Count + report.Removed.Count + report.Changed.Count;
-        var where = named is string folder ? $"the '{folder}' folder" : "the mod folder";
         var inFolder = named is string it ? $" in the '{it}' folder" : "";
 
-        // Named for the consequence rather than for the condition, which is why an activation that
-        // did not land says where the folder still is rather than what failed. The folder is in the
-        // headline now that a headline is about one of them - the single card's was about all of a
-        // game's folders at once, where naming one would have been a lie.
-        var (headline, body, severity) = report.Status switch
+        (string Headline, string? Body, IReadOnlyList<NoticeFact> Facts, NoticeSeverity Severity) shown = report.Status switch
         {
             DriftStatus.Drifted => (
                 $"'{game.Name}' no longer matches {profile}{inFolder}",
-                DescribeDrifted(report, files, where, named),
+                null,
+                DriftFacts.For(report),
                 NoticeSeverity.Warning),
 
             DriftStatus.NotApplied => (
                 report.AppliedProfileName is string applied
                     ? $"'{game.Name}' is still on '{applied}'{inFolder}"
                     : $"'{game.Name}' is still on the mod list it was last applied to{inFolder}",
-                $"Disregard if the profile is currently applying",
+                "Disregard if the profile is currently applying",
+                [],
                 NoticeSeverity.Pending),
 
             DriftStatus.FolderRepointed => (
                 $"'{game.Name}' has a mod folder nothing has been applied to",
-                $"The settings now point{inFolder} at {entry.Target?.ModFolder ?? "another folder"}, "
-                    + "which nothing has been applied to. Re-applying is what fills it in.",
+                null,
+                entry.Target is GameModFolder target ? [new NoticeFact("Folder", target.ModFolder)] : [],
                 NoticeSeverity.Pending),
 
-            // Deliberately not naming the profile: the name a notice would have is the one the
-            // manifest recorded, and the whole of this status is that there is no manifest.
+            // Not naming the profile: the name would come from the manifest, and this status is that
+            // there is none.
             _ => (
                 $"Nothing has been applied to '{game.Name}'{inFolder}",
-                $"This game follows a profile and there is no record of it ever being applied{inFolder} - "
-                    + "either it never was, or the record was lost. Applying it is what makes the two agree, "
-                    + "and until then nothing here can tell you whether the mods are right.",
+                null,
+                [],
                 NoticeSeverity.Pending)
         };
 
         var canReview = CanReview(entry, repo);
 
         // Review leads wherever it is offered: what the folder holds now is usually what the user
-        // meant to end up with, and re-applying before looking throws it away. It is not offered for
-        // the three pending statuses - there is nothing in the folder to look at yet - so re-apply
-        // leads there by being the only thing to do.
+        // meant to end up with, and re-applying before looking throws it away. The pending statuses
+        // have nothing in the folder to look at yet, so re-apply leads there.
         var reviewLeads = canReview && report.Status is DriftStatus.Drifted;
 
         return Make(
             $"drift/{game.Identity}/{entry.Target?.Target.Key.Value ?? "-"}",
-            severity,
-            headline,
-            body,
-            // The drifted files are by definition versions the user now has and the repo may not, so
-            // the warning doubles as the first step of the flow they came back to perform anyway.
-            footnote: files > 0 && canReview
-                ? "The versions now on disk may not be in the repo. Opening the mod list is where they get imported."
+            shown.Severity,
+            shown.Headline,
+            shown.Body,
+            footnote: report.Added.Count + report.Changed.Count > 0 && canReview
+                ? "Versions now on disk can be imported from the mod list."
                 : null,
             actions: ModActions(entry, repo, reviewLeads, canReview, environment),
-            subject: Subject(entry, repo));
-    }
-
-    private static string DescribeDrifted(DriftReport report, int files, string where, string? named)
-    {
-        var parts = new List<string>();
-
-        if (report.Changed.Count > 0) parts.Add($"{report.Changed.Count} replaced");
-        if (report.Added.Count > 0) parts.Add($"{report.Added.Count} added");
-        if (report.Removed.Count > 0) parts.Add($"{report.Removed.Count} removed");
-
-        var folder = files > 0
-            ? $"{string.Join(", ", parts)} in {where} since it was last applied. "
-                + "Updating mods from inside the game looks like this."
-            : "";
-
-        // The half of drift no directory listing can find: the folder is exactly what was installed,
-        // and what was installed is no longer what the profile says.
-        var revision = report.ProfileHasMoved
-            ? $"{(named is string it ? $"The '{it}' folder" : "This folder")} was made to match revision "
-                + $"{report.AppliedRevision}; the profile is now at revision {report.CurrentRevision}."
-            : "";
-
-        var pins = report.ProfileChangedMods.Count > 0
-            ? $"{report.ProfileChangedMods.Count} mods in {where} are pinned differently than what is "
-                + "installed - somebody has edited the profile since."
-            : "";
-
-        return string.Join(' ', new[] { folder, revision, pins }.Where(x => x.Length > 0));
+            subject: Subject(entry, repo, DriftReviewFilter.For(report)),
+            facts: shown.Facts);
     }
 
 
     /// <summary>
-    /// The dangerous half of a drifted folder, on its own card and in its own colour.
+    /// The locked mods of a drifted folder, on their own card: a locked mod at the wrong version can
+    /// damage a savegame. One card per folder rather than per mod, because an update-all that moved
+    /// twenty of them is one event with one remedy.
     /// </summary>
-    /// <remarks>
-    /// <b>One card per folder, not per mod.</b> An unlocked mod at the wrong version is untidy and a
-    /// locked one is a damaged savegame waiting to happen - but twenty locked mods are one update-all
-    /// with one remedy, and twenty cards saying so would be the wall a column has to avoid being.
-    /// The names go in the body, which is where a list belongs.
-    /// </remarks>
     private static Notice? Locked(
         TargetDrift entry, NoticeRepo repo, IReadOnlyDictionary<TargetKey, string> folders)
     {
@@ -266,43 +231,18 @@ public static class NoticeBuilder
         }
 
         var game = entry.Game;
-        var inFolder = FolderName(entry, folders) is string it ? $" in the '{it}' folder" : "";
-
         var first = locked[0];
         var version = first.AppliedVersion is string applied ? $" at {applied}" : "";
+        var inFolder = FolderName(entry, folders) is string folder ? $" in the '{folder}' folder" : "";
 
         var headline = locked.Count == 1
             ? first.Reason switch
             {
-                LockedDriftReason.FileRemoved => $"'{first.DisplayName}' is locked{version} and is no longer installed",
-                LockedDriftReason.ProfileMoved => $"'{first.DisplayName}' is locked and the profile has moved off it",
-                _ => $"'{first.DisplayName}' is locked{version} and its file has changed"
+                LockedDriftReason.FileRemoved => $"'{first.DisplayName}' is locked{version} and is no longer installed{inFolder}",
+                LockedDriftReason.ProfileMoved => $"'{first.DisplayName}' is locked and the profile has moved off it{inFolder}",
+                _ => $"'{first.DisplayName}' is locked{version} and its file has changed{inFolder}"
             }
-            : $"{locked.Count} locked mods in '{game.Name}' are not what they were locked at";
-
-        var what = first.Reason switch
-        {
-            LockedDriftReason.FileRemoved =>
-                $"'{first.DisplayName}' is locked{version} and is no longer in "
-                    + $"{(inFolder.Length > 0 ? inFolder[4..] : "the mod folder")}.",
-
-            LockedDriftReason.ProfileMoved =>
-                $"'{first.DisplayName}' is locked and the profile no longer pins the version installed here{version}.",
-
-            _ =>
-                $"'{first.DisplayName}' is locked{version} and its file has changed since it was applied."
-        };
-
-        // Up to three more by name before falling back to a count. A name is something the user can
-        // act on and a number is not, and three is where a card stops being readable at a glance.
-        var rest = locked.Skip(1).ToList();
-
-        var more = rest.Count switch
-        {
-            0 => "",
-            <= 3 => $" So {(rest.Count == 1 ? "is" : "are")} {Names(rest)}.",
-            _ => $" So are {Names(rest.Take(3))}, and {rest.Count - 3} more."
-        };
+            : $"{locked.Count} locked mods in '{game.Name}' are not what they were locked at{inFolder}";
 
         var canReview = CanReview(entry, repo);
 
@@ -310,22 +250,42 @@ public static class NoticeBuilder
             $"locked/{game.Identity}/{entry.Target?.Target.Key.Value ?? "-"}",
             NoticeSeverity.Critical,
             headline,
-            $"{what}{more} Hosting a savegame on it may damage that save.",
+            "Hosting a savegame on the wrong version may damage it.",
             footnote: null,
-            // No revision on this one's re-apply: the folder card beside it is the one that owns the
-            // mod half, and two buttons in one column disagreeing about a number would be worse than
-            // one of them being plainly worded.
+            // No revision on this one's re-apply: the folder card beside it owns the mod half, and
+            // two buttons in one column disagreeing about a number would be worse.
             actions: ModActions(entry, repo, reviewLeads: canReview, canReview, environment: null),
-            subject: Subject(entry, repo));
+            // Locked pins never show under Updates, and one whose file changed is still offered by
+            // the folder, so it would not show under Not in sources either.
+            subject: Subject(entry, repo, PinnedModFilter.Locked),
+            facts: LockedFacts(locked));
     }
 
-    private static string Names(IEnumerable<DriftedLockedMod> mods)
+    private static List<NoticeFact> LockedFacts(IReadOnlyList<DriftedLockedMod> locked)
     {
-        var names = mods.Select(x => $"'{x.DisplayName}'").ToList();
+        var ordered = locked
+            .OrderBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(x => x.ModId.Value, StringComparer.Ordinal)
+            .ToList();
 
-        return names.Count == 1
-            ? names[0]
-            : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}";
+        var shown = ordered.Count > MaxLockedFacts ? MaxLockedFacts - 1 : ordered.Count;
+
+        List<NoticeFact> facts =
+        [
+            .. ordered.Take(shown).Select(x => new NoticeFact(x.DisplayName, x.Reason switch
+            {
+                LockedDriftReason.FileRemoved => "Missing",
+                LockedDriftReason.ProfileMoved => "Profile moved",
+                _ => "Wrong version"
+            }))
+        ];
+
+        if (ordered.Count > shown)
+        {
+            facts.Add(new NoticeFact("More", (ordered.Count - shown).ToString(CultureInfo.CurrentCulture)));
+        }
+
+        return facts;
     }
 
 
@@ -590,13 +550,14 @@ public static class NoticeBuilder
             && entry.Target is not null
             && repo.MembershipLevel >= RepoMembershipLevel.Member;
 
-    private static NoticeSubject Subject(TargetDrift entry, NoticeRepo repo) =>
+    private static NoticeSubject Subject(TargetDrift entry, NoticeRepo repo, PinnedModFilter reviewFilter) =>
         new(entry.Game.Identity, entry.Game.Name)
         {
             Target = entry.Target?.Target,
             RepoId = repo.Id,
             ProfileId = entry.Game.ActiveProfile?.ProfileId,
-            ProfileName = entry.ProfileName
+            ProfileName = entry.ProfileName,
+            ReviewFilter = reviewFilter
         };
 
     /// <summary>
@@ -616,9 +577,8 @@ public static class NoticeBuilder
     /// Builds one notice and signs it with everything it says.
     /// </summary>
     /// <remarks>
-    /// The signature is the rendered content rather than the facts behind it, and deliberately: what
-    /// a dismissal means is "I have read this", so the thing that has to invalidate it is the text
-    /// changing. A fact that moves without changing a word of the card is not news.
+    /// The signature is the rendered content, because a dismissal means "I have read this": what
+    /// has to bring the notice back is what it says changing.
     /// </remarks>
     private static Notice Make(
         string key,
@@ -629,12 +589,18 @@ public static class NoticeBuilder
         IReadOnlyList<NoticeAction> actions,
         NoticeSubject? subject,
         bool canDismiss = true,
-        RepoMembershipLevel? membership = null)
+        RepoMembershipLevel? membership = null,
+        IReadOnlyList<NoticeFact>? facts = null)
     {
-        var signature = string.Join(SignatureSeparator, headline, body, footnote);
+        facts ??= [];
+
+        var signature = string.Join(
+            SignatureSeparator,
+            [headline, body, footnote, .. facts.Select(x => $"{x.Label}: {x.Value}")]);
 
         return new Notice(key, signature, severity, headline)
         {
+            Facts = facts,
             Body = string.IsNullOrWhiteSpace(body) ? null : body,
             Footnote = footnote,
             Actions = actions,
