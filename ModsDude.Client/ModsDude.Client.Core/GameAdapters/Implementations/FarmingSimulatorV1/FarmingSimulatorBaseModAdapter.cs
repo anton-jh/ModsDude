@@ -119,7 +119,7 @@ public class FarmingSimulatorBaseModAdapter(
         }
 
         // Normalized here, where the id is produced, rather than at each use site - which is how one
-        // gets missed. See docs/09-mod-catalog.md#the-casing-trap.
+        // gets missed.
         var maybeLocalMod =
             from filename in Maybe.From(Path.GetFileNameWithoutExtension(path))
             where string.IsNullOrWhiteSpace(filename) is false

@@ -26,7 +26,7 @@ ModsDude.Server/
   ModsDude.Server.Persistence   EF Core, PostgreSQL, migrations
   ModsDude.Server.Storage       Azure Blob Storage and SAS links
   ModsDude.Server.ModHub        Farming Simulator ModHub crawler
-  *.Tests                       Domain, persistence and ModHub parser tests
+  *.Tests                       Domain, persistence, storage and ModHub parser tests
 ModsDude.Client/
   ModsDude.Client.Core          Game adapters, generated API client, sync, content store
   ModsDude.Client.Wpf           The desktop app (Windows only)
@@ -118,7 +118,7 @@ deploying your own copy.
    ```bash
    dotnet user-secrets set "Admin:Password" "<password>" --project ModsDude.Server/ModsDude.Server.Api
    ```
-5. Optional: stop the dev API from crawling farming-simulator.com every hour.
+5. Optional: stop the dev API from crawling farming-simulator.com every day.
    ```bash
    dotnet user-secrets set "ModHub:Enabled" "false" --project ModsDude.Server/ModsDude.Server.Api
    ```
@@ -140,7 +140,7 @@ The API listens on `https://localhost:7035`, and on `https://localhost:7036` for
 | Address | What |
 | --- | --- |
 | `https://localhost:7035/swagger` | Swagger UI. Development only; sign in with the Authorize button. |
-| `https://localhost:7036/admin` | Admin page: trust codes. |
+| `https://localhost:7036/admin` | Admin pages: overview, repos, users, trust codes. |
 | `https://localhost:7036/admin/jobs` | Hangfire dashboard. |
 | `https://localhost:7035/health` | The running build number. |
 
@@ -164,6 +164,7 @@ users join through repo invites.
 ```bash
 dotnet test ModsDude.Server/ModsDude.Server.Domain.Tests
 dotnet test ModsDude.Server/ModsDude.Server.ModHub.Tests
+dotnet test ModsDude.Server/ModsDude.Server.Storage.Tests
 dotnet test ModsDude.Server/ModsDude.Server.Persistence.Tests
 dotnet test ModsDude.Client/ModsDude.Client.Core.Tests
 ```

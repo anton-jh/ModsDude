@@ -9,7 +9,6 @@ namespace ModsDude.Client.Core.Models;
 /// Somewhere to look for mods to import. Not a sync target: sync makes a game's mod folder
 /// match a profile, which means uninstalling from it, and nothing will ever delete, move or
 /// quarantine a file in Downloads or a folder the user pointed at.
-/// See docs/09-mod-catalog.md#sources-are-not-sync-targets.
 /// </summary>
 public record ModSource(ModSourceId Id, string Name, string Path, ModSourceKind Kind);
 
@@ -27,8 +26,7 @@ public enum ModSourceKind
     /// </para>
     /// <para>
     /// It has no scan, no error state and no count of files, so nothing that walks sources ever sees
-    /// it: it is composed by the surface that offers it and consumed by that surface's filter. See
-    /// docs/09-mod-catalog.md#the-source-list.
+    /// it: it is composed by the surface that offers it and consumed by that surface's filter.
     /// </para>
     /// </remarks>
     Repo,

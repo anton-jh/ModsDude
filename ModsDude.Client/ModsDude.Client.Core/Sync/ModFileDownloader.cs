@@ -43,7 +43,7 @@ public sealed class ModFileDownload(Stream content, long? length, IDisposable re
 }
 
 
-/// <summary>How a large download is split up. See docs/07-mod-sync-design.md#downloading.</summary>
+/// <summary>How a large download is split up.</summary>
 public sealed record RangedDownloadOptions
 {
     /// <summary>
@@ -98,7 +98,6 @@ public sealed record RangedDownloadOptions
 /// <para>
 /// <b>What comes back is still one stream in file order.</b> The store hashes as it reads, and
 /// keeping that the only path bytes take into it is worth the memory the reassembly window costs.
-/// See docs/07-mod-sync-design.md#downloading.
 /// </para>
 /// </remarks>
 public sealed class HttpModFileDownloader : IModFileDownloader

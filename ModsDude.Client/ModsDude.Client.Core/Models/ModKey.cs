@@ -9,7 +9,7 @@ namespace ModsDude.Client.Core.Models;
 /// and the server's '(RepoId, ModId)' key are both case-sensitive, so two members would register
 /// two mods pointing at two blobs for what is one mod to them. A type with a private constructor
 /// makes the normalized form the only representable one, so no path can carry an un-normalized id
-/// far enough to reach storage. See docs/09-mod-catalog.md#the-casing-trap.
+/// far enough to reach storage.
 /// </remarks>
 public readonly record struct ModKey
 {

@@ -78,7 +78,6 @@ public sealed record ModImportRequest(
     /// Folders rather than a store, because the store is a consequence of the folder: which disk
     /// serves which is machine-wide settings that an import has no business reading. Empty is
     /// legitimate - a repo whose game is not installed here - and seeds nothing.
-    /// See docs/07-mod-sync-design.md#ingestion.
     /// </remarks>
     public IReadOnlyList<string> ModFolders { get; init; } = [];
 }

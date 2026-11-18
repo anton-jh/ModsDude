@@ -20,7 +20,6 @@ namespace ModsDude.Client.Wpf.Profiles.Editor;
 /// failing the list - which is the whole reason the catalog reports failure per source instead of
 /// throwing. The failure colours the chip and the reason is in its tooltip, because a second line
 /// under it would cost every chip the height of the worst one.
-/// See docs/09-mod-catalog.md#the-source-chips.
 /// </para>
 /// </remarks>
 public partial class ModSourceViewModel : ObservableObject

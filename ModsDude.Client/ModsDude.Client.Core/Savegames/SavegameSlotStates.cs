@@ -146,7 +146,7 @@ public static class SavegameSlotStates
         SavegameSlotAvailability.Free => SavegameSlotWriteDecision.Allowed,
 
         // Refused, not warned. The slot holds play that exists nowhere else, and the remedy is to
-        // check that savegame in first - offered as a single action, per docs/PLAN.md#slot-safety.
+        // check that savegame in first - offered as a single action.
         SavegameSlotAvailability.HeldWithUnpublishedPlay => SavegameSlotWriteDecision.Refused,
 
         // The bytes here are on the server already, so this asks only because a slot silently

@@ -14,8 +14,7 @@ namespace ModsDude.Client.Core.Notices;
 /// <para>
 /// <b>Still deliberately weak, and for the original reason.</b> Nothing here is persisted, there is
 /// no permanent form of it, and a dismissal lasts only while the notice keeps saying the same thing:
-/// a warning waved away for good is a savegame silently at risk. See
-/// docs/07-mod-sync-design.md#it-has-to-be-unmissable-everywhere.
+/// a warning waved away for good is a savegame silently at risk.
 /// </para>
 /// <para>
 /// <b>It never grows without bound, and never forgets too early.</b> An entry is dropped when its

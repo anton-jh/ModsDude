@@ -22,7 +22,6 @@ namespace ModsDude.Client.Core.Sync;
 /// Which means <b>every lookup here is keyed by hash and nothing else</b>, and <b>every path in
 /// verifies</b> - see <see cref="IngestAsync"/>. One unverified write, or one lookup keyed by mod id,
 /// and the isolation argument is gone.
-/// See docs/07-mod-sync-design.md#cache-isolation.
 /// </para>
 /// <para>
 /// Blobs are deliberately left writable, and the exposure that opens is answered by <b>detection
@@ -32,7 +31,6 @@ namespace ModsDude.Client.Core.Sync;
 /// thing an in-game updater does when it renames over a mod file. Everything here is
 /// re-downloadable by construction, so catching a rewritten blob promptly costs a download and
 /// lands in nearly the same place as preventing one.
-/// See docs/07-mod-sync-design.md#detecting-a-rewritten-blob.
 /// </para>
 /// </remarks>
 public sealed class ContentStore

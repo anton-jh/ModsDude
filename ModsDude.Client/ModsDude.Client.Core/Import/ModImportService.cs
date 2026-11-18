@@ -25,7 +25,6 @@ namespace ModsDude.Client.Core.Import;
 /// protects it is the <em>per-mod</em> ordering of those three steps. Running several mods at once
 /// does not touch it: each mod's own sequence is unchanged, so the residue of a failure is at most
 /// one orphaned blob per mod in flight rather than a dangling registration.
-/// See docs/09-mod-catalog.md#per-mod-ordering-bounded-concurrency.
 /// </para>
 /// <para>
 /// Versions of one mod register <b>sequentially</b>, in ascending order, each inserting before the
@@ -1176,8 +1175,7 @@ public sealed class ModImportService(
         /// once those bytes are established. A recorded hash matching ours is this client's own
         /// orphan. One that differs is a different build wearing the same id and version, and one
         /// that is missing establishes nothing at all - both refuse, because registering over them
-        /// writes a hash no download can ever satisfy and there is no repair path. See
-        /// docs/07-mod-sync-design.md#hostile-or-wrong-hashes-have-to-be-unregisterable-not-just-undownloadable.
+        /// writes a hash no download can ever satisfy and there is no repair path.
         /// </remarks>
         private async Task<VersionOutcome> AdoptStoredFileAsync(
             CatalogModVersion version,

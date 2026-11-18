@@ -21,14 +21,14 @@ namespace ModsDude.Client.Core.Profiles;
 /// where the unregistered versions sit, and only where it is sure: a pair it abstained on is not an
 /// update, because offering a possible downgrade as one is worse than saying nothing. That is the
 /// same rule <c>RepoModsPageViewModel.IsUpdate</c> applies against the repo's own newest, arrived at
-/// from the other end. See docs/09-mod-catalog.md#a-note-on-update-available.
+/// from the other end.
 /// </para>
 /// <para>
 /// <b>Locked pins are not candidates at all</b>, rather than candidates the save prompts about.
 /// Sweeping them in and asking at save re-asks a question the user answered when they locked the
 /// mod, every single time, which is how a safety prompt becomes noise people dismiss. Skipping them
 /// outright means the save that follows cannot contain an unintended version change and needs no
-/// prompt. See docs/09-mod-catalog.md#batch-updates-skip-locked-mods-entirely.
+/// prompt.
 /// </para>
 /// </remarks>
 public static class ProfileModUpdates

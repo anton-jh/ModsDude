@@ -20,7 +20,6 @@ public readonly record struct ModVersionIdentity(ModKey ModId, ModVersionKey Ver
 /// Grouping - the version selector, and whether a newer version exists - is a
 /// <c>ToLookup(x =&gt; x.ModId)</c> built where needed, not a nested model that would have to be
 /// rebuilt every time a source checkbox recomposes the set.
-/// See docs/09-mod-catalog.md#a-merged-model.
 /// </remarks>
 public record CatalogModVersion(
     ModKey ModId,
@@ -135,7 +134,7 @@ public record CatalogModVersion(
     /// decode to gain resolution nobody is looking for in a 96 px strip - exactly the work
     /// derivatives exist to avoid - and it is not even faster after the first fetch, since a
     /// content-addressed image crosses the wire once per machine ever. It also means the content
-    /// store is never an image source. See docs/09-mod-catalog.md#registration-decides-where-imagery-comes-from.
+    /// store is never an image source.
     /// </remarks>
     public IReadOnlyList<ModImageReference> ServerImages { get; init; } = [];
 
@@ -177,7 +176,7 @@ public record CatalogModVersion(
     /// Comes from the server rather than from whichever profiles this client happens to have loaded:
     /// dependencies arrive one profile at a time, and deleting on a partial view risks removing a
     /// version a teammate's profile just picked up. Advisory even so - the delete endpoints re-ask
-    /// the database at the moment it matters. See docs/09-mod-catalog.md#manage.
+    /// the database at the moment it matters.
     /// </remarks>
     public ModUsage? Usage { get; init; }
 

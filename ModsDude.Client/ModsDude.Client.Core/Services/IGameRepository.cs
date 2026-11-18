@@ -20,10 +20,9 @@ public interface IGameRepository : IModFolders, IDriftCandidateSource
     /// <para>
     /// <b>The half <see cref="Games"/> cannot report.</b> Adding and deleting raise
     /// <c>CollectionChanged</c>, so a listener already hears about those; repointing a game at a
-    /// different mod folder, or at a different profile, changes nothing about the collection and used
-    /// to be silent. Both of those change whether the folder matches what was applied to it, which is
-    /// the entire question the drift check answers - see
-    /// docs/07-mod-sync-design.md#it-has-to-be-unmissable-everywhere.
+    /// different mod folder, or at a different profile, changes nothing about the collection. Both of
+    /// those change whether the folder matches what was applied to it, which is the entire question the
+    /// drift check answers.
     /// </para>
     /// <para>
     /// Raised after the state has been written, so a listener that reads the game back gets what

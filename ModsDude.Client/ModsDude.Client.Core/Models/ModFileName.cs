@@ -10,7 +10,6 @@ namespace ModsDude.Client.Core.Models;
 /// adapter rebuilt the name out of the id, so applying a profile renamed every archive in the mod
 /// folder to lower case. This carries the name the file actually has, so the id can stay normalized
 /// and the folder can still read the way the user's downloads do.
-/// See docs/09-mod-catalog.md#the-casing-trap.
 /// </para>
 /// <para>
 /// A value that came off <em>somebody else's</em> disk, through the repo, and is about to be

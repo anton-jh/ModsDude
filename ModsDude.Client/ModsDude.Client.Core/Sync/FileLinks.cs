@@ -12,7 +12,6 @@ namespace ModsDude.Client.Core.Sync;
 /// The link count is what makes store accounting honest. An entry hardlinked into a live mod folder
 /// costs no additional bytes, so evicting it reclaims nothing, and <see cref="FileInfo"/> cannot
 /// answer that - only <c>GetFileInformationByHandle</c> can.
-/// See docs/07-mod-sync-design.md#store-eviction-and-the-size-limit.
 /// </para>
 /// <para>
 /// <see cref="TryGetFileIdentity"/> is what tells an in-place rewrite from a rename-over. Both leave
@@ -20,7 +19,7 @@ namespace ModsDude.Client.Core.Sync;
 /// <em>through</em> the hardlink into the shared store blob. The difference is visible in one fact
 /// and no others - whether the file in the mod folder is still the same file as the blob - and a
 /// link count cannot answer it, because a rename-over leaves the blob with a perfectly ordinary
-/// count of one. See docs/07-mod-sync-design.md#detecting-a-rewritten-blob.
+/// count of one.
 /// </para>
 /// <para>
 /// All three calls are Windows-only. Everywhere else - and on any filesystem that refuses a link,

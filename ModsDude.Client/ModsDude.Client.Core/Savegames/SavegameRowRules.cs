@@ -38,7 +38,7 @@ public sealed record SavegameRowOffer(
 /// what a check-out has to do here and now is one function with one copy.
 /// </para>
 /// <para>
-/// <b>The claim never syncs mods on its own</b> - see docs/10-savegame-profile-binding.md#activating-before-the-claim.
+/// <b>The claim never syncs mods on its own.</b>
 /// What this does is notice the folder is not right and say which activation would make it so, which
 /// the check-out and the copy ask about, and run, before they write anything.
 /// </para>

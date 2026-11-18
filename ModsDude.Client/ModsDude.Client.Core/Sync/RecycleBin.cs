@@ -14,7 +14,6 @@ namespace ModsDude.Client.Core.Sync;
 /// put there, that nothing else has a copy of, and that must never be deleted. The Recycle Bin means
 /// recovery uses a mechanism the user already understands, with no ModsDude-specific quarantine to
 /// manage, garbage-collect or explain.
-/// See docs/07-mod-sync-design.md#uninstall-rules.
 /// </remarks>
 public interface IRecycleBin
 {

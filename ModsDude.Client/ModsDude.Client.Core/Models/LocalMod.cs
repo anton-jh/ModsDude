@@ -23,7 +23,7 @@ public record LocalMod(ModKey Id, ModVersionKey Version, string Name, string Des
     /// <summary>
     /// The archive's size. The only content signal a scan can afford - hashing every archive in a
     /// mod folder would read tens of gigabytes - so it is what tells two sources claiming the same
-    /// mod and version apart. See docs/09-mod-catalog.md#same-mod-several-sources.
+    /// mod and version apart.
     /// </summary>
     public required long FileLength { get; init; }
 
@@ -45,7 +45,6 @@ public record LocalMod(ModKey Id, ModVersionKey Version, string Name, string Des
     /// every file rather than carried forward from the last one: what makes a mod version-sensitive
     /// is declared in every version of it, so derivation comes out consistent without anything
     /// having to remember an answer - and without a prompt at import.
-    /// See docs/09-mod-catalog.md#the-adapter-sets-it-once-at-registration.
     /// </summary>
     public bool Locked { get; init; }
 

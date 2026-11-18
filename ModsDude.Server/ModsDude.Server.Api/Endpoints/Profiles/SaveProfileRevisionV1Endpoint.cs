@@ -37,10 +37,9 @@ namespace ModsDude.Server.Api.Endpoints.Profiles;
 /// Save is not an event, and a history that recorded it would bury the events that are.
 /// </para>
 /// <para>
-/// <b><c>BasedOn</c> is what makes concurrent edits safe.</b> Two members editing one profile used
-/// to write per-dependency, last write silently winning per mod - a profile could end up as neither
-/// person's list. A save now names the revision it was built on and is refused if that is no longer
-/// the head, which is a question the old shape could not even ask. See docs/06-flows.md.
+/// <b><c>BasedOn</c> is what makes concurrent edits safe.</b> A save names the revision it was built
+/// on and is refused if that is no longer the head, so one member's save can never silently undo
+/// part of another's.
 /// </para>
 /// <para>
 /// <b>A repeat is answered as the original was.</b> Each person's latest save or restore on a

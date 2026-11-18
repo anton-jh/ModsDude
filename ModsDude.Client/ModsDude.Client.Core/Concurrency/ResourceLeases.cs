@@ -26,7 +26,7 @@ public interface IResourceLease : IDisposable
 /// thing: an apply reached from the drift notice goes through no page at all, so a dialog over the
 /// page it did not come from protects nothing - while a mod folder somebody is browsing is perfectly
 /// safe to browse. So what is claimed here is the thing that can actually be left in a state nothing
-/// describes: a mod folder, a repo, a content store. See docs/07-mod-sync-design.md#leases.
+/// describes: a mod folder, a repo, a content store.
 /// </para>
 /// <para>
 /// <b>Keyed by name rather than by object</b>, because two of the three resources have no object to

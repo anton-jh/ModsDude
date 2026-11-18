@@ -131,8 +131,7 @@ public class ModImportServiceTests : IDisposable
     }
 
     /// <summary>
-    /// The worked example from docs/09: v1 and v4 registered, v2 in a game's mod folder and v3
-    /// in Downloads. Each insert names the version it goes before, and v4's position moves.
+    /// v1 and v4 registered, v2 in a game's mod folder and v3 in Downloads. Each insert names the version it goes before, and v4's position moves.
     /// </summary>
     [Fact]
     public async Task Two_new_versions_of_one_mod_are_placed_against_the_final_intended_order()

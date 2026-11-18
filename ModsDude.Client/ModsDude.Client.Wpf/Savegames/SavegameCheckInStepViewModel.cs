@@ -25,7 +25,7 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// </para>
 /// <para>
 /// <b>It names the mod list the play is being attributed to.</b> That attribution is observed rather
-/// than declared - see docs/10-savegame-profile-binding.md#play-attribution - so this is the one
+/// than declared, so this is the one
 /// moment it is visible to the person who would know it was wrong, and the moment before it is
 /// recorded for good.
 /// </para>

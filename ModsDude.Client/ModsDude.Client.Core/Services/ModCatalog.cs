@@ -467,7 +467,7 @@ public sealed class ModCatalog : IDisposable
     /// Read to exhaustion before it is used, deliberately: absence from the listing is what makes a
     /// version unused, and a half-read listing would call a version unused that a teammate's profile
     /// picked up on the next page. Deleting on that view is exactly the hazard the endpoint exists
-    /// to remove. See docs/09-mod-catalog.md#manage.
+    /// to remove.
     /// </remarks>
     private async Task<IReadOnlyDictionary<ModVersionIdentity, ModUsage>> LoadUsageAsync()
     {

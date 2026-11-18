@@ -15,7 +15,6 @@ namespace ModsDude.Client.Wpf.Profiles;
 /// every save. The same list shown automatically would re-ask a question the user answered when they
 /// locked these mods, which is how a safety prompt turns into noise people learn to dismiss.
 /// Every box starts unchecked, so dismissing this changes nothing.
-/// See docs/09-mod-catalog.md#batch-updates-skip-locked-mods-entirely.
 /// </remarks>
 public partial class ProfileLockedUpdatesModalViewModel : ModalViewModel
 {

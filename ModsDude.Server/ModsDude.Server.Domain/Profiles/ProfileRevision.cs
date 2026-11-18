@@ -179,8 +179,8 @@ public enum ProfileRevisionOrigin
 
 
 /// <summary>
-/// Where a revision sits in its profile's history. Contiguous and one-based, so "revision 7" is a
-/// thing somebody can say out loud and find.
+/// Where a revision sits in its profile's history. One-based and never reused, so "revision 7" is a
+/// thing somebody can say out loud and find. Pruning leaves gaps.
 /// </summary>
 public readonly record struct RevisionNumber(int Value) : IComparable<RevisionNumber>
 {

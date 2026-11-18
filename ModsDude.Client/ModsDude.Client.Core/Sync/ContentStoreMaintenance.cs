@@ -32,7 +32,6 @@ public sealed record StoreVerificationReport(
 /// The user-facing half exists because a store fills a disk quietly, and because the automatic half
 /// cannot reach everything on its own - a store nothing serves any more is the one somebody is most
 /// likely to want gone, and no sync will ever visit it.
-/// See docs/07-mod-sync-design.md#store-eviction-and-the-size-limit.
 /// </para>
 /// <para>
 /// Nothing here can lose data: every blob is registered in some repo and re-downloadable, which is

@@ -7,20 +7,12 @@ using System.Text.Json;
 namespace ModsDude.Client.Core.Tests.GameAdapters;
 
 /// <summary>
-/// A game with three optional targets, written before anything needs one.
+/// A game with three optional targets, for exercising multi-target paths without a real game.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>Farming Simulator has one target and the BeamNG adapter does not exist</b>, so without this
-/// every multi-target path in Phase 10 would ship having never run - <see cref="ModTargets"/> would
-/// be a list in the type system and a single folder everywhere else. This is what the rest of the
-/// phase is developed against.
-/// </para>
-/// <para>
 /// Three targets rather than a fake per shape: 0, 1, 2 and 3 are all reachable by filling in
 /// different fields, and so are the three pairings - mods without savegames, savegames without mods,
-/// and both - which is what the whole phase rests on.
-/// </para>
+/// and both.
 /// </remarks>
 internal class FakeMultiTargetGameAdapter : IGameAdapter
 {

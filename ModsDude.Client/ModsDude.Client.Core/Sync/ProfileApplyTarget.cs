@@ -18,8 +18,7 @@ namespace ModsDude.Client.Core.Sync;
 /// installations - a dedicated server, an MP client and a singleplayer copy are separate downloads
 /// in separate folders - and this system has never modelled installations at all. What there is one
 /// of is the <em>policy holder</em>: one active profile, one savegame hold, for however many folders
-/// the adapter reaches. Reading this as "one copy of the game on disk" is the conflation Phase 10
-/// exists to remove, wearing a different word.
+/// the adapter reaches. It does not mean "one copy of the game on disk".
 /// </para>
 /// <para>
 /// Every awkward option - a checklist beside the button, a dropdown of games, a pre-selected one -

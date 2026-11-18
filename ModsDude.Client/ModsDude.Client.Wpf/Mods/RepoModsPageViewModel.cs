@@ -28,7 +28,7 @@ namespace ModsDude.Client.Wpf.Mods;
 /// held beside what the repo held, and the move between them was the point of it. Importing now
 /// happens where a mod is chosen for a profile - the profile's mod list editor registers whatever its
 /// draft pins that the repo does not yet hold, as part of the save - so this page has no left list, no
-/// sources and no disk scan: it reads the repo and nothing else. See docs/09-mod-catalog.md#manage.
+/// sources and no disk scan: it reads the repo and nothing else.
 /// </remarks>
 public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 {

@@ -19,7 +19,6 @@ namespace ModsDude.Client.Wpf.Mods;
 /// Cancelling skips the mods listed here and lets the rest of the import finish, which is why the
 /// dismissing button says so rather than saying "cancel". One unorderable mod is one mod's problem;
 /// losing a two-thousand-mod batch over it is not a trade anybody would make.
-/// See docs/09-mod-catalog.md#when-abstention-forces-a-prompt.
 /// </para>
 /// </remarks>
 public partial class ModVersionArbitrationModalViewModel : ModalViewModel

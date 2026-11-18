@@ -11,7 +11,7 @@ These rules override default behaviour.
   - Say in the summary how existing data is carried forward.
 - Break the API freely; the API stays at v1. Regenerate the client in the same change. No version bumps or deprecation shims.
   - Why: the API and the client of one build ship together, and each refuses to talk to any other build.
-- Treat everything in `docs/` as out of date. Don't rely on it and don't update it; it will be removed or overhauled.
+- Keep `docs/` current. A change to a feature, a decision or a known issue updates its page in the same change. The pages describe the code as it is now, never its history.
 
 ## Priorities
 

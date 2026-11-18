@@ -34,8 +34,7 @@ public static class TargetNames
 {
     /// <param name="displayName">
     /// What the adapter called this folder, where anything could still ask it. Null falls back to
-    /// the key, which is adapter-authored and legible by construction - see
-    /// <c>docs/04-game-adapters.md#targets</c>.
+    /// the key, which is adapter-authored and legible by construction.
     /// </param>
     public static string Of(TargetKey key, string? displayName)
         => displayName is { Length: > 0 } named ? named : key.Value;

@@ -29,7 +29,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// A person who wants the effect republishes the savegame onto the profile they want, which is three
 /// operations that already exist: check it out, discard it - handing the claim back and clearing the
 /// binding - and publish that slot as a new savegame with its own history. The original stays where
-/// it is, intact. See docs/10-savegame-profile-binding.md#cardinality.
+/// it is, intact.
 /// </para>
 /// </remarks>
 public class UpdateSavegameV1Endpoint : IEndpoint

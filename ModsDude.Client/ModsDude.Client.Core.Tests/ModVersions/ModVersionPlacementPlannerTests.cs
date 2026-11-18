@@ -60,8 +60,7 @@ public class ModVersionPlacementPlannerTests
 
 
     /// <summary>
-    /// The worked example from docs/09-mod-catalog.md: v1 and v4 registered, v2 found in a mod
-    /// folder and v3 in Downloads. The intended result is v1, v2, v3, v4, which means v4 moves.
+    /// v1 and v4 registered, v2 found in a mod folder and v3 in Downloads. The intended result is v1, v2, v3, v4, which means v4 moves.
     /// </summary>
     [Fact]
     public void Several_new_versions_of_one_mod_are_each_placed_against_the_final_order()

@@ -131,7 +131,6 @@ public static class ModSyncPlanner
             // mod's own metadata, so two different builds both calling themselves 1.0.0 are
             // indistinguishable to it - and that happens in practice. Without this, content
             // addressing protects the store and does nothing for the mod folder.
-            // See docs/09-mod-catalog.md#same-mod-several-sources.
             var matches = ModContentHasher.Matches(hash, want.ContentHash);
 
             items.Add(new ModSyncItem

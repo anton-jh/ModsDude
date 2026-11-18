@@ -74,8 +74,7 @@ public readonly record struct SavegameCheckoutBinding(
     /// server holds and never moves while the save is held, so the drift notice compares against it
     /// to report play that exists on this disk and nowhere else; this one is rewritten at every
     /// observation. One field would compare equal to itself the moment an apply refreshed it, and
-    /// unchecked-in play would silently stop being reported. See
-    /// docs/10-savegame-profile-binding.md#two-hashes-two-questions.
+    /// unchecked-in play would silently stop being reported.
     /// </remarks>
     /// <value>
     /// Unset reads as <see cref="ContentHash"/>, because the bytes written at check-out are exactly

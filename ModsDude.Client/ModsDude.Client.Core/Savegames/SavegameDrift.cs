@@ -184,8 +184,7 @@ public interface ISavegameSightings
 /// slot, a head nobody asked about - reports nothing rather than reporting drift. The asymmetry is
 /// the cost of being wrong: the safety check is deciding whether to destroy an evening, where a
 /// needless prompt is cheap; this one is deciding whether to raise a warning, and a warning that
-/// fires when nothing is wrong is one everybody learns to click past - which is
-/// docs/PLAN.md#phase-4--make-drift-unmissable read from the other end.
+/// fires when nothing is wrong is one everybody learns to click past.
 /// </para>
 /// </remarks>
 public static class SavegameDriftRules

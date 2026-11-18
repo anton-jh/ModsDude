@@ -337,7 +337,7 @@ internal sealed class ModSyncPlanBuilder(
     /// <para>
     /// The refusal is a backstop and not the explanation. An interface that offers a button and then
     /// throws this has already failed; it consults the same rule beforehand and says what would enable
-    /// the apply instead - see docs/10-savegame-profile-binding.md#two-actions-not-one.
+    /// the apply instead.
     /// </para>
     /// </remarks>
     /// <exception cref="UserFriendlyException">A savegame held here refuses this apply.</exception>

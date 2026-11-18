@@ -15,8 +15,7 @@ public interface IContentStoreProvider
 
     /// <summary>
     /// Every store configured on this machine, the serving one included. Install looks across all of
-    /// them before the network, and uninstall asks all of them whether a copy already exists
-    /// somewhere before keeping one.
+    /// them before the network.
     /// </summary>
     IReadOnlyList<ContentStore> GetAllStores();
 }

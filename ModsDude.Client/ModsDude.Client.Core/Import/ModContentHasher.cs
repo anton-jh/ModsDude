@@ -72,7 +72,7 @@ public static class ModContentHasher
     /// the server refuses any spelling but this one, so two parts of the application disagreeing over
     /// hex casing is a bug in whichever of them wrote the odd spelling - and absorbing it at every
     /// comparison site hides that bug rather than fixing it, while inviting the next comparison to
-    /// lean on the same leniency. See docs/10-savegame-profile-binding.md#one-hash-format.
+    /// lean on the same leniency.
     /// </remarks>
     public static bool Matches(string? left, string? right)
         => left is not null && right is not null && string.Equals(left, right, StringComparison.Ordinal);

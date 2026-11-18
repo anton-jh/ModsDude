@@ -19,9 +19,8 @@ public class SavegamePlayAttributionTests
 
 
     /// <summary>
-    /// <b>The first worked example</b> in docs/10-savegame-profile-binding.md#worked-examples. Checked
-    /// out on revision 4, an evening played, the profile applied at 1004 while other people moved it
-    /// there, and another evening. The snapshot records 1004, and the evening before the apply was
+    /// Checked out on revision 4, an evening played, the profile applied at 1004 while other people
+    /// moved it there, and another evening. The snapshot records 1004, and the evening before the apply was
     /// attributed to 4 as it happened rather than reconstructed afterwards - which is not something
     /// timestamps could have told anybody.
     /// </summary>

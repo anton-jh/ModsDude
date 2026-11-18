@@ -36,7 +36,7 @@ namespace ModsDude.Client.Wpf.Profiles;
 /// <para>
 /// <b>Restoring copies forward.</b> It never deletes the revisions in between: what is on the
 /// server stays on the server, which is what makes both this and an accidental overwrite
-/// recoverable. See docs/02-domain-model.md#profile-revisions.
+/// recoverable.
 /// </para>
 /// </remarks>
 public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
@@ -216,7 +216,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
     /// <summary>
     /// Set when the listing was windowed. Nothing pages further yet, and saying so beats a list that
-    /// quietly stops - see docs/PLAN.md.
+    /// quietly stops.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasOlder))]

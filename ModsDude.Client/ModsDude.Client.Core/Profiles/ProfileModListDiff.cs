@@ -9,7 +9,6 @@ namespace ModsDude.Client.Core.Profiles;
 /// The editor is a draft until Save, so this is computed once at the end rather than one call per
 /// click. That is also what makes Cancel mean something: a local-only mod moved into the list is
 /// pending, and discarding the draft discards it without ever having uploaded anything.
-/// See docs/09-mod-catalog.md#import-on-save.
 /// </remarks>
 public static class ProfileModListDiff
 {

@@ -492,7 +492,7 @@
          every chip in the row the height of the worst of them - and the reason is the tooltip,
          along with the path.
          Bound against ModSourceViewModel, which is what both the profile editor and the repo's mod
-         page put behind these. See docs/09-mod-catalog.md#the-source-chips. -->
+         page put behind these. -->
     <Style x:Key="SourceChip" TargetType="ToggleButton">
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
         <Setter Property="Cursor" Value="Hand" />

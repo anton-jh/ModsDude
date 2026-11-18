@@ -26,7 +26,7 @@ public class SavegameDeletionTests(DatabaseFixture fixture)
 
 
     /// <summary>
-    /// The bargain Phase 8 accepts knowingly: a snapshot names the one mod list it was played
+    /// A snapshot names the one mod list it was played
     /// against, so a profile that has been played can no longer be deleted. The delete endpoint is
     /// expected to report this itself; the constraint is what stops a check-in landing between that
     /// check and the commit from taking the revision with it.

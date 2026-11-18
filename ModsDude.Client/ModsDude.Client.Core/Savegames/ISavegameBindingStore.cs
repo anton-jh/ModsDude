@@ -12,8 +12,7 @@ public interface ISavegameBindingStore
     /// <remarks>
     /// What this machine is holding is half of what the drift notice reports, and it changes without
     /// anything touching a mod folder or a profile - so a check-out taken and a save checked back in
-    /// are both moments the notice's answer is stale and nothing else would say so. See
-    /// docs/07-mod-sync-design.md#it-has-to-be-unmissable-everywhere.
+    /// are both moments the notice's answer is stale and nothing else would say so.
     /// </remarks>
     event EventHandler? BindingsChanged;
 

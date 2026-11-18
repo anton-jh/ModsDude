@@ -20,8 +20,7 @@ namespace ModsDude.Server.Domain.Savegames;
 /// <b>The profile is fixed at publish.</b> Nothing moves a savegame onto another one - a move would
 /// put this row and every snapshot's <see cref="SavegameSnapshot.ProfileId"/> in disagreement, and two
 /// profiles' revision numbers are not comparable anyway. Somebody who wants the effect republishes
-/// the savegame, which is three operations that already exist; see
-/// docs/10-savegame-profile-binding.md#cardinality.
+/// the savegame, which is three operations that already exist.
 /// </para>
 /// <para>
 /// <b><see cref="ProfileId"/> is optional.</b> A savegame that has none is unmanaged by the
