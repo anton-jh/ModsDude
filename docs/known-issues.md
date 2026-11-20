@@ -49,6 +49,15 @@ rows if usage changes between requests.
 
 ## Risks and traps
 
+**A sign-up holds its codes before its email is confirmed.** The invite uses and the trust code are
+redeemed at sign-up. An account whose email is never confirmed keeps them anyway.
+
+**A sign-in dropped by a cancelled user switch stays valid.** The client forgets its refresh token, but the
+server doesn't hear of it, so the token works until it expires.
+
+**Token certificates are replaced by hand.** They expire after two years, and nothing warns before then.
+Replacing them signs every user out.
+
 **Dropping an adapter version strands its repos.** The server stores a repo's adapter ID without
 checking it. A client build without that adapter version can't open the repo, and nothing warns about
 it beforehand.

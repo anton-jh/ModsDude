@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Wpf.Shell.Navigation;
 
@@ -30,8 +31,8 @@ public sealed partial class LoginPageViewModel(
 
 
     /// <summary>
-    /// Signs in as the cached account where that needs nobody, waiting out an identity provider that
-    /// does not answer. Anything else leaves the page offering to sign in.
+    /// Signs in as the account kept from the last run where that needs nobody, waiting out a server
+    /// that does not answer. Anything else leaves the page offering to sign in.
     /// </summary>
     public async Task SignInQuietlyAsync()
     {
@@ -63,11 +64,17 @@ public sealed partial class LoginPageViewModel(
     // Never greyed out while running: a sign-in tab closed without finishing never answers, and
     // clicking again is how the user gets a new one - which ends the old attempt.
     [RelayCommand(AllowConcurrentExecutions = true)]
-    private async Task SignIn(CancellationToken cancellationToken)
+    private Task SignIn(CancellationToken cancellationToken) => PromptAsync(SignInPrompt.SignIn, cancellationToken);
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task CreateAccount(CancellationToken cancellationToken) => PromptAsync(SignInPrompt.CreateAccount, cancellationToken);
+
+
+    private async Task PromptAsync(SignInPrompt prompt, CancellationToken cancellationToken)
     {
         try
         {
-            await switcher.SignInAsync(loginHint: null, cancellationToken);
+            await switcher.SignInAsync(prompt, cancellationToken);
         }
         catch (Exception exception) when (cancellationToken.IsCancellationRequested is false)
         {

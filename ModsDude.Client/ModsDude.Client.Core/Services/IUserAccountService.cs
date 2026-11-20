@@ -4,6 +4,9 @@ namespace ModsDude.Client.Core.Services;
 
 public interface IUserAccountService
 {
+    /// <summary>How the user signs in. Changed on the server's account pages.</summary>
+    Task<AccountDto> GetAccount(CancellationToken cancellationToken);
+
     Task<CurrentUserDto> SetDisplayName(string displayName, CancellationToken cancellationToken);
 
     /// <summary>

@@ -11,7 +11,7 @@ app around them.
 Velopack installs the app per user. `Program.Main` runs Velopack's hooks before WPF starts.
 
 - Each environment gets its own data folder (`ModsDude.<Env>`, with production as plain `ModsDude`).
-  State, logs, the image cache and the token cache live there. Each disk's default content store is
+  State, logs, the image cache and the refresh token live there. Each disk's default content store is
   `<disk>\ModsDude[.<Env>]\store`. The environment comes from `DOTNET_ENVIRONMENT`, falling back to the
   build configuration, because WPF has no launch profiles.
 - The Velopack package ID (`ModsDude.Client`) differs from the data folder on purpose, so uninstalling
@@ -168,8 +168,14 @@ Server errors are matched by problem type, never by status code.
   confirmed does it ask the same question and stop the work. If the work doesn't stop within 15 seconds,
   the switch is refused. The old session is never dropped before the new one exists. User-scoped services
   (`IUserScopedState`) are rebuilt.
-- **Sign-in.** Tokens are refreshed silently. A browser opens only when the user asks to sign in. There
-  is no sign-out.
+- **Sign-in.** The authorization code flow with PKCE, in the system browser, with the redirect received on
+  a loopback port (`InteractiveSignIn`). The browser opens only when the user asks to sign in or create
+  an account, and always shows the sign-in page, so it never lets the previous user through by itself.
+  `TokenSession` refreshes the access token a minute before it runs out, one refresh at a time, and keeps
+  the refresh token encrypted with DPAPI (`ProtectedTokenStore`). A refused refresh shows the sign-in
+  overlay. There is no sign-out.
+- **Account.** The account page shows the email from the server. Changing the password or the email
+  opens the server's account pages in the browser.
 
 ### Local state
 

@@ -18,6 +18,14 @@ public static class ServiceCollectionExtensions
         services.AddGameAdapters(typeof(IGameAdapter).Assembly);
         services.AddSingleton(TimeProvider.System);
 
+        // The server is its own sign-in provider.
+        var oidc = new OidcClientOptions(new Uri(serverBaseUrl), OidcClientOptions.DesktopClientId);
+        services.AddSingleton(oidc);
+        services.AddHttpClient(TokenEndpointClient.HttpClientName, client => client.BaseAddress = oidc.Issuer);
+        services.AddSingleton<ITokenEndpointClient, TokenEndpointClient>();
+        services.AddSingleton<IInteractiveSignIn, InteractiveSignIn>();
+        services.AddSingleton<ITokenSession, TokenSession>();
+
         // Their own HttpClients: they talk to blob storage over a SAS, not to the API, and must not
         // carry the access token the generated clients attach.
         // No overall timeout: a block under a slow line can take minutes. The uploader times each

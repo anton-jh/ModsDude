@@ -3,12 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
+using ModsDude.Server.Api.Invites;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Exceptions;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.RepoMemberships;
-using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using System.Security.Claims;
@@ -43,27 +43,18 @@ public class RedeemInviteV1Endpoint : IEndpoint
         RedeemInviteRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
+        IInviteCodeLookup inviteCodes,
         IUnitOfWork unitOfWork,
         ITimeService timeService,
         CancellationToken cancellationToken)
     {
-        if (!InviteCodes.TryParse(request.Code, out var code))
+        var lookup = await inviteCodes.FindInviteAsync(request.Code, cancellationToken);
+        if (!lookup.IsFound)
         {
-            return TypedResults.BadRequest(Problems.InviteNotFound.With(
-                x => x.Detail = "That is not an invite code. Check it against the one you were sent."));
+            return TypedResults.BadRequest(lookup.Problem);
         }
 
-        var invite = await dbContext.RepoInvites.GetByCodeAsync(code, cancellationToken);
-        if (invite is null)
-        {
-            return TypedResults.BadRequest(Problems.InviteNotFound);
-        }
-
-        var repo = await dbContext.Repos.GetAsync(invite.RepoId, cancellationToken);
-        if (repo is null)
-        {
-            return TypedResults.BadRequest(Problems.InviteNotFound);
-        }
+        var (repo, invite) = lookup.Value;
 
         var user = await dbContext.Users.GetAsync(claimsPrincipal.GetUserId(), cancellationToken)
             ?? throw new NotAuthenticatedException();
@@ -77,16 +68,14 @@ public class RedeemInviteV1Endpoint : IEndpoint
         }
 
         var now = timeService.Now();
-        var inviterLevel = invite.CreatedBy is UserId inviter ? repo.GetMembership(inviter)?.Level : null;
 
-        var status = invite.GetStatus(now, inviterLevel);
+        var status = repo.GetInviteStatus(invite, now);
         if (status is not InviteStatus.Active)
         {
             return TypedResults.BadRequest(Problems.InviteNotUsable(status));
         }
 
-        repo.AddMember(user, invite.GrantedLevel);
-        invite.Redeem(now, inviterLevel);
+        repo.Join(user, invite, now);
 
         try
         {

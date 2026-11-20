@@ -1,9 +1,9 @@
-using Microsoft.Identity.Client;
+using ModsDude.Client.Core.Authentication;
 
 namespace ModsDude.Client.Wpf.Account;
 
 /// <summary>
 /// A sign-in the user finished in the browser that has not replaced the current account yet. Adopted
-/// or discarded by whoever prompted for it.
+/// or dropped by whoever prompted for it.
 /// </summary>
-public sealed record PendingSignIn(AuthenticationResult Result, SignedInAccount Account);
+public sealed record PendingSignIn(TokenSet Tokens, SignedInAccount Account);

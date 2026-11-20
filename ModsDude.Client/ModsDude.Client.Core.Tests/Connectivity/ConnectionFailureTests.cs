@@ -92,21 +92,10 @@ public class ConnectionFailureTests
         Assert.False(ConnectionFailure.Is(Problem(403, ProblemType.InsufficientRepoAccess)));
     }
 
-    [Fact]
-    public void What_the_caller_also_counts_is_asked_of_the_whole_chain()
-    {
-        var exception = new InvalidOperationException("Outer", new ProviderUnreachable());
-
-        Assert.False(ConnectionFailure.Is(exception));
-        Assert.True(ConnectionFailure.Is(exception, x => x is ProviderUnreachable));
-    }
-
 
     private static ApiException Api(int status)
         => new("The HTTP status code of the response was not expected.", status, null, new Dictionary<string, IEnumerable<string>>(), null);
 
     private static ApiException<CustomProblemDetails> Problem(int status, ProblemType type)
         => new("A server side error occurred.", status, null, new Dictionary<string, IEnumerable<string>>(), new CustomProblemDetails { Type = type }, null);
-
-    private sealed class ProviderUnreachable : Exception;
 }

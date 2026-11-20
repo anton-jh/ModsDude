@@ -8,9 +8,12 @@ reasons for it. Each type's remarks hold the finer detail.
 
 ### Users
 
-A user is created by their first authenticated request. The token's `sub` claim identifies them. Its
-`name` claim only seeds the display name, which the user changes in the app afterwards, because Entra
-External ID has no profile page for that.
+A user is created only by signing up (`UserSignUp`), together with the account they sign in with. Sign-up
+takes a trust code, at least one repo invite, or both, and redeems every one of them or none. Two invites
+to the same repo are refused. The display name is typed at sign-up and changed in the app afterwards.
+
+Joining a repo by invite goes through `Repo.Join`, which judges the invite against its inviter's current
+level in the repo. Sign-up and the in-app invite redemption both use it.
 
 Display names are not unique. Where one list shows two users with the same name, each gets a four-digit
 `UserTag` derived from their ID. Repos get a `RepoTag` the same way. The tag belongs to the list, not to

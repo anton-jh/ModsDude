@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Navigation;
@@ -11,15 +12,12 @@ using System.IO;
 namespace ModsDude.Client.Wpf.Account;
 
 /// <summary>
-/// The signed-in user's own page: how everybody else sees them - name and picture - and the two
-/// things that are about the account itself rather than this system, the password and who is
-/// signed in.
+/// The signed-in user's own page: how everybody else sees them - name and picture - and how they sign
+/// in.
 /// </summary>
 /// <remarks>
-/// The name and picture are this system's and change here, immediately, for every teammate. The
-/// password belongs to the identity provider, which has no page for changing one while signed in;
-/// what it offers is a reset by emailed code from its sign-in page, so that is where the button
-/// goes.
+/// The name and picture change here, immediately, for every teammate. The password and email change
+/// on the server's account pages, which the buttons open in the browser.
 /// </remarks>
 public partial class AccountPageViewModel : PageViewModel, IDisposable
 {
@@ -27,8 +25,8 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
     public const int MaximumNameLength = 32;
 
     private readonly IUserAccountService _userAccountService;
-    private readonly IAuthenticationService _authenticationService;
-    private readonly IAccountSwitcher _switcher;
+    private readonly IBrowserLauncher _browser;
+    private readonly OidcClientOptions _server;
     private readonly IFilePickerService _filePickerService;
     private readonly IToastService _toasts;
     private readonly ILogger<AccountPageViewModel> _logger;
@@ -37,16 +35,16 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
     public AccountPageViewModel(
         AccountViewModel account,
         IUserAccountService userAccountService,
-        IAuthenticationService authenticationService,
-        IAccountSwitcher switcher,
+        IBrowserLauncher browser,
+        OidcClientOptions server,
         IFilePickerService filePickerService,
         IToastService toasts,
         ILogger<AccountPageViewModel> logger)
     {
         Account = account;
         _userAccountService = userAccountService;
-        _authenticationService = authenticationService;
-        _switcher = switcher;
+        _browser = browser;
+        _server = server;
         _filePickerService = filePickerService;
         _toasts = toasts;
         _logger = logger;
@@ -70,6 +68,10 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
 
     public bool HasNameError => NameError is not null;
 
+    /// <summary>The address the user signs in with. Null until the server has answered.</summary>
+    [ObservableProperty]
+    private string? _email;
+
     /// <summary>Whether the page is waiting on a picture being made, uploaded or removed.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ChangePictureCommand))]
@@ -81,6 +83,12 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
     {
         Account.PropertyChanged -= OnAccountChanged;
         GC.SuppressFinalize(this);
+    }
+
+
+    protected override async Task InitAsync()
+    {
+        Email = (await _userAccountService.GetAccount(CancellationToken.None)).Email;
     }
 
 
@@ -152,22 +160,11 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
         }
     }
 
-    // Never greyed out while running, for the same reason as switching user: a closed tab never
-    // answers, and asking again replaces it.
-    [RelayCommand(AllowConcurrentExecutions = true)]
-    private async Task ResetPassword(CancellationToken cancellationToken)
-    {
-        if (_authenticationService.CurrentAccount is not SignedInAccount current)
-        {
-            return;
-        }
+    [RelayCommand]
+    private void ChangePassword() => _browser.Open(new Uri(_server.Issuer, OidcClientOptions.ChangePasswordPath));
 
-        // Signing in as somebody else on that page is a switch, and the switch says so for itself.
-        if (await _switcher.SignInAsync(current.Email, cancellationToken) && _authenticationService.CurrentAccount?.Id == current.Id)
-        {
-            _toasts.Show("Signed in again. If you set a new password, it is the one to use from now on.");
-        }
-    }
+    [RelayCommand]
+    private void ChangeEmail() => _browser.Open(new Uri(_server.Issuer, OidcClientOptions.ChangeEmailPath));
 
 
     private void OnAccountChanged(object? sender, PropertyChangedEventArgs e)

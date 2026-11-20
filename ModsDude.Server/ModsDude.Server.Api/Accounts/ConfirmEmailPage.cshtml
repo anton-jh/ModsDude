@@ -1,0 +1,31 @@
+@page "/account/confirm-email"
+@model ConfirmEmailPageModel
+@{
+    ViewData["Title"] = "Confirm email";
+}
+
+<h1>Confirm email</h1>
+
+@if (Model.Confirmed)
+{
+    <p class="notice">Email confirmed.</p>
+    <div class="links">
+        <a asp-page="/Accounts/SignInPage" asp-route-returnUrl="@Model.ReturnUrl">Sign in</a>
+    </div>
+}
+else if (Model.Failed)
+{
+    <p class="form-error">This link does not work.</p>
+    <div class="links">
+        <a asp-page="/Accounts/SignInPage" asp-route-returnUrl="@Model.ReturnUrl">Sign in to get a new link</a>
+    </div>
+}
+else
+{
+    <form method="post">
+        <input type="hidden" asp-for="AccountId">
+        <input type="hidden" asp-for="Code">
+        <input type="hidden" asp-for="ReturnUrl">
+        <button type="submit" class="accent">Confirm email</button>
+    </form>
+}

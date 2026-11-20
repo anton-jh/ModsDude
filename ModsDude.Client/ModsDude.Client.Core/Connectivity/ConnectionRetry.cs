@@ -7,7 +7,7 @@ namespace ModsDude.Client.Core.Connectivity;
 /// <remarks>The declaration order is the order their notices are drawn in.</remarks>
 public enum ConnectionTarget
 {
-    /// <summary>The identity provider, which has to answer before anything else can be asked.</summary>
+    /// <summary>Signing in, which has to succeed before anything else can be asked.</summary>
     SignIn,
 
     /// <summary>The ModsDude server. Its outage is the offline state rather than a notice.</summary>
@@ -40,8 +40,7 @@ public enum ConnectionTarget
 /// </remarks>
 public sealed class ConnectionRetry(
     ILogger<ConnectionRetry> logger,
-    TimeProvider timeProvider,
-    Func<Exception, bool>? alsoConnectionFailure = null) : IConnectionRetry
+    TimeProvider timeProvider) : IConnectionRetry
 {
     /// <summary>Notice keys are prefixed with this.</summary>
     public const string KeyPrefix = "connection/";
@@ -94,7 +93,7 @@ public sealed class ConnectionRetry(
                 {
                     return false;
                 }
-                catch (Exception exception) when (ConnectionFailure.Is(exception, alsoConnectionFailure))
+                catch (Exception exception) when (ConnectionFailure.Is(exception))
                 {
                     failures++;
                     delay = DelayAfter(failures);
@@ -213,8 +212,8 @@ public sealed class ConnectionRetry(
 
         return new Notice(key, key, NoticeSeverity.Pending, "Could not sign in")
         {
-            Body = "The sign-in service did not answer, so nothing can be loaded yet. This is tried again on "
-                + "its own - if it goes on, check this machine's internet connection.",
+            Body = "The server did not answer, so nothing can be loaded yet. This is tried again on its own "
+                + "- if it goes on, check this machine's internet connection.",
             Footnote = $"{tried} {next}",
             CanDismiss = false,
             Actions = [new(NoticeActionKind.RetryConnection, "Retry now") { IsPrimary = true }]

@@ -6,8 +6,7 @@ public interface IAuthenticationService : IAccessTokenAccessor
 {
     /// <summary>
     /// Raised when the signed-in account becomes a different one - the first sign-in, or a switch.
-    /// Always on the UI thread: MSAL finishes wherever it likes, and everything listening to this
-    /// rebuilds bound state.
+    /// Always on the UI thread: everything listening to this rebuilds bound state.
     /// </summary>
     event EventHandler<SignedInAccount>? AccountChanged;
 
@@ -26,7 +25,7 @@ public interface IAuthenticationService : IAccessTokenAccessor
     bool NeedsSignIn { get; }
 
     /// <summary>
-    /// Signs in as the cached account, only if that takes no one at the keyboard.
+    /// Signs in as the account kept from the last run, only if that takes no one at the keyboard.
     /// </summary>
     /// <remarks>
     /// What it does not swallow is anything other than "needs the user" - a network that is not up
@@ -36,21 +35,14 @@ public interface IAuthenticationService : IAccessTokenAccessor
     Task<bool> TrySignInSilentlyAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Opens the sign-in page, replacing any sign-in page still open. Nothing changes until the
+    /// Opens the sign-in or sign-up page, replacing any such page still open. Nothing changes until the
     /// result is adopted.
     /// </summary>
-    /// <param name="loginHint">
-    /// The account to ask the password of, where set. Otherwise the page offers a choice of accounts.
-    /// </param>
     /// <returns>Null where the user closed the page, asked for another before finishing it, or the caller cancelled.</returns>
-    Task<PendingSignIn?> PromptAsync(string? loginHint, CancellationToken cancellationToken);
+    Task<PendingSignIn?> PromptAsync(SignInPrompt prompt, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Makes a pending sign-in the account, forgetting every other one. Raises
-    /// <see cref="AccountChanged"/> where it is a different user.
+    /// Makes a pending sign-in the account. Raises <see cref="AccountChanged"/> where it is a different user.
     /// </summary>
     Task AdoptAsync(PendingSignIn signIn);
-
-    /// <summary>Forgets a pending sign-in that will not be adopted, unless it is the current account.</summary>
-    Task DiscardAsync(PendingSignIn signIn);
 }

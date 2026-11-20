@@ -1,4 +1,5 @@
 ﻿using ModsDude.Server.Domain.Exceptions;
+using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Users;
 
@@ -118,6 +119,31 @@ public class Repo : IArchivable
         MembersVersion++;
     }
 
+    /// <summary>The invite's status, judged against its inviter's current level in this repo.</summary>
+    public InviteStatus GetInviteStatus(RepoInvite invite, DateTime now)
+    {
+        if (invite.RepoId != Id)
+        {
+            throw new DomainValidationException($"Invite '{invite.Id.Value}' belongs to another repo than '{Id.Value}'.");
+        }
+
+        return invite.GetStatus(now, InviterLevelOf(invite));
+    }
+
+    /// <summary>Adds the user at the invite's level and charges the invite one use.</summary>
+    public void Join(User user, RepoInvite invite, DateTime now)
+    {
+        if (GetInviteStatus(invite, now) is var status and not InviteStatus.Active)
+        {
+            throw new DomainValidationException($"Invite '{invite.Id.Value}' cannot be redeemed while {status}.");
+        }
+
+        var inviterLevel = InviterLevelOf(invite);
+
+        AddMember(user, invite.GrantedLevel);
+        invite.Redeem(now, inviterLevel);
+    }
+
     /// <summary>
     /// Demoting the only Admin is refused for the same reason kicking them is: it leaves a repo
     /// nobody can administer, and no remaining member can undo it. Setting the level a member already
@@ -171,6 +197,11 @@ public class Repo : IArchivable
         return _memberships.FirstOrDefault(x => x.UserId == userId);
     }
 
+
+    private RepoMembershipLevel? InviterLevelOf(RepoInvite invite)
+    {
+        return invite.CreatedBy is UserId inviter ? GetMembership(inviter)?.Level : null;
+    }
 
     private User UserOf(RepoMembership membership)
     {

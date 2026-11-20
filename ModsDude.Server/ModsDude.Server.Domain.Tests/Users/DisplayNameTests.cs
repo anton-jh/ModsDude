@@ -46,26 +46,6 @@ public class DisplayNameTests
     }
 
     [Fact]
-    public void A_claim_that_is_too_long_is_cut_to_fit_rather_than_refused()
-    {
-        var name = DisplayName.FromClaim(new string('a', DisplayName.MaximumLength + 10));
-
-        Assert.Equal(DisplayName.MaximumLength, name.Value.Length);
-    }
-
-    [Fact]
-    public void A_claim_loses_its_control_characters()
-    {
-        Assert.Equal(new DisplayName("Anton"), DisplayName.FromClaim("An\u0000ton"));
-    }
-
-    [Fact]
-    public void A_claim_of_only_control_characters_falls_back()
-    {
-        Assert.Equal(new DisplayName(DisplayName.Fallback), DisplayName.FromClaim("\t\n"));
-    }
-
-    [Fact]
     public void Renaming_a_user_stamps_when_their_profile_changed()
     {
         var created = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);

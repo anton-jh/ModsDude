@@ -2,12 +2,11 @@ using Asp.Versioning;
 using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Microsoft.Identity.Web;
+using ModsDude.Server.Api.Accounts;
 using ModsDude.Server.Api.Admin;
 using ModsDude.Server.Api.Builds;
 using ModsDude.Server.Api.Deploy;
@@ -65,34 +64,27 @@ builder.Services
     .AddEndpointsApiExplorer()
     .AddOpenApiDocument(config =>
     {
-        var authority = builder.Configuration["EntraExternalId:Authority"]?.TrimEnd('/')
-            ?? throw new InvalidOperationException("'EntraExternalId:Authority' is missing from appsettings.json.");
-        var tokenEndpoint = $"{authority}/oauth2/v2.0/token";
-        var authorizationEndpoint = $"{authority}/oauth2/v2.0/authorize";
-        var scope = builder.Configuration["SwaggerAuthentication:Scope"]
-            ?? throw new InvalidOperationException("'SwaggerAuthentication:Scope' is missing from appsettings.json.");
-
         config.Title = "ModsDude Server";
-        config.AddSecurity("EntraExternalId", new OpenApiSecurityScheme
+        config.AddSecurity("ModsDude", new OpenApiSecurityScheme
         {
             Type = OpenApiSecuritySchemeType.OAuth2,
             Flows = new OpenApiOAuthFlows
             {
                 AuthorizationCode = new OpenApiOAuthFlow
                 {
-                    AuthorizationUrl = authorizationEndpoint,
-                    TokenUrl = tokenEndpoint,
-                    RefreshUrl = tokenEndpoint,
+                    AuthorizationUrl = ConnectEndpoints.AuthorizePath,
+                    TokenUrl = ConnectEndpoints.TokenPath,
+                    RefreshUrl = ConnectEndpoints.TokenPath,
                     Scopes =
                     {
-                        { "offline_access", "Offline access" },
                         { "openid", "OpenID" },
-                        { scope, "ModsDude Server default user scope" }
+                        { "offline_access", "Offline access" },
+                        { AccountTokens.ApiScope, "The ModsDude API" }
                     }
                 }
             }
         });
-        config.OperationProcessors.Add(new AspNetCoreOperationSecurityScopeProcessor("EntraExternalId"));
+        config.OperationProcessors.Add(new AspNetCoreOperationSecurityScopeProcessor("ModsDude"));
 
         // Relative, so the document says "wherever this is served" rather than naming a machine. Written
         // at build time there is no request to take a host from, and without any server at all NSwag's
@@ -115,19 +107,7 @@ builder.Services
         options.SubstituteApiVersionInUrl = true;
     });
 
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddMicrosoftIdentityWebApi(
-    options =>
-    {
-        builder.Configuration.Bind("EntraExternalId", options);
-        options.TokenValidationParameters.NameClaimType = "name";
-        options.MapInboundClaims = false;
-    },
-    options =>
-    {
-        builder.Configuration.Bind("EntraExternalId", options);
-    });
+builder.AddAccounts(isDescribingOnly);
 
 builder.Services
     .Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName))
@@ -152,10 +132,11 @@ builder.Services.AddScoped<IAdminMemberships, AdminMemberships>();
 
 builder.Services.AddSingleton<IUpdateAnnouncement, UpdateAnnouncement>();
 
+// The admin pages and the account pages, each in its feature's folder with its own layout.
 builder.Services.AddRazorPages(options =>
 {
-    options.RootDirectory = "/Admin";
-    options.Conventions.AuthorizeFolder("/", AdminAuthenticationHandler.PolicyName);
+    options.RootDirectory = "/";
+    options.Conventions.AuthorizeFolder("/Admin", AdminAuthenticationHandler.PolicyName);
 });
 
 builder.Services.AddHttpContextAccessor();
@@ -222,6 +203,9 @@ app.UseExceptionHandler(new ExceptionHandlerOptions
     SuppressDiagnosticsCallback = context => context.ExceptionHandledBy is ExceptionHandledType.ExceptionHandlerService
 });
 
+// Before anything reads the scheme or the caller's address.
+app.UseForwardedHeaders();
+
 var apiVersionSet = app.NewApiVersionSet()
     .HasApiVersion(new ApiVersion(1))
     .Build();
@@ -239,7 +223,7 @@ if (app.Environment.IsDevelopment())
     {
         config.OAuth2Client = new OAuth2ClientSettings
         {
-            ClientId = builder.Configuration["SwaggerAuthentication:ClientId"],
+            ClientId = AccountClients.SwaggerClientId,
             ClientSecret = "",
             UsePkceWithAuthorizationCodeGrant = true
         };
@@ -253,10 +237,15 @@ app.UseWhen(
     api => api.UseMiddleware<ClientBuildMiddleware>());
 
 
+app.UseRateLimiter();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.UseMiddleware<UserLoadingMiddleware>();
+// Only for the API: the account pages sign in with a cookie and answer with pages, not problems.
+app.UseWhen(
+    context => context.Request.Path.StartsWithSegments("/api"),
+    api => api.UseMiddleware<UserLoadingMiddleware>());
 
 // The 401, 403, 412 and 500 are declared once here rather than in every endpoint's Results<...> union,
 // because middleware and ApiExceptionHandler produce them for every endpoint, including the ones that
@@ -285,6 +274,8 @@ app.MapGroup("api/v{v:apiVersion}")
 app.MapClientDownload();
 app.MapHealth();
 app.MapUpdateAnnouncement();
+
+app.MapConnect();
 
 app.MapRazorPages();
 
@@ -324,6 +315,8 @@ if (!isDescribingOnly)
                 .Database.Migrate();
         }
 
+        await AccountClients.EnsureRegisteredAsync(scope.ServiceProvider, app.Environment, CancellationToken.None);
+
         // Every container this server writes to, created if it is not there. Not fatal: the API serves
         // every metadata route perfectly well without them, and a storage account that is momentarily
         // unreachable is not a reason to refuse to start. Logged as an error because uploads fail until
@@ -359,6 +352,7 @@ if (!isDescribingOnly)
     RetentionJobs.Register(recurringJobs, app.Services.GetRequiredService<IOptions<RetentionOptions>>().Value);
     BlobReclamationJob.Register(recurringJobs, app.Services.GetRequiredService<IOptions<BlobReclamationOptions>>().Value);
     StorageStatisticsJob.Register(recurringJobs, app.Services.GetRequiredService<IOptions<StorageStatisticsOptions>>().Value);
+    TokenPruningJob.Register(recurringJobs);
     ModHubCrawlJob.Register(recurringJobs, app.Services.GetRequiredService<IOptions<ModHubOptions>>().Value, app.Logger);
 }
 

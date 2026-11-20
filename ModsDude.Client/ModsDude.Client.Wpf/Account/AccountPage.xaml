@@ -80,7 +80,7 @@
                     </GroupBox>
                 </Border>
 
-                <!-- The account itself, which belongs to the sign-in provider rather than to ModsDude. -->
+                <!-- How the user signs in. Changed on the server's account pages, in the browser. -->
                 <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                         CornerRadius="4"
                         Padding="16"
@@ -90,17 +90,21 @@
 
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                 <Run Text="Signed in as" />
-                                <Run Text="{Binding Account.Email, Mode=OneWay}"
+                                <Run Text="{Binding Email, Mode=OneWay}"
                                      FontWeight="SemiBold"
                                      Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                             </TextBlock>
 
-                            <Label Content="Password" Margin="0 24 0 8" />
+                            <Label Content="Password and email" Margin="0 24 0 8" />
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Text="This opens the sign-in page in your browser. Choose &quot;Forgot password?&quot; there, and you will be emailed a code to set a new one." />
-                            <Button Content="Change password" Margin="0 12 0 0" HorizontalAlignment="Left"
-                                    Command="{Binding ResetPasswordCommand}" />
+                                       Text="These open your account page in the browser." />
+                            <StackPanel Orientation="Horizontal" Margin="0 12 0 0">
+                                <Button Content="Change password" Margin="0 0 8 0"
+                                        Command="{Binding ChangePasswordCommand}" />
+                                <Button Content="Change email"
+                                        Command="{Binding ChangeEmailCommand}" />
+                            </StackPanel>
 
                             <Label Content="Switch user" Margin="0 24 0 8" />
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"

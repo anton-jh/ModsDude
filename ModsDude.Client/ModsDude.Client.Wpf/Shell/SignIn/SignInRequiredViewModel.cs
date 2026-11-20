@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Wpf.Account;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -52,7 +53,7 @@ public sealed partial class SignInRequiredViewModel : ObservableObject, IDisposa
     {
         try
         {
-            if (await _switcher.SignInAsync(_authentication.CurrentAccount?.Email, cancellationToken))
+            if (await _switcher.SignInAsync(SignInPrompt.SignIn, cancellationToken))
             {
                 // Whatever was waiting for a token tries again now rather than at its next interval.
                 _connection.RetryNow();

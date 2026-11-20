@@ -25,16 +25,12 @@ namespace ModsDude.Client.Core.Connectivity;
 /// </para>
 /// <para>
 /// <b>Down the whole inner chain</b>, because the thing that failed is rarely the thing that throws:
-/// the sign-in library wraps the socket error it got, and every server call acquires a token first.
+/// typed clients wrap the socket error they got, and every server call acquires a token first.
 /// </para>
 /// </remarks>
 public static class ConnectionFailure
 {
-    /// <param name="alsoCounts">
-    /// Anything else that means the same thing, for exception types Core cannot see - the sign-in
-    /// library's, which the WPF client owns. Asked of every exception in the chain.
-    /// </param>
-    public static bool Is(Exception exception, Func<Exception, bool>? alsoCounts = null)
+    public static bool Is(Exception exception)
     {
         for (var current = exception; current is not null; current = current.InnerException)
         {
@@ -49,7 +45,7 @@ public static class ConnectionFailure
                 SocketException => true,
                 // What HttpClient puts inside the cancellation it throws when its own timeout fires.
                 TimeoutException => true,
-                _ => alsoCounts?.Invoke(current) ?? false
+                _ => false
             };
 
             if (counts)

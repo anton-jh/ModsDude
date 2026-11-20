@@ -11,11 +11,9 @@ namespace ModsDude.Server.Api.Endpoints.Users;
 /// Who the caller is, in this system's terms.
 /// </summary>
 /// <remarks>
-/// The display name and picture are the user's own choice, stored here - the token only carries the
-/// name the identity provider seeded it from. The tag is derived from the subject id by a rule that
-/// lives on this side, and it is what tells
-/// this user apart from the other person of the same name they may one day stand next to in a member
-/// list. Nothing else reaches it for the caller themselves - <see cref="GetUsersV1Endpoint"/>
+/// The display name and picture are the user's own choice. The tag is derived from the subject id, and
+/// it is what tells this user apart from the other person of the same name they may one day stand next
+/// to in a member list. Nothing else reaches it for the caller themselves - <see cref="GetUsersV1Endpoint"/>
 /// deliberately returns everyone <i>except</i> them.
 /// <para>
 /// It also carries <c>IsTrusted</c>, which no other route exposes: it is the caller's own
@@ -37,8 +35,6 @@ public class GetCurrentUserV1Endpoint : IEndpoint
         ClaimsPrincipal claimsPrincipal,
         CancellationToken cancellationToken)
     {
-        // UserLoadingMiddleware has already provisioned the row for anyone who got this far, so a
-        // miss here is not a new user - it is a token whose subject this system has no record of.
         var user = await dbContext.Users.FindAsync([claimsPrincipal.GetUserId()], cancellationToken)
             ?? throw new NotAuthenticatedException();
 

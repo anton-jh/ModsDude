@@ -179,22 +179,6 @@ public class ConnectionRetryTests
         Assert.Empty(_retry.Build());
     }
 
-    [Fact]
-    public async Task What_the_caller_also_counts_is_retried_too()
-    {
-        var retry = new ConnectionRetry(NullLogger<ConnectionRetry>.Instance, _time, x => x is ProviderUnreachable);
-        var attempts = new Attempts(() => throw new ProviderUnreachable(), Succeed);
-
-        var run = retry.RunAsync(ConnectionTarget.SignIn, attempts.Next, CancellationToken.None);
-
-        await WaitUntil(() => _time.PendingTimers == 1);
-        retry.RetryNow();
-
-        Assert.True(await run.WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.Equal(2, attempts.Count);
-    }
-
-
     private static void Succeed() { }
 
     private static void Unreachable()
@@ -236,6 +220,4 @@ public class ConnectionRetryTests
             return Task.CompletedTask;
         }
     }
-
-    private sealed class ProviderUnreachable : Exception;
 }

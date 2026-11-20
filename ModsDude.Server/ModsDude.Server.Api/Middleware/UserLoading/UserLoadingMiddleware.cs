@@ -1,13 +1,15 @@
-using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
+using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace ModsDude.Server.Api.Middleware.UserLoading;
 
+/// <summary>
+/// Loads the caller named by the token, refuses one who is blocked or no longer exists, and keeps their
+/// <see cref="User.LastSeen"/> current. Users are created only by signing up.
+/// </summary>
 public class UserLoadingMiddleware(
     ApplicationDbContext dbContext,
     ITimeService timeService)
@@ -19,7 +21,7 @@ public class UserLoadingMiddleware(
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
         var isAuthenticated = context.User.Identity?.IsAuthenticated ?? false;
-        var subClaim = context.User.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Sub);
+        var subClaim = context.User.FindFirst(Claims.Subject);
 
         if (!isAuthenticated || subClaim is null)
         {
@@ -27,10 +29,17 @@ public class UserLoadingMiddleware(
             return;
         }
 
-        var userId = new UserId(subClaim.Value);
-        var existingUser = await dbContext.Users.FindAsync(userId);
+        var user = await dbContext.Users.FindAsync([new UserId(subClaim.Value)], context.RequestAborted);
 
-        if (existingUser is { IsBlocked: true })
+        if (user is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(Problems.NotAuthenticated, context.RequestAborted);
+
+            return;
+        }
+
+        if (user.IsBlocked)
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             await context.Response.WriteAsJsonAsync(Problems.UserBlocked, context.RequestAborted);
@@ -38,25 +47,14 @@ public class UserLoadingMiddleware(
             return;
         }
 
-        if (existingUser is not null)
-        {
-            await TouchUserAsync(existingUser);
-        }
-        else
-        {
-            await ProvisionUserAsync(userId, GetDisplayName(context.User), context.RequestAborted);
-        }
+        await TouchUserAsync(user, context.RequestAborted);
 
         await next(context);
     }
 
 
-    /// <summary>
-    /// Only <see cref="User.LastSeen"/>, and only once per <see cref="_lastSeenResolution"/>. The
-    /// name claim is <i>not</i> read again: it seeded the name at provisioning and the name is the
-    /// user's own from then on - see <see cref="DisplayName"/>.
-    /// </summary>
-    private async Task TouchUserAsync(User user)
+    /// <summary>Only once per <see cref="_lastSeenResolution"/>.</summary>
+    private async Task TouchUserAsync(User user, CancellationToken cancellationToken)
     {
         var now = timeService.Now();
 
@@ -67,39 +65,6 @@ public class UserLoadingMiddleware(
 
         user.LastSeen = now;
 
-        await dbContext.SaveChangesAsync();
-    }
-
-    /// <summary>
-    /// The subject id is the identity and the primary key both, so this insert can only ever land on
-    /// this subject's own row. What it races is another request for the same brand-new user, and the
-    /// loser of that race has nothing left to do.
-    /// </summary>
-    private async Task ProvisionUserAsync(UserId userId, DisplayName displayName, CancellationToken cancellationToken)
-    {
-        var newUser = new User(userId, displayName, timeService.Now());
-        dbContext.Users.Add(newUser);
-
-        try
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            // AsNoTracking so the answer comes from the database rather than from the Added entity
-            // this very method is holding, which the identity map would otherwise return.
-            if (!await dbContext.Users.AsNoTracking().AnyAsync(x => x.Id == userId, cancellationToken))
-            {
-                throw;
-            }
-
-            dbContext.Entry(newUser).State = EntityState.Detached;
-        }
-    }
-
-    private static DisplayName GetDisplayName(ClaimsPrincipal claimsPrincipal)
-    {
-        return DisplayName.FromClaim(
-            claimsPrincipal.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Name)?.Value);
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

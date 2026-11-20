@@ -17,8 +17,7 @@ namespace ModsDude.Server.Api.Endpoints.Users;
 /// </summary>
 /// <remarks>
 /// Nothing is checked against other users' names, because nothing needs a name to be unique - see
-/// <see cref="DisplayName"/>. The identity provider keeps whatever it had; this system stopped
-/// reading it after the first sign-in.
+/// <see cref="DisplayName"/>.
 /// </remarks>
 public class SetDisplayNameV1Endpoint : IEndpoint
 {

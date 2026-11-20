@@ -1,0 +1,109 @@
+@page "/account/sign-up"
+@model SignUpPageModel
+@{
+    ViewData["Title"] = "Create account";
+}
+
+<h1>Create account</h1>
+
+<form method="post">
+    <div asp-validation-summary="ModelOnly"></div>
+    <input type="hidden" asp-for="ReturnUrl">
+    <input type="hidden" asp-for="RequestId">
+
+    <div class="field">
+        <label asp-for="Email">Email</label>
+        <input asp-for="Email" type="email" autocomplete="email" autofocus>
+        <span asp-validation-for="Email"></span>
+    </div>
+
+    <div class="field">
+        <label asp-for="DisplayName">Name</label>
+        <input asp-for="DisplayName" type="text" autocomplete="nickname" maxlength="@Model.MaximumDisplayNameLength">
+        <span class="hint">What others in your repos see. You can change it later.</span>
+        <span asp-validation-for="DisplayName"></span>
+    </div>
+
+    <div class="field">
+        <label asp-for="Password">Password</label>
+        <input asp-for="Password" type="password" autocomplete="new-password">
+        <span class="hint">At least @Model.MinimumPasswordLength characters.</span>
+        <span asp-validation-for="Password"></span>
+    </div>
+
+    <div class="field">
+        <label asp-for="ConfirmPassword">Password again</label>
+        <input asp-for="ConfirmPassword" type="password" autocomplete="new-password">
+        <span asp-validation-for="ConfirmPassword"></span>
+    </div>
+
+    <h2>Codes</h2>
+    <p class="muted">A trust code, at least one invite code, or both.</p>
+
+    <div class="field">
+        <label asp-for="TrustCode">Trust code</label>
+        <input asp-for="TrustCode" type="text" autocomplete="off" spellcheck="false">
+        <span asp-validation-for="TrustCode"></span>
+    </div>
+
+    <div class="field" id="invites">
+        <label>Invite codes</label>
+        @for (var i = 0; i < Model.InviteCodes.Count; i++)
+        {
+            <div class="invite">
+                <div class="row">
+                    <input asp-for="InviteCodes[i]" type="text" autocomplete="off" spellcheck="false" aria-label="Invite code">
+                    <button type="button" class="remove-invite">Remove</button>
+                </div>
+                <span asp-validation-for="InviteCodes[i]"></span>
+            </div>
+        }
+        <div><button type="button" id="add-invite">Add invite code</button></div>
+    </div>
+
+    <button type="submit" class="accent">Create account</button>
+</form>
+
+<div class="links">
+    <a asp-page="/Accounts/SignInPage" asp-route-returnUrl="@Model.ReturnUrl">Sign in instead</a>
+</div>
+
+<script>
+    (() => {
+        const container = document.getElementById("invites");
+        const add = document.getElementById("add-invite");
+
+        // Rows are renumbered on every change, because the server binds them by index.
+        const renumber = () => {
+            container.querySelectorAll(".invite input").forEach((input, index) => {
+                input.name = `InviteCodes[${index}]`;
+                input.id = `InviteCodes_${index}_`;
+            });
+        };
+
+        const wire = row => {
+            row.querySelector(".remove-invite").addEventListener("click", () => {
+                if (container.querySelectorAll(".invite").length > 1) {
+                    row.remove();
+                } else {
+                    row.querySelector("input").value = "";
+                }
+                renumber();
+            });
+        };
+
+        container.querySelectorAll(".invite").forEach(wire);
+
+        add.addEventListener("click", () => {
+            const template = container.querySelector(".invite");
+            const row = template.cloneNode(true);
+            row.querySelector("input").value = "";
+            row.querySelector("input").classList.remove("input-validation-error");
+            row.querySelectorAll(".field-validation-error").forEach(x => x.textContent = "");
+            add.parentElement.before(row);
+            wire(row);
+            renumber();
+            row.querySelector("input").focus();
+        });
+    })();
+</script>

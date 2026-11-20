@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.Dtos;
 using ModsDude.Server.Api.ErrorHandling;
+using ModsDude.Server.Api.Invites;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Exceptions;
 using ModsDude.Server.Application.Services;
@@ -33,22 +34,19 @@ public class RedeemTrustCodeV1Endpoint : IEndpoint
         RedeemTrustCodeRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
+        IInviteCodeLookup inviteCodes,
         IUnitOfWork unitOfWork,
         ITimeService timeService,
         ILogger<RedeemTrustCodeV1Endpoint> logger,
         CancellationToken cancellationToken)
     {
-        if (!InviteCodes.TryParse(request.Code, out var code))
+        var lookup = await inviteCodes.FindTrustCodeAsync(request.Code, cancellationToken);
+        if (!lookup.IsFound)
         {
-            return TypedResults.BadRequest(Problems.TrustCodeNotFound.With(
-                x => x.Detail = "That is not a trust code. Check it against the one you were sent."));
+            return TypedResults.BadRequest(lookup.Problem);
         }
 
-        var trustCode = await dbContext.TrustCodes.GetByCodeAsync(code, cancellationToken);
-        if (trustCode is null)
-        {
-            return TypedResults.BadRequest(Problems.TrustCodeNotFound);
-        }
+        var trustCode = lookup.Value;
 
         var userId = claimsPrincipal.GetUserId();
         var user = await dbContext.Users.GetAsync(userId, cancellationToken)

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core;
 using ModsDude.Client.Core.Activity;
+using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.Changes;
 using ModsDude.Client.Core.Concurrency;
@@ -470,12 +471,8 @@ public partial class App : Application
 
         services.AddSingleton<IGameConnectionToasts, GameConnectionToasts>();
 
-        // Keeps trying sign-in and the first repo load until something answers. Told about the sign-in
-        // library's own way of saying so, which Core cannot see.
-        services.AddSingleton<IConnectionRetry>(sp => new ConnectionRetry(
-            sp.GetRequiredService<ILogger<ConnectionRetry>>(),
-            sp.GetRequiredService<TimeProvider>(),
-            alsoConnectionFailure: AuthenticationService.IsUnreachable));
+        // Keeps trying sign-in and the first repo load until something answers.
+        services.AddSingleton<IConnectionRetry, ConnectionRetry>();
 
         // Windows notifications: the toolkit behind one seam, and the object that decides when the
         // window's own notices and toasts are worth sending through it.
@@ -702,10 +699,8 @@ public partial class App : Application
 
         services.AddCore<IAuthenticationService>(configuration["ModsDudeServer:BaseUrl"]
             ?? throw new InvalidOperationException("'ModsDudeServer:BaseUrl' is missing from appsettings.json."));
-        var authentication = configuration.GetSection(AuthenticationOptions.SectionName).Get<AuthenticationOptions>();
-        services.AddSingleton(authentication is { IsComplete: true }
-            ? authentication
-            : throw new InvalidOperationException($"'{AuthenticationOptions.SectionName}' needs ClientId, Authority and Scope in appsettings.json."));
+        services.AddSingleton<ITokenStore, ProtectedTokenStore>();
+        services.AddSingleton<IBrowserLauncher, ShellBrowserLauncher>();
         services.AddSingleton<IAuthenticationService, AuthenticationService>();
         services.AddSingleton<ClientConfiguration>();
         services.AddSingleton<IStateStore, StateStore>();

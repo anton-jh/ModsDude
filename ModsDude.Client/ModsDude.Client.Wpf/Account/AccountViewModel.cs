@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Users;
 
@@ -17,11 +18,9 @@ namespace ModsDude.Client.Wpf.Account;
 /// leak waiting for its first user.
 /// </para>
 /// <para>
-/// The name painted first is the token's, which is only right until the user renames themselves -
-/// the server seeds its name from that claim once and keeps whatever the user chose after. The
-/// round trip brings the stored name, the picture, and the tag and avatar colour, which are worked
-/// out from the subject id on the server and are what tell this user apart from the next person of
-/// the same name.
+/// The name painted first is the token's, from the last time it was issued. The round trip brings the
+/// stored name, the picture, and the tag and avatar colour, which are worked out from the subject id
+/// on the server and are what tell this user apart from the next person of the same name.
 /// </para>
 /// </remarks>
 public partial class AccountViewModel : ObservableObject
@@ -83,9 +82,6 @@ public partial class AccountViewModel : ObservableObject
 
     public bool HasAvatar => Avatar is not null;
 
-    /// <summary>The address they sign in with. Only the identity provider knows it; the server never sees it.</summary>
-    public string? Email => _authenticationService.CurrentAccount?.Email;
-
     /// <summary>Name and tag together, for the tooltip - the one place a user can read their own tag.</summary>
     public string Description => Tag is null ? DisplayName : $"{DisplayName} {Tag}";
 
@@ -94,12 +90,11 @@ public partial class AccountViewModel : ObservableObject
     // Never greyed out while running: a sign-in tab closed without finishing never answers, and
     // clicking again is how the user gets a new one - which ends the old attempt.
     [RelayCommand(AllowConcurrentExecutions = true)]
-    private Task SwitchUser(CancellationToken cancellationToken) => _switcher.SignInAsync(loginHint: null, cancellationToken);
+    private Task SwitchUser(CancellationToken cancellationToken) => _switcher.SignInAsync(SignInPrompt.SignIn, cancellationToken);
 
     private void OnAccountChanged(object? sender, SignedInAccount account)
     {
         Show(_currentUser.User);
-        OnPropertyChanged(nameof(Email));
     }
 
     private void OnUserChanged(object? sender, EventArgs e)

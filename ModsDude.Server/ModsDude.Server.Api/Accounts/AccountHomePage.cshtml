@@ -1,0 +1,26 @@
+@page "/account"
+@model AccountHomePageModel
+@{
+    ViewData["Title"] = "Account";
+}
+
+<h1>Account</h1>
+
+@if (Model.Notice is string notice)
+{
+    <p class="notice">@notice</p>
+}
+
+<dl>
+    <dt>Email</dt>
+    <dd>@Model.Email</dd>
+</dl>
+
+<div class="links">
+    <a asp-page="/Accounts/ChangePasswordPage">Change password</a>
+    <a asp-page="/Accounts/ChangeEmailPage">Change email</a>
+</div>
+
+<form method="post" asp-page-handler="SignOut" class="separated">
+    <button type="submit">Sign out of this browser</button>
+</form>

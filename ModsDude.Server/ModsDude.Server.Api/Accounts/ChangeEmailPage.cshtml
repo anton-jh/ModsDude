@@ -1,0 +1,46 @@
+@page "/account/email"
+@model ChangeEmailPageModel
+@{
+    ViewData["Title"] = "Change email";
+}
+
+<h1>Change email</h1>
+
+<dl>
+    <dt>Current email</dt>
+    <dd>@Model.CurrentEmail</dd>
+    @if (Model.SentTo is string sentTo)
+    {
+        <dt>Link sent to</dt>
+        <dd>@sentTo</dd>
+    }
+</dl>
+
+@if (Model.SentTo is not null)
+{
+    <p>Open the link in that email to start using the new address.</p>
+}
+else
+{
+    <form method="post">
+        <div asp-validation-summary="ModelOnly"></div>
+
+        <div class="field">
+            <label asp-for="NewEmail">New email</label>
+            <input asp-for="NewEmail" type="email" autocomplete="email" autofocus>
+            <span asp-validation-for="NewEmail"></span>
+        </div>
+
+        <div class="field">
+            <label asp-for="Password">Password</label>
+            <input asp-for="Password" type="password" autocomplete="current-password">
+            <span asp-validation-for="Password"></span>
+        </div>
+
+        <button type="submit" class="accent">Send link</button>
+    </form>
+}
+
+<div class="links">
+    <a asp-page="/Accounts/AccountHomePage">Back to account</a>
+</div>

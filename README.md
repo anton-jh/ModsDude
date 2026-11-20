@@ -40,23 +40,8 @@ deploy/                         The production server: compose.yml, Caddy, deplo
 
 ## Cloud setup
 
-Both development and production need an Entra External ID tenant for sign-in and an Azure storage account
-for files. One tenant can serve both. Use one storage account per environment.
-
-### Entra External ID
-
-1. Create an external tenant. Note its subdomain (`<tenant>.ciamlogin.com`) and tenant ID.
-2. Create a sign-up and sign-in user flow that collects **Display Name**. The server takes a user's name
-   from the token's `name` claim and identifies them by `sub`.
-3. Register three applications:
-
-   | Registration | Platform and redirect URI | Notes |
-   | --- | --- | --- |
-   | API | none | Under Expose an API, set an Application ID URI (such as `api://modsdude-server`) and add a delegated scope (such as `act_as_user`). |
-   | Client | Mobile and desktop applications: `http://localhost` | Allow public client flows. Grant it the API's scope. |
-   | Swagger UI | Single-page application: `https://localhost:7035/swagger/oauth2-redirect.html` | Development only. Grant it the API's scope. |
-
-4. Add the Client and Swagger UI registrations to the user flow.
+The server is its own sign-in provider: accounts live in its database, and it issues the tokens. Both
+development and production need an Azure storage account for files. Use one per environment.
 
 ### Storage account
 
@@ -69,22 +54,14 @@ for files. One tenant can serve both. Use one storage account per environment.
 
 ### Settings
 
-These committed settings name the tenant, the storage account and the GitHub repository. Change them when
-deploying your own copy.
+These committed settings name the storage account and the GitHub repository. Change them when deploying
+your own copy.
 
 | File | Setting | Value |
 | --- | --- | --- |
-| `ModsDude.Server.Api/appsettings.json` | `EntraExternalId:Domain` | `<tenant>.onmicrosoft.com` |
-| | `EntraExternalId:ClientId`, `Audience` | The API's application (client) ID |
-| | `EntraExternalId:Authority` | `https://<tenant>.ciamlogin.com/<tenant ID>` |
-| | `SwaggerAuthentication:ClientId` | The Swagger UI's application (client) ID |
-| | `SwaggerAuthentication:Scope` | The API's scope, `<Application ID URI>/<scope>` |
-| | `ClientDownload:GithubRepository` | `https://github.com/<owner>/<repo>` |
+| `ModsDude.Server.Api/appsettings.json` | `ClientDownload:GithubRepository` | `https://github.com/<owner>/<repo>` |
 | `ModsDude.Server.Api/appsettings.Development.json` | `Storage:StorageAccountName` | The development storage account |
-| `ModsDude.Client.Wpf/appsettings.json` | `Authentication:ClientId` | The client's application (client) ID |
-| | `Authentication:Authority` | Same as `EntraExternalId:Authority` |
-| | `Authentication:Scope` | Same as `SwaggerAuthentication:Scope` |
-| | `Updates:GithubRepository` | Same as `ClientDownload:GithubRepository` |
+| `ModsDude.Client.Wpf/appsettings.json` | `Updates:GithubRepository` | Same as `ClientDownload:GithubRepository` |
 | `ModsDude.Client.Wpf/appsettings.Production.json` | `ModsDudeServer:BaseUrl` | `https://<SITE_ADDRESS>` (see [Production](#production)) |
 
 ## Local development
@@ -140,6 +117,7 @@ The API listens on `https://localhost:7035`, and on `https://localhost:7036` for
 | Address | What |
 | --- | --- |
 | `https://localhost:7035/swagger` | Swagger UI. Development only; sign in with the Authorize button. |
+| `https://localhost:7035/account` | The account pages: sign in, change password and email. |
 | `https://localhost:7036/admin` | Admin pages: overview, repos, users, trust codes. |
 | `https://localhost:7036/admin/jobs` | Hangfire dashboard. |
 | `https://localhost:7035/health` | The running build number. |
@@ -154,10 +132,17 @@ A Debug build of the client runs as the **Development** install, separate from a
 A local build of the API and the client is build 0. Each refuses to talk to any other build number, so a
 local client can't reach the production server.
 
+In development:
+
+- Emails are not sent. Each is written to `%TEMP%\ModsDude\emails` as an HTML file; open it for the link.
+- Tokens are signed with OpenIddict's development certificates, which it creates in the Windows user's
+  certificate store on first run.
+
 ### First use
 
-Creating a repo requires a trusted user. Create a trust code on `/admin` and redeem it in the client. Other
-users join through repo invites.
+Signing up takes a trust code or a repo invite. Create a trust code on `/admin`, then choose **Create
+account** in the client and enter it. A trust code lets the user create repos; other users sign up with
+repo invites.
 
 ### Tests
 
@@ -229,8 +214,7 @@ restored into a scratch database afterwards. The admin page shows the newest of 
 
 The server signs in to storage as a service principal:
 
-1. In the tenant that owns the storage account (not the External ID tenant), register an application such
-   as `modsdude-vps`.
+1. In the tenant that owns the storage account, register an application such as `modsdude-vps`.
 2. Give it Storage Blob Data Contributor on the production storage account.
 3. Give it Storage Blob Data Reader on the backup storage account (see [Backups](#backups)), and nothing
    more there. The server only lists the backups. Anything that can write or delete blobs there, or
@@ -276,6 +260,27 @@ At [healthchecks.io](https://healthchecks.io), add two checks that email when a 
 | Daily | 1 day | 2 hours | Its ping URL is `BACKUP_PING_DAILY` |
 
 A deploy refuses to start while any of these settings is missing from `.env`.
+
+### Sign-in
+
+The server signs and encrypts tokens with two certificates of its own. Generate them on your own machine
+and put the four lines it prints in `.env`:
+
+```bash
+pwsh scripts/new-token-certificates.ps1
+```
+
+They are valid for two years. Replacing them signs every user out.
+
+### Email
+
+Account emails (confirming an address, resetting a password) go through [Resend](https://resend.com):
+
+1. Add the domain in Resend and add the SPF and DKIM records it lists to the domain's DNS. Without them,
+   the emails land in spam.
+2. Create an API key with sending access. It is `RESEND_API_KEY` in `.env`.
+
+Emails are sent from `ModsDude <no-reply@modsdude.com>`. Set `Email:From` to send from another address.
 
 ### Setting up the server
 

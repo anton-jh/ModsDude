@@ -58,9 +58,10 @@ a savegame folder, or both.
 Test projects sit next to the projects they cover. The domain and client core suites are pure. The
 persistence suite runs against a real PostgreSQL, because many invariants live in the database.
 
-**Technology:** .NET 10, PostgreSQL with EF Core, Azure Blob Storage, Microsoft Entra External ID
-(MSAL on the client), Hangfire, NSwag, WPF with CommunityToolkit.Mvvm, Velopack for client installs and
-updates. Production runs in Docker Compose behind Caddy on one VPS.
+**Technology:** .NET 10, PostgreSQL with EF Core, Azure Blob Storage, ASP.NET Core Identity and
+OpenIddict (the server is its own sign-in provider), Resend for account emails, Hangfire, NSwag, WPF with
+CommunityToolkit.Mvvm, Velopack for client installs and updates. Production runs in Docker Compose behind
+Caddy on one VPS.
 
 ## Where work happens
 

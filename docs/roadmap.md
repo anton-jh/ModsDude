@@ -22,5 +22,5 @@ where the data comes from (adapter or user), how it shows in the editor, and how
 ## Not planned
 
 - **A web client.** The only web UI is the server's admin pages.
-- **Public sign-up.** Repo creation needs a trust code from the operator, and joining needs an invite.
+- **Public sign-up.** Signing up needs a trust code from the operator or a repo invite.
 - **Multi-tenancy, quotas and abuse handling** beyond blocking a user.

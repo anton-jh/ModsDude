@@ -57,6 +57,11 @@ services:
       # 8080 for Caddy; 8081 for the admin pages, which answer on nothing else.
       ASPNETCORE_HTTP_PORTS: "8080;8081"
       Deploy__Token: ${DEPLOY_TOKEN:?}
+      TokenCertificates__SigningCertificate: ${TOKEN_SIGNING_CERTIFICATE:?}
+      TokenCertificates__SigningCertificatePassword: ${TOKEN_SIGNING_CERTIFICATE_PASSWORD:?}
+      TokenCertificates__EncryptionCertificate: ${TOKEN_ENCRYPTION_CERTIFICATE:?}
+      TokenCertificates__EncryptionCertificatePassword: ${TOKEN_ENCRYPTION_CERTIFICATE_PASSWORD:?}
+      Email__ResendApiKey: ${RESEND_API_KEY:?}
     # Only on the server's own loopback. Tailscale serves it to the operator's devices; see README.md.
     ports:
       - "127.0.0.1:8081:8081"

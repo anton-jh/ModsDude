@@ -33,17 +33,4 @@ public class UserTagTests
 
         Assert.True(tags > 95, $"Expected close to 100 distinct tags, got {tags}");
     }
-
-    [Fact]
-    public void A_display_name_falls_back_when_the_claim_says_nothing()
-    {
-        Assert.Equal(new DisplayName(DisplayName.Fallback), DisplayName.FromClaim(null));
-        Assert.Equal(new DisplayName(DisplayName.Fallback), DisplayName.FromClaim("   "));
-    }
-
-    [Fact]
-    public void A_display_name_is_stored_as_the_claim_says_it()
-    {
-        Assert.Equal(new DisplayName("Anton"), DisplayName.FromClaim("  Anton  "));
-    }
 }

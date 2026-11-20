@@ -1,0 +1,37 @@
+@page "/account/sign-in"
+@model SignInPageModel
+@{
+    ViewData["Title"] = "Sign in";
+}
+
+<h1>Sign in</h1>
+
+@if (Model.NeedsConfirmation)
+{
+    <p class="notice">Confirm your email first. Open the link we sent you.</p>
+    <p><a asp-page="/Accounts/CheckEmailPage" asp-route-email="@Model.Email" asp-route-returnUrl="@Model.ReturnUrl">Send the link again</a></p>
+}
+
+<form method="post">
+    <div asp-validation-summary="ModelOnly"></div>
+    <input type="hidden" asp-for="ReturnUrl">
+
+    <div class="field">
+        <label asp-for="Email">Email</label>
+        <input asp-for="Email" type="email" autocomplete="username" autofocus>
+        <span asp-validation-for="Email"></span>
+    </div>
+
+    <div class="field">
+        <label asp-for="Password">Password</label>
+        <input asp-for="Password" type="password" autocomplete="current-password">
+        <span asp-validation-for="Password"></span>
+    </div>
+
+    <button type="submit" class="accent">Sign in</button>
+</form>
+
+<div class="links">
+    <a asp-page="/Accounts/ForgotPasswordPage" asp-route-email="@Model.Email">Forgot password?</a>
+    <a asp-page="/Accounts/SignUpPage" asp-route-returnUrl="@Model.ReturnUrl">Create account</a>
+</div>

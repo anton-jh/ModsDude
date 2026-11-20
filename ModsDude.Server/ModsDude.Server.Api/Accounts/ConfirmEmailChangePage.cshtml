@@ -1,0 +1,34 @@
+@page "/account/confirm-email-change"
+@model ConfirmEmailChangePageModel
+@{
+    ViewData["Title"] = "Confirm new email";
+}
+
+<h1>Confirm new email</h1>
+
+<dl>
+    <dt>New email</dt>
+    <dd>@Model.Email</dd>
+</dl>
+
+@if (Model.Changed)
+{
+    <p class="notice">Email changed. Sign in with the new address from now on.</p>
+    <div class="links">
+        <a asp-page="/Accounts/SignInPage" asp-route-email="@Model.Email">Sign in</a>
+    </div>
+}
+else
+{
+    @if (Model.Error is string error)
+    {
+        <p class="form-error">@error</p>
+    }
+
+    <form method="post">
+        <input type="hidden" asp-for="AccountId">
+        <input type="hidden" asp-for="Email">
+        <input type="hidden" asp-for="Code">
+        <button type="submit" class="accent">Use this email</button>
+    </form>
+}

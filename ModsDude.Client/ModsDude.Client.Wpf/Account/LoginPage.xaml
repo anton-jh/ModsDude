@@ -39,6 +39,9 @@
             <Border Grid.Row="1"
                     Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="24">
+                    <Button Content="Create account"
+                            Command="{Binding CreateAccountCommand}"
+                            Margin="0 0 8 0" />
                     <Button Content="Sign in"
                             Style="{DynamicResource AccentButtonStyle}"
                             Command="{Binding SignInCommand}" />

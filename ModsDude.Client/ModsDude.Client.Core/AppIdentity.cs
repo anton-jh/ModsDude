@@ -6,7 +6,7 @@ namespace ModsDude.Client.Core;
 /// <remarks>
 /// <para>
 /// <b>One name, and everything private to an install is filed under it</b>: <c>state.json</c>, the
-/// sync manifests, the logs, the sign-in token cache, the default content store and the default image
+/// sync manifests, the logs, the refresh token, the default content store and the default image
 /// cache. A debug build run from the IDE and the build somebody actually uses are then two apps that
 /// cannot see, let alone damage, each other's settings - the only things they still share are the mod
 /// folders and savegames they are both pointed at, which is the user's to keep straight.

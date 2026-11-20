@@ -68,6 +68,9 @@ public class CurrentUserStoreTests
         public Task<ICollection<UserDto>> GetUsersV1Async(CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<AccountDto> GetAccountV1Async(CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<CurrentUserDto> GetCurrentUserV1Async(CancellationToken cancellationToken = default)
         {
             Reads++;

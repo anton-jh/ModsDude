@@ -1,6 +1,15 @@
 {
   "components": {
     "schemas": {
+      "AccountDto": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "BlockedRevisionDto": {
         "additionalProperties": false,
         "properties": {
@@ -2185,17 +2194,17 @@
       }
     },
     "securitySchemes": {
-      "EntraExternalId": {
+      "ModsDude": {
         "flows": {
           "authorizationCode": {
-            "authorizationUrl": "https://modsdudeexternal.ciamlogin.com/cce54c8f-87a3-4c39-a558-9a15733d2cdf/oauth2/v2.0/authorize",
-            "refreshUrl": "https://modsdudeexternal.ciamlogin.com/cce54c8f-87a3-4c39-a558-9a15733d2cdf/oauth2/v2.0/token",
+            "authorizationUrl": "/connect/authorize",
+            "refreshUrl": "/connect/token",
             "scopes": {
-              "api://modsdude-server/act_as_user": "ModsDude Server default user scope",
+              "api": "The ModsDude API",
               "offline_access": "Offline access",
               "openid": "OpenID"
             },
-            "tokenUrl": "https://modsdudeexternal.ciamlogin.com/cce54c8f-87a3-4c39-a558-9a15733d2cdf/oauth2/v2.0/token"
+            "tokenUrl": "/connect/token"
           }
         },
         "type": "oauth2"
@@ -2279,7 +2288,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -2357,7 +2366,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -2435,7 +2444,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -2515,7 +2524,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -2580,7 +2589,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -2667,7 +2676,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -2754,7 +2763,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -2841,7 +2850,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -2928,7 +2937,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3015,7 +3024,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3102,7 +3111,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3195,7 +3204,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3282,7 +3291,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3380,7 +3389,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3448,7 +3457,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3533,7 +3542,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3601,7 +3610,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3681,7 +3690,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3766,7 +3775,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3863,7 +3872,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -3943,7 +3952,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -4023,7 +4032,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -4120,7 +4129,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -4210,7 +4219,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -4307,7 +4316,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -4396,7 +4405,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -4495,7 +4504,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -4592,7 +4601,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -4689,7 +4698,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -4795,7 +4804,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -4884,7 +4893,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -4970,7 +4979,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -5066,7 +5075,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -5164,7 +5173,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -5259,7 +5268,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -5376,7 +5385,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -5493,7 +5502,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -5583,7 +5592,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -5680,7 +5689,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -5760,7 +5769,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -5850,7 +5859,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -5945,7 +5954,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -6052,7 +6061,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -6149,7 +6158,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -6246,7 +6255,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -6353,7 +6362,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -6460,7 +6469,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -6568,7 +6577,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -6685,7 +6694,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -6792,7 +6801,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -6901,7 +6910,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -7020,7 +7029,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -7100,7 +7109,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -7190,7 +7199,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -7287,7 +7296,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -7377,7 +7386,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -7467,7 +7476,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -7574,7 +7583,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -7664,7 +7673,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -7771,7 +7780,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -7888,7 +7897,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -7995,7 +8004,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -8085,7 +8094,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -8186,7 +8195,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -8303,7 +8312,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -8410,7 +8419,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -8510,7 +8519,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -8629,7 +8638,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -8716,7 +8725,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -8784,7 +8793,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -8849,7 +8858,72 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
+          }
+        ],
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/account": {
+      "get": {
+        "operationId": "GetAccountV1",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomProblemDetails"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -8914,7 +8988,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -8999,7 +9073,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [
@@ -9086,7 +9160,7 @@
         },
         "security": [
           {
-            "EntraExternalId": []
+            "ModsDude": []
           }
         ],
         "tags": [

@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Domain;
 using ModsDude.Server.Domain.Activity;
@@ -12,11 +13,13 @@ using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Statistics;
 using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
+using ModsDude.Server.Persistence.Accounts;
 using ModsDude.Server.Persistence.Changes;
 using ModsDude.Server.Persistence.Extensions;
 
 namespace ModsDude.Server.Persistence.DbContexts;
-public class ApplicationDbContext(DbContextOptions options) : DbContext(options), IUnitOfWork
+public class ApplicationDbContext(DbContextOptions options)
+    : DbContext(options), IDataProtectionKeyContext, IUnitOfWork
 {
     public required DbSet<User> Users { get; init; }
     public required DbSet<Repo> Repos { get; init; }
@@ -43,6 +46,8 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
     public required DbSet<FileTransfer> FileTransfers { get; init; }
     public required DbSet<StorageUsageSample> StorageUsageSamples { get; init; }
     public required DbSet<StorageBinding> StorageBindings { get; init; }
+    public required DbSet<UserAccount> UserAccounts { get; init; }
+    public required DbSet<DataProtectionKey> DataProtectionKeys { get; init; }
 
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -55,6 +60,8 @@ public class ApplicationDbContext(DbContextOptions options) : DbContext(options)
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.UseOpenIddict();
+
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
     }
 

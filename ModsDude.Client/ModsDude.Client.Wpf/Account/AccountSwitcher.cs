@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ModsDude.Client.Core.Authentication;
 using ModsDude.Client.Wpf.Shell;
 using ModsDude.Client.Wpf.Shell.Modals;
 using ModsDude.Client.Wpf.Shell.Navigation;
@@ -6,8 +7,8 @@ using ModsDude.Client.Wpf.Shell.Navigation;
 namespace ModsDude.Client.Wpf.Account;
 
 /// <remarks>
-/// The browser comes first and the question after, so somebody signing in as themselves again - the
-/// usual outcome of a password reset - is never asked about the work they are about to keep.
+/// The browser comes first and the question after, so somebody signing in as themselves again is never
+/// asked about the work they are about to keep.
 /// </remarks>
 public sealed class AccountSwitcher(
     IAuthenticationService authentication,
@@ -16,9 +17,9 @@ public sealed class AccountSwitcher(
     Lazy<IModalService> modalService,
     ILogger<AccountSwitcher> logger) : IAccountSwitcher
 {
-    public async Task<bool> SignInAsync(string? loginHint, CancellationToken cancellationToken)
+    public async Task<bool> SignInAsync(SignInPrompt prompt, CancellationToken cancellationToken)
     {
-        if (await authentication.PromptAsync(loginHint, cancellationToken) is not PendingSignIn signIn)
+        if (await authentication.PromptAsync(prompt, cancellationToken) is not PendingSignIn signIn)
         {
             return false;
         }
@@ -26,8 +27,6 @@ public sealed class AccountSwitcher(
         if (authentication.CurrentAccount is SignedInAccount current && current.Id != signIn.Account.Id
             && await EndSessionAsync() is false)
         {
-            await authentication.DiscardAsync(signIn);
-
             return false;
         }
 

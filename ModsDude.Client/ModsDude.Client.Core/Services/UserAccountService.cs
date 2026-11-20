@@ -9,8 +9,7 @@ namespace ModsDude.Client.Core.Services;
 /// Each answers with the user as the server now has them.
 /// </summary>
 /// <remarks>
-/// The password is not here and cannot be: it belongs to the identity provider, which is where the
-/// account page sends the user to reset it.
+/// The password and email are changed on the server's account pages, in the browser.
 /// </remarks>
 public class UserAccountService(
     IUsersClient usersClient,
@@ -18,6 +17,11 @@ public class UserAccountService(
     IModImageStore imageStore,
     ICurrentUserStore currentUser) : IUserAccountService
 {
+    public Task<AccountDto> GetAccount(CancellationToken cancellationToken)
+    {
+        return usersClient.GetAccountV1Async(cancellationToken);
+    }
+
     public Task<CurrentUserDto> SetDisplayName(string displayName, CancellationToken cancellationToken)
     {
         return currentUser.WriteAsync(
