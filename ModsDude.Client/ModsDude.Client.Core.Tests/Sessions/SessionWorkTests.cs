@@ -100,7 +100,10 @@ public class SessionWorkTests
         harness.Presence.Hang = true;
 
         var stop = harness.Work.StopAllAsync(CancellationToken.None);
-        await harness.WaitForTimerAsync();
+
+        // Not just any timer: the wait for running work arms one first, and advancing past the
+        // offline timeout before its own timer exists would fire nothing.
+        await harness.Presence.GoingOffline.WaitAsync(TimeSpan.FromSeconds(5));
         harness.Time.Advance(SessionWork.GoOfflineTimeout);
 
         Assert.True(await stop.WaitAsync(TimeSpan.FromSeconds(5)));
@@ -155,12 +158,19 @@ public class SessionWorkTests
 
     private sealed class FakePresence(List<string> events) : IPresenceReporter
     {
+        private readonly TaskCompletionSource _goingOffline = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public bool Hang { get; set; }
+
+        /// <summary>Completes once the server is being told, which is after its timeout is armed.</summary>
+        public Task GoingOffline => _goingOffline.Task;
 
         public Task ReportAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
         public async Task GoOfflineAsync(CancellationToken cancellationToken)
         {
+            _goingOffline.TrySetResult();
+
             if (Hang)
             {
                 await Task.Delay(Timeout.Infinite, cancellationToken);
