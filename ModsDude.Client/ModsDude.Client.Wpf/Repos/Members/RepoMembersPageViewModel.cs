@@ -42,7 +42,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
     private readonly ILogger<RepoMembersPageViewModel> _logger;
     private readonly ISavegameStore _savegames;
     private readonly IRepoDeparture _departure;
-    private readonly RequestIdKeeper<(RepoMembershipLevel Level, int? MaximumUses, TimeSpan? Expiry)> _inviteRequestIds = new();
+    private readonly RequestIdKeeper<(RepoMembershipLevel Level, int? MaximumUses, TimeSpan Expiry)> _inviteRequestIds = new();
 
     private IReadOnlyList<RepoMemberDto> _fetchedMembers = [];
     private IReadOnlyList<RepoInviteDto> _fetchedInvites = [];
@@ -97,13 +97,13 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
 
         ExpiryOptions =
         [
-            new("Never", null),
             new("1 hour", TimeSpan.FromHours(1)),
             new("1 day", TimeSpan.FromDays(1)),
+            new("2 days", TimeSpan.FromDays(2)),
             new("7 days", TimeSpan.FromDays(7)),
             new("30 days", TimeSpan.FromDays(30))
         ];
-        _newInviteExpiry = ExpiryOptions[0];
+        _newInviteExpiry = ExpiryOptions.Single(x => x.Duration == TimeSpan.FromDays(7));
     }
 
 
@@ -201,7 +201,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
             _inviteRequestIds.For((NewInviteLevel, maximumUses, NewInviteExpiry.Duration)),
             NewInviteLevel,
             maximumUses,
-            NewInviteExpiry.Duration is TimeSpan duration ? _time.GetUtcNow().UtcDateTime + duration : null,
+            _time.GetUtcNow().UtcDateTime + NewInviteExpiry.Duration,
             cancellationToken);
 
         // Another invite with the same settings is another invite, not a repeat of this one.
@@ -538,7 +538,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
 
 
     /// <summary>How long a new invite should last, offered as durations rather than as a calendar.</summary>
-    public record InviteExpiryOption(string Label, TimeSpan? Duration)
+    public record InviteExpiryOption(string Label, TimeSpan Duration)
     {
         public override string ToString() => Label;
     }

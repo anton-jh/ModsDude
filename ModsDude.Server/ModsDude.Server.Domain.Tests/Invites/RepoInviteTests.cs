@@ -15,17 +15,17 @@ public class RepoInviteTests
 
 
     [Fact]
-    public void A_fresh_invite_with_no_limits_is_active()
+    public void A_fresh_invite_is_active()
     {
         var invite = CreateInvite();
 
-        Assert.Equal(InviteStatus.Active, invite.GetStatus(_created.AddYears(10), CreatorLevel));
+        Assert.Equal(InviteStatus.Active, invite.GetStatus(_created, CreatorLevel));
     }
 
     [Fact]
     public void An_invite_created_on_the_admin_pages_has_no_creator_and_still_works()
     {
-        var invite = new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Guest, createdBy: null, _created, null, null);
+        var invite = new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Guest, createdBy: null, _created, _created.AddDays(7), null);
 
         invite.Redeem(_created, CreatorLevel);
 
@@ -157,7 +157,7 @@ public class RepoInviteTests
     public void An_invite_cannot_grant_admin()
     {
         Assert.Throws<DomainValidationException>(
-            () => new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Admin, _creator, _created, null, null));
+            () => new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Admin, _creator, _created, _created.AddDays(7), null));
     }
 
     [Fact]
@@ -203,7 +203,7 @@ public class RepoInviteTests
     [Fact]
     public void An_invite_made_on_the_admin_pages_does_not_depend_on_anybody_in_the_repo()
     {
-        var invite = new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Member, createdBy: null, _created, null, null);
+        var invite = new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Member, createdBy: null, _created, _created.AddDays(7), null);
 
         Assert.Equal(InviteStatus.Active, invite.GetStatus(_created, null));
     }
@@ -236,7 +236,7 @@ public class RepoInviteTests
             level,
             _creator,
             _created,
-            expiresAt,
+            expiresAt ?? _created.AddDays(7),
             maximumUses);
     }
 
@@ -244,6 +244,6 @@ public class RepoInviteTests
     public void An_invite_cannot_grant_a_level_that_is_not_defined()
     {
         Assert.Throws<DomainValidationException>(
-            () => new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), (RepoMembershipLevel)0, _creator, _created, null, null));
+            () => new RepoInvite(_repo, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), (RepoMembershipLevel)0, _creator, _created, _created.AddDays(7), null));
     }
 }

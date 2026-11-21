@@ -97,7 +97,7 @@ public class EntityVersionTests
     {
         var invite = new RepoInvite(
             new RepoId(Guid.NewGuid()), InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()),
-            RepoMembershipLevel.Member, createdBy: null, _now, null, null);
+            RepoMembershipLevel.Member, createdBy: null, _now, _now.AddDays(7), null);
 
         invite.Redeem(_now, inviterLevel: null);
         invite.Redeem(_now, inviterLevel: null);
@@ -109,10 +109,20 @@ public class EntityVersionTests
     [Fact]
     public void A_trust_code_moves_on_when_revoked_and_not_when_revoked_again()
     {
-        var code = new TrustCode(InviteCodes.Generate(), new TrustCodeRequestId(Guid.NewGuid()), _now);
+        var code = new TrustCode(InviteCodes.Generate(), new TrustCodeRequestId(Guid.NewGuid()), _now, _now.AddDays(2));
 
         code.Revoke(_now);
         code.Revoke(_now);
+
+        Assert.Equal(1, code.Version);
+    }
+
+    [Fact]
+    public void A_trust_code_moves_on_when_its_expiry_changes()
+    {
+        var code = new TrustCode(InviteCodes.Generate(), new TrustCodeRequestId(Guid.NewGuid()), _now, _now.AddDays(2));
+
+        code.ChangeExpiry(_now.AddDays(7), _now);
 
         Assert.Equal(1, code.Version);
     }

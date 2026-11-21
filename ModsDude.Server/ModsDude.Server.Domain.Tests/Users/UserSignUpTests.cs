@@ -91,7 +91,7 @@ public class UserSignUpTests
         var repo = CreateRepo();
         var inviter = new User(new UserId("inviter"), new DisplayName("Inviter"), _now);
         repo.AddMember(inviter, RepoMembershipLevel.Guest);
-        var invite = new RepoInvite(repo.Id, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Guest, inviter.Id, _now, null, null);
+        var invite = new RepoInvite(repo.Id, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), RepoMembershipLevel.Guest, inviter.Id, _now, _now.AddDays(7), null);
 
         Assert.Equal(InviteStatus.InviterLostAccess, repo.GetInviteStatus(invite, _now));
         Assert.Throws<DomainValidationException>(() => SignUp(null, new RepoInviteRedemption(repo, invite)));
@@ -122,10 +122,10 @@ public class UserSignUpTests
         => UserSignUp.Create(_newUser, new DisplayName("New"), _now, trustCode, invites);
 
     private static TrustCode CreateTrustCode()
-        => new(InviteCodes.Generate(), new TrustCodeRequestId(Guid.NewGuid()), _now.AddHours(-1));
+        => new(InviteCodes.Generate(), new TrustCodeRequestId(Guid.NewGuid()), _now.AddHours(-1), _now.AddDays(2));
 
     private RepoInvite CreateInvite(Repo repo, RepoMembershipLevel level, int? maximumUses = null)
-        => new(repo.Id, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), level, _creator.Id, _now.AddHours(-1), null, maximumUses);
+        => new(repo.Id, InviteCodes.Generate(), new RepoInviteRequestId(Guid.NewGuid()), level, _creator.Id, _now.AddHours(-1), _now.AddDays(7), maximumUses);
 
     private Repo CreateRepo() => new(new RepoName("repo"), _now, _creator)
     {

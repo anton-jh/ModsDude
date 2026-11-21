@@ -120,7 +120,7 @@ public class CodeIssuingTests(DatabaseFixture fixture)
 
     private static RepoInvite NewInvite(RepoId repoId, InviteCode code, RepoInviteRequestId request)
     {
-        return new RepoInvite(repoId, code, request, RepoMembershipLevel.Member, createdBy: null, _now, expiresAt: null, maximumUses: null);
+        return new RepoInvite(repoId, code, request, RepoMembershipLevel.Member, createdBy: null, _now, expiresAt: _now.AddDays(7), maximumUses: null);
     }
 
     private async Task<RepoInvite> GivenAnInvite(RepoId repoId)

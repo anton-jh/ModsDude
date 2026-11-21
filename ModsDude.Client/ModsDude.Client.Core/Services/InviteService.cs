@@ -37,7 +37,7 @@ public class InviteService(
         Guid requestId,
         RepoMembershipLevel level,
         int? maximumUses,
-        DateTime? expiresAt,
+        DateTime expiresAt,
         CancellationToken cancellationToken)
     {
         var request = new CreateInviteRequest()

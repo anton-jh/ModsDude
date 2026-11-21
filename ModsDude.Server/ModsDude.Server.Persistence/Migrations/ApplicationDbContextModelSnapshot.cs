@@ -172,7 +172,7 @@ namespace ModsDude.Server.Persistence.Migrations
                     b.Property<DateTime?>("DismissedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("ExpiresAt")
+                    b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("GrantedLevel")
@@ -208,6 +208,8 @@ namespace ModsDude.Server.Persistence.Migrations
 
                     b.ToTable("RepoInvites", t =>
                         {
+                            t.HasCheckConstraint("CK_RepoInvites_ExpiresAfterCreated", "\"ExpiresAt\" > \"Created\"");
+
                             t.HasCheckConstraint("CK_RepoInvites_GrantedLevel", "\"GrantedLevel\" IN ('Admin', 'Guest', 'Member')");
                         });
                 });
@@ -222,6 +224,9 @@ namespace ModsDude.Server.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("Created")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("RedeemedAt")
@@ -256,6 +261,8 @@ namespace ModsDude.Server.Persistence.Migrations
 
                     b.ToTable("TrustCodes", t =>
                         {
+                            t.HasCheckConstraint("CK_TrustCodes_ExpiresAfterCreated", "\"ExpiresAt\" > \"Created\"");
+
                             t.HasCheckConstraint("CK_TrustCodes_NotRedeemedAndRevoked", "\"RedeemedAt\" IS NULL OR \"RevokedAt\" IS NULL");
 
                             t.HasCheckConstraint("CK_TrustCodes_RedeemedByAndAtTogether", "(\"RedeemedBy\" IS NULL) = (\"RedeemedAt\" IS NULL) AND (\"RedeemedBy\" IS NULL) = (\"RedeemedTrustEpoch\" IS NULL)");

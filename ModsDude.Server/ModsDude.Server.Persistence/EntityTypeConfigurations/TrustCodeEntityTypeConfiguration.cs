@@ -31,6 +31,7 @@ internal class TrustCodeEntityTypeConfiguration : IEntityTypeConfiguration<Trust
             x.HasCheckConstraint(
                 "CK_TrustCodes_NotRedeemedAndRevoked",
                 "\"RedeemedAt\" IS NULL OR \"RevokedAt\" IS NULL");
+            x.HasCheckConstraint("CK_TrustCodes_ExpiresAfterCreated", "\"ExpiresAt\" > \"Created\"");
         });
     }
 }

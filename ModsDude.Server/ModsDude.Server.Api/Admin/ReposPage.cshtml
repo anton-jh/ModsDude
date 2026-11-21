@@ -230,7 +230,7 @@
                                             <td class="code">@invite.Code</td>
                                             <td>@invite.Level</td>
                                             <td>@AdminFormat.Time(invite.Created)</td>
-                                            <td>@(invite.ExpiresAt is DateTime expiresAt ? AdminFormat.Time(expiresAt) : "Never")</td>
+                                            <td>@AdminFormat.Time(invite.ExpiresAt)</td>
                                             <td class="number">@AdminFormat.Count(invite.Uses)@(invite.MaximumUses is int maximum ? $" / {AdminFormat.Count(maximum)}" : "")</td>
                                             <td>
                                                 <form method="post" asp-page-handler="RevokeInvite" data-confirm="Revoke @invite.Code? It stops working at once.">
@@ -278,9 +278,9 @@
                                     <label class="field">
                                         <span>Expires</span>
                                         <select name="expiresInHours">
-                                            @foreach (var expiry in ReposPageModel.InviteExpiryOptions)
+                                            @foreach (var expiry in AdminExpiryOptions.All)
                                             {
-                                                <option value="@(expiry.Hours?.ToString() ?? "")">@expiry.Label</option>
+                                                <option value="@expiry.Hours" selected="@(expiry.Hours == AdminExpiryOptions.DefaultHours)">@expiry.Label</option>
                                             }
                                         </select>
                                     </label>

@@ -186,7 +186,7 @@ public class RepoDeletionTests(DatabaseFixture fixture)
             RepoMembershipLevel.Member,
             _author,
             DateTime.UtcNow,
-            expiresAt: null,
+            expiresAt: DateTime.UtcNow.AddDays(7),
             maximumUses: null));
 
         await dbContext.SaveChangesAsync(CancellationToken.None);

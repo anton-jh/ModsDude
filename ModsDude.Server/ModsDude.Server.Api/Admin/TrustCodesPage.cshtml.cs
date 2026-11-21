@@ -49,7 +49,7 @@ public class TrustCodesPageModel(
         }
     }
 
-    public async Task<IActionResult> OnPostIssueAsync(Guid requestId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostIssueAsync(Guid requestId, int expiresInHours, CancellationToken cancellationToken)
     {
         var request = new TrustCodeRequestId(requestId);
 
@@ -58,9 +58,14 @@ public class TrustCodesPageModel(
             return ShowIssued(repeat);
         }
 
+        if (!AdminExpiryOptions.IsOffered(expiresInHours))
+        {
+            return ShowError("Pick when the trust code expires.");
+        }
+
         var now = timeService.Now();
         var trustCode = await dbContext.IssueAsync(
-            code => new TrustCode(code, request, now),
+            code => new TrustCode(code, request, now, now.AddHours(expiresInHours)),
             ct => dbContext.TrustCodes.GetByRequestIdAsync(request, ct),
             logger,
             cancellationToken);
@@ -68,6 +73,55 @@ public class TrustCodesPageModel(
         logger.LogInformation("Admin {Operator} issued trust code {TrustCodeId}.", User.OperatorName(), trustCode.Id.Value);
 
         return ShowIssued(trustCode);
+    }
+
+    public async Task<IActionResult> OnPostChangeExpiryAsync(Guid id, int expiresInHours, CancellationToken cancellationToken)
+    {
+        if (!AdminExpiryOptions.IsOffered(expiresInHours))
+        {
+            return ShowError("Pick when the trust code expires.");
+        }
+
+        var trustCode = await dbContext.TrustCodes.GetAsync(new TrustCodeId(id), cancellationToken);
+
+        if (trustCode is null)
+        {
+            return ShowError("That trust code does not exist.");
+        }
+
+        if (trustCode.RedeemedAt is not null)
+        {
+            return ShowError("That trust code has already been redeemed.");
+        }
+
+        if (trustCode.RevokedAt is not null)
+        {
+            return ShowError("That trust code has been revoked.");
+        }
+
+        var now = timeService.Now();
+        var expiresAt = now.AddHours(expiresInHours);
+        trustCode.ChangeExpiry(expiresAt, now);
+
+        try
+        {
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            logger.LogInformation(exception, "Changing the expiry of trust code {TrustCodeId} lost to a concurrent write.", id);
+            dbContext.ChangeTracker.Clear();
+
+            return ShowError("That trust code changed while its expiry was being changed. Check it again.");
+        }
+
+        logger.LogInformation(
+            "Admin {Operator} changed the expiry of trust code {TrustCodeId} to {ExpiresAt:O}.",
+            User.OperatorName(),
+            id,
+            expiresAt);
+
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostRevokeAsync(Guid id, CancellationToken cancellationToken)
@@ -127,6 +181,8 @@ public class TrustCodesPageModel(
         string? RedeemedBy,
         DateTime? RedeemedAt)
     {
+        public bool CanChangeExpiry => Status is TrustCodeStatus.Active or TrustCodeStatus.Expired;
+
         public static TrustCodeRow Of(TrustCode trustCode, DateTime now, IReadOnlyDictionary<UserId, UserNameplate> nameplates)
         {
             return new(

@@ -200,7 +200,7 @@ Razor pages at `/admin`, behind the admin scheme and only on the admin port, whi
 | Overview | Users, storage trend, traffic, backups, largest items |
 | Repos | Rename, archive, restore, delete, prune, invites, members and their levels |
 | Users | Rename, remove avatar, block and unblock, grant and revoke trust, memberships |
-| Trust codes | Issue and revoke |
+| Trust codes | Issue, change expiry, revoke |
 
 The Hangfire dashboard is at `/admin/jobs`.
 

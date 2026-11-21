@@ -12,7 +12,7 @@ namespace ModsDude.Server.Domain.Invites;
 /// Joining is an act by the person joining, which is the whole point: nobody can be put into a repo
 /// by a stranger who guessed their name, and a user is reachable only by people they gave a code to.
 /// The limits are the counterweight - a code shared once travels further than it was meant to, so it
-/// can be capped by uses, by time, by both, or left open and revoked when it has served its purpose.
+/// always expires, can also be capped by uses, and can be revoked when it has served its purpose.
 /// </remarks>
 /// <remarks>
 /// <b>An invite can never grant Admin.</b> A code is a secret that travels, and the whole point of
@@ -39,7 +39,7 @@ public class RepoInvite
         RepoMembershipLevel grantedLevel,
         UserId? createdBy,
         DateTime created,
-        DateTime? expiresAt,
+        DateTime expiresAt,
         int? maximumUses)
     {
         if (!Enum.IsDefined(grantedLevel))
@@ -57,7 +57,7 @@ public class RepoInvite
             throw new DomainValidationException($"An invite cannot be limited to {maximumUses} uses.");
         }
 
-        if (expiresAt is DateTime expiry && expiry <= created)
+        if (expiresAt <= created)
         {
             throw new DomainValidationException("An invite cannot expire before it is created.");
         }
@@ -83,8 +83,7 @@ public class RepoInvite
     public UserId? CreatedBy { get; private set; }
     public DateTime Created { get; private set; }
 
-    /// <summary>Null where the invite was created without a time limit.</summary>
-    public DateTime? ExpiresAt { get; private set; }
+    public DateTime ExpiresAt { get; private set; }
 
     /// <summary>Null where the invite was created without a use limit.</summary>
     public int? MaximumUses { get; private set; }
@@ -150,7 +149,7 @@ public class RepoInvite
             return InviteStatus.Revoked;
         }
 
-        if (ExpiresAt is DateTime expiry && expiry <= now)
+        if (ExpiresAt <= now)
         {
             return InviteStatus.Expired;
         }

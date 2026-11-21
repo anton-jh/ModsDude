@@ -15,7 +15,7 @@ public interface IInviteService
         Guid requestId,
         RepoMembershipLevel level,
         int? maximumUses,
-        DateTime? expiresAt,
+        DateTime expiresAt,
         CancellationToken cancellationToken);
 
     Task RevokeInvite(Guid repoId, Guid inviteId, CancellationToken cancellationToken);

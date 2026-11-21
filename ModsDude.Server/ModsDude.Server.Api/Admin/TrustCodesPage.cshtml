@@ -6,10 +6,16 @@
 
 <section>
     <h2>Trust codes</h2>
-    <div class="muted">Lets one user create repos. Single use, valid for @TrustCode.Lifetime.TotalHours hours.</div>
+    <div class="muted">Lets one user create repos. Single use.</div>
 
-    <form method="post" asp-page-handler="Issue" class="actions">
+    <form method="post" asp-page-handler="Issue" class="toolbar actions">
         <input type="hidden" name="requestId" value="@Model.IssueRequestId">
+        <select name="expiresInHours" aria-label="Expires in">
+            @foreach (var expiry in AdminExpiryOptions.All)
+            {
+                <option value="@expiry.Hours" selected="@(expiry.Hours == AdminExpiryOptions.DefaultHours)">Expires in @expiry.Label</option>
+            }
+        </select>
         <button type="submit" class="accent">Issue trust code</button>
     </form>
 
@@ -49,12 +55,40 @@
                             <td>@AdminFormat.Time(row.ExpiresAt)</td>
                             <td>@(row.RedeemedBy ?? "")</td>
                             <td>
-                                @if (row.Status is TrustCodeStatus.Active)
+                                <div class="toolbar">
+                                    @if (row.CanChangeExpiry)
+                                    {
+                                        <button type="button" data-open-dialog="change-expiry-@row.Id">Change expiry</button>
+                                    }
+                                    @if (row.Status is TrustCodeStatus.Active)
+                                    {
+                                        <form method="post" asp-page-handler="Revoke" data-confirm="Revoke @row.Code? It stops working at once.">
+                                            <input type="hidden" name="id" value="@row.Id">
+                                            <button type="submit">Revoke</button>
+                                        </form>
+                                    }
+                                </div>
+                                @if (row.CanChangeExpiry)
                                 {
-                                    <form method="post" asp-page-handler="Revoke" data-confirm="Revoke @row.Code? It stops working at once.">
-                                        <input type="hidden" name="id" value="@row.Id">
-                                        <button type="submit">Revoke</button>
-                                    </form>
+                                    <dialog id="change-expiry-@row.Id">
+                                        <form method="post" asp-page-handler="ChangeExpiry" class="dialog-form">
+                                            <h2>Change expiry of <span class="code">@row.Code</span></h2>
+                                            <input type="hidden" name="id" value="@row.Id">
+                                            <label class="field">
+                                                <span>Expires in</span>
+                                                <select name="expiresInHours">
+                                                    @foreach (var expiry in AdminExpiryOptions.All)
+                                                    {
+                                                        <option value="@expiry.Hours" selected="@(expiry.Hours == AdminExpiryOptions.DefaultHours)">@expiry.Label</option>
+                                                    }
+                                                </select>
+                                            </label>
+                                            <div class="dialog-actions">
+                                                <button type="button" data-close-dialog>Cancel</button>
+                                                <button type="submit" class="accent">Save</button>
+                                            </div>
+                                        </form>
+                                    </dialog>
                                 }
                             </td>
                         </tr>

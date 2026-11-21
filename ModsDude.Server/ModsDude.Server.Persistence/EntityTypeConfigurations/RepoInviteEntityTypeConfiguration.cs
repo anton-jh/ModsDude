@@ -20,7 +20,11 @@ internal class RepoInviteEntityTypeConfiguration : IEntityTypeConfiguration<Repo
         builder.Property(x => x.GrantedLevel)
             .HasConversion<RepoMembershipLevelValueConverter>();
 
-        builder.ToTable(x => x.HasCheckConstraint("CK_RepoInvites_GrantedLevel", RepoMembershipLevelValueConverter.CheckConstraintSql("GrantedLevel")));
+        builder.ToTable(x =>
+        {
+            x.HasCheckConstraint("CK_RepoInvites_GrantedLevel", RepoMembershipLevelValueConverter.CheckConstraintSql("GrantedLevel"));
+            x.HasCheckConstraint("CK_RepoInvites_ExpiresAfterCreated", "\"ExpiresAt\" > \"Created\"");
+        });
 
         // Two people redeeming the last use of a capped invite at the same moment would otherwise
         // both read Uses, both write Uses + 1, and both get in. The second write loses instead.

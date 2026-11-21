@@ -300,7 +300,7 @@ public class ReposPageModel(
         Guid requestId,
         RepoMembershipLevel level,
         int? maximumUses,
-        int? expiresInHours,
+        int expiresInHours,
         CancellationToken cancellationToken)
     {
         var id = new RepoId(repoId);
@@ -326,14 +326,14 @@ public class ReposPageModel(
             return ShowError(repoId, "Pick a level below Admin.");
         }
 
+        if (!AdminExpiryOptions.IsOffered(expiresInHours))
+        {
+            return ShowError(repoId, "Pick when the invite expires.");
+        }
+
         if (!ModelState.IsValid || maximumUses is <= 0)
         {
             return ShowError(repoId, "Max joins must be at least 1.");
-        }
-
-        if (expiresInHours is not null && !InviteExpiryOptions.Any(x => x.Hours == expiresInHours))
-        {
-            return ShowError(repoId, "Pick when the invite expires.");
         }
 
         var now = timeService.Now();
@@ -345,7 +345,7 @@ public class ReposPageModel(
                 level,
                 createdBy: null,
                 now,
-                expiresInHours is int hours ? now.AddHours(hours) : null,
+                now.AddHours(expiresInHours),
                 maximumUses),
             ct => dbContext.RepoInvites.GetByRequestIdAsync(id, request, ct),
             logger,
@@ -463,16 +463,6 @@ public class ReposPageModel(
     public static IReadOnlyList<RepoMembershipLevel> InvitableLevels { get; } =
         [.. Enum.GetValues<RepoMembershipLevel>().Where(x => x < RepoMembershipLevel.Admin)];
 
-    /// <summary>The same choices the client offers. <c>null</c> hours is no expiry.</summary>
-    public static IReadOnlyList<InviteExpiryOption> InviteExpiryOptions { get; } =
-    [
-        new("Never", null),
-        new("1 hour", 1),
-        new("1 day", 24),
-        new("7 days", 7 * 24),
-        new("30 days", 30 * 24)
-    ];
-
     /// <summary>The server never validates the configuration, so one that is not JSON is shown as stored.</summary>
     private string BaseSettings(RepoId repoId, AdapterConfiguration configuration)
     {
@@ -534,7 +524,5 @@ public class ReposPageModel(
 
     public record UserOption(string Id, string Name);
 
-    public record InviteRow(Guid Id, string Code, RepoMembershipLevel Level, DateTime Created, DateTime? ExpiresAt, int Uses, int? MaximumUses);
-
-    public record InviteExpiryOption(string Label, int? Hours);
+    public record InviteRow(Guid Id, string Code, RepoMembershipLevel Level, DateTime Created, DateTime ExpiresAt, int Uses, int? MaximumUses);
 }

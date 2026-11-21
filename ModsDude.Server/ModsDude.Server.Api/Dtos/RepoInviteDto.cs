@@ -12,7 +12,7 @@ public record RepoInviteDto(
     Guid Id,
     RepoMembershipLevel MembershipLevel,
     DateTime Created,
-    DateTime? ExpiresAt,
+    DateTime ExpiresAt,
     int? MaximumUses,
     int Uses,
     InviteStatus Status,

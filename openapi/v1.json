@@ -214,7 +214,6 @@
         "properties": {
           "expiresAt": {
             "format": "date-time",
-            "nullable": true,
             "type": "string"
           },
           "maximumUses": {
@@ -1647,7 +1646,6 @@
           },
           "expiresAt": {
             "format": "date-time",
-            "nullable": true,
             "type": "string"
           },
           "id": {

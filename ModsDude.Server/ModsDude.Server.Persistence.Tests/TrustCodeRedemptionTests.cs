@@ -118,6 +118,25 @@ public class TrustCodeRedemptionTests(DatabaseFixture fixture)
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => revokeContext.SaveChangesAsync());
     }
 
+    [Fact]
+    public async Task Changing_the_expiry_of_a_code_that_was_redeemed_meanwhile_is_refused()
+    {
+        var user = await GivenAUser();
+        var code = await GivenACode();
+
+        using var redeemContext = fixture.CreateDbContext();
+        using var changeContext = fixture.CreateDbContext();
+
+        var toRedeem = (await redeemContext.TrustCodes.GetAsync(code, CancellationToken.None))!;
+        var toChange = (await changeContext.TrustCodes.GetAsync(code, CancellationToken.None))!;
+
+        toRedeem.Redeem((await redeemContext.Users.GetAsync(user, CancellationToken.None))!, _now);
+        toChange.ChangeExpiry(_now.AddDays(30), _now);
+
+        await redeemContext.SaveChangesAsync();
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => changeContext.SaveChangesAsync());
+    }
+
 
     private async Task<UserId> GivenAUser()
     {
@@ -132,7 +151,7 @@ public class TrustCodeRedemptionTests(DatabaseFixture fixture)
 
     private async Task<TrustCodeId> GivenACode()
     {
-        var code = new TrustCode(InviteCodes.Generate(), new TrustCodeRequestId(Guid.NewGuid()), _now);
+        var code = new TrustCode(InviteCodes.Generate(), new TrustCodeRequestId(Guid.NewGuid()), _now, _now.AddDays(2));
 
         using var dbContext = fixture.CreateDbContext();
         dbContext.TrustCodes.Add(code);

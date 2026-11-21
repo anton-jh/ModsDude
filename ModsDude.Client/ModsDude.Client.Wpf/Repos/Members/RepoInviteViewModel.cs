@@ -119,15 +119,12 @@ public partial class RepoInviteViewModel : ObservableObject
             InviteStatus.Expired => $"Expired {Format(invite.ExpiresAt)}",
             InviteStatus.Exhausted => "All joins used",
             InviteStatus.InviterLostAccess => "Inviter lost access",
-            _ when invite.ExpiresAt is DateTime expiry => $"Expires {Format(expiry)}",
-            _ => "No expiry"
+            _ => $"Expires {Format(invite.ExpiresAt)}"
         };
     }
 
-    private static string Format(DateTime? moment)
+    private static string Format(DateTime moment)
     {
-        return moment is DateTime value
-            ? value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)
-            : "";
+        return moment.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
     }
 }

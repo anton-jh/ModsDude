@@ -8,17 +8,20 @@ namespace ModsDude.Server.Domain.Invites;
 /// </summary>
 public class TrustCode
 {
-    public static readonly TimeSpan Lifetime = TimeSpan.FromHours(48);
-
-
     // ef
     private TrustCode() { }
 
-    public TrustCode(InviteCode code, TrustCodeRequestId requestId, DateTime created)
+    public TrustCode(InviteCode code, TrustCodeRequestId requestId, DateTime created, DateTime expiresAt)
     {
+        if (expiresAt <= created)
+        {
+            throw new DomainValidationException("A trust code cannot expire before it is created.");
+        }
+
         Code = code;
         RequestId = requestId;
         Created = created;
+        ExpiresAt = expiresAt;
     }
 
 
@@ -27,6 +30,7 @@ public class TrustCode
     public InviteCode Code { get; private set; }
     public TrustCodeRequestId RequestId { get; private set; }
     public DateTime Created { get; private set; }
+    public DateTime ExpiresAt { get; private set; }
     public UserId? RedeemedBy { get; private set; }
     public DateTime? RedeemedAt { get; private set; }
 
@@ -40,8 +44,6 @@ public class TrustCode
 
     /// <summary>Counts changes. A concurrency token, so two redemptions cannot both be saved.</summary>
     public int Version { get; private set; }
-
-    public DateTime ExpiresAt => Created + Lifetime;
 
 
     public TrustCodeStatus GetStatus(DateTime now)
@@ -81,6 +83,24 @@ public class TrustCode
         RedeemedTrustEpoch = user.TrustEpoch;
         Version++;
         user.GrantTrust();
+    }
+
+    /// <summary>Also brings an expired code back. A redeemed or revoked one is done with.</summary>
+    public void ChangeExpiry(DateTime expiresAt, DateTime now)
+    {
+        if (RedeemedAt is not null || RevokedAt is not null)
+        {
+            throw new DomainValidationException(
+                $"The expiry of trust code '{Id.Value}' cannot be changed while {GetStatus(now)}.");
+        }
+
+        if (expiresAt <= now)
+        {
+            throw new DomainValidationException("A trust code cannot be set to expire in the past.");
+        }
+
+        ExpiresAt = expiresAt;
+        Version++;
     }
 
     /// <summary>Idempotent. A redeemed code has already done its work and cannot be revoked.</summary>

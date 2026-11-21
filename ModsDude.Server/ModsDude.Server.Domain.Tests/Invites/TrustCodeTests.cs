@@ -7,6 +7,7 @@ namespace ModsDude.Server.Domain.Tests.Invites;
 public class TrustCodeTests
 {
     private static readonly DateTime _created = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime _expiresAt = _created.AddDays(2);
 
 
     [Fact]
@@ -16,14 +17,87 @@ public class TrustCodeTests
     }
 
     [Fact]
-    public void A_code_expires_48_hours_after_it_is_created()
+    public void A_code_expires_at_the_moment_it_says()
     {
         var code = CreateCode();
-        var expiry = _created.AddHours(48);
 
-        Assert.Equal(expiry, code.ExpiresAt);
-        Assert.Equal(TrustCodeStatus.Active, code.GetStatus(expiry.AddSeconds(-1)));
-        Assert.Equal(TrustCodeStatus.Expired, code.GetStatus(expiry));
+        Assert.Equal(TrustCodeStatus.Active, code.GetStatus(_expiresAt.AddSeconds(-1)));
+        Assert.Equal(TrustCodeStatus.Expired, code.GetStatus(_expiresAt));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void A_code_cannot_expire_before_it_is_created(int hours)
+    {
+        Assert.Throws<DomainValidationException>(
+            () => new TrustCode(InviteCodes.Generate(), new TrustCodeRequestId(Guid.NewGuid()), _created, _created.AddHours(hours)));
+    }
+
+    [Fact]
+    public void Changing_the_expiry_extends_an_active_code()
+    {
+        var code = CreateCode();
+        var later = _expiresAt.AddDays(5);
+
+        code.ChangeExpiry(later, _created.AddHours(1));
+
+        Assert.Equal(later, code.ExpiresAt);
+        Assert.Equal(TrustCodeStatus.Active, code.GetStatus(_expiresAt));
+    }
+
+    [Fact]
+    public void Changing_the_expiry_can_shorten_a_code()
+    {
+        var code = CreateCode();
+        var sooner = _created.AddHours(2);
+
+        code.ChangeExpiry(sooner, _created.AddHours(1));
+
+        Assert.Equal(TrustCodeStatus.Expired, code.GetStatus(sooner));
+    }
+
+    [Fact]
+    public void Changing_the_expiry_brings_an_expired_code_back()
+    {
+        var code = CreateCode();
+        var now = _expiresAt.AddDays(1);
+
+        code.ChangeExpiry(now.AddDays(1), now);
+
+        Assert.Equal(TrustCodeStatus.Active, code.GetStatus(now));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void The_expiry_cannot_be_changed_to_the_past(int hours)
+    {
+        var code = CreateCode();
+        var now = _created.AddHours(1);
+
+        Assert.Throws<DomainValidationException>(() => code.ChangeExpiry(now.AddHours(hours), now));
+        Assert.Equal(_expiresAt, code.ExpiresAt);
+    }
+
+    [Fact]
+    public void The_expiry_of_a_redeemed_code_cannot_be_changed()
+    {
+        var code = CreateCode();
+        code.Redeem(CreateUser("redeemer"), _created);
+
+        Assert.Throws<DomainValidationException>(() => code.ChangeExpiry(_expiresAt.AddDays(1), _created));
+        Assert.Equal(_expiresAt, code.ExpiresAt);
+    }
+
+    [Fact]
+    public void The_expiry_of_a_revoked_code_cannot_be_changed()
+    {
+        var code = CreateCode();
+        code.Revoke(_created);
+
+        Assert.Throws<DomainValidationException>(() => code.ChangeExpiry(_expiresAt.AddDays(1), _created));
+        Assert.Equal(TrustCodeStatus.Revoked, code.GetStatus(_created));
     }
 
     [Fact]
@@ -133,7 +207,7 @@ public class TrustCodeTests
 
     private static TrustCode CreateCode()
     {
-        return new TrustCode(InviteCodes.Generate(), new TrustCodeRequestId(Guid.NewGuid()), _created);
+        return new TrustCode(InviteCodes.Generate(), new TrustCodeRequestId(Guid.NewGuid()), _created, _expiresAt);
     }
 
     private static User CreateUser(string id)

@@ -21,9 +21,11 @@ the person, so it only shows when there is something to tell apart.
 
 A user also has two flags that an operator controls:
 
-- **Trusted.** Only trusted users can create repos. Trust comes from redeeming a `TrustCode`, which is
-  single use, lasts 48 hours and is issued on the admin pages, or from an operator granting it there
-  directly. Revoking trust bumps the user's `TrustEpoch`, so a fresh code can grant it again.
+- **Trusted.** Only trusted users can create repos. Trust comes from redeeming a `TrustCode`, or from
+  an operator granting it on the admin pages. A trust code is single use and issued on the admin
+  pages with an expiry of 1 hour to 30 days. The operator can change the expiry of an active or expired
+  code, which brings an expired one back. Revoking trust bumps the user's `TrustEpoch`, so a fresh code
+  can grant it again.
 - **Blocked.** A blocked user gets `403 UserBlocked` on every request. They can't be added to a repo,
   and they don't count as an admin when a repo checks who can still administer it.
 
@@ -49,7 +51,7 @@ Users join a repo with an invite code. There is no user search. Operators can al
 create invites, on the admin pages.
 
 - A code grants Guest or Member, never Admin.
-- A code can be limited by number of uses, by time, or both, and it can be revoked.
+- A code always expires. It can also be limited by number of uses, and it can be revoked.
 - A code works only while its inviter could still create it: still in the repo, at Member or above, and
   at least at the level the code grants. Kicking, demoting or leaving pauses the inviter's codes
   without touching them.
