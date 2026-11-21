@@ -380,8 +380,10 @@ sort text differently, which corrupts the indexes.
 ### Admin pages
 
 The admin page and the Hangfire dashboard are not on the internet. The API serves them only on port 8081,
-published on the server's loopback, and Tailscale serves that to your own devices:
-`https://<machine>.<tailnet>.ts.net/admin` and `/admin/jobs`. Sign in as `admin` with `ADMIN_PASSWORD`.
+published on the server's loopback, and Tailscale serves that to your own devices on port 8443:
+`https://<machine>.<tailnet>.ts.net:8443/admin` and `/admin/jobs`. Sign in as `admin` with `ADMIN_PASSWORD`.
+Caddy holds 443 on every address, so Tailscale must not serve on 443: whichever starts second fails, and
+the site goes down if that is Caddy.
 
 To set it up:
 
@@ -391,18 +393,20 @@ To set it up:
 3. On the server, as root:
    ```bash
    curl -fsSL https://tailscale.com/install.sh | sh
-   tailscale up
+   tailscale up --accept-dns=false
    ```
-   Open the URL it prints and approve the machine.
+   Open the URL it prints and approve the machine. `--accept-dns=false` keeps the server's own DNS: with
+   MagicDNS, Tailscale rewrites `/etc/resolv.conf` and the server can fail to resolve anything outside the
+   tailnet, which breaks email, sign-in and blob storage.
 4. In the admin console, under Machines, give the server a short name such as `modsdude` and disable its
    key expiry. With expiry on, the server leaves the tailnet after 180 days.
 5. Let Tailscale's HTTPS through ufw, on the Tailscale interface only:
    ```bash
-   ufw allow in on tailscale0 to any port 443 proto tcp
+   ufw allow in on tailscale0 to any port 8443 proto tcp
    ```
 6. Once a deploy has started the API with its admin port, serve it, as root:
    ```bash
-   tailscale serve --bg http://127.0.0.1:8081
+   tailscale serve --bg --https=8443 http://127.0.0.1:8081
    ```
    It survives reboots. The first visit waits a few seconds for the certificate.
 7. Install Tailscale on your phone and computer and sign in with the same account.
