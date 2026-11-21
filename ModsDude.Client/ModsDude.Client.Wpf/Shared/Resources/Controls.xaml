@@ -728,31 +728,35 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                    <!-- Transparent so the gaps between the row's controls keep its hover. -->
-                    <Grid Background="Transparent">
-                        <!-- The accent's tint: the one colour on the row that cannot be confused
-                             with the hover state. -->
-                        <Border x:Name="Fill"
-                                Background="{DynamicResource AccentTintBrush}"
-                                Visibility="Collapsed" />
+                    <!-- The divider and the hover belong to the container, so both span the whole
+                         row, controls and all. Transparent so the gaps between them keep the hover. -->
+                    <Border Background="Transparent"
+                            BorderThickness="0 0 0 1"
+                            BorderBrush="{DynamicResource RowDividerBrush}">
+                        <Grid>
+                            <!-- The accent's tint: the one colour on the row that cannot be confused
+                                 with the hover state. -->
+                            <Border x:Name="Fill"
+                                    Background="{DynamicResource AccentTintBrush}"
+                                    Visibility="Collapsed" />
 
-                        <!-- On the container, so the whole row lights up, controls and all. -->
-                        <Border x:Name="Hover"
-                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                                Visibility="Collapsed" />
+                            <Border x:Name="Hover"
+                                    Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                    Visibility="Collapsed" />
 
-                        <Rectangle x:Name="Bar"
-                                   Width="3"
-                                   HorizontalAlignment="Left"
-                                   Visibility="Collapsed"
-                                   Fill="{DynamicResource AccentBrush}" />
+                            <Rectangle x:Name="Bar"
+                                       Width="3"
+                                       HorizontalAlignment="Left"
+                                       Visibility="Collapsed"
+                                       Fill="{DynamicResource AccentBrush}" />
 
-                        <ContentPresenter />
+                            <ContentPresenter />
 
-                        <Border x:Name="Focus"
-                                BorderThickness="0"
-                                BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
-                    </Grid>
+                            <Border x:Name="Focus"
+                                    BorderThickness="0"
+                                    BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                        </Grid>
+                    </Border>
                     <ControlTemplate.Triggers>
                         <DataTrigger Binding="{Binding IsSelected}" Value="True">
                             <Setter TargetName="Fill" Property="Visibility" Value="Visible" />

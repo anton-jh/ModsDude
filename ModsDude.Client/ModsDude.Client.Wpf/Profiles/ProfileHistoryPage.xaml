@@ -101,10 +101,7 @@
 
                                 <ListBox.ItemTemplate>
                                     <DataTemplate DataType="{x:Type profiles:ProfileRevisionViewModel}">
-                                        <Border Padding="0 10 12 10"
-                                                BorderThickness="0 0 0 1"
-                                                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                                                Background="Transparent">
+                                        <Border Padding="0 10 12 10">
                                             <Grid ColumnDefinitions="auto auto *">
 
                                                 <!-- Whether this one can be deleted, for whoever may

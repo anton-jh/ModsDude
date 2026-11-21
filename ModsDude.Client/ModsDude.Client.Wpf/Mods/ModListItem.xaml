@@ -9,7 +9,7 @@
         <ResourceDictionary Source="../Shared/Resources/Controls.xaml" />
     </ResourceDictionary.MergedDictionaries>
 
-    <!-- A row of a list nobody picks from: the hover of ModRow, without its picked state or focus. -->
+    <!-- A row of a list nobody picks from: the divider and hover of ModRow, without its picked state or focus. -->
     <Style x:Key="ReadOnlyModRow" TargetType="ListBoxItem">
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Padding" Value="0" />
@@ -17,13 +17,17 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                    <Grid Background="Transparent">
-                        <Border x:Name="Hover"
-                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                                Visibility="Collapsed" />
+                    <Border Background="Transparent"
+                            BorderThickness="0 0 0 1"
+                            BorderBrush="{DynamicResource RowDividerBrush}">
+                        <Grid>
+                            <Border x:Name="Hover"
+                                    Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                    Visibility="Collapsed" />
 
-                        <ContentPresenter />
-                    </Grid>
+                            <ContentPresenter />
+                        </Grid>
+                    </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Hover" Property="Visibility" Value="Visible" />
@@ -45,10 +49,9 @@
         <!-- behaviors:LazyLoad.Source is what pulls the icon out of the mod archive, and only once the row
              is actually realized by the virtualizing panel. It re-fires when a recycled row is
              handed a different mod. -->
+        <!-- 67 high, so the row is 68 with the divider its list item draws under it. -->
         <Border behaviors:LazyLoad.Source="{Binding}"
-                Height="68"
-                BorderThickness="0 0 0 1"
-                BorderBrush="{DynamicResource RowDividerBrush}">
+                Height="67">
 
             <Grid>
 
