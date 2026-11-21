@@ -102,6 +102,12 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
 
     private ImmutableHashSet<ModSourceId> Loaded => _current().Loaded;
 
+    /// <summary>The game's mod folders: what an editor opens with loaded.</summary>
+    public ImmutableHashSet<ModSourceId> Targets => _catalog.GetSources()
+        .Where(x => x.Kind is ModSourceKind.Game)
+        .Select(x => x.Id)
+        .ToImmutableHashSet();
+
 
     /// <summary>Tells the catalog which of its sources are enabled, on standby or unloaded.</summary>
     public void ApplyToCatalog()
@@ -195,10 +201,7 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
     /// </summary>
     public ImmutableHashSet<ModSourceId> FocusOnTargets()
     {
-        var targets = _catalog.GetSources()
-            .Where(x => x.Kind is ModSourceKind.Game)
-            .Select(x => x.Id)
-            .ToImmutableHashSet();
+        var targets = Targets;
 
         foreach (var other in Loaded.Except(targets))
         {

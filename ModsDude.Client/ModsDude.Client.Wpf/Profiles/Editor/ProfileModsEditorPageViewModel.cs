@@ -155,6 +155,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
 
         Sources.RemoteChanged += ShowRemote;
 
+        _history.Reset(Current with { Loaded = Sources.Targets });
+
         _state = ProfileEditorState.Compute(Inputs());
         _summary = Summarize();
 
@@ -1541,7 +1543,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     public class Factory(IServiceProvider serviceProvider, IRetainedPages retainedPages)
     {
         /// <summary>The page kept for this profile where there is one, and a new one otherwise.</summary>
-        /// <param name="review">Opens the page reviewing the game's mod folders. Null reads no disk until a source is switched on.</param>
+        /// <param name="review">Opens the page reviewing the game's mod folders. Null opens it with the default sources on.</param>
         public ProfileModsEditorPageViewModel Create(Repo repo, Profile profile, PinnedModFilter? review = null)
         {
             var page = retainedPages.Take<ProfileModsEditorPageViewModel>(new ProfileModsEditorKey(repo.Id, profile.Id))

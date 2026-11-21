@@ -89,6 +89,9 @@ lay their pane straight on the window.
   the selected tab.
 - Chosen things wear the accent's tint: the open rail and sidebar entry, filter and source chips,
   picked mod rows. Status badges are tints of their state's colour.
+- Mod lists light up the whole row on hover, the controls at its end included. The hover is drawn by
+  the list's item container: `ModRow` (`ModList`) where rows are picked, `ReadOnlyModRow`
+  (`ReadOnlyModList`, in `Mods/ModListItem.xaml`) where they are only read.
 
 ### Kept-alive pages
 

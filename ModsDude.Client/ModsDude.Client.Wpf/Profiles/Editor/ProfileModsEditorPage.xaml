@@ -92,7 +92,6 @@
         <Style x:Key="SortAttributeBox" TargetType="ComboBox">
             <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Margin" Value="0 0 6 0" />
             <Setter Property="MinWidth" Value="110" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -186,16 +185,23 @@
                            Margin="0 0 8 0"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                <RadioButton Style="{StaticResource FilterChip}"
-                             Content="Name"
-                             IsChecked="{Binding Kind, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Name}" />
-                <RadioButton Style="{StaticResource FilterChip}"
-                             Content="{Binding DateLabel}"
-                             ToolTip="{Binding DateTooltip}"
-                             IsChecked="{Binding Kind, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Date}" />
-                <ComboBox Style="{StaticResource SortAttributeBox}"
-                          ItemsSource="{Binding DataContext.SortAttributes, RelativeSource={RelativeSource AncestorType=Page}}"
-                          SelectedItem="{Binding Attribute, Mode=TwoWay}" />
+                <!-- The keys are one choice, so they share a well; the direction sits outside it. -->
+                <Border Style="{StaticResource InsetWell}" Padding="2" Margin="0 0 6 0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton Style="{StaticResource FilterChip}"
+                                     Margin="0 0 2 0"
+                                     Content="Name"
+                                     IsChecked="{Binding Kind, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Name}" />
+                        <RadioButton Style="{StaticResource FilterChip}"
+                                     Margin="0 0 2 0"
+                                     Content="{Binding DateLabel}"
+                                     ToolTip="{Binding DateTooltip}"
+                                     IsChecked="{Binding Kind, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Date}" />
+                        <ComboBox Style="{StaticResource SortAttributeBox}"
+                                  ItemsSource="{Binding DataContext.SortAttributes, RelativeSource={RelativeSource AncestorType=Page}}"
+                                  SelectedItem="{Binding Attribute, Mode=TwoWay}" />
+                    </StackPanel>
+                </Border>
                 <Button Style="{DynamicResource SubtleIconButton}"
                         ToolTip="{Binding DirectionText}"
                         Command="{Binding ToggleDirectionCommand}">

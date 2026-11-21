@@ -25,7 +25,7 @@ keeps current. The local half comes from **sources**:
 
 | Source kind | What | Loaded |
 | --- | --- | --- |
-| Game folders | The connected game's mod targets | Standing; scanned when switched on |
+| Game folders | The connected game's mod targets | Standing; on when the editor opens |
 | Downloads | The user's Downloads folder | Standing; scanned when switched on |
 | Remote | The adapter's remote sources, such as ModHub | Always loaded, on by default |
 | Ad-hoc folders | Folders the user adds for the session | On request |
@@ -176,9 +176,9 @@ lists what it had to keep.
 **One flat catalog per version.** Files on disk and pins in a revision are both per version. A per-mod
 model would need to be split back apart at both ends.
 
-**Navigating never touches the disk.** Only the repo and remote sources start on. Folder sources start
-off, are never remembered, and scan after a short delay. Opening a page with two thousand mods must not start reading
-archives.
+**Passing through never touches the disk.** The editor opens with the repo, the remote sources and the
+game's mod folders on. The other folder sources start off and are never remembered. A scan starts only once the profile has been read from the server, waits
+150 ms, and is cancelled when the page closes, so clicking past the editor reads no archives.
 
 **Import on save, not on drag.** Cancel stays meaningful, and the repo doesn't fill with mods nobody
 kept.

@@ -728,11 +728,17 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                    <Grid>
+                    <!-- Transparent so the gaps between the row's controls keep its hover. -->
+                    <Grid Background="Transparent">
                         <!-- The accent's tint: the one colour on the row that cannot be confused
-                             with the hover state under it. -->
+                             with the hover state. -->
                         <Border x:Name="Fill"
                                 Background="{DynamicResource AccentTintBrush}"
+                                Visibility="Collapsed" />
+
+                        <!-- On the container, so the whole row lights up, controls and all. -->
+                        <Border x:Name="Hover"
+                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
                                 Visibility="Collapsed" />
 
                         <Rectangle x:Name="Bar"
@@ -752,6 +758,9 @@
                             <Setter TargetName="Fill" Property="Visibility" Value="Visible" />
                             <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
                         </DataTrigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Hover" Property="Visibility" Value="Visible" />
+                        </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Focus" Property="BorderThickness" Value="1" />
                         </Trigger>

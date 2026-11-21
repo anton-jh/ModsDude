@@ -9,6 +9,35 @@
         <ResourceDictionary Source="../Shared/Resources/Controls.xaml" />
     </ResourceDictionary.MergedDictionaries>
 
+    <!-- A row of a list nobody picks from: the hover of ModRow, without its picked state or focus. -->
+    <Style x:Key="ReadOnlyModRow" TargetType="ListBoxItem">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Grid Background="Transparent">
+                        <Border x:Name="Hover"
+                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                Visibility="Collapsed" />
+
+                        <ContentPresenter />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Hover" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="ReadOnlyModList" TargetType="ListBox" BasedOn="{StaticResource ModList}">
+        <Setter Property="ItemContainerStyle" Value="{StaticResource ReadOnlyModRow}" />
+    </Style>
+
     <!-- The one place a mod is styled for a list. Being an implicit template, any items control
          bound to ModListItemViewModels gets the same row without having to ask for it. -->
     <DataTemplate DataType="{x:Type mods:ModListItemViewModel}">
@@ -20,17 +49,6 @@
                 Height="68"
                 BorderThickness="0 0 0 1"
                 BorderBrush="{DynamicResource RowDividerBrush}">
-
-            <Border.Style>
-                <Style TargetType="Border">
-                    <Setter Property="Background" Value="Transparent" />
-                    <Style.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-            </Border.Style>
 
             <Grid>
 

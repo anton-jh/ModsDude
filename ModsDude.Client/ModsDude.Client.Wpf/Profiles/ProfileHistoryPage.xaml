@@ -393,27 +393,9 @@
 
                                     <!-- The same row as everywhere else, rendered by the implicit
                                          ModListItemViewModel template in App.xaml. -->
-                                    <ItemsControl ItemsSource="{Binding Mods}"
-                                                  VirtualizingStackPanel.IsVirtualizing="True"
-                                                  VirtualizingStackPanel.VirtualizationMode="Recycling"
-                                                  ScrollViewer.CanContentScroll="True">
-                                        <ItemsControl.Template>
-                                            <ControlTemplate TargetType="ItemsControl">
-                                                <ScrollViewer CanContentScroll="True"
-                                                              Focusable="False"
-                                                              VerticalScrollBarVisibility="Auto"
-                                                              HorizontalScrollBarVisibility="Disabled">
-                                                    <ItemsPresenter />
-                                                </ScrollViewer>
-                                            </ControlTemplate>
-                                        </ItemsControl.Template>
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <VirtualizingStackPanel />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
+                                    <ListBox Style="{StaticResource ReadOnlyModList}" ItemsSource="{Binding Mods}">
 
-                                        <ItemsControl.ItemTemplate>
+                                        <ListBox.ItemTemplate>
                                             <DataTemplate DataType="{x:Type profiles:PinnedModViewModel}">
                                                 <Grid ColumnDefinitions="* auto">
                                                     <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
@@ -428,8 +410,8 @@
                                                                Visibility="{Binding IsLockedByProfile, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                 </Grid>
                                             </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
 
                                     <TextBlock Text="Reading this revision…"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -440,27 +422,9 @@
                                 <Grid Grid.Row="1"
                                       Visibility="{Binding ShowChanges, Converter={StaticResource BoolToVisibilityConverter}}">
 
-                                    <ItemsControl ItemsSource="{Binding Changes}"
-                                                  VirtualizingStackPanel.IsVirtualizing="True"
-                                                  VirtualizingStackPanel.VirtualizationMode="Recycling"
-                                                  ScrollViewer.CanContentScroll="True">
-                                        <ItemsControl.Template>
-                                            <ControlTemplate TargetType="ItemsControl">
-                                                <ScrollViewer CanContentScroll="True"
-                                                              Focusable="False"
-                                                              VerticalScrollBarVisibility="Auto"
-                                                              HorizontalScrollBarVisibility="Disabled">
-                                                    <ItemsPresenter />
-                                                </ScrollViewer>
-                                            </ControlTemplate>
-                                        </ItemsControl.Template>
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <VirtualizingStackPanel />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
+                                    <ListBox Style="{StaticResource ReadOnlyModList}" ItemsSource="{Binding Changes}">
 
-                                        <ItemsControl.ItemTemplate>
+                                        <ListBox.ItemTemplate>
                                             <DataTemplate DataType="{x:Type profiles:ProfileModChangeViewModel}">
                                                 <Grid ColumnDefinitions="* auto auto">
 
@@ -486,8 +450,8 @@
                                                     </Border>
                                                 </Grid>
                                             </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
 
                                     <TextBlock Text="Comparing…"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"
