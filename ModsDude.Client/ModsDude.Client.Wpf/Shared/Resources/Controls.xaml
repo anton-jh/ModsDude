@@ -620,9 +620,9 @@
         </Setter>
     </Style>
 
-    <!-- The "add a source" chips and the rescan, which are actions rather than toggles and so keep
-         the neutral chrome whatever is switched on: an empty pill with a dashed edge, so they never
-         read as one more source. WPF's Border has no dashes, so the edge is a rectangle. -->
+    <!-- The "add a source" chips, which are actions rather than toggles and so keep the neutral chrome
+         whatever is switched on: an empty pill with a dashed edge, so they never read as one more
+         source. WPF's Border has no dashes, so the edge is a rectangle. -->
     <Style x:Key="SourceActionChip" TargetType="Button">
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
         <Setter Property="Cursor" Value="Hand" />
@@ -647,6 +647,41 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Edge" Property="Fill" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                            <Setter TargetName="Background" Property="Opacity" Value="0.5" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- An action on every source at once, such as the rescan: a round chip in the sources' neutral
+         chrome, holding a glyph. -->
+    <Style x:Key="SourceIconChip" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Margin" Value="0 0 6 0" />
+        <Setter Property="Width" Value="30" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="FontFamily" Value="{DynamicResource SymbolThemeFontFamily}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Background"
+                            Background="{DynamicResource RaisedBrush}"
+                            BorderBrush="{DynamicResource RaisedStrokeBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadiusConverter}}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Background" Property="BorderBrush" Value="{DynamicResource StrongStrokeBrush}" />
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
