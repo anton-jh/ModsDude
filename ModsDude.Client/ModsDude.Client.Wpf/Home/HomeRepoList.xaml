@@ -13,13 +13,9 @@
 
         <!-- One panel per game. No horizontal padding of its own: the rows fill it edge to edge so
              their hover reaches the border, and everything inside pads itself by RowPadding. -->
-        <Style x:Key="GameGroupPanel" TargetType="Border">
+        <Style x:Key="GameGroupPanel" TargetType="Border" BasedOn="{StaticResource InsetWell}">
             <Setter Property="Margin" Value="0 0 0 12" />
             <Setter Property="Padding" Value="0 12 0 4" />
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
         </Style>
 
         <Thickness x:Key="RowPadding">16 12</Thickness>
@@ -27,7 +23,7 @@
         <Style x:Key="RepoRow" TargetType="Border">
             <Setter Property="Padding" Value="{StaticResource RowPadding}" />
             <Setter Property="BorderThickness" Value="0 1 0 0" />
-            <Setter Property="BorderBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource RowDividerBrush}" />
             <Setter Property="Background" Value="Transparent" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
@@ -126,11 +122,7 @@
                                                                VerticalOffset="4"
                                                                StaysOpen="False"
                                                                AllowsTransparency="True">
-                                                            <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
-                                                                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
-                                                                    BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                                                                    BorderThickness="1"
-                                                                    Padding="4">
+                                                            <Border Style="{StaticResource PopupSurface}">
                                                                 <StackPanel Orientation="Vertical" Width="280">
                                                                     <TextBlock Padding="10 7"
                                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"

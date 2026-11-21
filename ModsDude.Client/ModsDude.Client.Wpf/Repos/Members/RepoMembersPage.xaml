@@ -13,7 +13,7 @@
       Title="RepoMembersPage"
       FontSize="14">
 
-    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+    <Border Style="{StaticResource PageBody}">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
@@ -24,10 +24,7 @@
                            Visibility="{Binding IsHiddenFromMe, Converter={StaticResource BoolToVisibilityConverter}}"
                            Text="Guests cannot see who else is in a repo, or invite anybody to it. Ask an admin for a higher membership level." />
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Visibility="{Binding CanSeeMembers, Converter={StaticResource BoolToVisibilityConverter}}">
+                <shared:Surface Style="{StaticResource Card}" Visibility="{Binding CanSeeMembers, Converter={StaticResource BoolToVisibilityConverter}}">
                     <GroupBox Header="Members" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
                             <ItemsControl ItemsSource="{Binding Members}">
@@ -91,13 +88,11 @@
                             </StackPanel>
                         </StackPanel>
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0"
-                        Visibility="{Binding CanManageInvites, Converter={StaticResource BoolToVisibilityConverter}}">
+                <shared:Surface Style="{StaticResource Card}"
+                                Margin="0 16 0 0"
+                                Visibility="{Binding CanManageInvites, Converter={StaticResource BoolToVisibilityConverter}}">
                     <GroupBox Header="Invites" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
@@ -134,8 +129,8 @@
                             <ItemsControl ItemsSource="{Binding Invites}" Margin="0 20 0 0">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type members:RepoInviteViewModel}">
-                                        <Border Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
-                                                CornerRadius="4" Padding="12" Margin="0 0 0 8">
+                                        <Border Padding="12"
+                                                Margin="0 0 0 8">
                                             <StackPanel Orientation="Vertical">
 
                                                 <!-- A Grid rather than a StackPanel of fixed widths.
@@ -189,7 +184,7 @@
                                             </StackPanel>
 
                                             <Border.Style>
-                                                <Style TargetType="Border">
+                                                <Style TargetType="Border" BasedOn="{StaticResource InsetWell}">
                                                     <Style.Triggers>
                                                         <!-- Spent invites stay for their join count, and so
                                                              that a list with none on it reads as "I never made
@@ -208,7 +203,7 @@
 
                         </StackPanel>
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
                 <Button Content="Refresh" HorizontalAlignment="Left" Margin="0 16 0 0"
                         Visibility="{Binding CanSeeMembers, Converter={StaticResource BoolToVisibilityConverter}}"

@@ -8,6 +8,8 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="pack://application:,,,/PresentationFramework.Fluent;component/Themes/Fluent.xaml"/>
+                <ResourceDictionary Source="Shared/Resources/FluentPalette.xaml"/>
+                <ResourceDictionary Source="Shared/Resources/Surfaces.xaml"/>
                 <ResourceDictionary Source="Shared/Resources/Controls.xaml"/>
                 <ResourceDictionary Source="Shared/SharedTemplates.xaml"/>
                 <ResourceDictionary Source="Shell/ShellTemplates.xaml"/>

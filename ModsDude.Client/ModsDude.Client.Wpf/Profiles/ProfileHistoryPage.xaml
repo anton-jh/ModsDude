@@ -25,7 +25,7 @@
 
     </shared:AppPage.Resources>
 
-    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+    <Border Style="{StaticResource PageBody}">
         <Grid RowDefinitions="auto *">
 
             <TextBlock Grid.Row="0"
@@ -67,11 +67,7 @@
                                 Visibility="{Binding CanPrune, Converter={StaticResource BoolToVisibilityConverter}}" />
                     </Grid>
 
-                    <Border Grid.Row="1"
-                            CornerRadius="6"
-                            BorderThickness="1"
-                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                    <shared:Surface Style="{StaticResource Card}" Padding="0" Grid.Row="1">
                         <Grid RowDefinitions="* auto">
 
                             <!-- Scrolled by the pixel: a row is three or four lines tall, and a list of
@@ -267,7 +263,7 @@
                                        Text="Older revisions than these exist and are not shown here yet."
                                        Visibility="{Binding HasOlder, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </Grid>
-                    </Border>
+                    </shared:Surface>
 
                     <!-- Only for whoever may delete, and only while something is picked. The button
                          counts what a delete would take, and the line under it names what it would
@@ -367,11 +363,7 @@
                         </StackPanel>
                     </Grid>
 
-                    <Border Grid.Row="1"
-                            CornerRadius="6"
-                            BorderThickness="1"
-                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                    <shared:Surface Style="{StaticResource Card}" Padding="0" Grid.Row="1">
                         <Grid>
 
                             <Grid RowDefinitions="auto *"
@@ -484,12 +476,10 @@
                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                Visibility="{Binding HasTransition, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                                                    <Border Grid.Column="2"
+                                                    <Border Style="{StaticResource StatusChip}"
+                                                            Grid.Column="2"
                                                             Margin="0 0 12 0"
-                                                            Padding="8 2"
-                                                            VerticalAlignment="Center"
-                                                            CornerRadius="3"
-                                                            Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                                                            VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding KindText}"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                                    Style="{DynamicResource CaptionTextBlockStyle}" />
@@ -539,7 +529,7 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        Visibility="{Binding ShowsNothing, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </Grid>
-                    </Border>
+                    </shared:Surface>
                 </Grid>
             </Grid>
 

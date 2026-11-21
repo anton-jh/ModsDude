@@ -23,243 +23,247 @@
         </Style>
     </shared:AppPage.Resources>
 
-    <Grid RowDefinitions="auto *">
+    <!-- The repo's sheet on the window: its header and sidebar, with the page laid over it as a pane of
+         its own. -->
+    <shared:Surface Style="{StaticResource ShellSheet}">
+        <Grid RowDefinitions="auto *">
 
-        <!-- One header for everything under this repo, across the top of the sidebar and the page both.
-             It says where you are - the repo, its game, and the profile when one is open - so the pages
-             under it do not have to.
+            <!-- One header for everything under this repo, across the top of the sidebar and the page both.
+                 It says where you are - the repo, its game, and the profile when one is open - so the pages
+                 under it do not have to.
 
-             A button follows the words rather than sitting in the far corner. The words are a fixed width
-             where there is room for it, so the button is in the same place whatever the names are: a button
-             that moves under the pointer with the length of a name is one that gets missed. Where there is
-             not room, the words give way and the button does not. What does not fit is trimmed rather than
-             wrapped, and the full name is in a tooltip. -->
-        <Border Grid.Row="0"
-                Padding="24 16"
-                MinHeight="84"
-                CornerRadius="4"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                 A button follows the words rather than sitting in the far corner. The words are a fixed width
+                 where there is room for it, so the button is in the same place whatever the names are: a button
+                 that moves under the pointer with the length of a name is one that gets missed. Where there is
+                 not room, the words give way and the button does not. What does not fit is trimmed rather than
+                 wrapped, and the full name is in a tooltip. -->
+            <Border Grid.Row="0"
+                    Padding="24 16"
+                    MinHeight="84">
 
-            <Grid VerticalAlignment="Center">
-                <Grid.ColumnDefinitions>
-                    <!-- The words. Up to 600 wide and no wider, and the button is drawn straight after whatever width
-                         they end up with: in a window with room they are exactly 600 and the button does not move with
-                         the names; in a narrow one they give way first, and the button stays where it can be reached.
-                         A star column, and not an Auto one, so that it is measured against the room there is: an Auto
-                         column is measured against unlimited width, grows to whatever its names want, and takes the
-                         button out of the window with it. The limits on the names below are worked out from the width
-                         this column ends up giving the words. -->
-                    <ColumnDefinition Width="*" MinWidth="160" MaxWidth="600" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+                <Grid VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <!-- The words. Up to 600 wide and no wider, and the button is drawn straight after whatever width
+                             they end up with: in a window with room they are exactly 600 and the button does not move with
+                             the names; in a narrow one they give way first, and the button stays where it can be reached.
+                             A star column, and not an Auto one, so that it is measured against the room there is: an Auto
+                             column is measured against unlimited width, grows to whatever its names want, and takes the
+                             button out of the window with it. The limits on the names below are worked out from the width
+                             this column ends up giving the words. -->
+                        <ColumnDefinition Width="*" MinWidth="160" MaxWidth="600" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                <Grid x:Name="WordsGrid"
-                      Grid.Column="0"
-                      VerticalAlignment="Center"
-                      RowDefinitions="auto auto">
+                    <Grid x:Name="WordsGrid"
+                          Grid.Column="0"
+                          VerticalAlignment="Center"
+                          RowDefinitions="auto auto">
 
-                    <!-- On the repo's own pages, the repo's name alone: the way back to its overview, and the
-                         title. It is the accent colour because it is the one thing here that is a link; it reads
-                         as plain text of that colour until the pointer is on it. The colour is set on the
-                         TextBlock as well as on the link, because the ellipsis of a trimmed name is drawn in the
-                         TextBlock's own colour and not the link's. -->
-                    <TextBlock Grid.Row="0"
-                               VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"
-                               FontSize="22"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasOpenProfile}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                        <Hyperlink Style="{StaticResource RepoNameLink}"
-                                   Command="{Binding GoToOverviewCommand}"
-                                   ToolTip="{Binding RepoName}">
-                            <Run Text="{Binding RepoName, Mode=OneWay}" />
-                        </Hyperlink>
-                    </TextBlock>
-
-                    <!-- Under a profile, the repo's name and then the profile's, each in its own colour and each
-                         trimmed in its own. The repo's gives way first: it is given whatever is left of the row
-                         once the profile's name has taken its width, so a long profile name keeps its text and a
-                         long repo name is the one that ends in an ellipsis. The profile's is in turn stopped short
-                         of the whole row, so that the repo's name is never trimmed to nothing. The profile's is the
-                         selected entry's title rather than its own name, because that is the one a rename
-                         updates in place. -->
-                    <Grid x:Name="BreadcrumbRow"
-                          Grid.Row="0"
-                          ColumnDefinitions="auto auto auto"
-                          VerticalAlignment="Center">
-                        <Grid.Style>
-                            <Style TargetType="Grid">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasOpenProfile}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Grid.Style>
-
-                        <TextBlock x:Name="BreadcrumbSeparator"
-                                   Grid.Column="1"
-                                   Margin="12 0"
-                                   VerticalAlignment="Center"
-                                   FontSize="22"
-                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                   Text="&#x203A;" />
-
-                        <TextBlock x:Name="BreadcrumbProfile"
-                                   Grid.Column="2"
+                        <!-- On the repo's own pages, the repo's name alone: the way back to its overview, and the
+                             title. It is the accent colour because it is the one thing here that is a link; it reads
+                             as plain text of that colour until the pointer is on it. The colour is set on the
+                             TextBlock as well as on the link, because the ellipsis of a trimmed name is drawn in the
+                             TextBlock's own colour and not the link's. -->
+                        <TextBlock Grid.Row="0"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"
                                    FontSize="22"
                                    FontWeight="SemiBold"
-                                   ToolTip="{Binding NavManager.Selected.Title}"
-                                   Text="{Binding NavManager.Selected.Title}">
-                            <TextBlock.MaxWidth>
-                                <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;114">
-                                    <Binding ElementName="WordsGrid" Path="ActualWidth" />
-                                    <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
-                                </MultiBinding>
-                            </TextBlock.MaxWidth>
-                        </TextBlock>
-
-                        <!-- The width the profile's name wants, measured on a copy of it that is not drawn. The
-                             repo's limit has to be worked out from that, and it cannot be worked out from the drawn
-                             one: that is arranged after the repo's, at whatever the repo left, and a name that
-                             has been left no room reads as no width and so never asks the repo to give way. The copy
-                             has the same limit as the drawn one, so what it measures is what the drawn one will
-                             take. -->
-                        <TextBlock x:Name="BreadcrumbProfileSize"
-                                   Grid.Column="2"
-                                   Visibility="Hidden"
-                                   IsHitTestVisible="False"
-                                   VerticalAlignment="Center"
-                                   FontSize="22"
-                                   FontWeight="SemiBold"
-                                   Text="{Binding NavManager.Selected.Title}">
-                            <TextBlock.MaxWidth>
-                                <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;114">
-                                    <Binding ElementName="WordsGrid" Path="ActualWidth" />
-                                    <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
-                                </MultiBinding>
-                            </TextBlock.MaxWidth>
-                        </TextBlock>
-
-                        <!-- Last of the four, because it is bound to the widths of the others and a name in a binding has to
-                             be declared before the element that refers to it: the repo's limit is what is left once the
-                             separator and the profile's name have taken theirs. -->
-                        <TextBlock Grid.Column="0"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   FontSize="22"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                   ToolTip="{Binding RepoName}">
-                            <TextBlock.MaxWidth>
-                                <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;24">
-                                    <Binding ElementName="WordsGrid" Path="ActualWidth" />
-                                    <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
-                                    <Binding ElementName="BreadcrumbProfileSize" Path="ActualWidth" />
-                                </MultiBinding>
-                            </TextBlock.MaxWidth>
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasOpenProfile}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
                             <Hyperlink Style="{StaticResource RepoNameLink}"
-                                       Command="{Binding GoToOverviewCommand}">
+                                       Command="{Binding GoToOverviewCommand}"
+                                       ToolTip="{Binding RepoName}">
                                 <Run Text="{Binding RepoName, Mode=OneWay}" />
                             </Hyperlink>
                         </TextBlock>
 
+                        <!-- Under a profile, the repo's name and then the profile's, each in its own colour and each
+                             trimmed in its own. The repo's gives way first: it is given whatever is left of the row
+                             once the profile's name has taken its width, so a long profile name keeps its text and a
+                             long repo name is the one that ends in an ellipsis. The profile's is in turn stopped short
+                             of the whole row, so that the repo's name is never trimmed to nothing. The profile's is the
+                             selected entry's title rather than its own name, because that is the one a rename
+                             updates in place. -->
+                        <Grid x:Name="BreadcrumbRow"
+                              Grid.Row="0"
+                              ColumnDefinitions="auto auto auto"
+                              VerticalAlignment="Center">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasOpenProfile}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+
+                            <TextBlock x:Name="BreadcrumbSeparator"
+                                       Grid.Column="1"
+                                       Margin="12 0"
+                                       VerticalAlignment="Center"
+                                       FontSize="22"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Text="&#x203A;" />
+
+                            <TextBlock x:Name="BreadcrumbProfile"
+                                       Grid.Column="2"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       FontSize="22"
+                                       FontWeight="SemiBold"
+                                       ToolTip="{Binding NavManager.Selected.Title}"
+                                       Text="{Binding NavManager.Selected.Title}">
+                                <TextBlock.MaxWidth>
+                                    <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;114">
+                                        <Binding ElementName="WordsGrid" Path="ActualWidth" />
+                                        <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
+                                    </MultiBinding>
+                                </TextBlock.MaxWidth>
+                            </TextBlock>
+
+                            <!-- The width the profile's name wants, measured on a copy of it that is not drawn. The
+                                 repo's limit has to be worked out from that, and it cannot be worked out from the drawn
+                                 one: that is arranged after the repo's, at whatever the repo left, and a name that
+                                 has been left no room reads as no width and so never asks the repo to give way. The copy
+                                 has the same limit as the drawn one, so what it measures is what the drawn one will
+                                 take. -->
+                            <TextBlock x:Name="BreadcrumbProfileSize"
+                                       Grid.Column="2"
+                                       Visibility="Hidden"
+                                       IsHitTestVisible="False"
+                                       VerticalAlignment="Center"
+                                       FontSize="22"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding NavManager.Selected.Title}">
+                                <TextBlock.MaxWidth>
+                                    <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;114">
+                                        <Binding ElementName="WordsGrid" Path="ActualWidth" />
+                                        <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
+                                    </MultiBinding>
+                                </TextBlock.MaxWidth>
+                            </TextBlock>
+
+                            <!-- Last of the four, because it is bound to the widths of the others and a name in a binding has to
+                                 be declared before the element that refers to it: the repo's limit is what is left once the
+                                 separator and the profile's name have taken theirs. -->
+                            <TextBlock Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       FontSize="22"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                       ToolTip="{Binding RepoName}">
+                                <TextBlock.MaxWidth>
+                                    <MultiBinding Converter="{StaticResource ShareWidth}" ConverterParameter="90;24">
+                                        <Binding ElementName="WordsGrid" Path="ActualWidth" />
+                                        <Binding ElementName="BreadcrumbSeparator" Path="ActualWidth" />
+                                        <Binding ElementName="BreadcrumbProfileSize" Path="ActualWidth" />
+                                    </MultiBinding>
+                                </TextBlock.MaxWidth>
+                                <Hyperlink Style="{StaticResource RepoNameLink}"
+                                           Command="{Binding GoToOverviewCommand}">
+                                    <Run Text="{Binding RepoName, Mode=OneWay}" />
+                                </Hyperlink>
+                            </TextBlock>
+
+                        </Grid>
+
+                        <!-- The game, under the name, on every page: it is what the repo is about, and it does not stop
+                             being so when a profile is open. Where the profile stands against the game follows it, on
+                             the profile the game follows only: on any other there is nothing to say, and a chip reading
+                             "not active" on every other profile would only be noise. -->
+                        <StackPanel Grid.Row="1" Margin="0 4 0 0" Orientation="Horizontal">
+                            <TextBlock VerticalAlignment="Center"
+                                       FontSize="14"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Text="{Binding GameName}" />
+
+                            <!-- The negative vertical margin takes back what the chip's padding adds over the game's line:
+                                 the chip is a little taller than the text beside it, and without it showing the chip
+                                 would push the whole page down by the difference. -->
+                            <Border Margin="14 -3 0 -3"
+                                    DataContext="{Binding OpenProfile}"
+                                    Style="{StaticResource ProfileSyncChip}"
+                                    Visibility="{Binding HasSyncState, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
+                                <TextBlock FontSize="13" Text="{Binding SyncLabel}" />
+                            </Border>
+                        </StackPanel>
                     </Grid>
 
-                    <!-- The game, under the name, on every page: it is what the repo is about, and it does not stop
-                         being so when a profile is open. Where the profile stands against the game follows it, on
-                         the profile the game follows only: on any other there is nothing to say, and a chip reading
-                         "not active" on every other profile would only be noise. -->
-                    <StackPanel Grid.Row="1" Margin="0 4 0 0" Orientation="Horizontal">
-                        <TextBlock VerticalAlignment="Center"
-                                   FontSize="14"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="{Binding GameName}" />
+                    <!-- Where there is no game to put anything on, the one thing to do is connect one, which goes to
+                         the Connect game entry rather than opening a page of its own, so the sidebar still says where
+                         you are. Behind a divider. A profile's own act, applying it, is on its tab bar. -->
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                Visibility="{Binding ShowConnectGame, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Border Width="1"
+                                Margin="32 0"
+                                Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
 
-                        <!-- The negative vertical margin takes back what the chip's padding adds over the game's line:
-                             the chip is a little taller than the text beside it, and without it showing the chip
-                             would push the whole page down by the difference. -->
-                        <Border Margin="14 -3 0 -3"
-                                DataContext="{Binding OpenProfile}"
-                                Style="{StaticResource ProfileSyncChip}"
-                                Visibility="{Binding HasSyncState, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue={x:Static Visibility.Collapsed}}">
-                            <TextBlock FontSize="13" Text="{Binding SyncLabel}" />
-                        </Border>
+                        <Button MinWidth="150"
+                                Padding="28 10"
+                                VerticalAlignment="Center"
+                                FontSize="15"
+                                FontWeight="SemiBold"
+                                Style="{DynamicResource AccentButtonStyle}"
+                                Content="Connect game"
+                                Command="{Binding ConnectGameCommand}" />
                     </StackPanel>
-                </Grid>
-
-                <!-- Where there is no game to put anything on, the one thing to do is connect one, which goes to
-                     the Connect game entry rather than opening a page of its own, so the sidebar still says where
-                     you are. Behind a divider. A profile's own act, applying it, is on its tab bar. -->
-                <StackPanel Grid.Column="1"
-                            Orientation="Horizontal"
-                            Visibility="{Binding ShowConnectGame, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Border Width="1"
-                            Margin="32 0"
-                            Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-
-                    <Button MinWidth="150"
-                            Padding="28 10"
-                            VerticalAlignment="Center"
-                            FontSize="15"
-                            FontWeight="SemiBold"
-                            Style="{DynamicResource AccentButtonStyle}"
-                            Content="Connect game"
-                            Command="{Binding ConnectGameCommand}" />
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <Grid Grid.Row="1" ColumnDefinitions="200 *">
-
-            <Border Grid.Column="0" Style="{StaticResource SidebarSurface}">
-                <Grid RowDefinitions="auto auto * auto auto">
-
-                    <ListView Grid.Row="0"
-                              Style="{StaticResource SidebarList}"
-                              ItemsSource="{Binding Path=MenuItems}"
-                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
-                              behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
-
-                    <sidebar:SidebarHeader Grid.Row="1" Title="Profiles"
-                                           AddCommand="{Binding CreateProfileCommand}"
-                                           IsAddEnabled="{Binding CanCreateProfiles}"
-                                           AddToolTip="{Binding CreateProfileToolTip}" />
-
-                    <ListView Grid.Row="2"
-                              ItemsSource="{Binding Path=Profiles}"
-                              Style="{StaticResource SidebarList}"
-                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
-                              behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
-
-                    <!-- At most one row, and only while a link into an archived profile is being followed.
-                         Under its own heading so it reads as reached through the archive rather than as
-                         back in the list above; it goes away on the next navigation. -->
-                    <sidebar:SidebarHeader Grid.Row="3" Title="From the archive"
-                                           Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                    <ListView Grid.Row="4"
-                              Style="{StaticResource SidebarList}"
-                              ItemsSource="{Binding Path=ArchivedProfiles}"
-                              SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
-                              behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}"
-                              Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </Grid>
             </Border>
 
-            <Frame Grid.Column="1" Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
+            <Grid Grid.Row="1" ColumnDefinitions="220 *">
+
+                <Border Grid.Column="0" Padding="12 0 10 16">
+                    <Grid RowDefinitions="auto auto * auto auto">
+
+                        <ListView Grid.Row="0"
+                                  Style="{StaticResource SidebarList}"
+                                  ItemsSource="{Binding Path=MenuItems}"
+                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                                  behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
+
+                        <sidebar:SidebarHeader Grid.Row="1" Title="Profiles"
+                                               AddCommand="{Binding CreateProfileCommand}"
+                                               IsAddEnabled="{Binding CanCreateProfiles}"
+                                               AddToolTip="{Binding CreateProfileToolTip}" />
+
+                        <ListView Grid.Row="2"
+                                  ItemsSource="{Binding Path=Profiles}"
+                                  Style="{StaticResource SidebarList}"
+                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                                  behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}" />
+
+                        <!-- At most one row, and only while a link into an archived profile is being followed.
+                             Under its own heading so it reads as reached through the archive rather than as
+                             back in the list above; it goes away on the next navigation. -->
+                        <sidebar:SidebarHeader Grid.Row="3" Title="From the archive"
+                                               Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                        <ListView Grid.Row="4"
+                                  Style="{StaticResource SidebarList}"
+                                  ItemsSource="{Binding Path=ArchivedProfiles}"
+                                  SelectedItem="{Binding Path=NavManager.Selected, Mode=TwoWay}"
+                                  behaviors:ReselectItem.Command="{Binding NavManager.GoBackCommand}"
+                                  Visibility="{Binding HasArchivedProfileOpen, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    </Grid>
+                </Border>
+
+                <shared:Surface Grid.Column="1" Style="{StaticResource ContentPane}">
+                    <Frame Content="{Binding NavManager.CurrentPage}" NavigationUIVisibility="Hidden" />
+                </shared:Surface>
+            </Grid>
         </Grid>
-    </Grid>
+    </shared:Surface>
 </shared:AppPage>

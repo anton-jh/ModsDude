@@ -1,6 +1,7 @@
 <UserControl x:Class="ModsDude.Client.Wpf.Shell.Modals.WizardModal"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:modals="clr-namespace:ModsDude.Client.Wpf.Shell.Modals"
@@ -9,14 +10,7 @@
              d:DataContext="{d:DesignInstance Type=modals:WizardModalViewModel, IsDesignTimeCreatable=False}"
              Focusable="True">
 
-    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
-            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-            BorderThickness="1">
-
-        <Border.Effect>
-            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
-        </Border.Effect>
+    <shared:Surface Style="{StaticResource ModalSurface}">
 
         <Grid RowDefinitions="auto auto">
 
@@ -32,8 +26,7 @@
                                 Content="{Binding Current}" />
             </StackPanel>
 
-            <Border Grid.Row="1"
-                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+            <Border Style="{StaticResource ModalFooter}" Grid.Row="1">
                 <!-- 12 at the bottom rather than 20: every button below carries 8 of its own, so a stack
                      of answers is spaced evenly and Back and Cancel sit level with the last one. -->
                 <Grid Margin="24 16 24 12" ColumnDefinitions="auto * auto">
@@ -81,7 +74,7 @@
                 </Grid>
             </Border>
         </Grid>
-    </Border>
+    </shared:Surface>
 
     <!-- Escape and Enter are the shell's, handled once for whatever modal is up. See
          MainWindow.OnPreviewKeyDown. -->

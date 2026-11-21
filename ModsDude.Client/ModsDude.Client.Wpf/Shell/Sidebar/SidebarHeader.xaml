@@ -30,7 +30,7 @@
              tooltips do. -->
         <Border Grid.Column="1" Grid.Row="0"
                 Margin="8 0 16 4"
-                CornerRadius="4"
+                CornerRadius="{DynamicResource ControlCornerRadius}"
                 VerticalAlignment="Center">
             <Border.Style>
                 <Style TargetType="Border">

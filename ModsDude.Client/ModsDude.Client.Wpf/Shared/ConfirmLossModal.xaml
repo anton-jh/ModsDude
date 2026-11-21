@@ -9,14 +9,7 @@
              d:DataContext="{d:DesignInstance Type=shared:ConfirmLossModalViewModel, IsDesignTimeCreatable=False}"
              Focusable="True">
 
-    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
-            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-            BorderThickness="1">
-
-        <Border.Effect>
-            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
-        </Border.Effect>
+    <shared:Surface Style="{StaticResource ModalSurface}">
 
         <Grid RowDefinitions="auto * auto">
 
@@ -43,9 +36,9 @@
                 </ItemsControl>
             </ScrollViewer>
 
-            <Border Grid.Row="2"
-                    Margin="0 16 0 0"
-                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+            <Border Style="{StaticResource ModalFooter}"
+                    Grid.Row="2"
+                    Margin="0 16 0 0">
 
                 <!-- A uniform grid because it leaves collapsed buttons out of the count. Three
                      phrases side by side do not fit, so an alternative stacks every answer. -->
@@ -81,5 +74,5 @@
                 </UniformGrid>
             </Border>
         </Grid>
-    </Border>
+    </shared:Surface>
 </UserControl>

@@ -12,17 +12,14 @@
       Title="HomePage"
       FontSize="14">
 
-    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+    <shared:Surface Style="{StaticResource PagePane}">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
                 <navigation:PageTitle Text="Home" />
 
                 <!-- Nothing to show anywhere until there is a repo. -->
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Visibility="{Binding HasNoRepos, Converter={StaticResource BoolToVisibilityConverter}}">
+                <shared:Surface Style="{StaticResource Card}" Visibility="{Binding HasNoRepos, Converter={StaticResource BoolToVisibilityConverter}}">
                     <StackPanel Orientation="Vertical">
                         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Text="You are not in any repo yet." />
@@ -32,13 +29,10 @@
                                 Content="Join or create"
                                 Command="{Binding JoinOrCreateCommand}" />
                     </StackPanel>
-                </Border>
+                </shared:Surface>
 
                 <!-- Every repo, with the profiles friends are on in it. -->
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Visibility="{Binding HasRepos, Converter={StaticResource BoolToVisibilityConverter}}">
+                <shared:Surface Style="{StaticResource Card}" Visibility="{Binding HasRepos, Converter={StaticResource BoolToVisibilityConverter}}">
                     <GroupBox Header="Repos" Padding="0 16 0 0">
                         <StackPanel Orientation="Vertical">
                             <TextBlock Margin="0 0 0 12"
@@ -48,9 +42,9 @@
                             <home:HomeRepoList DataContext="{Binding RepoList}" />
                         </StackPanel>
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
             </StackPanel>
         </ScrollViewer>
-    </Border>
+    </shared:Surface>
 </shared:AppPage>

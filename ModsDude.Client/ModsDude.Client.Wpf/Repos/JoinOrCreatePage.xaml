@@ -11,31 +11,26 @@
       d:DataContext="{d:DesignInstance Type=repos:JoinOrCreatePageViewModel, IsDesignTimeCreatable=False}"
       Title="JoinOrCreatePage">
 
-    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+    <shared:Surface Style="{StaticResource PagePane}">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
                 <navigation:PageTitle Text="{Binding Title}" />
 
                 <!-- Join first: most people arrive with an invite. -->
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16">
+                <shared:Surface Style="{StaticResource Card}">
                     <GroupBox Header="Join a repo" Padding="0 16 0 16">
                         <ContentControl Content="{Binding Join}" />
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0">
+                <shared:Surface Style="{StaticResource Card}" Margin="0 16 0 0">
                     <GroupBox Header="Create a repo" Padding="0 16 0 16">
                         <ContentControl Content="{Binding Create}" />
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
             </StackPanel>
         </ScrollViewer>
-    </Border>
+    </shared:Surface>
 </shared:AppPage>

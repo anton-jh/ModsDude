@@ -1,0 +1,105 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared">
+
+    <!-- The layers of Palette.xaml as surfaces. A layer's rounded corner is its top-left one, where it
+         meets the layer under it: everything else runs to the window's edge. -->
+
+    <!-- The repo's header and sidebar, on the window beside the rail. -->
+    <Style x:Key="ShellSheet" TargetType="shared:Surface">
+        <Setter Property="Background" Value="{DynamicResource ShellBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ShellStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1 1 0 0" />
+        <Setter Property="CornerRadius" Value="{StaticResource LayerCornerRadius}" />
+    </Style>
+
+    <!-- The page: on the shell under a repo, or straight on the window beside the rail elsewhere. Its
+         shadow falls to the left, onto the sidebar or the rail. -->
+    <Style x:Key="ContentPane" TargetType="shared:Surface">
+        <Setter Property="Background" Value="{DynamicResource ContentBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ContentStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1 1 0 0" />
+        <Setter Property="CornerRadius" Value="{StaticResource LayerCornerRadius}" />
+        <Setter Property="ShadowBlur" Value="24" />
+        <Setter Property="ShadowOffset" Value="-8,0" />
+        <Setter Property="ShadowOpacity" Value="0.25" />
+    </Style>
+
+    <!-- The pane of a page that has no shell under it, with the page's own margin. -->
+    <Style x:Key="PagePane" TargetType="shared:Surface" BasedOn="{StaticResource ContentPane}">
+        <Setter Property="Padding" Value="32" />
+    </Style>
+
+    <!-- A page inside a pane someone else draws: under a repo, or under a profile's tabs. -->
+    <Style x:Key="PageBody" TargetType="Border">
+        <Setter Property="Padding" Value="32" />
+    </Style>
+
+    <!-- What a page keeps at its foot, under everything that scrolls: a step below the page. -->
+    <Style x:Key="PageFooter" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource FooterBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ContentStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="0 1 0 0" />
+        <Setter Property="Padding" Value="28 14" />
+    </Style>
+
+    <!-- A group on a page. -->
+    <Style x:Key="Card" TargetType="shared:Surface">
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
+        <Setter Property="Padding" Value="24 20" />
+        <Setter Property="ShadowBlur" Value="24" />
+        <Setter Property="ShadowOffset" Value="0,8" />
+        <Setter Property="ShadowOpacity" Value="0.22" />
+    </Style>
+
+    <!-- Sunk into a card: a list, a search field, a set of facts. -->
+    <Style x:Key="InsetWell" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource InsetBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource InsetStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource WellCornerRadius}" />
+    </Style>
+
+    <!-- Everything in the modal layer: over the dimmed app, a card lifted well clear of it. -->
+    <Style x:Key="ModalSurface" TargetType="shared:Surface">
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource RaisedStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+        <Setter Property="ShadowBlur" Value="40" />
+        <Setter Property="ShadowOffset" Value="0,12" />
+        <Setter Property="ShadowOpacity" Value="0.45" />
+    </Style>
+
+    <!-- A modal's answers, along its foot. Rounded at the bottom by the modal's radius less its
+         border, so it fills the corners without crossing them. -->
+    <Style x:Key="ModalFooter" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource FooterBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="0 1 0 0" />
+        <Setter Property="CornerRadius" Value="0 0 13 13" />
+    </Style>
+
+    <!-- A menu or a list that drops from a control. -->
+    <Style x:Key="PopupSurface" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource PopupBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource RaisedStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource PopupCornerRadius}" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
+
+    <!-- Something small that floats over the app without stopping it: a toast, the progress strip. -->
+    <Style x:Key="FloatingSurface" TargetType="shared:Surface">
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource RaisedStrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
+        <Setter Property="ShadowBlur" Value="24" />
+        <Setter Property="ShadowOffset" Value="0,6" />
+        <Setter Property="ShadowOpacity" Value="0.4" />
+    </Style>
+</ResourceDictionary>

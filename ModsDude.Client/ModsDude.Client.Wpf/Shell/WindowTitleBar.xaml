@@ -50,16 +50,16 @@
                                     <Condition Property="IsClose" Value="True" />
                                     <Condition Property="IsMouseOver" Value="True" />
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="Surface" Property="Background" Value="#C42B1C" />
-                                <Setter Property="Foreground" Value="White" />
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource CaptionCloseBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource OnColorBrush}" />
                             </MultiTrigger>
                             <MultiTrigger>
                                 <MultiTrigger.Conditions>
                                     <Condition Property="IsClose" Value="True" />
                                     <Condition Property="IsPressed" Value="True" />
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="Surface" Property="Background" Value="#C83C31" />
-                                <Setter Property="Foreground" Value="White" />
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource CaptionClosePressedBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource OnColorBrush}" />
                             </MultiTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

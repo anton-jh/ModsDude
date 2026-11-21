@@ -17,9 +17,9 @@
              is actually realized by the virtualizing panel. It re-fires when a recycled row is
              handed a different mod. -->
         <Border behaviors:LazyLoad.Source="{Binding}"
-                Height="72"
+                Height="68"
                 BorderThickness="0 0 0 1"
-                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                BorderBrush="{DynamicResource RowDividerBrush}">
 
             <Border.Style>
                 <Style TargetType="Border">
@@ -46,18 +46,25 @@
                               Visibility="{Binding IsSelectable, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                     <Border Grid.Column="1"
-                            Width="56" Height="56"
-                            Margin="4 0 0 0"
-                            CornerRadius="4"
-                            Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            Width="48" Height="48"
+                            Margin="6 0 0 0"
+                            CornerRadius="9"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource RaisedStrokeBrush}"
+                            Background="{DynamicResource RaisedBrush}">
                         <Grid>
                             <!-- Shows through until the icon has decoded, and stays for mods without one. -->
                             <TextBlock Text="{Binding Initials}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Foreground="{DynamicResource TextFillColorDisabledBrush}"
                                        Style="{DynamicResource BodyStrongTextBlockStyle}" />
 
-                            <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                            <!-- A brush rather than an Image, so the picture takes the frame's rounded corners. -->
+                            <Border CornerRadius="8">
+                                <Border.Background>
+                                    <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                </Border.Background>
+                            </Border>
                         </Grid>
                     </Border>
 
@@ -124,8 +131,10 @@
                             <Border Margin="8 0 0 0"
                                     Padding="6 1"
                                     VerticalAlignment="Center"
-                                    CornerRadius="3"
-                                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                    CornerRadius="{StaticResource BadgeCornerRadius}"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource RaisedStrokeBrush}"
+                                    Background="{DynamicResource RaisedBrush}"
                                     Visibility="{Binding ShowsVersionChip, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <TextBlock Text="{Binding Version}"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -186,7 +195,7 @@
                                VerticalAlignment="Center"
                                Text="&#xE72E;"
                                FontFamily="{DynamicResource SymbolThemeFontFamily}"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Foreground="{DynamicResource LockedTextBrush}"
                                ToolTip="Version-sensitive. Batch updates leave this mod alone."
                                Visibility="{Binding ShowsAdapterLockIcon, Converter={StaticResource BoolToVisibilityConverter}}" />
 
@@ -201,7 +210,9 @@
                             <Style TargetType="Border" BasedOn="{StaticResource SuccessStatusChip}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsSecondaryChipCaution}" Value="True">
-                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                        <Setter Property="Background" Value="{DynamicResource CautionTintBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource CautionBorderBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource CautionTextBrush}" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -211,8 +222,8 @@
                                    Style="{DynamicResource CaptionTextBlockStyle}" />
                     </Border>
 
-                    <!-- What the editor's draft has done to this mod. Filled, where every status
-                         beside it is an outline: this is the one chip on the row that is somebody's
+                    <!-- What the editor's draft has done to this mod. Solid, where every status
+                         beside it is a tint: this is the one chip on the row that is somebody's
                          own doing. On the status chip's line rather than the name's, so the two
                          read as one row of chips. The words behind it are the tooltip. -->
                     <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
@@ -223,6 +234,8 @@
                             Visibility="{Binding HasTouch, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Border.Style>
                             <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
+                                <Setter Property="BorderThickness" Value="0" />
+                                <Setter Property="Padding" Value="9 3" />
                                 <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
                                 <Setter Property="TextElement.Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
                                 <Style.Triggers>
@@ -254,8 +267,8 @@
                             ToolTipService.InitialShowDelay="400">
 
                         <Border.Style>
-                            <!-- Every fill here comes with the text colour that can be read on it;
-                                 see StatusChip in Controls.xaml for why they cannot be set apart. -->
+                            <!-- Every tint here comes with its edge and text; see StatusChip in
+                                 Controls.xaml. -->
                             <Style TargetType="Border" BasedOn="{StaticResource StatusChip}">
                                 <Setter Property="Visibility" Value="Collapsed" />
                                 <Style.Triggers>
@@ -263,17 +276,19 @@
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding Status}" Value="New">
-                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                        <Setter Property="Background" Value="{DynamicResource InfoTintBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource InfoBorderBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource InfoTextBrush}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding Status}" Value="NewVersion">
-                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                        <Setter Property="Background" Value="{DynamicResource SuccessTintBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource SuccessBorderBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource SuccessTextBrush}" />
                                     </DataTrigger>
-                                    <!-- Where a draft exists to tell apart from, every fill above steps
-                                         back to an outline: a filled chip there means "you did this"
-                                         (see the touch chip), and a status is only a fact about the
-                                         version. A running import is not a fact, so it keeps its fill,
+                                    <!-- Where a draft exists to tell apart from, every tint above steps
+                                         back to an outline, so it does not compete with the touch chip
+                                         that says "you did this": a status is only a fact about the
+                                         version. A running import is not a fact, so it keeps its tint,
                                          and the triggers below it win. -->
                                     <MultiDataTrigger>
                                         <MultiDataTrigger.Conditions>
@@ -281,31 +296,33 @@
                                             <Condition Binding="{Binding HasImportState}" Value="False" />
                                         </MultiDataTrigger.Conditions>
                                         <Setter Property="Background" Value="Transparent" />
-                                        <Setter Property="BorderThickness" Value="1" />
-                                        <Setter Property="Padding" Value="7 1" />
-                                        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource RaisedStrokeBrush}" />
                                         <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
                                     </MultiDataTrigger>
                                     <DataTrigger Binding="{Binding HasImportState}" Value="True">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding ImportState}" Value="Running">
-                                        <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                        <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource RaisedStrokeBrush}" />
                                         <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding ImportState}" Value="Succeeded">
-                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
-                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                        <Setter Property="Background" Value="{DynamicResource SuccessTintBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource SuccessBorderBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource SuccessTextBrush}" />
                                     </DataTrigger>
                                     <!-- Skipped and failed are deliberately different colours: one is
                                          waiting on a decision, the other went wrong. -->
                                     <DataTrigger Binding="{Binding ImportState}" Value="Skipped">
-                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                        <Setter Property="Background" Value="{DynamicResource CautionTintBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource CautionBorderBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource CautionTextBrush}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding ImportState}" Value="Failed">
-                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorInverseBrush}" />
+                                        <Setter Property="Background" Value="{DynamicResource CriticalTintBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource CriticalBorderBrush}" />
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource CriticalTextBrush}" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -338,11 +355,7 @@
                                    AllowsTransparency="True"
                                    HorizontalOffset="-160">
 
-                                <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
-                                        Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
-                                        BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                                        BorderThickness="1"
-                                        Padding="4">
+                                <Border Style="{StaticResource PopupSurface}">
                                     <StackPanel Width="200">
                                         <Button Content="Reorder versions…"
                                                 HorizontalContentAlignment="Left"

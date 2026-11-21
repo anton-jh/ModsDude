@@ -15,7 +15,7 @@
 
                 <Border Margin="0 2"
                         Padding="8 4"
-                        CornerRadius="4"
+                        CornerRadius="{DynamicResource ControlCornerRadius}"
                         BorderThickness="1">
 
                     <Border.Style>

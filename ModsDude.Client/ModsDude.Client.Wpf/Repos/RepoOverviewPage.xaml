@@ -13,15 +13,13 @@
       Title="RepoOverviewPage"
       FontSize="14">
 
-    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+    <Border Style="{StaticResource PageBody}">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
                 <navigation:PageTitle Text="Overview" />
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16">
+                <shared:Surface Style="{StaticResource Card}">
                     <GroupBox Header="This repo" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
                             <TextBlock FontWeight="SemiBold" Text="{Binding GameName}" />
@@ -34,14 +32,11 @@
                                        Text="{Binding ProfileSummary}" />
                         </StackPanel>
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
                 <!-- The one place the game this machine has connected for the repo is shown and
                      managed. -->
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0">
+                <shared:Surface Style="{StaticResource Card}" Margin="0 16 0 0">
                     <GroupBox Header="This machine" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
@@ -107,11 +102,7 @@
                                            VerticalOffset="4"
                                            StaysOpen="False"
                                            AllowsTransparency="True">
-                                        <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
-                                                Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
-                                                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                                                BorderThickness="1"
-                                                Padding="4">
+                                        <Border Style="{StaticResource PopupSurface}">
                                             <StackPanel Orientation="Vertical">
                                                 <Button Width="340"
                                                         Style="{DynamicResource SubtleMenuButton}"
@@ -159,18 +150,15 @@
 
                         </StackPanel>
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
                 <!-- Who else is on which of this repo's profiles. Only this repo's: somebody on
                      another repo's profile is not playing this one. -->
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0">
+                <shared:Surface Style="{StaticResource Card}" Margin="0 16 0 0">
                     <GroupBox Header="Members' profiles" Padding="0 16 0 16">
                         <friends:FriendActivityList DataContext="{Binding Friends}" />
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
             </StackPanel>
         </ScrollViewer>

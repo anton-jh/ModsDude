@@ -96,11 +96,8 @@
             <!-- Drawn as the mod lists and the savegame log are - a row with a hairline under it,
                  inside a frame - and tall enough that more of twenty slots is in view at once. It
                  scrolls by the pixel (see SlotList). -->
-            <Border Margin="0 8 0 0"
-                    CornerRadius="6"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            <Border Style="{StaticResource InsetWell}"
+                    Margin="0 8 0 0"
                     Visibility="{Binding ShowAllSlots, Converter={StaticResource BoolToVisibilityConverter}}">
                 <ListBox MaxHeight="360"
                          Style="{StaticResource SlotList}"

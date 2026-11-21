@@ -15,15 +15,11 @@
              three things - what it was called, when it was put away, and the two verbs. -->
         <DataTemplate x:Key="ArchivedRow" DataType="{x:Type archive:ArchivedItemViewModel}">
             <Border Padding="12"
-                    Margin="0 0 0 8"
-                    CornerRadius="6"
-                    BorderThickness="1"
-                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                    Margin="0 0 0 8">
                 <Border.Style>
                     <!-- A link into something archived picks its row out, because the point of
                          following one is finding the thing it named. -->
-                    <Style TargetType="Border">
-                        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                    <Style TargetType="Border" BasedOn="{StaticResource InsetWell}">
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
                                 <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
@@ -66,7 +62,7 @@
         </DataTemplate>
     </shared:AppPage.Resources>
 
-    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+    <Border Style="{StaticResource PageBody}">
         <Grid RowDefinitions="auto auto *">
 
             <navigation:PageTitle Grid.Row="0" Text="Archive" Style="{StaticResource PageColumn}" />

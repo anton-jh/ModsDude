@@ -15,10 +15,10 @@
     <Grid ColumnDefinitions="auto *">
 
         <!-- The rail: Home, the repos, grouped by game, then the places that are not a repo, and the user's
-             own settings and account at the foot. Pictures only; each one's name comes out of it on hover. -->
+             own settings and account at the foot. Pictures only; each one's name comes out of it on hover.
+             On the window itself, like the title bar: the pages are the layers laid on it. -->
         <Border Grid.Column="0"
-                Width="{StaticResource RailWidth}"
-                Style="{StaticResource SidebarSurface}">
+                Width="{StaticResource RailWidth}">
             <Border.Resources>
                 <Style TargetType="ToolTip" BasedOn="{StaticResource RailLabel}" />
             </Border.Resources>

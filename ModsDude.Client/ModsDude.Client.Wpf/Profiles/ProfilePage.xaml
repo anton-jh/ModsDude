@@ -13,15 +13,13 @@
 
     <Grid RowDefinitions="auto *">
 
-        <!-- The profile's tab bar, in the repo header's fill so it reads as part of the header, which names
-             the profile above it. The tabs are always the same three, so the button straight after them is
-             in the same place on every profile; it is the primary act of the app, putting the profile on the
-             game, and the same act from every tab. -->
+        <!-- The profile's tab bar, along the top of the page under the header that names the profile. The
+             tabs are always the same three, so the button straight after them is in the same place on every
+             profile; it is the primary act of the app, putting the profile on the game, and the same act from
+             every tab. -->
         <Border Grid.Row="0"
                 MinHeight="64"
-                Padding="16 0 24 0"
-                CornerRadius="0 0 4 4"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                Padding="16 6 32 0">
             <StackPanel Orientation="Horizontal">
 
                 <ListBox Style="{StaticResource PageTabs}"

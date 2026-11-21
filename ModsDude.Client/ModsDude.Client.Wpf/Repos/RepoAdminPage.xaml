@@ -14,43 +14,40 @@
 
     <Grid RowDefinitions="*, auto">
 
-        <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <Border Style="{StaticResource PageBody}">
             <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
                 <navigation:PageTitle Text="Admin" />
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16">
+                <shared:Surface Style="{StaticResource Card}">
                     <GroupBox Header="Basics" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
                             <Label Content="Name" Margin="0 0 0 12"/>
                             <TextBox Width="300" Text="{Binding Path=Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" />
                         </StackPanel>
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0">
+                <shared:Surface Style="{StaticResource Card}" Margin="0 16 0 0">
                     <GroupBox Header="Game adapter settings" Padding="0 16 0 16">
                         <games:DynamicFormEditor DataContext="{Binding BaseSettingsEditor}" />
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
             </StackPanel>
         </Border>
 
-        <StackPanel Grid.Row="1" Style="{StaticResource PageActions}">
-            <Button Grid.Column="0" Width="250" Style="{DynamicResource AccentButtonStyle}"
-                    Content="Save changes" Command="{Binding Path=SaveChangesCommand}" />
-
-            <Button Grid.Column="2" Width="250" Margin="8 0 0 0"
-                    Content="Archive repo"
-                    ToolTip="Takes it out of everybody's sidebar and frees its name. It can be brought back from the Archive."
-                    Command="{Binding Path=ArchiveRepoCommand}" />
-        </StackPanel>
+        <Border Grid.Row="1" Style="{StaticResource PageFooter}">
+            <StackPanel Style="{StaticResource PageActions}">
+                <Button Grid.Column="0" Width="250" Style="{DynamicResource AccentButtonStyle}"
+                        Content="Save changes" Command="{Binding Path=SaveChangesCommand}" />
+    
+                <Button Grid.Column="2" Width="250" Margin="8 0 0 0"
+                        Content="Archive repo"
+                        ToolTip="Takes it out of everybody's sidebar and frees its name. It can be brought back from the Archive."
+                        Command="{Binding Path=ArchiveRepoCommand}" />
+            </StackPanel>
+        </Border>
 
     </Grid>
 </shared:AppPage>

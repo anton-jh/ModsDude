@@ -1,6 +1,7 @@
 <UserControl x:Class="ModsDude.Client.Wpf.Mods.ModDependentsModal"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mods="clr-namespace:ModsDude.Client.Wpf.Mods"
@@ -9,14 +10,7 @@
              d:DataContext="{d:DesignInstance Type=mods:ModDependentsModalViewModel, IsDesignTimeCreatable=False}"
              Focusable="True">
 
-    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
-            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-            BorderThickness="1">
-
-        <Border.Effect>
-            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
-        </Border.Effect>
+    <shared:Surface Style="{StaticResource ModalSurface}">
 
         <Grid RowDefinitions="auto * auto">
 
@@ -52,10 +46,9 @@
                     <ItemsControl ItemsSource="{Binding Profiles}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type mods:ProfileDependentViewModel}">
-                                <Border Margin="0 0 0 12"
-                                        Padding="12"
-                                        CornerRadius="4"
-                                        Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                <Border Style="{StaticResource InsetWell}"
+                                        Margin="0 0 0 12"
+                                        Padding="12">
                                     <StackPanel>
                                         <Grid ColumnDefinitions="* auto">
                                             <TextBlock Grid.Column="0"
@@ -115,9 +108,9 @@
                 </StackPanel>
             </ScrollViewer>
 
-            <Border Grid.Row="2"
-                    Margin="0 16 0 0"
-                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+            <Border Style="{StaticResource ModalFooter}"
+                    Grid.Row="2"
+                    Margin="0 16 0 0">
                 <Button Margin="24"
                         MinWidth="120"
                         HorizontalAlignment="Right"
@@ -126,6 +119,6 @@
                         Command="{Binding CloseCommand}" />
             </Border>
         </Grid>
-    </Border>
+    </shared:Surface>
 
 </UserControl>

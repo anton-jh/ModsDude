@@ -12,13 +12,11 @@
       Title="ProfileOverviewPage"
       FontSize="14">
 
-    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+    <Border Style="{StaticResource PageBody}">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16">
+                <shared:Surface Style="{StaticResource Card}">
                     <GroupBox Header="This profile" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
                             <TextBlock FontWeight="SemiBold" Text="{Binding RepoName}" />
@@ -26,12 +24,9 @@
                                        Text="{Binding ModSummary}" />
                         </StackPanel>
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0">
+                <shared:Surface Style="{StaticResource Card}" Margin="0 16 0 0">
                     <GroupBox Header="Where it is applied" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
@@ -65,15 +60,13 @@
 
                         </StackPanel>
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
                 <!-- This profile's savegames, most recently played first. Each name leads to its row on
                      the repo's Saves list, which is where a savegame is checked out and in. -->
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0"
-                        Visibility="{Binding HasSavegames, Converter={StaticResource BoolToVisibilityConverter}}">
+                <shared:Surface Style="{StaticResource Card}"
+                                Margin="0 16 0 0"
+                                Visibility="{Binding HasSavegames, Converter={StaticResource BoolToVisibilityConverter}}">
                     <GroupBox Header="Savegames" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
@@ -123,7 +116,7 @@
                                     Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </StackPanel>
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
                 <ContentControl Margin="0 16 0 0"
                                 Content="{Binding Manage}"

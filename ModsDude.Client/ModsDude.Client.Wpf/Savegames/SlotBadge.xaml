@@ -13,7 +13,7 @@
          say something is wrong. -->
     <Border x:Name="Frame"
             Width="44" Height="44"
-            CornerRadius="6"
+            CornerRadius="{StaticResource BadgeCornerRadius}"
             Background="{DynamicResource AccentFillColorDefaultBrush}">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
             <TextBlock x:Name="Caption"

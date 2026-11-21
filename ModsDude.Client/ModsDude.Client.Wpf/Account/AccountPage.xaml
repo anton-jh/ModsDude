@@ -11,16 +11,14 @@
       d:DataContext="{d:DesignInstance account:AccountPageViewModel, IsDesignTimeCreatable=False}"
       Title="AccountPage">
 
-    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+    <shared:Surface Style="{StaticResource PagePane}">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
                 <navigation:PageTitle Text="Account" />
 
                 <!-- How everybody else sees you. Both change here, for every teammate, at once. -->
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16">
+                <shared:Surface Style="{StaticResource Card}">
                     <GroupBox Header="Profile" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
@@ -78,13 +76,10 @@
 
                         </StackPanel>
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
                 <!-- How the user signs in. Changed on the server's account pages, in the browser. -->
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16"
-                        Margin="0 16 0 0">
+                <shared:Surface Style="{StaticResource Card}" Margin="0 16 0 0">
                     <GroupBox Header="Sign-in" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
@@ -115,9 +110,9 @@
 
                         </StackPanel>
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
             </StackPanel>
         </ScrollViewer>
-    </Border>
+    </shared:Surface>
 </shared:AppPage>

@@ -11,7 +11,7 @@
       Title="ProfileModsPage"
       FontSize="14">
 
-    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+    <Border Style="{StaticResource PageBody}">
         <Grid RowDefinitions="auto *">
 
             <TextBlock Grid.Row="0"
@@ -20,11 +20,7 @@
                        TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                        Text="What this profile pins, and what syncing it puts in your mod folder. Guests cannot change the list - ask an admin for a higher membership level to edit it." />
 
-            <Border Grid.Row="1"
-                    CornerRadius="6"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+            <Border Style="{StaticResource InsetWell}" Grid.Row="1">
                 <Grid>
 
                     <!-- The same row as the repo's mod list and the editor, rendered by the implicit

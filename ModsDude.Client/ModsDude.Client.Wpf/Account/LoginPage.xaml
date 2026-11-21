@@ -10,12 +10,10 @@
       d:DataContext="{d:DesignInstance account:LoginPageViewModel, IsDesignTimeCreatable=False}"
       Title="LoginPage">
 
-    <Border Width="440"
-            HorizontalAlignment="Center" VerticalAlignment="Center"
-            CornerRadius="{StaticResource OverlayCornerRadius}"
-            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-            BorderThickness="1">
+    <shared:Surface Style="{StaticResource ModalSurface}"
+                    Width="440"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
 
         <Grid RowDefinitions="* auto">
             <StackPanel Grid.Row="0" Orientation="Vertical" Margin="24 32 24 24">
@@ -36,8 +34,7 @@
 
             </StackPanel>
 
-            <Border Grid.Row="1"
-                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+            <Border Style="{StaticResource ModalFooter}" Grid.Row="1">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="24">
                     <Button Content="Create account"
                             Command="{Binding CreateAccountCommand}"
@@ -48,5 +45,5 @@
                 </StackPanel>
             </Border>
         </Grid>
-    </Border>
+    </shared:Surface>
 </shared:AppPage>

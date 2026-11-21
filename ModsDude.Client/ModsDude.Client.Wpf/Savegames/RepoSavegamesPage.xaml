@@ -186,7 +186,7 @@
 
     </shared:AppPage.Resources>
 
-    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+    <Border Style="{StaticResource PageBody}">
         <Grid RowDefinitions="auto auto *">
 
             <navigation:PageTitle Grid.Row="0" Text="Saves" />
@@ -207,12 +207,9 @@
             <Grid Grid.Row="2" ColumnDefinitions="420 *">
 
                 <!-- The saves. -->
-                <Border Grid.Column="0"
-                        Margin="0 0 12 0"
-                        CornerRadius="6"
-                        BorderThickness="1"
-                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                <shared:Surface Style="{StaticResource Card}" Padding="0"
+                                Grid.Column="0"
+                                Margin="0 0 12 0">
                     <Grid RowDefinitions="* auto auto">
 
                         <ListBox Grid.Row="0"
@@ -464,14 +461,10 @@
                             </StackPanel>
                         </Border>
                     </Grid>
-                </Border>
+                </shared:Surface>
 
                 <!-- Its history: snapshots and checkouts as one column. -->
-                <Border Grid.Column="1"
-                        CornerRadius="6"
-                        BorderThickness="1"
-                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                <shared:Surface Style="{StaticResource Card}" Padding="0" Grid.Column="1">
                     <Grid RowDefinitions="auto * auto auto"
                           Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
 
@@ -663,7 +656,7 @@
                                     Visibility="{Binding CanPruneSnapshots, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </StackPanel>
                     </Grid>
-                </Border>
+                </shared:Surface>
             </Grid>
 
         </Grid>

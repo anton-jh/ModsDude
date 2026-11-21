@@ -1,6 +1,7 @@
 <UserControl x:Class="ModsDude.Client.Wpf.Shell.Toasts.ToastHost"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:toasts="clr-namespace:ModsDude.Client.Wpf.Shell.Toasts"
@@ -25,24 +26,18 @@
                   Focusable="False">
         <ItemsControl.ItemTemplate>
             <DataTemplate DataType="{x:Type toasts:ToastViewModel}">
-                <Border MinWidth="260" MaxWidth="560"
-                        Margin="0 4 0 0"
-                        Padding="16 10 10 10"
-                        CornerRadius="6"
-                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-                        MouseEnter="OnToastMouseEnter"
-                        MouseLeave="OnToastMouseLeave">
-                    <Border.Effect>
-                        <DropShadowEffect Color="#66000000" BlurRadius="12" ShadowDepth="2" />
-                    </Border.Effect>
+                <shared:Surface MinWidth="260"
+                                MaxWidth="560"
+                                Margin="0 4 0 0"
+                                Padding="16 10 10 10"
+                                MouseEnter="OnToastMouseEnter"
+                                MouseLeave="OnToastMouseLeave">
 
                     <!-- The left edge says how much it matters, as on the notice cards. Both values
                          are set by the style and neither on the element: a local value would outrank
                          the trigger. -->
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="BorderThickness" Value="1" />
-                            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+                    <shared:Surface.Style>
+                        <Style TargetType="shared:Surface" BasedOn="{StaticResource FloatingSurface}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Severity}" Value="Warning">
                                     <Setter Property="BorderThickness" Value="4 1 1 1" />
@@ -50,7 +45,7 @@
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
-                    </Border.Style>
+                    </shared:Surface.Style>
 
                     <Grid ColumnDefinitions="* auto auto">
                         <TextBlock Grid.Column="0"
@@ -94,7 +89,7 @@
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                         </Button>
                     </Grid>
-                </Border>
+                </shared:Surface>
             </DataTemplate>
         </ItemsControl.ItemTemplate>
     </ItemsControl>

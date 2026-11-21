@@ -2,6 +2,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:account="clr-namespace:ModsDude.Client.Wpf.Account"
                     xmlns:behaviors="clr-namespace:ModsDude.Client.Wpf.Shared.Behaviors"
+                    xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
                     xmlns:sidebar="clr-namespace:ModsDude.Client.Wpf.Shell.Sidebar"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
@@ -9,20 +10,30 @@
         <ResourceDictionary Source="../../Shared/Resources/Controls.xaml" />
     </ResourceDictionary.MergedDictionaries>
 
-    <!-- What a repo or a profile is drawn as: a plain square with its first letter. Where the game follows
-         the profile - or where a repo's does and has drifted - the letter gives way to the status: green
-         check, amber warning, or an arrow that turns while an apply runs. Sized by whoever places it; the
-         letter takes the placing control's font size. -->
+    <!-- What a repo or a profile is drawn as: its first letter, in the accent while it is the page showing.
+         Where the game follows the profile - or where a repo's does and has drifted - the letter gives way
+         to the status: green check, amber warning, or an arrow that turns while an apply runs. The square
+         behind it is drawn by whoever places it, at whatever size; the letter takes the placing control's
+         font size. -->
     <DataTemplate x:Key="EntityTile" DataType="{x:Type sidebar:MenuItemViewModel}">
-        <Border CornerRadius="6"
-                Background="{DynamicResource ControlFillColorSecondaryBrush}">
+        <Border Background="Transparent">
             <Grid>
                 <TextBlock Text="{Binding Initial}"
                            FontWeight="SemiBold"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Visibility="{Binding HasStatus, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                           Visibility="{Binding HasStatus, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
 
                 <TextBlock Text="{Binding DisplayIcon}"
                            FontFamily="{DynamicResource SymbolThemeFontFamily}"
@@ -83,19 +94,54 @@
              own TextBlock, because WPF suppresses a tooltip on anything disabled unless
              ShowOnDisabled says otherwise - and a closed entry whose explanation cannot be
              read is worse than no explanation at all. -->
+        <!-- The row is drawn here rather than by the theme: the open entry is a raised card on the sheet
+             with the accent down its left edge, the way the rail marks its own. -->
         <Setter Property="ItemContainerStyle">
             <Setter.Value>
-                <Style TargetType="ListViewItem" BasedOn="{StaticResource {x:Type ListViewItem}}">
+                <Style TargetType="ListViewItem">
                     <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
                     <Setter Property="ToolTip" Value="{Binding ToolTip}" />
                     <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
                     <Setter Property="ToolTipService.InitialShowDelay" Value="200" />
                     <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
                     <Setter Property="Cursor" Value="Hand" />
-                    <!-- The theme's row is at least 88 wide and pads itself 16 and 12 either side; the row
-                         lays itself out instead. -->
-                    <Setter Property="MinWidth" Value="0" />
-                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0 1" />
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListViewItem">
+                                <Grid>
+                                    <Border x:Name="Row"
+                                            CornerRadius="{DynamicResource ControlCornerRadius}"
+                                            BorderThickness="1"
+                                            BorderBrush="Transparent"
+                                            Background="Transparent">
+                                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                                    </Border>
+                                    <Border x:Name="Bar"
+                                            Width="3" Height="20"
+                                            CornerRadius="0 3 3 0"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            Background="{DynamicResource AccentBrush}"
+                                            Visibility="Hidden" />
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Row" Property="Background" Value="{DynamicResource CardBrush}" />
+                                        <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource RaisedStrokeBrush}" />
+                                        <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
                 </Style>
             </Setter.Value>
         </Setter>
@@ -154,29 +200,44 @@
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"
                                        FontFamily="{DynamicResource SymbolThemeFontFamily}"
-                                       FontSize="14"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                       FontSize="14">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsEntity}" Value="True">
                                                 <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
+                                                <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
 
-                            <ContentControl Grid.Column="0"
-                                            Width="28" Height="28"
-                                            Margin="0 14"
-                                            FontSize="13"
-                                            Focusable="False"
-                                            HorizontalAlignment="Center"
-                                            VerticalAlignment="Center"
-                                            Content="{Binding}"
-                                            ContentTemplate="{StaticResource EntityTile}"
-                                            Visibility="{Binding IsEntity, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Border Grid.Column="0"
+                                    Width="28" Height="28"
+                                    Margin="0 14"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    CornerRadius="7"
+                                    Visibility="{Binding IsEntity, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{DynamicResource RaisedBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <ContentControl FontSize="13"
+                                                Focusable="False"
+                                                Content="{Binding}"
+                                                ContentTemplate="{StaticResource EntityTile}" />
+                            </Border>
 
                             <!-- Something here wants a look. Sits on the top-right corner of the glyph or the
                                  entity's tile, so the row keeps its height; what it means is in the tooltip. -->
@@ -266,8 +327,8 @@
                     <Border Margin="0 2"
                             Padding="10 6 16 6"
                             MaxWidth="320"
-                            CornerRadius="0 6 6 0"
-                            Background="{DynamicResource SidebarHoverBrush}">
+                            CornerRadius="0 12 12 0"
+                            Background="{DynamicResource CardBrush}">
                         <TextBlock VerticalAlignment="Center"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -282,8 +343,8 @@
          carries it on. -->
     <Style x:Key="RailBand" TargetType="Border">
         <Setter Property="Margin" Value="6 2 0 2" />
-        <Setter Property="CornerRadius" Value="6 0 0 6" />
-        <Setter Property="Background" Value="{DynamicResource SidebarHoverBrush}" />
+        <Setter Property="CornerRadius" Value="12 0 0 12" />
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
         <Setter Property="Visibility" Value="Hidden" />
     </Style>
 
@@ -294,7 +355,7 @@
             <Setter.Value>
                 <ControlTemplate>
                     <Border Margin="6 2 0 2"
-                            CornerRadius="6 0 0 6"
+                            CornerRadius="12 0 0 12"
                             BorderThickness="2 2 0 2"
                             BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
                 </ControlTemplate>
@@ -302,16 +363,16 @@
         </Setter>
     </Style>
 
-    <!-- The frame every rail picture sits in. Outlined for a place the app offers, so those never read
-         as one more repo; a repo's filled square sits inside it with the outline off. The accent while
-         it is the page showing. The border leaves an even inner width, so a 16px glyph centres on a whole
-         pixel. -->
+    <!-- The frame every rail picture sits in. Outlined and empty for a place the app offers, so those
+         never read as one more repo; filled for a repo, with its letter. The accent's tint while it is the
+         page showing. The border leaves an even inner width, so a 16px glyph centres on a whole pixel. -->
     <Style x:Key="RailTile" TargetType="Border">
-        <Setter Property="Width" Value="36" />
-        <Setter Property="Height" Value="36" />
-        <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="BorderThickness" Value="2" />
-        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource RaisedStrokeBrush}" />
     </Style>
 
     <Style x:Key="RailGlyph" TargetType="TextBlock" BasedOn="{StaticResource CenteredGlyph}">
@@ -336,13 +397,15 @@
         </Border>
         <DataTemplate.Triggers>
             <DataTrigger Binding="{Binding IsEntity}" Value="True">
-                <Setter TargetName="Tile" Property="BorderBrush" Value="Transparent" />
+                <Setter TargetName="Tile" Property="Background" Value="{DynamicResource ContentBrush}" />
+                <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource ShellStrokeBrush}" />
                 <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
                 <Setter TargetName="Entity" Property="Visibility" Value="Visible" />
             </DataTrigger>
             <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
-                <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                <Setter TargetName="Tile" Property="Background" Value="{DynamicResource AccentTintBrush}" />
+                <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
+                <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
             </DataTrigger>
         </DataTemplate.Triggers>
     </DataTemplate>
@@ -350,7 +413,7 @@
     <!-- The account: the user's own avatar in a round frame, or a person glyph until the server has
          answered with their colour. -->
     <DataTemplate x:Key="RailAccountTemplate" DataType="{x:Type account:AccountItemViewModel}">
-        <Border x:Name="Tile" Style="{StaticResource RailTile}" CornerRadius="18" BorderBrush="Transparent">
+        <Border x:Name="Tile" Style="{StaticResource RailTile}" CornerRadius="20" BorderBrush="Transparent">
             <Grid>
                 <Grid Visibility="{Binding Account.HasAvatar, Converter={StaticResource BoolToVisibilityConverter}}">
                     <account:UserAvatar Width="30" Height="30" FontSize="14"
@@ -362,7 +425,7 @@
         </Border>
         <DataTemplate.Triggers>
             <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True">
-                <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
             </DataTrigger>
         </DataTemplate.Triggers>
     </DataTemplate>
@@ -401,14 +464,17 @@
                             <ControlTemplate TargetType="ListViewItem">
                                 <Grid Background="Transparent">
                                     <Border x:Name="Band" Style="{StaticResource RailBand}" />
-                                    <!-- Which page is showing, on the rail's edge. -->
-                                    <Border x:Name="Indicator"
-                                            Width="4" Height="20"
-                                            CornerRadius="0 2 2 0"
-                                            HorizontalAlignment="Left"
-                                            VerticalAlignment="Center"
-                                            Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                            Visibility="Hidden" />
+                                    <!-- Which page is showing, on the rail's edge, glowing. -->
+                                    <shared:Surface x:Name="Indicator"
+                                                    Width="3" Height="24"
+                                                    CornerRadius="0 3 3 0"
+                                                    HorizontalAlignment="Left"
+                                                    VerticalAlignment="Center"
+                                                    Background="{DynamicResource AccentBrush}"
+                                                    ShadowColor="{StaticResource AccentGlowColor}"
+                                                    ShadowBlur="10"
+                                                    ShadowOpacity="0.6"
+                                                    Visibility="Hidden" />
                                     <ContentPresenter x:Name="Content"
                                                       Margin="0 6"
                                                       HorizontalAlignment="Center"

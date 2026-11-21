@@ -52,11 +52,7 @@
                        StaysOpen="False"
                        AllowsTransparency="True"
                        MinWidth="150">
-                    <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
-                            Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
-                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            Padding="4">
+                    <Border Style="{StaticResource PopupSurface}">
                         <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
                             <ItemsControl x:Name="Options" ItemsSource="{Binding Versions}">
                                 <ItemsControl.ItemTemplate>
@@ -220,11 +216,7 @@
         </DataTemplate>
 
         <!-- The box a list sits in, and the target a drag from the other list lands on. -->
-        <Style x:Key="DropFrame" TargetType="Border">
-            <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
-            <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorBaseBrush}" />
+        <Style x:Key="DropFrame" TargetType="Border" BasedOn="{StaticResource InsetWell}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Child.(editor:ModListDrag.IsOver), RelativeSource={RelativeSource Self}}" Value="True">
                     <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
@@ -244,7 +236,7 @@
 
     <Grid RowDefinitions="*, auto">
 
-        <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <Border Style="{StaticResource PageBody}">
             <Grid RowDefinitions="auto auto *">
 
                 <!-- One search box over both lists. -->
@@ -259,20 +251,18 @@
                                Style="{StaticResource Placeholder}" />
                 </Grid>
 
-                <Border Grid.Row="1"
+                <Border Style="{StaticResource InsetWell}"
+                        Grid.Row="1"
                         Margin="0 0 0 12"
                         Padding="12 8"
-                        CornerRadius="4"
-                        Background="{DynamicResource ControlFillColorSecondaryBrush}"
                         Visibility="{Binding IsWaitingForSave, Converter={StaticResource BoolToVisibilityConverter}}">
                     <TextBlock Text="This profile is being saved. The editor opens for changes when the save is done." />
                 </Border>
 
-                <Border Grid.Row="1"
+                <Border Style="{StaticResource InsetWell}"
+                        Grid.Row="1"
                         Margin="0 0 0 12"
                         Padding="12 8"
-                        CornerRadius="4"
-                        Background="{DynamicResource ControlFillColorSecondaryBrush}"
                         Visibility="{Binding HasLoadFailed, Converter={StaticResource BoolToVisibilityConverter}}">
                     <DockPanel>
                         <Button DockPanel.Dock="Right"
@@ -285,713 +275,718 @@
                 <Grid Grid.Row="2" ColumnDefinitions="* 16 *">
 
                     <!-- What the profile does not hold: everything the enabled sources offer. -->
-                    <Grid Grid.Column="0" RowDefinitions="auto auto auto * auto auto">
+                    <shared:Surface Grid.Column="0" Style="{StaticResource Card}" Padding="14">
+                        <Grid RowDefinitions="auto auto auto * auto auto">
 
-                        <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="auto * auto auto">
+                            <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="auto * auto auto">
 
-                            <CheckBox Grid.Column="0"
-                                      Margin="12 0 10 0"
-                                      VerticalAlignment="Center"
-                                      IsChecked="{Binding AvailableSelection.AllShownSelected, Mode=TwoWay}"
-                                      IsEnabled="{Binding CanEdit}"
-                                      ToolTip="Select everything this list is showing" />
+                                <CheckBox Grid.Column="0"
+                                          Margin="12 0 10 0"
+                                          VerticalAlignment="Center"
+                                          IsChecked="{Binding AvailableSelection.AllShownSelected, Mode=TwoWay}"
+                                          IsEnabled="{Binding CanEdit}"
+                                          ToolTip="Select everything this list is showing" />
 
-                            <TextBlock Grid.Column="1"
-                                       Text="Not in this profile"
-                                       VerticalAlignment="Center"
-                                       ToolTip="What the enabled sources offer that this profile does not hold."
-                                       Style="{DynamicResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Grid.Column="1"
+                                           Text="Not in this profile"
+                                           VerticalAlignment="Center"
+                                           ToolTip="What the enabled sources offer that this profile does not hold."
+                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
 
-                            <!-- Ignored mods: hidden until shown, dimmed then. Crossed out while hidden. -->
-                            <ToggleButton Grid.Column="2"
-                                          Margin="8 0 0 0"
-                                          Width="Auto"
-                                          MinWidth="36"
-                                          Padding="8 0"
-                                          Style="{DynamicResource SubtleIconToggleButton}"
-                                          IsChecked="{Binding ShowIgnored, Mode=TwoWay}"
-                                          ToolTip="{Binding Summary.IgnoredToggleTooltip}"
-                                          ToolTipService.ShowDuration="20000">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock VerticalAlignment="Center">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Text" Value="&#xED1A;" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ShowIgnored}" Value="True">
-                                                        <Setter Property="Text" Value="&#xE890;" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <TextBlock Margin="6 0 0 0"
-                                               VerticalAlignment="Center"
-                                               FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType=Page}}"
-                                               Text="{Binding Summary.IgnoredText}"
-                                               Visibility="{Binding Summary.HasIgnored, Converter={StaticResource BoolToVisibilityConverter}}" />
-                                </StackPanel>
-                            </ToggleButton>
+                                <!-- Ignored mods: hidden until shown, dimmed then. Crossed out while hidden. -->
+                                <ToggleButton Grid.Column="2"
+                                              Margin="8 0 0 0"
+                                              Width="Auto"
+                                              MinWidth="36"
+                                              Padding="8 0"
+                                              Style="{DynamicResource SubtleIconToggleButton}"
+                                              IsChecked="{Binding ShowIgnored, Mode=TwoWay}"
+                                              ToolTip="{Binding Summary.IgnoredToggleTooltip}"
+                                              ToolTipService.ShowDuration="20000">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="&#xED1A;" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ShowIgnored}" Value="True">
+                                                            <Setter Property="Text" Value="&#xE890;" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Margin="6 0 0 0"
+                                                   VerticalAlignment="Center"
+                                                   FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                   Text="{Binding Summary.IgnoredText}"
+                                                   Visibility="{Binding Summary.HasIgnored, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    </StackPanel>
+                                </ToggleButton>
 
-                            <TextBlock Grid.Column="3"
-                                       Margin="12 0 0 0"
-                                       VerticalAlignment="Center"
-                                       Text="{Binding Summary.AvailableCountText}"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                        </Grid>
+                                <TextBlock Grid.Column="3"
+                                           Margin="12 0 0 0"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding Summary.AvailableCountText}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </Grid>
 
-                        <!-- The sources. A ✕ unloads one, taking everything it supplied. A folder
-                             opens in Explorer from its menu, even while editing is locked, since
-                             that changes nothing. -->
-                        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0 0 0 8" IsEnabled="{Binding CanEdit}">
+                            <!-- The sources. A ✕ unloads one, taking everything it supplied. A folder
+                                 opens in Explorer from its menu, even while editing is locked, since
+                                 that changes nothing. -->
+                            <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0 0 0 8" IsEnabled="{Binding CanEdit}">
 
-                            <ItemsControl ItemsSource="{Binding Sources.Chips}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel Orientation="Horizontal" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type editor:ModSourceViewModel}">
-                                        <ToggleButton Style="{StaticResource SourceChip}"
-                                                      Margin="0 0 6 6"
-                                                      ToolTip="{Binding Tooltip}"
-                                                      ToolTipService.ShowDuration="20000"
-                                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                                      Tag="{Binding DataContext.Sources, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                      ContextMenuService.IsEnabled="{Binding IsFolder}"
-                                                      ContextMenuService.ShowOnDisabled="True">
-                                            <ToggleButton.ContextMenu>
-                                                <ContextMenu>
-                                                    <MenuItem Header="Open in Explorer"
-                                                              Command="{Binding PlacementTarget.Tag.OpenInExplorerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                              CommandParameter="{Binding}" />
-                                                </ContextMenu>
-                                            </ToggleButton.ContextMenu>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Name}"
-                                                           MaxWidth="160"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           VerticalAlignment="Center" />
-                                                <TextBlock Text="{Binding ChipCountText}"
-                                                           Margin="6 0 0 0"
-                                                           Opacity="0.7"
-                                                           VerticalAlignment="Center" />
-                                                <Button Margin="6 0 -2 0"
-                                                        Padding="2 0"
-                                                        VerticalAlignment="Center"
-                                                        Style="{DynamicResource SubtleIconButton}"
-                                                        Width="18" Height="18"
-                                                        FontSize="10"
-                                                        Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
-                                                        Content="&#xE711;"
-                                                        ToolTip="{Binding RemoveTooltip}"
-                                                        Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                        Command="{Binding DataContext.Sources.UnloadCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                        CommandParameter="{Binding}" />
-                                            </StackPanel>
-                                        </ToggleButton>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <Button Style="{StaticResource SourceActionChip}"
-                                    Margin="0 0 6 6"
-                                    Content="+ folder"
-                                    ToolTip="Scanned for this session only, and never written to disk"
-                                    Command="{Binding Sources.AddFolderCommand}" />
-
-                            <Button Style="{StaticResource SourceActionChip}"
-                                    Margin="0 0 6 6"
-                                    Content="+ profile"
-                                    ToolTip="Read another profile's list as a source, to see what it holds and this one does not"
-                                    Command="{Binding Sources.AddProfileCommand}" />
-
-                            <Button Style="{StaticResource SourceActionChip}"
-                                    Margin="0 0 6 6"
-                                    Content="&#xE72C;"
-                                    FontFamily="{DynamicResource SymbolThemeFontFamily}"
-                                    ToolTip="Rescan every folder and look up every remote source again"
-                                    Command="{Binding Sources.RescanAllCommand}" />
-                        </WrapPanel>
-
-                        <Grid Grid.Row="2" Margin="0 0 0 8" ColumnDefinitions="* auto">
-                            <WrapPanel Grid.Column="0" Orientation="Horizontal">
-                                <RadioButton Style="{StaticResource FilterChip}"
-                                             Content="All"
-                                             IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=All}" />
-                                <RadioButton Style="{StaticResource FilterChip}"
-                                             Content="New to the repo"
-                                             ToolTip="Not registered here yet. Saving imports these."
-                                             IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=New}" />
-                                <RadioButton Style="{StaticResource FilterChip}"
-                                             Content="Not settled"
-                                             ToolTip="The order between this version and what the repo holds is not settled. Importing it will ask which comes first."
-                                             IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Unordered}" />
-                            </WrapPanel>
-
-                            <ContentControl Grid.Column="1" Margin="12 0 0 0" VerticalAlignment="Top" Content="{Binding AvailableSorting}" />
-                        </Grid>
-
-                        <Grid Grid.Row="3">
-                            <Border Style="{StaticResource DropFrame}">
-                                <ListBox x:Name="AvailableList"
-                                         Style="{StaticResource ModList}"
-                                         ItemsSource="{Binding AvailableRows}"
-                                         behaviors:ListSelection.Controller="{Binding AvailableSelection}"
-                                         editor:ModListDrag.Kind="Available"
-                                         editor:ModListDrag.DropCommand="{Binding RemoveSelectedCommand}">
-
-                                    <ListBox.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Add the selected mods" Command="{Binding AddSelectedCommand}" />
-                                            <MenuItem Header="Ignore the selected mods" Command="{Binding IgnoreSelectedCommand}" />
-                                            <MenuItem Header="Dismiss the selected versions" Command="{Binding DismissSelectedVersionsCommand}" />
-                                            <Separator />
-                                            <MenuItem Header="Select everything shown" Command="{Binding AvailableSelection.SelectAllShownCommand}" />
-                                            <MenuItem Header="Clear the selection" Command="{Binding AvailableSelection.ClearSelectionCommand}" />
-                                        </ContextMenu>
-                                    </ListBox.ContextMenu>
-
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type editor:AvailableModRowViewModel}">
-                                            <Grid ColumnDefinitions="* auto auto">
-                                                <Grid.Style>
-                                                    <Style TargetType="Grid">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsIgnored}" Value="True">
-                                                                <Setter Property="Opacity" Value="0.55" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Grid.Style>
-
-                                                <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
-
-                                                <TextBlock Grid.Column="1"
-                                                           Margin="8 0"
-                                                           VerticalAlignment="Center"
-                                                           Text="{Binding SortCaption}"
-                                                           ToolTip="{Binding SortTooltip}"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Visibility="{Binding HasSortCaption, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
-                                                            IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
-
-                                                    <Button Margin="0 0 4 0"
-                                                            ToolTip="{Binding IgnoreTooltip}"
-                                                            ToolTipService.ShowDuration="20000"
-                                                            Command="{Binding DataContext.ToggleIgnoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                            CommandParameter="{Binding}">
-                                                        <Button.Style>
-                                                            <Style TargetType="Button" BasedOn="{StaticResource SubtleIconButton}">
-                                                                <Setter Property="Content" Value="&#xED1A;" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsIgnored}" Value="True">
-                                                                        <Setter Property="Content" Value="&#xE890;" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Button.Style>
-                                                    </Button>
-
-                                                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VersionPicker}" ToolTip="Which version this would add" />
-
-                                                    <Button Style="{DynamicResource SubtleIconButton}"
-                                                            Margin="0 0 8 0"
-                                                            Content="&#xE710;"
-                                                            ToolTip="Add to this profile"
-                                                            Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                <ItemsControl ItemsSource="{Binding Sources.Chips}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type editor:ModSourceViewModel}">
+                                            <ToggleButton Style="{StaticResource SourceChip}"
+                                                          Margin="0 0 6 6"
+                                                          ToolTip="{Binding Tooltip}"
+                                                          ToolTipService.ShowDuration="20000"
+                                                          IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                                          Tag="{Binding DataContext.Sources, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                          ContextMenuService.IsEnabled="{Binding IsFolder}"
+                                                          ContextMenuService.ShowOnDisabled="True">
+                                                <ToggleButton.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="Open in Explorer"
+                                                                  Command="{Binding PlacementTarget.Tag.OpenInExplorerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                  CommandParameter="{Binding}" />
+                                                    </ContextMenu>
+                                                </ToggleButton.ContextMenu>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               MaxWidth="160"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding ChipCountText}"
+                                                               Margin="6 0 0 0"
+                                                               Opacity="0.7"
+                                                               VerticalAlignment="Center" />
+                                                    <Button Margin="6 0 -2 0"
+                                                            Padding="2 0"
+                                                            VerticalAlignment="Center"
+                                                            Style="{DynamicResource SubtleIconButton}"
+                                                            Width="18" Height="18"
+                                                            FontSize="10"
+                                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
+                                                            Content="&#xE711;"
+                                                            ToolTip="{Binding RemoveTooltip}"
+                                                            Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                            Command="{Binding DataContext.Sources.UnloadCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                             CommandParameter="{Binding}" />
                                                 </StackPanel>
-                                            </Grid>
+                                            </ToggleButton>
                                         </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Button Style="{StaticResource SourceActionChip}"
+                                        Margin="0 0 6 6"
+                                        Content="+ folder"
+                                        ToolTip="Scanned for this session only, and never written to disk"
+                                        Command="{Binding Sources.AddFolderCommand}" />
+
+                                <Button Style="{StaticResource SourceActionChip}"
+                                        Margin="0 0 6 6"
+                                        Content="+ profile"
+                                        ToolTip="Read another profile's list as a source, to see what it holds and this one does not"
+                                        Command="{Binding Sources.AddProfileCommand}" />
+
+                                <Button Style="{StaticResource SourceActionChip}"
+                                        Margin="0 0 6 6"
+                                        Content="&#xE72C;"
+                                        FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                        ToolTip="Rescan every folder and look up every remote source again"
+                                        Command="{Binding Sources.RescanAllCommand}" />
+                            </WrapPanel>
+
+                            <Grid Grid.Row="2" Margin="0 0 0 8" ColumnDefinitions="* auto">
+                                <WrapPanel Grid.Column="0" Orientation="Horizontal">
+                                    <RadioButton Style="{StaticResource FilterChip}"
+                                                 Content="All"
+                                                 IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=All}" />
+                                    <RadioButton Style="{StaticResource FilterChip}"
+                                                 Content="New to the repo"
+                                                 ToolTip="Not registered here yet. Saving imports these."
+                                                 IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=New}" />
+                                    <RadioButton Style="{StaticResource FilterChip}"
+                                                 Content="Not settled"
+                                                 ToolTip="The order between this version and what the repo holds is not settled. Importing it will ask which comes first."
+                                                 IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Unordered}" />
+                                </WrapPanel>
+
+                                <ContentControl Grid.Column="1" Margin="12 0 0 0" VerticalAlignment="Top" Content="{Binding AvailableSorting}" />
+                            </Grid>
+
+                            <Grid Grid.Row="3">
+                                <Border Style="{StaticResource DropFrame}">
+                                    <ListBox x:Name="AvailableList"
+                                             Style="{StaticResource ModList}"
+                                             ItemsSource="{Binding AvailableRows}"
+                                             behaviors:ListSelection.Controller="{Binding AvailableSelection}"
+                                             editor:ModListDrag.Kind="Available"
+                                             editor:ModListDrag.DropCommand="{Binding RemoveSelectedCommand}">
+
+                                        <ListBox.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Add the selected mods" Command="{Binding AddSelectedCommand}" />
+                                                <MenuItem Header="Ignore the selected mods" Command="{Binding IgnoreSelectedCommand}" />
+                                                <MenuItem Header="Dismiss the selected versions" Command="{Binding DismissSelectedVersionsCommand}" />
+                                                <Separator />
+                                                <MenuItem Header="Select everything shown" Command="{Binding AvailableSelection.SelectAllShownCommand}" />
+                                                <MenuItem Header="Clear the selection" Command="{Binding AvailableSelection.ClearSelectionCommand}" />
+                                            </ContextMenu>
+                                        </ListBox.ContextMenu>
+
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type editor:AvailableModRowViewModel}">
+                                                <Grid ColumnDefinitions="* auto auto">
+                                                    <Grid.Style>
+                                                        <Style TargetType="Grid">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsIgnored}" Value="True">
+                                                                    <Setter Property="Opacity" Value="0.55" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Grid.Style>
+
+                                                    <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
+
+                                                    <TextBlock Grid.Column="1"
+                                                               Margin="8 0"
+                                                               VerticalAlignment="Center"
+                                                               Text="{Binding SortCaption}"
+                                                               ToolTip="{Binding SortTooltip}"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Visibility="{Binding HasSortCaption, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
+                                                                IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
+
+                                                        <Button Margin="0 0 4 0"
+                                                                ToolTip="{Binding IgnoreTooltip}"
+                                                                ToolTipService.ShowDuration="20000"
+                                                                Command="{Binding DataContext.ToggleIgnoreCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                                CommandParameter="{Binding}">
+                                                            <Button.Style>
+                                                                <Style TargetType="Button" BasedOn="{StaticResource SubtleIconButton}">
+                                                                    <Setter Property="Content" Value="&#xED1A;" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsIgnored}" Value="True">
+                                                                            <Setter Property="Content" Value="&#xE890;" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Button.Style>
+                                                        </Button>
+
+                                                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VersionPicker}" ToolTip="Which version this would add" />
+
+                                                        <Button Style="{DynamicResource SubtleIconButton}"
+                                                                Margin="0 0 8 0"
+                                                                Content="&#xE710;"
+                                                                ToolTip="Add to this profile"
+                                                                Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                                CommandParameter="{Binding}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Border>
+
+                                <TextBlock Text="Reading the repo and scanning the sources…"
+                                           Style="{StaticResource EmptyListText}"
+                                           Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            </Grid>
+
+                            <Border Grid.Row="4"
+                                    Style="{StaticResource SelectionBar}"
+                                    Visibility="{Binding AvailableSelection.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid RowDefinitions="auto auto auto">
+
+                                    <Grid Grid.Row="0" ColumnDefinitions="* auto">
+                                        <Button Grid.Column="0"
+                                                HorizontalAlignment="Stretch"
+                                                Style="{DynamicResource AccentButtonStyle}"
+                                                Content="{Binding AvailableSelection.ActionText}"
+                                                Command="{Binding AddSelectedCommand}" />
+                                        <Button Grid.Column="1"
+                                                Margin="8 0 0 0"
+                                                Content="Clear"
+                                                Command="{Binding AvailableSelection.ClearSelectionCommand}" />
+                                    </Grid>
+
+                                    <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* * *">
+                                        <Button Grid.Column="0"
+                                                Margin="0 0 4 0"
+                                                HorizontalAlignment="Stretch"
+                                                Content="{Binding IgnoreSelectedText}"
+                                                ToolTip="Hide the picked mods from this list"
+                                                Command="{Binding IgnoreSelectedCommand}" />
+                                        <Button Grid.Column="1"
+                                                Margin="4 0"
+                                                HorizontalAlignment="Stretch"
+                                                Content="{Binding UnignoreSelectedText}"
+                                                ToolTip="Stop ignoring the picked mods"
+                                                Command="{Binding UnignoreSelectedCommand}" />
+                                        <Button Grid.Column="2"
+                                                Margin="4 0 0 0"
+                                                HorizontalAlignment="Stretch"
+                                                Content="{Binding DismissSelectedVersionsText}"
+                                                ToolTip="Never offer the version each picked row shows as an update"
+                                                Command="{Binding DismissSelectedVersionsCommand}" />
+                                    </Grid>
+
+                                    <Grid Grid.Row="2"
+                                          Margin="0 8 0 0"
+                                          ColumnDefinitions="* auto"
+                                          Visibility="{Binding AvailableSelection.HasHidden, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <TextBlock Grid.Column="0"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   Text="{Binding AvailableSelection.HiddenText}"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        <Button Grid.Column="1"
+                                                Margin="8 0 0 0"
+                                                Content="{Binding AvailableSelection.DeselectHiddenText}"
+                                                Command="{Binding AvailableSelection.DeselectHiddenCommand}" />
+                                    </Grid>
+                                </Grid>
                             </Border>
 
-                            <TextBlock Text="Reading the repo and scanning the sources…"
-                                       Style="{StaticResource EmptyListText}"
-                                       Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
-                        </Grid>
-
-                        <Border Grid.Row="4"
-                                Style="{StaticResource SelectionBar}"
-                                Visibility="{Binding AvailableSelection.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <Grid RowDefinitions="auto auto auto">
-
-                                <Grid Grid.Row="0" ColumnDefinitions="* auto">
-                                    <Button Grid.Column="0"
-                                            HorizontalAlignment="Stretch"
-                                            Style="{DynamicResource AccentButtonStyle}"
-                                            Content="{Binding AvailableSelection.ActionText}"
-                                            Command="{Binding AddSelectedCommand}" />
-                                    <Button Grid.Column="1"
-                                            Margin="8 0 0 0"
-                                            Content="Clear"
-                                            Command="{Binding AvailableSelection.ClearSelectionCommand}" />
-                                </Grid>
-
-                                <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* * *">
-                                    <Button Grid.Column="0"
-                                            Margin="0 0 4 0"
-                                            HorizontalAlignment="Stretch"
-                                            Content="{Binding IgnoreSelectedText}"
-                                            ToolTip="Hide the picked mods from this list"
-                                            Command="{Binding IgnoreSelectedCommand}" />
-                                    <Button Grid.Column="1"
-                                            Margin="4 0"
-                                            HorizontalAlignment="Stretch"
-                                            Content="{Binding UnignoreSelectedText}"
-                                            ToolTip="Stop ignoring the picked mods"
-                                            Command="{Binding UnignoreSelectedCommand}" />
-                                    <Button Grid.Column="2"
-                                            Margin="4 0 0 0"
-                                            HorizontalAlignment="Stretch"
-                                            Content="{Binding DismissSelectedVersionsText}"
-                                            ToolTip="Never offer the version each picked row shows as an update"
-                                            Command="{Binding DismissSelectedVersionsCommand}" />
-                                </Grid>
-
-                                <Grid Grid.Row="2"
-                                      Margin="0 8 0 0"
-                                      ColumnDefinitions="* auto"
-                                      Visibility="{Binding AvailableSelection.HasHidden, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <TextBlock Grid.Column="0"
-                                               VerticalAlignment="Center"
-                                               TextWrapping="Wrap"
-                                               Text="{Binding AvailableSelection.HiddenText}"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    <Button Grid.Column="1"
-                                            Margin="8 0 0 0"
-                                            Content="{Binding AvailableSelection.DeselectHiddenText}"
-                                            Command="{Binding AvailableSelection.DeselectHiddenCommand}" />
-                                </Grid>
+                            <Grid Grid.Row="5" Margin="0 8 0 0" ColumnDefinitions="* * *">
+                                <Button Grid.Column="0"
+                                        Margin="0 0 4 0"
+                                        HorizontalAlignment="Stretch"
+                                        Content="Add all shown"
+                                        ToolTip="Add every mod the list above is showing"
+                                        Command="{Binding AddAllShownCommand}" />
+                                <Button Grid.Column="1"
+                                        Margin="4 0"
+                                        HorizontalAlignment="Stretch"
+                                        Content="Copy from a profile…"
+                                        ToolTip="Take the mod list from another profile in this repo"
+                                        Command="{Binding CopyFromProfileCommand}" />
+                                <Button Grid.Column="2"
+                                        Margin="4 0 0 0"
+                                        HorizontalAlignment="Stretch"
+                                        Content="Paste a list…"
+                                        ToolTip="Paste mod names or ids and select everything that matches"
+                                        Command="{Binding PasteListCommand}" />
                             </Grid>
-                        </Border>
-
-                        <Grid Grid.Row="5" Margin="0 8 0 0" ColumnDefinitions="* * *">
-                            <Button Grid.Column="0"
-                                    Margin="0 0 4 0"
-                                    HorizontalAlignment="Stretch"
-                                    Content="Add all shown"
-                                    ToolTip="Add every mod the list above is showing"
-                                    Command="{Binding AddAllShownCommand}" />
-                            <Button Grid.Column="1"
-                                    Margin="4 0"
-                                    HorizontalAlignment="Stretch"
-                                    Content="Copy from a profile…"
-                                    ToolTip="Take the mod list from another profile in this repo"
-                                    Command="{Binding CopyFromProfileCommand}" />
-                            <Button Grid.Column="2"
-                                    Margin="4 0 0 0"
-                                    HorizontalAlignment="Stretch"
-                                    Content="Paste a list…"
-                                    ToolTip="Paste mod names or ids and select everything that matches"
-                                    Command="{Binding PasteListCommand}" />
                         </Grid>
-                    </Grid>
+                    </shared:Surface>
 
                     <!-- The draft: every pin, and every saved pin it takes out. -->
-                    <Grid Grid.Column="2" RowDefinitions="auto auto auto * auto auto">
+                    <shared:Surface Grid.Column="2" Style="{StaticResource Card}" Padding="14">
+                        <Grid RowDefinitions="auto auto auto * auto auto">
 
-                        <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="auto * auto auto">
+                            <Grid Grid.Row="0" Margin="0 0 0 8" ColumnDefinitions="auto * auto auto">
 
-                            <CheckBox Grid.Column="0"
-                                      Margin="12 0 10 0"
-                                      VerticalAlignment="Center"
-                                      IsChecked="{Binding PinnedSelection.AllShownSelected, Mode=TwoWay}"
-                                      IsEnabled="{Binding CanEdit}"
-                                      ToolTip="Select everything this list is showing" />
+                                <CheckBox Grid.Column="0"
+                                          Margin="12 0 10 0"
+                                          VerticalAlignment="Center"
+                                          IsChecked="{Binding PinnedSelection.AllShownSelected, Mode=TwoWay}"
+                                          IsEnabled="{Binding CanEdit}"
+                                          ToolTip="Select everything this list is showing" />
 
-                            <TextBlock Grid.Column="1"
-                                       Text="In this profile"
-                                       VerticalAlignment="Center"
-                                       Style="{DynamicResource BodyStrongTextBlockStyle}" />
-
-                            <Button Grid.Column="2"
-                                    Margin="12 0 0 0"
-                                    Padding="0"
-                                    Style="{DynamicResource SubtleMenuButton}"
-                                    Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                    Content="{Binding Summary.ChangeSummary}"
-                                    ToolTip="Show only what this draft changes"
-                                    Visibility="{Binding Summary.HasModListChanges, Converter={StaticResource BoolToVisibilityConverter}}"
-                                    Command="{Binding ShowChangesCommand}" />
-
-                            <TextBlock Grid.Column="3"
-                                       Margin="12 0 0 0"
-                                       VerticalAlignment="Center"
-                                       Text="{Binding Summary.PinnedCountText}"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                        </Grid>
-
-                        <Grid Grid.Row="1" Margin="0 0 0 8" ColumnDefinitions="* auto">
-                            <WrapPanel Grid.Column="0" Orientation="Horizontal">
-                                <RadioButton Style="{StaticResource FilterChip}"
-                                             Content="All"
-                                             ToolTip="The draft, with what it takes out struck through"
-                                             IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=All}" />
-                                <RadioButton Style="{StaticResource FilterChip}"
-                                             Content="Result"
-                                             ToolTip="Exactly what saving would leave in the profile"
-                                             IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Result}" />
-                                <RadioButton Style="{StaticResource FilterChip}"
-                                             Content="Changes"
-                                             ToolTip="Only what differs from the saved profile"
-                                             IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Changes}" />
-                                <RadioButton Style="{StaticResource FilterChip}"
-                                             Content="Updates"
-                                             shared:FilterChip.Count="{Binding Summary.UpdatesFilterCount}"
-                                             ToolTip="Unlocked mods with a newer version - in the repo, in a folder being read, or online"
-                                             IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Updates}" />
-                                <RadioButton Style="{StaticResource FilterChip}"
-                                             Content="Locked"
-                                             ToolTip="Mods held at their version, by you or by the game adapter"
-                                             IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Locked}" />
-                                <RadioButton Style="{StaticResource FilterChip}"
-                                             Content="Not in the sources"
-                                             ToolTip="Mods this profile pins that none of the enabled sources offers any version of"
-                                             IsEnabled="{Binding Sources.HasEnabledSources}"
-                                             IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=NotInSources}" />
-                            </WrapPanel>
-
-                            <ContentControl Grid.Column="1" Margin="12 0 0 0" VerticalAlignment="Top" Content="{Binding PinnedSorting}" />
-                        </Grid>
-
-                        <!-- The updates band: always on screen, so "no updates" is an answer too. -->
-                        <Border Grid.Row="2"
-                                Margin="0 0 0 8"
-                                Padding="12 8"
-                                CornerRadius="4"
-                                Background="{DynamicResource ControlFillColorSecondaryBrush}">
-                            <Grid ColumnDefinitions="auto * auto">
-                                <TextBlock Grid.Column="0"
+                                <TextBlock Grid.Column="1"
+                                           Text="In this profile"
                                            VerticalAlignment="Center"
-                                           Text="{Binding Summary.UpdateCountText}" />
+                                           Style="{DynamicResource BodyStrongTextBlockStyle}" />
 
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12 0 0 0">
-                                    <Button Padding="6 2"
-                                            Style="{DynamicResource SubtleMenuButton}"
-                                            Content="{Binding Summary.SkippedText}"
-                                            ToolTip="Locked mods with a newer version. Open the list to move any of them anyway."
-                                            Visibility="{Binding Summary.HasSkippedUpdates, Converter={StaticResource BoolToVisibilityConverter}}"
-                                            Command="{Binding ShowSkippedUpdatesCommand}" />
-                                    <Button Padding="6 2"
-                                            Margin="8 0 0 0"
-                                            Style="{DynamicResource SubtleMenuButton}"
-                                            Content="{Binding Summary.DismissedText}"
-                                            ToolTip="Versions never offered as updates. Open the list to offer any of them again."
-                                            Visibility="{Binding Summary.HasDismissed, Converter={StaticResource BoolToVisibilityConverter}}"
-                                            Command="{Binding ShowDismissedCommand}" />
-                                    <Button Padding="6 2"
-                                            Margin="8 0 0 0"
-                                            Style="{DynamicResource SubtleMenuButton}"
-                                            Content="{Binding Summary.UnsettledText}"
-                                            ToolTip="Their order relative to what the repo holds is not settled. Importing one will ask which comes first."
-                                            Visibility="{Binding Summary.HasUnsettled, Converter={StaticResource BoolToVisibilityConverter}}"
-                                            Command="{Binding ShowUpdatesCommand}" />
-                                </StackPanel>
+                                <Button Grid.Column="2"
+                                        Margin="12 0 0 0"
+                                        Padding="0"
+                                        Style="{DynamicResource SubtleMenuButton}"
+                                        Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                        Content="{Binding Summary.ChangeSummary}"
+                                        ToolTip="Show only what this draft changes"
+                                        Visibility="{Binding Summary.HasModListChanges, Converter={StaticResource BoolToVisibilityConverter}}"
+                                        Command="{Binding ShowChangesCommand}" />
 
-                                <shared:SplitButton Grid.Column="2"
-                                                    Header="{Binding Summary.ApplyUpdatesText}"
-                                                    Command="{Binding ApplyAllUpdatesCommand}"
-                                                    IsMenuAvailable="{Binding Summary.HasRepoOnlyUpdates}"
-                                                    CaretToolTip="Other ways to update">
-                                    <Button Width="300"
-                                            Style="{DynamicResource SubtleMenuButton}"
-                                            Command="{Binding ApplyRepoUpdatesCommand}">
-                                        <StackPanel Orientation="Vertical">
-                                            <TextBlock Text="{Binding Summary.UpdateRepoOnlyText}" FontWeight="SemiBold" />
-                                            <TextBlock Text="{Binding UpdateRepoOnlyDescription}"
-                                                       Margin="0 2 0 0"
-                                                       TextWrapping="Wrap"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                        </StackPanel>
-                                    </Button>
-                                </shared:SplitButton>
+                                <TextBlock Grid.Column="3"
+                                           Margin="12 0 0 0"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding Summary.PinnedCountText}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                             </Grid>
-                        </Border>
 
-                        <Grid Grid.Row="3">
-                            <Border Style="{StaticResource DropFrame}">
-                                <ListBox x:Name="PinnedList"
-                                         Style="{StaticResource ModList}"
-                                         ItemsSource="{Binding PinnedRows}"
-                                         behaviors:ListSelection.Controller="{Binding PinnedSelection}"
-                                         editor:ModListDrag.Kind="Pinned"
-                                         editor:ModListDrag.DropCommand="{Binding AddSelectedCommand}">
+                            <Grid Grid.Row="1" Margin="0 0 0 8" ColumnDefinitions="* auto">
+                                <WrapPanel Grid.Column="0" Orientation="Horizontal">
+                                    <RadioButton Style="{StaticResource FilterChip}"
+                                                 Content="All"
+                                                 ToolTip="The draft, with what it takes out struck through"
+                                                 IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=All}" />
+                                    <RadioButton Style="{StaticResource FilterChip}"
+                                                 Content="Result"
+                                                 ToolTip="Exactly what saving would leave in the profile"
+                                                 IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Result}" />
+                                    <RadioButton Style="{StaticResource FilterChip}"
+                                                 Content="Changes"
+                                                 ToolTip="Only what differs from the saved profile"
+                                                 IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Changes}" />
+                                    <RadioButton Style="{StaticResource FilterChip}"
+                                                 Content="Updates"
+                                                 shared:FilterChip.Count="{Binding Summary.UpdatesFilterCount}"
+                                                 ToolTip="Unlocked mods with a newer version - in the repo, in a folder being read, or online"
+                                                 IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Updates}" />
+                                    <RadioButton Style="{StaticResource FilterChip}"
+                                                 Content="Locked"
+                                                 ToolTip="Mods held at their version, by you or by the game adapter"
+                                                 IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Locked}" />
+                                    <RadioButton Style="{StaticResource FilterChip}"
+                                                 Content="Not in the sources"
+                                                 ToolTip="Mods this profile pins that none of the enabled sources offers any version of"
+                                                 IsEnabled="{Binding Sources.HasEnabledSources}"
+                                                 IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=NotInSources}" />
+                                </WrapPanel>
 
-                                    <ListBox.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Take the selected mods out" Command="{Binding RemoveSelectedCommand}" />
-                                            <MenuItem Header="Revert the selected mods" Command="{Binding RevertSelectedCommand}" />
-                                            <Separator />
-                                            <MenuItem Header="Update the selected mods" Command="{Binding UpdateSelectedCommand}" />
-                                            <MenuItem Header="Dismiss the selected updates" Command="{Binding DismissSelectedUpdatesCommand}" />
-                                            <MenuItem Header="Lock the selected mods" Command="{Binding LockSelectedCommand}" />
-                                            <MenuItem Header="Unlock the selected mods" Command="{Binding UnlockSelectedCommand}" />
-                                            <Separator />
-                                            <MenuItem Header="Select everything shown" Command="{Binding PinnedSelection.SelectAllShownCommand}" />
-                                            <MenuItem Header="Clear the selection" Command="{Binding PinnedSelection.ClearSelectionCommand}" />
-                                        </ContextMenu>
-                                    </ListBox.ContextMenu>
+                                <ContentControl Grid.Column="1" Margin="12 0 0 0" VerticalAlignment="Top" Content="{Binding PinnedSorting}" />
+                            </Grid>
 
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type editor:PinnedModRowViewModel}">
-                                            <Grid ColumnDefinitions="* auto auto">
-                                                <Grid.Style>
-                                                    <Style TargetType="Grid">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsTakenOut}" Value="True">
-                                                                <Setter Property="Opacity" Value="0.6" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Grid.Style>
-
-                                                <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
-
-                                                <TextBlock Grid.Column="1"
-                                                           Margin="8 0"
-                                                           VerticalAlignment="Center"
-                                                           Text="{Binding SortCaption}"
-                                                           ToolTip="{Binding SortTooltip}"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                           Visibility="{Binding HasSortCaption, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
-                                                            IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
-
-                                                    <Button Style="{DynamicResource SubtleIconButton}"
-                                                            Content="&#xE74A;"
-                                                            ToolTip="{Binding UpdateTooltip}"
-                                                            Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                            Command="{Binding DataContext.UpdateOneCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                            CommandParameter="{Binding}" />
-
-                                                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VersionPicker}" ToolTip="Which version this profile pins" />
-
-                                                    <!-- Open while nothing holds the pin, closed while something does, in the
-                                                         accent while the adapter does - which unticking cannot release. -->
-                                                    <ToggleButton ToolTip="{Binding LockTooltip}"
-                                                                  IsChecked="{Binding LockedByProfile, Mode=TwoWay}"
-                                                                  Visibility="{Binding IsTakenOut, Converter={StaticResource InverseBoolToVisibilityConverter}}">
-                                                        <ToggleButton.Style>
-                                                            <Style TargetType="ToggleButton" BasedOn="{StaticResource SubtleIconToggleButton}">
-                                                                <Setter Property="Content" Value="&#xE785;" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsLocked}" Value="True">
-                                                                        <Setter Property="Content" Value="&#xE72E;" />
-                                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding LockedByAdapter}" Value="True">
-                                                                        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </ToggleButton.Style>
-                                                    </ToggleButton>
-
-                                                    <Button Style="{DynamicResource SubtleIconButton}"
-                                                            Content="&#xE7A7;"
-                                                            ToolTip="Revert to what the saved profile holds"
-                                                            Visibility="{Binding IsChanged, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                            Command="{Binding DataContext.RevertCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                            CommandParameter="{Binding}" />
-
-                                                    <Button Margin="0 0 8 0"
-                                                            Style="{DynamicResource SubtleIconButton}"
-                                                            Content="&#xE738;"
-                                                            ToolTip="Take out of this profile"
-                                                            Visibility="{Binding IsTakenOut, Converter={StaticResource InverseBoolToVisibilityConverter}}"
-                                                            Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                            CommandParameter="{Binding}" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                            </Border>
-
-                            <TextBlock Text="{Binding Summary.PinnedEmptyText}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource EmptyListText}">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Summary.PinnedEmptyText}" Value="{x:Null}">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsLoading}" Value="True">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Grid>
-
-                        <Border Grid.Row="4"
-                                Style="{StaticResource SelectionBar}"
-                                Visibility="{Binding PinnedSelection.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <Grid RowDefinitions="auto auto auto">
-
-                                <Grid Grid.Row="0" ColumnDefinitions="* auto">
-                                    <Button Grid.Column="0"
-                                            HorizontalAlignment="Stretch"
-                                            Style="{DynamicResource AccentButtonStyle}"
-                                            Content="{Binding PinnedSelection.ActionText}"
-                                            Command="{Binding RemoveSelectedCommand}" />
-                                    <Button Grid.Column="1"
-                                            Margin="8 0 0 0"
-                                            Content="Clear"
-                                            Command="{Binding PinnedSelection.ClearSelectionCommand}" />
-                                </Grid>
-
-                                <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* auto auto auto auto">
-                                    <Button Grid.Column="0"
-                                            Margin="0 0 4 0"
-                                            HorizontalAlignment="Stretch"
-                                            Content="{Binding UpdateSelectedText}"
-                                            ToolTip="Move the picked mods to their newest version, leaving locked ones alone"
-                                            Command="{Binding UpdateSelectedCommand}" />
-                                    <Button Grid.Column="1"
-                                            Margin="4 0"
-                                            MinWidth="72"
-                                            Content="{Binding DismissSelectedUpdatesText}"
-                                            ToolTip="Never offer the version each picked mod's update points at"
-                                            Command="{Binding DismissSelectedUpdatesCommand}" />
-                                    <Button Grid.Column="2"
-                                            Margin="4 0"
-                                            MinWidth="72"
-                                            Content="Lock"
-                                            ToolTip="Hold the picked mods at their versions in this profile"
-                                            Command="{Binding LockSelectedCommand}" />
-                                    <Button Grid.Column="3"
-                                            Margin="4 0"
-                                            MinWidth="72"
-                                            Content="Unlock"
-                                            ToolTip="Release this profile's own lock on the picked mods"
-                                            Command="{Binding UnlockSelectedCommand}" />
-                                    <Button Grid.Column="4"
-                                            Margin="4 0 0 0"
-                                            MinWidth="72"
-                                            Content="{Binding RevertSelectedText}"
-                                            ToolTip="Put the picked mods back the way the saved profile has them"
-                                            Command="{Binding RevertSelectedCommand}" />
-                                </Grid>
-
-                                <Grid Grid.Row="2"
-                                      Margin="0 8 0 0"
-                                      ColumnDefinitions="* auto"
-                                      Visibility="{Binding PinnedSelection.HasHidden, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <!-- The updates band: always on screen, so "no updates" is an answer too. -->
+                            <Border Style="{StaticResource InsetWell}"
+                                    Grid.Row="2"
+                                    Margin="0 0 0 8"
+                                    Padding="12 8">
+                                <Grid ColumnDefinitions="auto * auto">
                                     <TextBlock Grid.Column="0"
                                                VerticalAlignment="Center"
-                                               TextWrapping="Wrap"
-                                               Text="{Binding PinnedSelection.HiddenText}"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    <Button Grid.Column="1"
-                                            Margin="8 0 0 0"
-                                            Content="{Binding PinnedSelection.DeselectHiddenText}"
-                                            Command="{Binding PinnedSelection.DeselectHiddenCommand}" />
-                                </Grid>
-                            </Grid>
-                        </Border>
+                                               Text="{Binding Summary.UpdateCountText}" />
 
-                        <Grid Grid.Row="5" Margin="0 8 0 0" ColumnDefinitions="* *">
-                            <Button Grid.Column="0"
-                                    Margin="0 0 4 0"
-                                    HorizontalAlignment="Stretch"
-                                    Content="Take out everything shown"
-                                    ToolTip="Take every mod the list above is showing out of this profile"
-                                    Command="{Binding RemoveAllShownCommand}" />
-                            <Button Grid.Column="1"
-                                    Margin="4 0 0 0"
-                                    HorizontalAlignment="Stretch"
-                                    Content="Revert everything shown"
-                                    ToolTip="Put every changed mod the list above is showing back the way the saved profile has it"
-                                    Command="{Binding RevertAllShownCommand}" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12 0 0 0">
+                                        <Button Padding="6 2"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Content="{Binding Summary.SkippedText}"
+                                                ToolTip="Locked mods with a newer version. Open the list to move any of them anyway."
+                                                Visibility="{Binding Summary.HasSkippedUpdates, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                Command="{Binding ShowSkippedUpdatesCommand}" />
+                                        <Button Padding="6 2"
+                                                Margin="8 0 0 0"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Content="{Binding Summary.DismissedText}"
+                                                ToolTip="Versions never offered as updates. Open the list to offer any of them again."
+                                                Visibility="{Binding Summary.HasDismissed, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                Command="{Binding ShowDismissedCommand}" />
+                                        <Button Padding="6 2"
+                                                Margin="8 0 0 0"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Content="{Binding Summary.UnsettledText}"
+                                                ToolTip="Their order relative to what the repo holds is not settled. Importing one will ask which comes first."
+                                                Visibility="{Binding Summary.HasUnsettled, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                Command="{Binding ShowUpdatesCommand}" />
+                                    </StackPanel>
+
+                                    <shared:SplitButton Grid.Column="2"
+                                                        Header="{Binding Summary.ApplyUpdatesText}"
+                                                        Command="{Binding ApplyAllUpdatesCommand}"
+                                                        IsMenuAvailable="{Binding Summary.HasRepoOnlyUpdates}"
+                                                        CaretToolTip="Other ways to update">
+                                        <Button Width="300"
+                                                Style="{DynamicResource SubtleMenuButton}"
+                                                Command="{Binding ApplyRepoUpdatesCommand}">
+                                            <StackPanel Orientation="Vertical">
+                                                <TextBlock Text="{Binding Summary.UpdateRepoOnlyText}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding UpdateRepoOnlyDescription}"
+                                                           Margin="0 2 0 0"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </shared:SplitButton>
+                                </Grid>
+                            </Border>
+
+                            <Grid Grid.Row="3">
+                                <Border Style="{StaticResource DropFrame}">
+                                    <ListBox x:Name="PinnedList"
+                                             Style="{StaticResource ModList}"
+                                             ItemsSource="{Binding PinnedRows}"
+                                             behaviors:ListSelection.Controller="{Binding PinnedSelection}"
+                                             editor:ModListDrag.Kind="Pinned"
+                                             editor:ModListDrag.DropCommand="{Binding AddSelectedCommand}">
+
+                                        <ListBox.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Take the selected mods out" Command="{Binding RemoveSelectedCommand}" />
+                                                <MenuItem Header="Revert the selected mods" Command="{Binding RevertSelectedCommand}" />
+                                                <Separator />
+                                                <MenuItem Header="Update the selected mods" Command="{Binding UpdateSelectedCommand}" />
+                                                <MenuItem Header="Dismiss the selected updates" Command="{Binding DismissSelectedUpdatesCommand}" />
+                                                <MenuItem Header="Lock the selected mods" Command="{Binding LockSelectedCommand}" />
+                                                <MenuItem Header="Unlock the selected mods" Command="{Binding UnlockSelectedCommand}" />
+                                                <Separator />
+                                                <MenuItem Header="Select everything shown" Command="{Binding PinnedSelection.SelectAllShownCommand}" />
+                                                <MenuItem Header="Clear the selection" Command="{Binding PinnedSelection.ClearSelectionCommand}" />
+                                            </ContextMenu>
+                                        </ListBox.ContextMenu>
+
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type editor:PinnedModRowViewModel}">
+                                                <Grid ColumnDefinitions="* auto auto">
+                                                    <Grid.Style>
+                                                        <Style TargetType="Grid">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsTakenOut}" Value="True">
+                                                                    <Setter Property="Opacity" Value="0.6" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Grid.Style>
+
+                                                    <ContentPresenter Grid.Column="0" Content="{Binding Item}" />
+
+                                                    <TextBlock Grid.Column="1"
+                                                               Margin="8 0"
+                                                               VerticalAlignment="Center"
+                                                               Text="{Binding SortCaption}"
+                                                               ToolTip="{Binding SortTooltip}"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Visibility="{Binding HasSortCaption, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
+                                                                IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=Page}}">
+
+                                                        <Button Style="{DynamicResource SubtleIconButton}"
+                                                                Content="&#xE74A;"
+                                                                ToolTip="{Binding UpdateTooltip}"
+                                                                Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                Command="{Binding DataContext.UpdateOneCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                                CommandParameter="{Binding}" />
+
+                                                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VersionPicker}" ToolTip="Which version this profile pins" />
+
+                                                        <!-- Open while nothing holds the pin, closed while something does, in the
+                                                             accent while the adapter does - which unticking cannot release. -->
+                                                        <ToggleButton ToolTip="{Binding LockTooltip}"
+                                                                      IsChecked="{Binding LockedByProfile, Mode=TwoWay}"
+                                                                      Visibility="{Binding IsTakenOut, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                                                            <ToggleButton.Style>
+                                                                <Style TargetType="ToggleButton" BasedOn="{StaticResource SubtleIconToggleButton}">
+                                                                    <Setter Property="Content" Value="&#xE785;" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsLocked}" Value="True">
+                                                                            <Setter Property="Content" Value="&#xE72E;" />
+                                                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding LockedByAdapter}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ToggleButton.Style>
+                                                        </ToggleButton>
+
+                                                        <Button Style="{DynamicResource SubtleIconButton}"
+                                                                Content="&#xE7A7;"
+                                                                ToolTip="Revert to what the saved profile holds"
+                                                                Visibility="{Binding IsChanged, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                Command="{Binding DataContext.RevertCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                                CommandParameter="{Binding}" />
+
+                                                        <Button Margin="0 0 8 0"
+                                                                Style="{DynamicResource SubtleIconButton}"
+                                                                Content="&#xE738;"
+                                                                ToolTip="Take out of this profile"
+                                                                Visibility="{Binding IsTakenOut, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                                                                Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                                CommandParameter="{Binding}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Border>
+
+                                <TextBlock Text="{Binding Summary.PinnedEmptyText}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource EmptyListText}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Summary.PinnedEmptyText}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsLoading}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+
+                            <Border Grid.Row="4"
+                                    Style="{StaticResource SelectionBar}"
+                                    Visibility="{Binding PinnedSelection.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid RowDefinitions="auto auto auto">
+
+                                    <Grid Grid.Row="0" ColumnDefinitions="* auto">
+                                        <Button Grid.Column="0"
+                                                HorizontalAlignment="Stretch"
+                                                Style="{DynamicResource AccentButtonStyle}"
+                                                Content="{Binding PinnedSelection.ActionText}"
+                                                Command="{Binding RemoveSelectedCommand}" />
+                                        <Button Grid.Column="1"
+                                                Margin="8 0 0 0"
+                                                Content="Clear"
+                                                Command="{Binding PinnedSelection.ClearSelectionCommand}" />
+                                    </Grid>
+
+                                    <Grid Grid.Row="1" Margin="0 8 0 0" ColumnDefinitions="* auto auto auto auto">
+                                        <Button Grid.Column="0"
+                                                Margin="0 0 4 0"
+                                                HorizontalAlignment="Stretch"
+                                                Content="{Binding UpdateSelectedText}"
+                                                ToolTip="Move the picked mods to their newest version, leaving locked ones alone"
+                                                Command="{Binding UpdateSelectedCommand}" />
+                                        <Button Grid.Column="1"
+                                                Margin="4 0"
+                                                MinWidth="72"
+                                                Content="{Binding DismissSelectedUpdatesText}"
+                                                ToolTip="Never offer the version each picked mod's update points at"
+                                                Command="{Binding DismissSelectedUpdatesCommand}" />
+                                        <Button Grid.Column="2"
+                                                Margin="4 0"
+                                                MinWidth="72"
+                                                Content="Lock"
+                                                ToolTip="Hold the picked mods at their versions in this profile"
+                                                Command="{Binding LockSelectedCommand}" />
+                                        <Button Grid.Column="3"
+                                                Margin="4 0"
+                                                MinWidth="72"
+                                                Content="Unlock"
+                                                ToolTip="Release this profile's own lock on the picked mods"
+                                                Command="{Binding UnlockSelectedCommand}" />
+                                        <Button Grid.Column="4"
+                                                Margin="4 0 0 0"
+                                                MinWidth="72"
+                                                Content="{Binding RevertSelectedText}"
+                                                ToolTip="Put the picked mods back the way the saved profile has them"
+                                                Command="{Binding RevertSelectedCommand}" />
+                                    </Grid>
+
+                                    <Grid Grid.Row="2"
+                                          Margin="0 8 0 0"
+                                          ColumnDefinitions="* auto"
+                                          Visibility="{Binding PinnedSelection.HasHidden, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <TextBlock Grid.Column="0"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   Text="{Binding PinnedSelection.HiddenText}"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        <Button Grid.Column="1"
+                                                Margin="8 0 0 0"
+                                                Content="{Binding PinnedSelection.DeselectHiddenText}"
+                                                Command="{Binding PinnedSelection.DeselectHiddenCommand}" />
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <Grid Grid.Row="5" Margin="0 8 0 0" ColumnDefinitions="* *">
+                                <Button Grid.Column="0"
+                                        Margin="0 0 4 0"
+                                        HorizontalAlignment="Stretch"
+                                        Content="Take out everything shown"
+                                        ToolTip="Take every mod the list above is showing out of this profile"
+                                        Command="{Binding RemoveAllShownCommand}" />
+                                <Button Grid.Column="1"
+                                        Margin="4 0 0 0"
+                                        HorizontalAlignment="Stretch"
+                                        Content="Revert everything shown"
+                                        ToolTip="Put every changed mod the list above is showing back the way the saved profile has it"
+                                        Command="{Binding RevertAllShownCommand}" />
+                            </Grid>
                         </Grid>
-                    </Grid>
+                    </shared:Surface>
                 </Grid>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" ColumnDefinitions="auto auto auto auto *">
-
-            <!-- Split button: Save is one click, and saving without re-applying costs opening the menu. -->
-            <shared:SplitButton Grid.Column="0" Margin="32 24 4 24"
-                                MinWidth="234"
-                                Padding="16 7"
-                                IsAccent="True"
-                                Header="{Binding Summary.SaveActionText}"
-                                Command="{Binding SaveChangesCommand}"
-                                IsMenuAvailable="{Binding Summary.WillApply}"
-                                MenuPlacement="Top"
-                                CaretToolTip="Other ways to save">
-                <Button Width="320"
-                        Style="{DynamicResource SubtleMenuButton}"
-                        Command="{Binding SaveOnlyCommand}">
-                    <StackPanel Orientation="Vertical">
-                        <TextBlock Text="Save only" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding SaveOnlyDescription}"
-                                   Margin="0 2 0 0"
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                </Button>
-            </shared:SplitButton>
-
-            <Button Grid.Column="1" Margin="4 24 4 24"
-                    Content="Discard changes"
-                    ToolTip="Put everything back the way the saved profile has it. You can undo this."
-                    Command="{Binding DiscardChangesCommand}" />
-
-            <StackPanel Grid.Column="2" Margin="4 24 4 24" Orientation="Horizontal">
-                <Button Style="{DynamicResource SubtleIconButton}"
-                        Content="&#xE7A7;"
-                        ToolTip="{Binding UndoTooltip}"
-                        ToolTipService.ShowOnDisabled="True"
-                        Command="{Binding UndoCommand}" />
-                <Button Style="{DynamicResource SubtleIconButton}"
-                        Content="&#xE7A6;"
-                        ToolTip="{Binding RedoTooltip}"
-                        ToolTipService.ShowOnDisabled="True"
-                        Command="{Binding RedoCommand}" />
-            </StackPanel>
-
-            <StackPanel Grid.Column="3" Margin="12 0 16 0" VerticalAlignment="Center">
-
-                <!-- Optional, so only there while there is something to save. MaxLength matches
-                     ProfileRevision.MaximumLabelLength on the server. -->
-                <Grid Width="300"
-                      HorizontalAlignment="Left"
-                      Visibility="{Binding Summary.HasUnsavedChanges, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBox x:Name="VersionDescriptionBox"
-                             MaxLength="100"
-                             Text="{Binding VersionDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             ToolTip="What this save is, in the profile's history. Left empty, the history shows what changed instead."
-                             ToolTipService.InitialShowDelay="200" />
-                    <TextBlock Text="Version description (optional)"
-                               Tag="{Binding ElementName=VersionDescriptionBox}"
-                               Style="{StaticResource Placeholder}" />
-                </Grid>
-
-                <TextBlock Text="{Binding SaveBlockedReason}"
-                           Margin="0 6 0 0"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                           Visibility="{Binding HasSaveBlockedReason, Converter={StaticResource BoolToVisibilityConverter}}" />
-            </StackPanel>
-
-            <TextBlock Grid.Column="4"
-                       Margin="0 0 32 0"
-                       VerticalAlignment="Center"
-                       HorizontalAlignment="Right"
-                       Text="{Binding Summary.PendingText}"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Visibility="{Binding Summary.HasPending, Converter={StaticResource BoolToVisibilityConverter}}" />
-        </Grid>
+        <Border Grid.Row="1" Style="{StaticResource PageFooter}">
+            <Grid ColumnDefinitions="auto auto auto auto *">
+    
+                <!-- Split button: Save is one click, and saving without re-applying costs opening the menu. -->
+                <shared:SplitButton Grid.Column="0" Margin="4 0"
+                                    MinWidth="234"
+                                    Padding="16 7"
+                                    IsAccent="True"
+                                    Header="{Binding Summary.SaveActionText}"
+                                    Command="{Binding SaveChangesCommand}"
+                                    IsMenuAvailable="{Binding Summary.WillApply}"
+                                    MenuPlacement="Top"
+                                    CaretToolTip="Other ways to save">
+                    <Button Width="320"
+                            Style="{DynamicResource SubtleMenuButton}"
+                            Command="{Binding SaveOnlyCommand}">
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock Text="Save only" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding SaveOnlyDescription}"
+                                       Margin="0 2 0 0"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Button>
+                </shared:SplitButton>
+    
+                <Button Grid.Column="1" Margin="4 0"
+                        Content="Discard changes"
+                        ToolTip="Put everything back the way the saved profile has it. You can undo this."
+                        Command="{Binding DiscardChangesCommand}" />
+    
+                <StackPanel Grid.Column="2" Margin="4 0" Orientation="Horizontal">
+                    <Button Style="{DynamicResource SubtleIconButton}"
+                            Content="&#xE7A7;"
+                            ToolTip="{Binding UndoTooltip}"
+                            ToolTipService.ShowOnDisabled="True"
+                            Command="{Binding UndoCommand}" />
+                    <Button Style="{DynamicResource SubtleIconButton}"
+                            Content="&#xE7A6;"
+                            ToolTip="{Binding RedoTooltip}"
+                            ToolTipService.ShowOnDisabled="True"
+                            Command="{Binding RedoCommand}" />
+                </StackPanel>
+    
+                <StackPanel Grid.Column="3" Margin="12 0 16 0" VerticalAlignment="Center">
+    
+                    <!-- Optional, so only there while there is something to save. MaxLength matches
+                         ProfileRevision.MaximumLabelLength on the server. -->
+                    <Grid Width="300"
+                          HorizontalAlignment="Left"
+                          Visibility="{Binding Summary.HasUnsavedChanges, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBox x:Name="VersionDescriptionBox"
+                                 MaxLength="100"
+                                 Text="{Binding VersionDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="What this save is, in the profile's history. Left empty, the history shows what changed instead."
+                                 ToolTipService.InitialShowDelay="200" />
+                        <TextBlock Text="Version description (optional)"
+                                   Tag="{Binding ElementName=VersionDescriptionBox}"
+                                   Style="{StaticResource Placeholder}" />
+                    </Grid>
+    
+                    <TextBlock Text="{Binding SaveBlockedReason}"
+                               Margin="0 6 0 0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                               Visibility="{Binding HasSaveBlockedReason, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </StackPanel>
+    
+                <TextBlock Grid.Column="4"
+                           Margin="0 0 4 0"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           Text="{Binding Summary.PendingText}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Visibility="{Binding Summary.HasPending, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </Grid>
+        </Border>
 
     </Grid>
 

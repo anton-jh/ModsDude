@@ -1,6 +1,7 @@
 <UserControl x:Class="ModsDude.Client.Wpf.Mods.Import.UnrecognisedFilesModal"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:import="clr-namespace:ModsDude.Client.Wpf.Mods.Import"
@@ -9,14 +10,7 @@
              d:DataContext="{d:DesignInstance Type=import:UnrecognisedFilesModalViewModel, IsDesignTimeCreatable=False}"
              Focusable="True">
 
-    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
-            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-            BorderThickness="1">
-
-        <Border.Effect>
-            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
-        </Border.Effect>
+    <shared:Surface Style="{StaticResource ModalSurface}">
 
         <Grid RowDefinitions="* auto">
 
@@ -43,9 +37,7 @@
 
                 <!-- The first ten names; the view model says how many more there are, so a long list
                      cannot push the choice below off the modal. -->
-                <Border Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                        CornerRadius="4"
-                        Padding="12 8">
+                <Border Style="{StaticResource InsetWell}" Padding="12 8">
                     <StackPanel>
                         <ItemsControl ItemsSource="{Binding Names}">
                             <ItemsControl.ItemTemplate>
@@ -95,8 +87,7 @@
                            Visibility="{Binding HasFolderProblem, Converter={StaticResource BoolToVisibilityConverter}}" />
             </StackPanel>
 
-            <Border Grid.Row="1"
-                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+            <Border Style="{StaticResource ModalFooter}" Grid.Row="1">
                 <Grid Margin="24 16 24 20" ColumnDefinitions="* *">
                     <Button Grid.Column="0"
                             Margin="0 0 4 0"
@@ -114,6 +105,6 @@
                 </Grid>
             </Border>
         </Grid>
-    </Border>
+    </shared:Surface>
 
 </UserControl>

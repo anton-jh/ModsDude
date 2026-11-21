@@ -12,7 +12,7 @@
       d:DataContext="{d:DesignInstance Type=mods:RepoModsPageViewModel, IsDesignTimeCreatable=False}"
       Title="RepoModsPage">
 
-    <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+    <Border Style="{StaticResource PageBody}">
         <Grid RowDefinitions="auto auto auto auto auto * auto">
 
             <navigation:PageTitle Grid.Row="0" Text="Mods" />
@@ -104,11 +104,7 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             </StackPanel>
 
-            <Border Grid.Row="5"
-                    CornerRadius="6"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+            <Border Style="{StaticResource InsetWell}" Grid.Row="5">
                 <Grid>
 
                     <!-- One row per mod version, rendered by the implicit ModListItemViewModel template

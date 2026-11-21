@@ -9,14 +9,7 @@
              d:DataContext="{d:DesignInstance Type=shared:NameModalViewModel, IsDesignTimeCreatable=False}"
              Focusable="True">
 
-    <Border CornerRadius="{StaticResource OverlayCornerRadius}"
-            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-            BorderThickness="1">
-
-        <Border.Effect>
-            <DropShadowEffect Color="#66000000" BlurRadius="20" ShadowDepth="4" />
-        </Border.Effect>
+    <shared:Surface Style="{StaticResource ModalSurface}">
 
         <Grid RowDefinitions="auto auto">
 
@@ -42,8 +35,7 @@
                            Visibility="{Binding HasError, Converter={StaticResource BoolToVisibilityConverter}}" />
             </StackPanel>
 
-            <Border Grid.Row="1"
-                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+            <Border Style="{StaticResource ModalFooter}" Grid.Row="1">
                 <Grid Margin="24 16 24 20" ColumnDefinitions="* *">
                     <Button Grid.Column="0"
                             Margin="0 0 4 0"
@@ -61,6 +53,6 @@
                 </Grid>
             </Border>
         </Grid>
-    </Border>
+    </shared:Surface>
 
 </UserControl>

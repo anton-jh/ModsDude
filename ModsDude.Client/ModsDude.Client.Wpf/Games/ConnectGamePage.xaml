@@ -13,7 +13,7 @@
 
     <Grid RowDefinitions="*, auto">
 
-        <Border CornerRadius="4 0 0 4" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" Padding="32">
+        <Border Style="{StaticResource PageBody}">
             <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
 
                 <navigation:PageTitle Text="Connect game" BackCommand="{Binding BackCommand}" />
@@ -26,21 +26,21 @@
                     <Run Text="on this machine. It is configured once and offered under every repo about that game." />
                 </TextBlock>
 
-                <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="4"
-                        Padding="16">
+                <shared:Surface Style="{StaticResource Card}">
                     <GroupBox Header="Folders" Padding="0 16 0 16">
                         <games:DynamicFormEditor DataContext="{Binding LocalSettingsEditor}" />
                     </GroupBox>
-                </Border>
+                </shared:Surface>
 
             </StackPanel>
         </Border>
 
-        <StackPanel Grid.Row="1" Style="{StaticResource PageActions}">
-            <Button Width="250" Style="{DynamicResource AccentButtonStyle}"
-                    Content="Connect" Command="{Binding Path=SaveChangesCommand}" />
-        </StackPanel>
+        <Border Grid.Row="1" Style="{StaticResource PageFooter}">
+            <StackPanel Style="{StaticResource PageActions}">
+                <Button Width="250" Style="{DynamicResource AccentButtonStyle}"
+                        Content="Connect" Command="{Binding Path=SaveChangesCommand}" />
+            </StackPanel>
+        </Border>
 
     </Grid>
 </shared:AppPage>

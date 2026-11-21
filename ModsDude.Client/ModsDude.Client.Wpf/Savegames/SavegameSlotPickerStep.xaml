@@ -15,11 +15,7 @@
 
         <!-- The same list, drawn the same way, as the check-out step's: rows with a hairline under
              them inside a frame, scrolling by the pixel. -->
-        <Border Margin="0 16 0 0"
-                CornerRadius="6"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+        <Border Style="{StaticResource InsetWell}" Margin="0 16 0 0">
             <ListBox MaxHeight="400"
                      Style="{StaticResource SlotList}"
                      HorizontalContentAlignment="Stretch"
