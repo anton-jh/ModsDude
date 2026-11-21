@@ -86,9 +86,13 @@ lay their pane straight on the window.
 - `Surfaces.xaml` has a style per layer: `ShellSheet`, `ContentPane`, `PagePane`, `PageBody`,
   `PageFooter`, `Card`, `InsetWell`, `ModalSurface`, `ModalFooter`, `PopupSurface`, `FloatingSurface`.
 - `Surface` is a border that draws its own soft shadow, or the accent's glow under primary buttons and
-  the selected tab.
+  the selected tab. Only its own shape takes clicks; the shadow does not.
+- Cards, inset wells and modals clip their content to their rounded corners (`RoundedClip`), so rows
+  and footers that run to the edge follow the curve.
+- Chips are stadiums: their corner radius is half their height (`PillRadiusConverter`).
 - Chosen things wear the accent's tint: the open rail and sidebar entry, filter and source chips,
-  picked mod rows. Status badges are tints of their state's colour.
+  picked mod rows, the chosen row of a `ListRow` list (`SlotList`, the Saves page). Status badges are
+  tints of their state's colour.
 - Mod lists light up the whole row on hover, the controls at its end included, and divide rows across
   their whole width. The hover and divider are drawn by the list's item container: `ModRow`
   (`ModList`) where rows are picked, `ReadOnlyModRow` (`ReadOnlyModList`, in `Mods/ModListItem.xaml`)

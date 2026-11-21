@@ -472,8 +472,8 @@
                                                     VerticalAlignment="Center"
                                                     Background="{DynamicResource AccentBrush}"
                                                     ShadowColor="{StaticResource AccentGlowColor}"
-                                                    ShadowBlur="10"
-                                                    ShadowOpacity="0.6"
+                                                    ShadowBlur="6"
+                                                    ShadowOpacity="0.3"
                                                     Visibility="Hidden" />
                                     <ContentPresenter x:Name="Content"
                                                       Margin="0 6"

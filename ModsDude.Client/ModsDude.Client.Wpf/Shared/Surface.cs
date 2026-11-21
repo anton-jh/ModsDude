@@ -66,6 +66,26 @@ public class Surface : Border
     }
 
     /// <summary>
+    /// WPF hit-tests everything drawn in OnRender, so without this the shadow would take the clicks
+    /// meant for whatever it falls on. Only the surface's own shape is hit.
+    /// </summary>
+    protected override HitTestResult? HitTestCore(PointHitTestParameters hitTestParameters) =>
+        Outline().FillContains(hitTestParameters.HitPoint) ? base.HitTestCore(hitTestParameters) : null;
+
+    protected override GeometryHitTestResult? HitTestCore(GeometryHitTestParameters hitTestParameters)
+    {
+        if (base.HitTestCore(hitTestParameters) is null)
+        {
+            return null;
+        }
+
+        var detail = Outline().FillContainsWithDetail(hitTestParameters.HitGeometry);
+        return detail == IntersectionDetail.Empty ? null : new GeometryHitTestResult(this, detail);
+    }
+
+    private StreamGeometry Outline() => RoundedGeometry.Rectangle(new Rect(RenderSize), CornerRadius);
+
+    /// <summary>
     /// Ring k covers everything within k/N of the blur from the edge, so a point in band k is under rings
     /// k to N. Each ring's alpha is chosen so that the rings over a band add up, by ordinary alpha
     /// compositing, to the shadow's strength at the middle of that band: full at the edge, easing to none
@@ -89,7 +109,7 @@ public class Surface : Border
             var color = ShadowColor;
             var brush = new SolidColorBrush(Color.FromArgb((byte)Math.Round(alpha * 255), color.R, color.G, color.B));
             brush.Freeze();
-            drawingContext.DrawGeometry(brush, null, RoundedRectangle(ringBounds, Inflate(CornerRadius, inflation)));
+            drawingContext.DrawGeometry(brush, null, RoundedGeometry.Rectangle(ringBounds, Inflate(CornerRadius, inflation)));
         }
     }
 
@@ -101,28 +121,4 @@ public class Surface : Border
 
     private static CornerRadius Inflate(CornerRadius radius, double by) => new(
         radius.TopLeft + by, radius.TopRight + by, radius.BottomRight + by, radius.BottomLeft + by);
-
-    private static StreamGeometry RoundedRectangle(Rect rect, CornerRadius radius)
-    {
-        var geometry = new StreamGeometry();
-        using (var context = geometry.Open())
-        {
-            context.BeginFigure(new Point(rect.Left + radius.TopLeft, rect.Top), isFilled: true, isClosed: true);
-            context.LineTo(new Point(rect.Right - radius.TopRight, rect.Top), isStroked: false, isSmoothJoin: false);
-            Corner(context, new Point(rect.Right, rect.Top + radius.TopRight), radius.TopRight);
-            context.LineTo(new Point(rect.Right, rect.Bottom - radius.BottomRight), isStroked: false, isSmoothJoin: false);
-            Corner(context, new Point(rect.Right - radius.BottomRight, rect.Bottom), radius.BottomRight);
-            context.LineTo(new Point(rect.Left + radius.BottomLeft, rect.Bottom), isStroked: false, isSmoothJoin: false);
-            Corner(context, new Point(rect.Left, rect.Bottom - radius.BottomLeft), radius.BottomLeft);
-            context.LineTo(new Point(rect.Left, rect.Top + radius.TopLeft), isStroked: false, isSmoothJoin: false);
-            Corner(context, new Point(rect.Left + radius.TopLeft, rect.Top), radius.TopLeft);
-        }
-
-        geometry.Freeze();
-        return geometry;
-    }
-
-    private static void Corner(StreamGeometryContext context, Point end, double radius) =>
-        context.ArcTo(end, new Size(radius, radius), 0, isLargeArc: false, SweepDirection.Clockwise,
-            isStroked: false, isSmoothJoin: false);
 }

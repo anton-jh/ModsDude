@@ -10,6 +10,7 @@
     <converters:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
     <converters:IconKindToStringConverter x:Key="IconKindToStringConverter" />
     <converters:GlyphCenteringConverter x:Key="GlyphCenteringConverter" />
+    <converters:PillRadiusConverter x:Key="PillRadiusConverter" />
 
     <!-- An icon glyph drawn centred in a frame: nudged so its ink is centred, not just its box. See
          GlyphCenteringConverter. -->
@@ -59,9 +60,9 @@
                         <shared:Surface x:Name="Glow"
                                         CornerRadius="{DynamicResource ControlCornerRadius}"
                                         ShadowColor="{StaticResource AccentGlowColor}"
-                                        ShadowBlur="18"
-                                        ShadowOffset="0,5"
-                                        ShadowOpacity="0.32" />
+                                        ShadowBlur="10"
+                                        ShadowOffset="0,3"
+                                        ShadowOpacity="0.2" />
                         <Border x:Name="Chrome"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
@@ -240,9 +241,9 @@
                                         Grid.ColumnSpan="2"
                                         CornerRadius="{DynamicResource ControlCornerRadius}"
                                         ShadowColor="{StaticResource AccentGlowColor}"
-                                        ShadowBlur="18"
-                                        ShadowOffset="0,5"
-                                        ShadowOpacity="0.32"
+                                        ShadowBlur="10"
+                                        ShadowOffset="0,3"
+                                        ShadowOpacity="0.2"
                                         Visibility="Collapsed" />
 
                         <Border x:Name="PrimaryChrome"
@@ -518,7 +519,9 @@
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Margin" Value="0 0 6 0" />
-        <Setter Property="Padding" Value="12 5" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="Padding" Value="12 0" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
@@ -527,7 +530,7 @@
                             BorderBrush="{DynamicResource RaisedStrokeBrush}"
                             BorderThickness="1"
                             Padding="{TemplateBinding Padding}"
-                            CornerRadius="{StaticResource PillCornerRadius}">
+                            CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadiusConverter}}">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <ContentPresenter VerticalAlignment="Center" />
                             <TextBlock x:Name="Count"
@@ -549,6 +552,7 @@
                             <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentTintBrush}" />
                             <Setter TargetName="Background" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
                             <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+                            <Setter Property="FontWeight" Value="Medium" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
@@ -574,7 +578,9 @@
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Margin" Value="0 0 6 0" />
-        <Setter Property="Padding" Value="10 4" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="Padding" Value="12 0" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
@@ -583,7 +589,7 @@
                             BorderBrush="{DynamicResource RaisedStrokeBrush}"
                             BorderThickness="1"
                             Padding="{TemplateBinding Padding}"
-                            CornerRadius="{StaticResource PillCornerRadius}">
+                            CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadiusConverter}}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -595,6 +601,7 @@
                             <Setter TargetName="Background" Property="Background" Value="{DynamicResource AccentTintBrush}" />
                             <Setter TargetName="Background" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
                             <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+                            <Setter Property="FontWeight" Value="Medium" />
                         </Trigger>
                         <!-- After the checked trigger, so a source that is switched on and
                              unreadable reads as unreadable. -->
@@ -615,19 +622,21 @@
 
     <!-- The "add a source" chips and the rescan, which are actions rather than toggles and so keep
          the neutral chrome whatever is switched on: an empty pill with a dashed edge, so they never
-         read as one more source. WPF's Border has no dashes, so the edge is a rectangle; its corner
-         radius is clamped to half its height, which makes it a pill at any size. -->
+         read as one more source. WPF's Border has no dashes, so the edge is a rectangle. -->
     <Style x:Key="SourceActionChip" TargetType="Button">
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Margin" Value="0 0 6 0" />
-        <Setter Property="Padding" Value="11 5" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="Padding" Value="12 0" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Grid x:Name="Background" Background="Transparent">
                         <Rectangle x:Name="Edge"
-                                   RadiusX="999" RadiusY="999"
+                                   RadiusX="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadiusConverter}}"
+                                   RadiusY="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadiusConverter}}"
                                    Stroke="{DynamicResource StrongStrokeBrush}"
                                    StrokeThickness="1"
                                    StrokeDashArray="3 2" />
@@ -651,12 +660,12 @@
     </Style>
 
 
-    <!-- The row of a list somebody is choosing from - a slot, in the modals that pick one - drawn the way
-         the mod lists and the savegame log draw theirs: a full-width row with a hairline under it, the
-         accent at low opacity and a bar down the left for the chosen one, and a lighter fill under the
-         pointer. The default ListBoxItem is a padded box with the theme's own highlight, which is what
-         made these read as a settings control rather than as a list of things. -->
-    <Style x:Key="SlotRow" TargetType="ListBoxItem">
+    <!-- The row of a list somebody chooses one thing from - a save and its history on the Saves page, a
+         slot in the modals that pick one - drawn the way the mod lists draw theirs: a full-width row
+         with a hairline under it, the accent's tint and a bar down the left for the chosen one, and a
+         lighter fill under the pointer. It knows nothing about what a row contains: the padding belongs
+         to the row templates. -->
+    <Style x:Key="ListRow" TargetType="ListBoxItem">
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Template">
@@ -709,7 +718,7 @@
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="ItemContainerStyle" Value="{StaticResource SlotRow}" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource ListRow}" />
         <Setter Property="ScrollViewer.CanContentScroll" Value="False" />
         <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
         <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
@@ -890,8 +899,8 @@
                                                     VerticalAlignment="Bottom"
                                                     Background="{DynamicResource AccentBrush}"
                                                     ShadowColor="{StaticResource AccentGlowColor}"
-                                                    ShadowBlur="12"
-                                                    ShadowOpacity="0.4"
+                                                    ShadowBlur="6"
+                                                    ShadowOpacity="0.25"
                                                     Visibility="Hidden" />
                                 </Grid>
                                 <ControlTemplate.Triggers>

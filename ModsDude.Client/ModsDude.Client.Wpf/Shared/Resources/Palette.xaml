@@ -127,5 +127,4 @@
     <CornerRadius x:Key="CardCornerRadius">14</CornerRadius>
     <CornerRadius x:Key="WellCornerRadius">10</CornerRadius>
     <CornerRadius x:Key="BadgeCornerRadius">6</CornerRadius>
-    <CornerRadius x:Key="PillCornerRadius">999</CornerRadius>
 </ResourceDictionary>
