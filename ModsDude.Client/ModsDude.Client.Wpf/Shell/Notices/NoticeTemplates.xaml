@@ -1,0 +1,158 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:notices="clr-namespace:ModsDude.Client.Wpf.Shell.Notices"
+                    xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared">
+
+    <!-- One notice: a card with its severity down the left edge and in the tile beside the headline,
+         the colour being what survives a glance down the column. -->
+    <DataTemplate DataType="{x:Type notices:NoticeViewModel}">
+        <StackPanel Margin="0 0 0 10">
+
+            <!-- Only above the first card of a run, and only where a game contributed more than one:
+                 three folders of one game reading as three games in trouble is the one real objection
+                 to a column. -->
+            <TextBlock Text="{Binding GroupLabel}"
+                       Margin="4 6 0 6"
+                       Style="{StaticResource SectionCaption}"
+                       Visibility="{Binding HasGroupHeading, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+            <shared:Surface Style="{StaticResource Card}" Padding="0">
+                <Grid>
+                    <Border Style="{StaticResource SeverityBar}" />
+
+                    <Grid Margin="16 14 12 14" ColumnDefinitions="auto * auto">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Grid.Column="0"
+                                Margin="0 0 12 0"
+                                VerticalAlignment="Top"
+                                Style="{StaticResource SeverityTile}">
+                            <TextBlock Style="{StaticResource SeverityGlyph}" />
+                        </Border>
+
+                        <TextBlock Grid.Row="0" Grid.Column="1"
+                                   Text="{Binding Headline}"
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap" />
+
+                        <Button Grid.Row="0" Grid.Column="2"
+                                Margin="8 0 0 0"
+                                Width="28" Height="28"
+                                VerticalAlignment="Top"
+                                FontSize="10"
+                                Style="{StaticResource SubtleIconButton}"
+                                Command="{Binding ToggleExpandedCommand}">
+                            <Button.Content>
+                                <TextBlock>
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="&#xE70D;" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                    <Setter Property="Text" Value="&#xE70E;" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button.Content>
+                        </Button>
+
+                        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                    Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                            <TextBlock Text="{Binding Body}"
+                                       Margin="0 6 0 0"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Visibility="{Binding HasBody, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <Border Margin="0 10 0 0"
+                                    Padding="12 6 12 10"
+                                    Style="{StaticResource InsetWell}"
+                                    Visibility="{Binding HasFacts, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <ItemsControl ItemsSource="{Binding Facts}" Style="{StaticResource FactList}" />
+                            </Border>
+
+                            <TextBlock Text="{Binding Footnote}"
+                                       Margin="0 8 0 0"
+                                       TextWrapping="Wrap"
+                                       Style="{DynamicResource CaptionTextBlockStyle}"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Visibility="{Binding HasFootnote, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </StackPanel>
+
+                        <!-- Outside the collapsible half: what the last press did is the one thing a
+                             collapsed card must not swallow. -->
+                        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                                   Text="{Binding Status}"
+                                   Margin="0 8 0 0"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource AccentTextBrush}"
+                                   Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                        <!-- The remedies on the left, and Dismiss apart from them on the right: it is
+                             the one answer that fixes nothing. -->
+                        <Grid Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                              Margin="0 12 0 0"
+                              ColumnDefinitions="* auto"
+                              Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                            <ItemsControl Grid.Column="0" ItemsSource="{Binding Actions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type notices:NoticeActionViewModel}">
+                                        <!-- Declared twice because a WPF style cannot set the Style
+                                             property, so the accent cannot be moved by a trigger.
+                                             Exactly one is ever visible. -->
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="{Binding Label}"
+                                                    Margin="0 0 8 0"
+                                                    Style="{DynamicResource AccentButtonStyle}"
+                                                    Command="{Binding InvokeCommand}"
+                                                    Visibility="{Binding IsPrimary, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                            <Button Content="{Binding Label}"
+                                                    Margin="0 0 8 0"
+                                                    Command="{Binding InvokeCommand}"
+                                                    Visibility="{Binding IsSecondary, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Button Grid.Column="1"
+                                    Content="Dismiss"
+                                    VerticalAlignment="Top"
+                                    Style="{StaticResource SubtleTextButton}"
+                                    Command="{Binding DismissCommand}"
+                                    Visibility="{Binding CanDismiss, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </shared:Surface>
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- "2 critical", in the severity's colours. The column's header and the collapsed rail both list
+         these: a count per severity, because "4 notices" says nothing about whether to look now. -->
+    <DataTemplate DataType="{x:Type notices:NoticeSeverityCountViewModel}">
+        <Border Style="{StaticResource SeverityPill}">
+            <TextBlock Text="{Binding Label}"
+                       VerticalAlignment="Center"
+                       FontSize="12"
+                       FontWeight="SemiBold" />
+        </Border>
+    </DataTemplate>
+
+</ResourceDictionary>

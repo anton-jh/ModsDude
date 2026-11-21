@@ -137,6 +137,10 @@ The column shows up to six cards, with the rest behind "N more":
   (`DismissalLedger`). If the notice changes, or goes away and comes back, it shows again. Dismissals
   are cleared on restart and user switch.
 - Collapsing the column is not dismissing. New, unseen notices reopen it.
+- The column (`NoticeColumn`) is a layer over the page's right edge, headed by a count per severity.
+  A card shows its severity as a bar down its left edge and a tile beside its headline
+  (`NoticeTemplates.xaml`). Collapsed, it becomes a rail (`NoticeRail`): an edge in the worst
+  severity's colour and the same counts, rotated.
 - Background failures that would otherwise be swallowed are counted, one notice per kind. Dismissing
   them gives a 10-minute cooldown, shared by all of them.
 

@@ -960,4 +960,104 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <!-- A small heading over a group of things: quieter than a title, louder than a caption. -->
+    <Style x:Key="SectionCaption" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- A secondary action in words, with no chrome until pointed at: Dismiss beside a remedy. -->
+    <Style x:Key="SubtleTextButton" TargetType="Button" BasedOn="{StaticResource SubtleMenuButton}">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Padding" Value="10 6" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- What a notice puts at stake, bound to a Severity of type NoticeSeverity on the data context.
+         Critical can cost an evening; pending is work owed rather than anything wrong. -->
+
+    <!-- The bar down a notice card's left edge, clipped to the card's corners by the card. -->
+    <Style x:Key="SeverityBar" TargetType="Border">
+        <Setter Property="Width" Value="3" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Background" Value="{DynamicResource InfoBrush}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Severity}" Value="Critical">
+                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Warning">
+                <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Pending">
+                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- A severity's badge: its colour faint behind, stronger round the edge, and a light shade of it
+         for what is inside, as StatusChip does for states. -->
+    <Style x:Key="SeverityBadge" TargetType="Border">
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="{DynamicResource InfoTintBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource InfoBorderBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource InfoTextBrush}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Severity}" Value="Critical">
+                <Setter Property="Background" Value="{DynamicResource CriticalTintBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource CriticalBorderBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource CriticalTextBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Warning">
+                <Setter Property="Background" Value="{DynamicResource CautionTintBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource CautionBorderBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource CautionTextBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Pending">
+                <Setter Property="Background" Value="{DynamicResource AccentTintBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentTextBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- The square a notice's glyph sits in, beside its headline. -->
+    <Style x:Key="SeverityTile" TargetType="Border" BasedOn="{StaticResource SeverityBadge}">
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="CornerRadius" Value="{StaticResource BadgeCornerRadius}" />
+    </Style>
+
+    <!-- A count of one severity, as a pill: "2 critical". -->
+    <Style x:Key="SeverityPill" TargetType="Border" BasedOn="{StaticResource SeverityBadge}">
+        <Setter Property="Height" Value="22" />
+        <Setter Property="Padding" Value="9 0" />
+        <Setter Property="CornerRadius" Value="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadiusConverter}}" />
+    </Style>
+
+    <Style x:Key="SeverityGlyph" TargetType="TextBlock" BasedOn="{StaticResource CenteredGlyph}">
+        <Setter Property="FontFamily" Value="{DynamicResource SymbolThemeFontFamily}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Text" Value="&#xE946;" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Severity}" Value="Critical">
+                <Setter Property="Text" Value="&#xE783;" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Warning">
+                <Setter Property="Text" Value="&#xE7BA;" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Pending">
+                <Setter Property="Text" Value="&#xE823;" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
 </ResourceDictionary>

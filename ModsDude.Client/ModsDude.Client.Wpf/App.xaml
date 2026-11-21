@@ -13,6 +13,7 @@
                 <ResourceDictionary Source="Shared/Resources/Controls.xaml"/>
                 <ResourceDictionary Source="Shared/SharedTemplates.xaml"/>
                 <ResourceDictionary Source="Shell/ShellTemplates.xaml"/>
+                <ResourceDictionary Source="Shell/Notices/NoticeTemplates.xaml"/>
                 <ResourceDictionary Source="Shell/Sidebar/SidebarResources.xaml"/>
                 <ResourceDictionary Source="Account/AccountTemplates.xaml"/>
                 <ResourceDictionary Source="Home/HomeTemplates.xaml"/>
