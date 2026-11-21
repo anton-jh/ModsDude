@@ -127,6 +127,9 @@ live and archived savegame lists and looking for the new save.
 
 ### Publishing
 
+The slots offered are the ones holding a save ModsDude has no copy of. A held save is checked in rather
+than published again.
+
 `SavegamePublishWizard` picks the slot, the name, optionally a profile, and whether to keep playing. When
 the publisher keeps playing a save tied to a profile, the wizard works out a keep plan
 (`SavegameKeepPlan`):
@@ -186,3 +189,10 @@ construction, so an adapter that numbers slots from one in each folder can't mak
 
 **Unreadable slots count as occupied.** A slot the adapter can't read is still someone's data, and must
 stay impossible to overwrite by accident.
+
+**Slot pickers classify every slot in one pass.** `ISavegameSlots.ClassifySlotsAsync` reads the slots once
+and hashes only the slots a binding claims. Only for those does the content decide what the slot is.
+
+**Savegame byte work runs on the thread pool.** `SavegamePacker` and `SavegameTransfer` move their hashing,
+packing, unpacking and transfers off the caller's context. Their callers are view models on the UI thread,
+and each 64 KiB read would otherwise resume there.

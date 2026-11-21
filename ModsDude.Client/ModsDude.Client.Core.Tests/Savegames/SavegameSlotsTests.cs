@@ -47,6 +47,59 @@ public class SavegameSlotsTests
         Assert.Equal(SavegameSlotAvailability.HeldClean, await harness.Slots.ClassifySlotAsync(harness.Game, _slot1, CancellationToken.None));
     }
 
+    /// <summary>
+    /// The pickers ask about every slot at once. Asked in one pass, each slot must read exactly as it
+    /// does asked about alone, in the order the picker lists them.
+    /// </summary>
+    [Fact]
+    public async Task Classifying_every_slot_at_once_agrees_with_classifying_each_one()
+    {
+        using var harness = new SavegameHarness();
+        harness.AddSecondTarget();
+        await harness.SeedHeadAsync("a savegame");
+
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+        harness.WriteSlotFile(_slot2, "somebody's own savegame");
+
+        await AssertAgreesAsync(harness);
+        Assert.Equal(
+            [SavegameSlotAvailability.HeldClean, SavegameSlotAvailability.Unrecognised, SavegameSlotAvailability.Free, SavegameSlotAvailability.Free],
+            (await harness.Slots.ClassifySlotsAsync(harness.Game, CancellationToken.None)).Select(x => x.Availability));
+
+        harness.WriteSlotFile(_slot1, "a night of play");
+
+        await AssertAgreesAsync(harness);
+        Assert.Equal(
+            SavegameSlotAvailability.HeldWithUnpublishedPlay,
+            (await harness.Slots.ClassifySlotsAsync(harness.Game, CancellationToken.None)).First().Availability);
+
+        static async Task AssertAgreesAsync(SavegameHarness harness)
+        {
+            var all = await harness.Slots.ClassifySlotsAsync(harness.Game, CancellationToken.None);
+            var listed = await harness.Slots.GetSlotsAsync(harness.Game, CancellationToken.None);
+
+            Assert.Equal(listed.Select(x => x.Ref), all.Select(x => x.Slot.Ref));
+
+            foreach (var (slot, availability) in all)
+            {
+                Assert.Equal(await harness.Slots.ClassifySlotAsync(harness.Game, slot.Ref, CancellationToken.None), availability);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Classifying_every_slot_stops_when_cancelled()
+    {
+        using var harness = new SavegameHarness();
+        await harness.SeedHeadAsync("a savegame");
+        await harness.CheckOut.CheckOutAsync(harness.Game, harness.Server.Savegame, _slot1, SavegameRevisionMode.Latest, CancellationToken.None);
+
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => harness.Slots.ClassifySlotsAsync(harness.Game, cancelled.Token));
+    }
+
     [Fact]
     public async Task The_picker_pre_selects_the_remembered_slot_and_falls_back_to_the_first_free_one()
     {

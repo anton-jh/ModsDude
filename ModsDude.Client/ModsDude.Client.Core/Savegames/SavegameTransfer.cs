@@ -25,7 +25,15 @@ public sealed class SavegameTransfer(
     /// network stream cannot seek back. The contents are verified as they are unpacked, which is the
     /// only point where what arrived and what lands in the slot are the same bytes.
     /// </remarks>
-    public async Task<DownloadedSavegame> DownloadAsync(
+    public Task<DownloadedSavegame> DownloadAsync(
+        Guid repoId,
+        Guid savegameId,
+        string contentHash,
+        IProgress<SavegameProgress>? progress,
+        CancellationToken ct)
+        => Task.Run(() => DownloadToArchiveAsync(repoId, savegameId, contentHash, progress, ct), ct);
+
+    private async Task<DownloadedSavegame> DownloadToArchiveAsync(
         Guid repoId,
         Guid savegameId,
         string contentHash,
@@ -112,7 +120,10 @@ public sealed class SavegameTransfer(
     /// <remarks>
     /// The blob is addressed by its content, so an <c>AlreadyStored</c> link skips the upload entirely.
     /// </remarks>
-    public async Task UploadAsync(Guid repoId, Guid savegameId, PackedSavegame packed, IProgress<SavegameProgress>? progress, CancellationToken ct)
+    public Task UploadAsync(Guid repoId, Guid savegameId, PackedSavegame packed, IProgress<SavegameProgress>? progress, CancellationToken ct)
+        => Task.Run(() => UploadArchiveAsync(repoId, savegameId, packed, progress, ct), ct);
+
+    private async Task UploadArchiveAsync(Guid repoId, Guid savegameId, PackedSavegame packed, IProgress<SavegameProgress>? progress, CancellationToken ct)
     {
         Task<CreateSavegameUploadLinkResponse> CreateLinkAsync(CancellationToken cancellationToken)
             => filesClient.CreateSavegameUploadLinkV1Async(new CreateSavegameUploadLinkRequest

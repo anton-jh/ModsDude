@@ -459,9 +459,51 @@ public class SavegamePackerTests
         Assert.True(reports.Count > 2);
     }
 
+    /// <summary>
+    /// The callers are view models on the UI thread. A walk awaits once per read, and none of those
+    /// continuations may be posted back to the caller's context.
+    /// </summary>
+    [Fact]
+    public async Task Hashing_packing_and_unpacking_never_resume_on_the_callers_context()
+    {
+        using var root = new TempDirectory("savegame-context");
+        var adapter = new PackerTestAdapter(root.Path);
+        var packer = new SavegamePacker();
+        var context = new CountingSynchronizationContext();
+
+        // Many reads' worth, so a walk on the caller's context would post many times.
+        WriteSlotFile(root, _slot, "careerSavegame.xml", new string('a', 1_500_000));
+
+        await StartedUnder(context, () => packer.HashSlotAsync(adapter, adapter.Target, _slot, CancellationToken.None));
+        using var archive = new OwnedArchive(await StartedUnder(context, () => packer.PackAsync(adapter, adapter.Target, _slot, [], CancellationToken.None)));
+        await StartedUnder(context, () => packer.UnpackAsync(archive.FilePath, archive.ContentHash, adapter, adapter.Target, _otherSlot, CancellationToken.None));
+
+        Assert.Equal(0, context.Posts);
+    }
+
 
     private static async Task<OwnedArchive> Pack(PackerTestAdapter adapter, SavegameSlotId slot)
         => new(await new SavegamePacker().PackAsync(adapter, adapter.Target, slot, [], CancellationToken.None));
+
+    /// <summary>Starts the call with <paramref name="context"/> current, and awaits it without.</summary>
+    private static async Task<T> StartedUnder<T>(SynchronizationContext context, Func<Task<T>> start)
+    {
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(context);
+
+        Task<T> started;
+
+        try
+        {
+            started = start();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        return await started;
+    }
 
     private static GameFileEdit Rename(string relativePath, string content)
         => new(relativePath, _ => Encoding.UTF8.GetBytes(content));
@@ -561,6 +603,20 @@ public class SavegamePackerTests
             {
                 // A leftover temp file is not worth failing a passing test over.
             }
+        }
+    }
+
+
+    private sealed class CountingSynchronizationContext : SynchronizationContext
+    {
+        private int _posts;
+
+        public int Posts => Volatile.Read(ref _posts);
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref _posts);
+            base.Post(d, state);
         }
     }
 }

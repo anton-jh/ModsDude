@@ -13,6 +13,12 @@ public interface ISavegameSlots
     Task<IReadOnlyList<GameSavegameSlot>> GetSlotsAsync(Game game, CancellationToken ct);
 
     /// <summary>
+    /// Every slot, as <see cref="GetSlotsAsync"/> lists them, with what each is to somebody about to
+    /// write into it. Reads the slots once, and hashes only the ones a binding claims.
+    /// </summary>
+    Task<IReadOnlyList<ClassifiedSavegameSlot>> ClassifySlotsAsync(Game game, CancellationToken ct);
+
+    /// <summary>
     /// The slot to pre-select for a savegame: the one it used last if that is free, otherwise the first
     /// free one, otherwise null. Never changes the remembered slot.
     /// </summary>
@@ -38,3 +44,6 @@ public interface ISavegameSlots
     Task<List<SavegameDetailDto>> ReadDetailsAsync(
         ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken ct);
 }
+
+
+public sealed record ClassifiedSavegameSlot(GameSavegameSlot Slot, SavegameSlotAvailability Availability);

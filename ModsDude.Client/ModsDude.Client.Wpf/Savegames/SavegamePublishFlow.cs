@@ -112,19 +112,12 @@ public sealed class SavegamePublishFlow(
     private async Task<IReadOnlyList<SavegameSlotOptionViewModel>> ReadPublishableSlotsAsync(
         Game game, CancellationToken cancellationToken)
     {
-        var options = new List<SavegameSlotOptionViewModel>();
-
-        foreach (var slot in await savegameSlots.GetSlotsAsync(game, cancellationToken))
-        {
-            var availability = await savegameSlots.ClassifySlotAsync(game, slot.Ref, cancellationToken);
-
-            if (availability is SavegameSlotAvailability.Unrecognised)
-            {
-                options.Add(new SavegameSlotOptionViewModel(slot, availability));
-            }
-        }
-
-        return options;
+        return
+        [
+            .. (await savegameSlots.ClassifySlotsAsync(game, cancellationToken))
+                .Where(x => x.Availability is SavegameSlotAvailability.Unrecognised)
+                .Select(x => new SavegameSlotOptionViewModel(x.Slot, x.Availability))
+        ];
     }
 
     /// <summary>

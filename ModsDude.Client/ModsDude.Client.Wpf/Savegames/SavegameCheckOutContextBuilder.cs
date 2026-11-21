@@ -27,12 +27,10 @@ public sealed class SavegameCheckOutContextBuilder(
         IReadOnlySet<Guid> checkedInFirst,
         CancellationToken cancellationToken)
     {
-        var slots = await savegameSlots.GetSlotsAsync(game, cancellationToken);
         var options = new List<SavegameSlotOptionViewModel>();
 
-        foreach (var slot in slots)
+        foreach (var (slot, availability) in await savegameSlots.ClassifySlotsAsync(game, cancellationToken))
         {
-            var availability = await savegameSlots.ClassifySlotAsync(game, slot.Ref, cancellationToken);
             var binding = bindingStore.GetBindingForSlot(game.Identity, slot.Ref);
 
             options.Add(new SavegameSlotOptionViewModel(

@@ -50,6 +50,10 @@ public readonly record struct PackedSavegame(
 /// <b>Hashing and packing walk the same code.</b> <see cref="HashSlotAsync"/> is the pack's walk with
 /// no archive to write, so a drift check cannot disagree with the packer.
 /// </para>
+/// <para>
+/// <b>Every call does its work on the thread pool.</b> A walk awaits once per read, so none of it may
+/// resume on the caller's context: on a UI thread each read would queue behind the UI.
+/// </para>
 /// </remarks>
 public interface ISavegamePacker
 {
@@ -118,13 +122,36 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
     private static readonly DateTimeOffset _fixedTimestamp = new(1980, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
 
-    public async Task<PackedSavegame> PackAsync(
+    public Task<PackedSavegame> PackAsync(
         ILocalSavegameAdapter adapter,
         SavegameTarget target,
         SavegameSlotId slot,
         IReadOnlyList<GameFileEdit> overlay,
         CancellationToken cancellationToken,
         IProgress<SavegameProgress>? progress = null)
+        => Task.Run(() => WriteArchiveAsync(adapter, target, slot, overlay, progress, cancellationToken), cancellationToken);
+
+    public Task<string> HashSlotAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken)
+        => Task.Run(async () => (await WalkAsync(adapter, target, slot, [], null, null, cancellationToken)).SlotHash, cancellationToken);
+
+    public Task<string?> UnpackAsync(
+        string archivePath,
+        string expectedContentHash,
+        ILocalSavegameAdapter adapter,
+        SavegameTarget target,
+        SavegameSlotId slot,
+        CancellationToken cancellationToken,
+        IProgress<SavegameProgress>? progress = null)
+        => Task.Run(() => ReplaceSlotAsync(archivePath, expectedContentHash, adapter, target, slot, progress, cancellationToken), cancellationToken);
+
+
+    private async Task<PackedSavegame> WriteArchiveAsync(
+        ILocalSavegameAdapter adapter,
+        SavegameTarget target,
+        SavegameSlotId slot,
+        IReadOnlyList<GameFileEdit> overlay,
+        IProgress<SavegameProgress>? progress,
+        CancellationToken cancellationToken)
     {
         var archivePath = GetTemporaryArchivePath();
 
@@ -162,17 +189,14 @@ public sealed class SavegamePacker(ILogger<SavegamePacker>? logger = null) : ISa
         }
     }
 
-    public async Task<string> HashSlotAsync(ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken)
-        => (await WalkAsync(adapter, target, slot, [], null, null, cancellationToken)).SlotHash;
-
-    public async Task<string?> UnpackAsync(
+    private async Task<string?> ReplaceSlotAsync(
         string archivePath,
         string expectedContentHash,
         ILocalSavegameAdapter adapter,
         SavegameTarget target,
         SavegameSlotId slot,
-        CancellationToken cancellationToken,
-        IProgress<SavegameProgress>? progress = null)
+        IProgress<SavegameProgress>? progress,
+        CancellationToken cancellationToken)
     {
         var slotPath = Path.GetFullPath(adapter.GetSlotPath(target, slot));
         var parent = Path.GetDirectoryName(slotPath)

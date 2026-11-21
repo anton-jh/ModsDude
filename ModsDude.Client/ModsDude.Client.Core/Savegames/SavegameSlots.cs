@@ -13,22 +13,19 @@ public sealed class SavegameSlots(
     : ISavegameSlots
 {
     public async Task<IReadOnlyList<GameSavegameSlot>> GetSlotsAsync(Game game, CancellationToken ct)
+        => [.. (await ReadSlotsAsync(adapters.Require(game), ct)).Select(x => x.Slot)];
+
+    public async Task<IReadOnlyList<ClassifiedSavegameSlot>> ClassifySlotsAsync(Game game, CancellationToken ct)
     {
         var adapter = adapters.Require(game);
-        var targets = adapter.SavegameTargets;
-        var slots = new List<GameSavegameSlot>();
+        var classified = new List<ClassifiedSavegameSlot>();
 
-        foreach (var target in targets)
+        foreach (var (target, slot) in await ReadSlotsAsync(adapter, ct))
         {
-            var name = TargetNames.Distinguishing(target.Key, target.DisplayName, targets.Count);
-
-            foreach (var slot in await adapter.GetSlots(target, ct))
-            {
-                slots.Add(new GameSavegameSlot(new SavegameSlotRef(target.Key, slot.Id), name, slot));
-            }
+            classified.Add(new ClassifiedSavegameSlot(slot, await ClassifyAsync(game, adapter, target, slot, ct)));
         }
 
-        return slots;
+        return classified;
     }
 
     public async Task<SavegameSlotRef?> SuggestSlotAsync(Game game, Guid savegameId, CancellationToken ct)
@@ -61,13 +58,8 @@ public sealed class SavegameSlots(
             ?? new SavegameSlot(slotRef.Slot, null, false, [], adapter.GetSlotNumber(slotRef.Slot));
 
         var addressed = new GameSavegameSlot(new SavegameSlotRef(target.Key, slot.Id), target.DisplayName, slot);
-        var binding = bindings.GetBindingForSlot(game.Identity, addressed.Ref);
 
-        var currentHash = binding is not null && slot.IsOccupied
-            ? await packer.HashSlotAsync(adapter, target, slot.Id, ct)
-            : null;
-
-        return SavegameSlotStates.Classify(addressed, binding, currentHash);
+        return await ClassifyAsync(game, adapter, target, addressed, ct);
     }
 
     public string? DescribeFolder(Game game, TargetKey target)
@@ -103,5 +95,38 @@ public sealed class SavegameSlots(
 
             return [];
         }
+    }
+
+
+    /// <summary>Every slot of every folder, in picker order, each beside the folder it is in.</summary>
+    private static async Task<IReadOnlyList<(SavegameTarget Target, GameSavegameSlot Slot)>> ReadSlotsAsync(
+        ILocalSavegameAdapter adapter, CancellationToken ct)
+    {
+        var targets = adapter.SavegameTargets;
+        var slots = new List<(SavegameTarget, GameSavegameSlot)>();
+
+        foreach (var target in targets)
+        {
+            var name = TargetNames.Distinguishing(target.Key, target.DisplayName, targets.Count);
+
+            foreach (var slot in await adapter.GetSlots(target, ct))
+            {
+                slots.Add((target, new GameSavegameSlot(new SavegameSlotRef(target.Key, slot.Id), name, slot)));
+            }
+        }
+
+        return slots;
+    }
+
+    private async Task<SavegameSlotAvailability> ClassifyAsync(
+        Game game, ILocalSavegameAdapter adapter, SavegameTarget target, GameSavegameSlot slot, CancellationToken ct)
+    {
+        var binding = bindings.GetBindingForSlot(game.Identity, slot.Ref);
+
+        var currentHash = binding is not null && slot.IsOccupied
+            ? await packer.HashSlotAsync(adapter, target, slot.Id, ct)
+            : null;
+
+        return SavegameSlotStates.Classify(slot, binding, currentHash);
     }
 }

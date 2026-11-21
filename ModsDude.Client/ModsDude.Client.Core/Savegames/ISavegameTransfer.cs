@@ -4,6 +4,7 @@ using ModsDude.Client.Core.Models;
 namespace ModsDude.Client.Core.Savegames;
 
 /// <summary>Moves savegame bytes between storage and a slot.</summary>
+/// <remarks>The byte work runs on the thread pool, never on the caller's context, like <see cref="ISavegamePacker"/>.</remarks>
 public interface ISavegameTransfer
 {
     /// <summary>
