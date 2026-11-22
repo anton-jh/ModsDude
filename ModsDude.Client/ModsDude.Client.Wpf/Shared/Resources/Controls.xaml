@@ -565,6 +565,46 @@
         </Setter>
     </Style>
 
+    <!-- One choice of a segmented control: the segments share an InsetWell with 2px padding, and the
+         chosen one is lifted out of it on a raised fill. -->
+    <Style x:Key="SegmentChip" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Height" Value="26" />
+        <Setter Property="Padding" Value="12 0" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <shared:Surface x:Name="Segment"
+                                    Background="Transparent"
+                                    Padding="{TemplateBinding Padding}"
+                                    CornerRadius="{StaticResource SegmentCornerRadius}"
+                                    ShadowBlur="2"
+                                    ShadowOffset="0,1">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </shared:Surface>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Segment" Property="Background" Value="{DynamicResource RaisedStrokeBrush}" />
+                            <Setter TargetName="Segment" Property="ShadowOpacity" Value="0.4" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <Setter Property="FontWeight" Value="Medium" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                            <Setter TargetName="Segment" Property="Opacity" Value="0.5" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- A source chip. The same shape as the FilterChip above and deliberately never in the same row
          as one: these are independent toggles and those are mutually exclusive, so one row of both
          would read as one control with two kinds of behaviour in it. Above the filters where a page

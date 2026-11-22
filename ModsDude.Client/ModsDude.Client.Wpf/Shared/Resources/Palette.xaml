@@ -126,5 +126,7 @@
     <CornerRadius x:Key="LayerCornerRadius">14 0 0 0</CornerRadius>
     <CornerRadius x:Key="CardCornerRadius">14</CornerRadius>
     <CornerRadius x:Key="WellCornerRadius">10</CornerRadius>
+    <!-- A segment inside a well's 1px edge and 2px padding, so its corners run parallel to the well's. -->
+    <CornerRadius x:Key="SegmentCornerRadius">7</CornerRadius>
     <CornerRadius x:Key="BadgeCornerRadius">6</CornerRadius>
 </ResourceDictionary>

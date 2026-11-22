@@ -87,11 +87,13 @@
             </Style.Triggers>
         </Style>
 
-        <!-- An attribute sort's dropdown, drawn as a sort chip: grey and saying "Attribute" while it
-             holds no key, lit like a checked chip while it is the sort. -->
+        <!-- An attribute sort's dropdown, drawn as one of the sort's segments: plain and saying
+             "Attribute" while it holds no key, lifted like a chosen SegmentChip while it is the sort. -->
         <Style x:Key="SortAttributeBox" TargetType="ComboBox">
-            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Height" Value="26" />
             <Setter Property="MinWidth" Value="110" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -100,12 +102,14 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBox">
                         <Grid>
-                            <Border x:Name="Chip"
-                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                    BorderThickness="1"
-                                    Padding="12 5 10 5"
-                                    CornerRadius="14">
+                            <shared:Surface x:Name="Segment"
+                                            Background="{DynamicResource RaisedStrokeBrush}"
+                                            TextElement.FontWeight="Medium"
+                                            Padding="12 0 10 0"
+                                            CornerRadius="{StaticResource SegmentCornerRadius}"
+                                            ShadowBlur="2"
+                                            ShadowOffset="0,1"
+                                            ShadowOpacity="0.4">
                                 <Grid ColumnDefinitions="* auto">
                                     <ContentPresenter x:Name="Selection"
                                                       Content="{TemplateBinding SelectionBoxItem}"
@@ -122,7 +126,7 @@
                                                FontSize="10"
                                                Text="&#xE70D;" />
                                 </Grid>
-                            </Border>
+                            </shared:Surface>
 
                             <ToggleButton OverridesDefaultStyle="True"
                                           HorizontalAlignment="Stretch"
@@ -158,16 +162,18 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="SelectedItem" Value="{x:Null}">
-                                <Setter TargetName="Chip" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                                <Setter TargetName="Segment" Property="Background" Value="Transparent" />
+                                <Setter TargetName="Segment" Property="ShadowOpacity" Value="0" />
                                 <Setter TargetName="Placeholder" Property="Visibility" Value="Visible" />
                                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <Setter TargetName="Segment" Property="TextElement.FontWeight" Value="Normal" />
                             </Trigger>
                             <MultiTrigger>
                                 <MultiTrigger.Conditions>
                                     <Condition Property="SelectedItem" Value="{x:Null}" />
                                     <Condition Property="IsMouseOver" Value="True" />
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="Chip" Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                             </MultiTrigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
@@ -188,11 +194,11 @@
                 <!-- The keys are one choice, so they share a well; the direction sits outside it. -->
                 <Border Style="{StaticResource InsetWell}" Padding="2" Margin="0 0 6 0" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal">
-                        <RadioButton Style="{StaticResource FilterChip}"
+                        <RadioButton Style="{StaticResource SegmentChip}"
                                      Margin="0 0 2 0"
                                      Content="Name"
                                      IsChecked="{Binding Kind, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Name}" />
-                        <RadioButton Style="{StaticResource FilterChip}"
+                        <RadioButton Style="{StaticResource SegmentChip}"
                                      Margin="0 0 2 0"
                                      Content="{Binding DateLabel}"
                                      ToolTip="{Binding DateTooltip}"

@@ -90,6 +90,9 @@ lay their pane straight on the window.
 - Cards, inset wells and modals clip their content to their rounded corners (`RoundedClip`), so rows
   and footers that run to the edge follow the curve.
 - Chips are stadiums: their corner radius is half their height (`PillRadiusConverter`).
+- A segmented control (a list's sort keys) is a row of `SegmentChip`s in an `InsetWell`: rounded
+  rectangles whose corners run parallel to the well's (`SegmentCornerRadius`). The chosen segment is
+  lifted on a raised fill with a small shadow rather than tinted.
 - Chosen things wear the accent's tint: the open rail and sidebar entry, filter and source chips,
   picked mod rows, the chosen row of a `ListRow` list (`SlotList`, the Saves page). Status badges are
   tints of their state's colour.
