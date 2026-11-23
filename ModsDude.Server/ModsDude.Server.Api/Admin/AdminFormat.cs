@@ -1,4 +1,5 @@
 using ModsDude.Server.Domain.Backups;
+using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Users;
 using System.Globalization;
@@ -36,6 +37,23 @@ public static class AdminFormat
         BackupFreshness.Late => "Late",
         BackupFreshness.Missing => "No backups",
         _ => throw new ArgumentOutOfRangeException(nameof(freshness), freshness, null)
+    };
+
+    /// <summary>The badge class a freshness is shown in.</summary>
+    public static string Tone(BackupFreshness freshness) => freshness switch
+    {
+        BackupFreshness.Ok => "success",
+        BackupFreshness.Late or BackupFreshness.Missing => "critical",
+        _ => throw new ArgumentOutOfRangeException(nameof(freshness), freshness, null)
+    };
+
+    /// <summary>The badge class a trust code's status is shown in.</summary>
+    public static string Tone(TrustCodeStatus status) => status switch
+    {
+        TrustCodeStatus.Active => "success",
+        TrustCodeStatus.Redeemed => "info",
+        TrustCodeStatus.Expired or TrustCodeStatus.Revoked => "",
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
     };
 
     public static string Date(DateOnly date)

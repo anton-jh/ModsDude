@@ -11,16 +11,16 @@
     <p class="notice">@notice</p>
 }
 
-<dl>
+<dl class="well">
     <dt>Email</dt>
     <dd>@Model.Email</dd>
 </dl>
+
+<form method="post" asp-page-handler="SignOut">
+    <button type="submit">Sign out of this browser</button>
+</form>
 
 <div class="links">
     <a asp-page="/Accounts/ChangePasswordPage">Change password</a>
     <a asp-page="/Accounts/ChangeEmailPage">Change email</a>
 </div>
-
-<form method="post" asp-page-handler="SignOut" class="separated">
-    <button type="submit">Sign out of this browser</button>
-</form>

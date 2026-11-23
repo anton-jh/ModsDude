@@ -6,7 +6,7 @@
     ViewData[AdminLayout.SectionKey] = AdminSection.Repos;
 }
 
-<section>
+<section class="card">
     <h2>Repos</h2>
     <div class="muted">Traffic covers the last @AdminWindows.TrafficDays days, counted when links are issued.</div>
 
@@ -16,7 +16,7 @@
     }
     else
     {
-        <div class="rows" style="--columns: minmax(10rem, 2fr) minmax(6rem, 1fr) 5rem 5rem 6.5rem 6.5rem 6.5rem 6.5rem">
+        <div class="well rows" style="--columns: minmax(10rem, 2fr) minmax(6rem, 1fr) 5rem 5rem 6.5rem 6.5rem 6.5rem 6.5rem">
             <div class="rows-header">
                 <span>Repo</span>
                 <span>Adapter</span>
@@ -36,11 +36,11 @@
                             @repo.Name
                             @if (repo.ArchivedAt is not null)
                             {
-                                <span class="status">Archived</span>
+                                <span class="badge">Archived</span>
                             }
                             @if (!repo.HasActiveAdmin)
                             {
-                                <span class="status NoActiveAdmin">No active Admin</span>
+                                <span class="badge critical">No active Admin</span>
                             }
                         </span>
                         <span class="code">@repo.Adapter</span>
@@ -121,7 +121,7 @@
                         }
                         else
                         {
-                            <div class="scroll-list"><table>
+                            <div class="well scroll-list"><table>
                                 <thead>
                                     <tr>
                                         <th>User</th>
@@ -137,7 +137,7 @@
                                                 @member.User
                                                 @if (member.IsBlocked)
                                                 {
-                                                    <span class="status Blocked">Blocked</span>
+                                                    <span class="badge critical">Blocked</span>
                                                 }
                                             </td>
                                             <td>
@@ -212,7 +212,7 @@
                         }
                         else
                         {
-                            <div class="scroll-list"><table>
+                            <div class="well scroll-list"><table>
                                 <thead>
                                     <tr>
                                         <th>Code</th>
@@ -305,7 +305,7 @@
                         </div>
 
                         <h3>Traffic, last @AdminWindows.TrafficDays days</h3>
-                        <table>
+                        <div class="well table-scroll"><table>
                             <thead>
                                 <tr>
                                     <th>File</th>
@@ -327,7 +327,7 @@
                                     </tr>
                                 }
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 </details>
             }

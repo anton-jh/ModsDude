@@ -6,7 +6,7 @@
     ViewData[AdminLayout.SectionKey] = AdminSection.Users;
 }
 
-<section>
+<section class="card">
     <h2>Users</h2>
     <div class="muted">Traffic covers the last @AdminWindows.TrafficDays days, counted when links are issued.</div>
 
@@ -16,7 +16,7 @@
     }
     else
     {
-        <div class="rows" style="--columns: minmax(10rem, 2fr) 10rem 5rem 6.5rem 6.5rem">
+        <div class="well rows" style="--columns: minmax(10rem, 2fr) 10rem 5rem 6.5rem 6.5rem">
             <div class="rows-header">
                 <span>User</span>
                 <span>Last seen</span>
@@ -33,11 +33,11 @@
                             @user.Name
                             @if (user.BlockedAt is not null)
                             {
-                                <span class="status Blocked">Blocked</span>
+                                <span class="badge critical">Blocked</span>
                             }
                             @if (user.IsTrusted)
                             {
-                                <span class="status Trusted">Trusted</span>
+                                <span class="badge success">Trusted</span>
                             }
                         </span>
                         <span>@AdminFormat.Time(user.LastSeen)</span>
@@ -109,7 +109,7 @@
                         }
                         else
                         {
-                            <div class="scroll-list"><table>
+                            <div class="well scroll-list"><table>
                                 <thead>
                                     <tr>
                                         <th>Repo</th>
