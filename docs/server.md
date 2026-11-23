@@ -1,7 +1,7 @@
 # Server
 
 The API is one ASP.NET Core process (`ModsDude.Server.Api`) over PostgreSQL and Azure Blob Storage.
-Besides the API it hosts the account pages, the admin pages, the Hangfire jobs and the ModHub crawler,
+Besides the API it hosts the landing page, the account pages, the admin pages, the Hangfire jobs and the ModHub crawler,
 and it is its own sign-in provider. How to set it up and
 run it is in the [repository README](../README.md).
 
@@ -78,9 +78,12 @@ The server is its own sign-in provider. Everything for it lives in `Api/Accounts
   development certificates.
 - **Account pages.** Razor Pages under `/account`: sign in, sign up, check email, confirm email,
   forgot and reset password, and, signed in with Identity's cookie, change password and change email.
-  They and the admin pages share `Shared/_Theme.cshtml`: the client's palette, generated from
-  `Palette.xaml` into `Shared/_Palette.cshtml` by `scripts/web-palette.ps1`, and recipes matching the
-  client's buttons, fields, cards, wells and badges. Dark only. A card on the window, like a client modal.
+  They, the landing page and the admin pages share `Shared/_Theme.cshtml`: the client's palette,
+  generated from `Palette.xaml` into `Shared/_Palette.cshtml` by `scripts/web-palette.ps1`, and recipes
+  matching the client's buttons, fields, cards, wells and badges. Dark only.
+- **Landing page.** A Razor page at `/` with the Download button. It and the account pages draw one card
+  on the window (`Shared/_CardLayout.cshtml`). It is down, like `/download`, while a deploy has the API
+  stopped.
   Sign-up (`AccountSignUp`) needs a trust code or an invite, checks each code before anything is written,
   and saves the user, the account and every redemption in one transaction. A resubmit with the same
   request ID and password gets the original outcome.

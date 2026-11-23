@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="robots" content="noindex">
+@if (ViewData["Indexed"] is not true)
+{
+    <meta name="robots" content="noindex">
+}
 <title>@(ViewData["Title"] is string title ? $"{title} - ModsDude" : "ModsDude")</title>
 @await Html.PartialAsync("/Shared/_Theme.cshtml")
 <style>
@@ -134,6 +137,7 @@
         overflow-wrap: anywhere;
     }
 </style>
+@await RenderSectionAsync("Styles", required: false)
 </head>
 <body>
 <main>

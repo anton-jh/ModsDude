@@ -190,8 +190,8 @@ One Linux server runs three containers from `deploy/compose.yml`:
 - **api**: the image CI builds. Its admin pages answer only on port 8081, published on the server's
   loopback and reached over Tailscale; see [Admin pages](#admin-pages).
 - **db**: PostgreSQL 17.
-- **caddy**: serves `SITE_ADDRESS` over HTTPS with a Let's Encrypt certificate it gets by itself, proxies
-  to the API and serves the landing page in `deploy/caddy/site`.
+- **caddy**: serves `SITE_ADDRESS` over HTTPS with a Let's Encrypt certificate it gets by itself and
+  proxies to the API, which serves the landing page too.
 
 Blobs live in the production storage account. Clients install and update from the repository's GitHub
 Releases.

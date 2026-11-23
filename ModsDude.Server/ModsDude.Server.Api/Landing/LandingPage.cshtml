@@ -1,0 +1,31 @@
+@page "/"
+@{
+    ViewData["Indexed"] = true;
+}
+
+<h1>ModsDude</h1>
+<p class="tagline">The Dude of Mods.</p>
+
+<a class="button accent download" href="/download">Download</a>
+
+<p class="well restricted">ModsDude is not intended for public use. A personal invitation is needed to use it.</p>
+
+@section Styles {
+<style>
+    .tagline {
+        margin-top: -12px;
+        color: var(--text-muted);
+    }
+
+    .download {
+        min-height: 40px;
+        font-size: 14px;
+    }
+
+    .restricted {
+        padding: 12px 16px;
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+</style>
+}
