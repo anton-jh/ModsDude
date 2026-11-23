@@ -222,6 +222,14 @@ server is about to move on.
 The operational steps are in the [repository README](../README.md). The design:
 
 - **Ports.** Only Caddy publishes public ports. The API's admin port is published on localhost only.
+- **Memory.** Sized for a server with under 1 GB of RAM:
+  - each container has a memory limit (API 400 MB, database 256 MB, Caddy 128 MB), and the API's
+    garbage collector sizes its heap to its limit;
+  - the database runs with `shared_buffers=64MB` and `max_connections=40`, and the API's connection pool
+    holds at most 25;
+  - the API runs with write-xor-execute off, which saves tens of MB of double-mapped JIT code;
+  - the host swaps to zram, then to a 2 GB file, and earlyoom kills the API (which Docker restarts) before
+    the host freezes.
 - **Deploy order.** `deploy/deploy.sh` checks its preconditions, loads the image, makes sure the backup
   timers, database and Caddy are up, then stops the API, takes a backup, and migrates in one transaction
   from the idempotent migration script. An `EXIT` trap restarts the old build if the stop, backup or
