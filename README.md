@@ -307,11 +307,30 @@ Debian. As root:
    apt update
    apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
    ```
-3. Make a deploy key pair on your own machine. It needs no passphrase, because CI uses it.
+3. Give the server swap and an early OOM killer. Without swap, a server with under 1 GB of RAM freezes
+   instead of recovering when memory runs out. Swap goes to compressed RAM (zram) first, then to a 2 GB
+   file. earlyoom kills the API, which Docker restarts, before the server freezes. Transparent huge pages
+   only where asked for, since `always` wastes hundreds of MB on a server this small.
+   ```bash
+   fallocate -l 2G /swapfile
+   chmod 600 /swapfile
+   mkswap /swapfile
+   swapon --priority 10 /swapfile
+   echo "/swapfile none swap sw,pri=10 0 0" >> /etc/fstab
+
+   echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
+   echo "w /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise" > /etc/tmpfiles.d/thp.conf
+
+   apt install -y zram-tools earlyoom
+   printf 'ALGO=zstd\nPERCENT=50\nPRIORITY=100\n' > /etc/default/zramswap
+   echo 'EARLYOOM_ARGS="-r 3600 -m 5 -s 10 --prefer ^dotnet$ --avoid ^(postgres|dockerd|containerd|containerd-shim|sshd|tailscaled|systemd.*|caddy)$"' > /etc/default/earlyoom
+   systemctl restart zramswap earlyoom
+   ```
+4. Make a deploy key pair on your own machine. It needs no passphrase, because CI uses it.
    ```bash
    ssh-keygen -t ed25519 -f deploy_key -N ""
    ```
-4. Create the user CI deploys as. Membership of the `docker` group is as good as root on this machine.
+5. Create the user CI deploys as. Membership of the `docker` group is as good as root on this machine.
    ```bash
    adduser --disabled-password --gecos "" modsdude
    usermod -aG docker modsdude
@@ -323,13 +342,13 @@ Debian. As root:
    loginctl enable-linger modsdude
    ```
    Linger keeps `modsdude`'s systemd units, the backup timers, running while nobody is logged in.
-5. As `modsdude` (`su - modsdude`), create `.env` from `deploy/.env.example` and fill it in:
+6. As `modsdude` (`su - modsdude`), create `.env` from `deploy/.env.example` and fill it in:
    ```bash
    mkdir ~/modsdude
    nano ~/modsdude/.env
    chmod 600 ~/modsdude/.env
    ```
-6. Print the server's host key as a `known_hosts` line, for `DEPLOY_KNOWN_HOSTS` below. Use the server's
+7. Print the server's host key as a `known_hosts` line, for `DEPLOY_KNOWN_HOSTS` below. Use the server's
    address exactly as it will be in `DEPLOY_HOST`:
    ```bash
    awk -v host=<DEPLOY_HOST> '{print host, $1, $2}' /etc/ssh/ssh_host_ed25519_key.pub
@@ -337,22 +356,22 @@ Debian. As root:
 
 Then, outside the server:
 
-7. Point `SITE_ADDRESS` at the server in DNS. Open 22, 80 and 443 (TCP, and UDP for 443) in the hosting
+8. Point `SITE_ADDRESS` at the server in DNS. Open 22, 80 and 443 (TCP, and UDP for 443) in the hosting
    provider's firewall if it has one.
-8. Set `ModsDudeServer:BaseUrl` in `ModsDude.Client.Wpf/appsettings.Production.json` to
+9. Set `ModsDudeServer:BaseUrl` in `ModsDude.Client.Wpf/appsettings.Production.json` to
    `https://<SITE_ADDRESS>` and commit it. CI refuses to release a client that points at localhost.
-9. In the GitHub repository's Settings → Secrets and variables → Actions, add these variables:
+10. In the GitHub repository's Settings → Secrets and variables → Actions, add these variables:
 
    | Variable | Value |
    | --- | --- |
    | `SITE_ADDRESS` | The same domain as in `.env` |
    | `DEPLOY_HOST` | The server's address |
    | `DEPLOY_USER` | `modsdude` |
-   | `DEPLOY_KNOWN_HOSTS` | The line from step 6 |
+   | `DEPLOY_KNOWN_HOSTS` | The line from step 7 |
 
    And two secrets: `DEPLOY_SSH_KEY`, the contents of `deploy_key`, the private half (make a new pair if it
    is lost), and `DEPLOY_TOKEN`, the same value as in `.env`.
-10. Push to main, or re-run the latest CI run on main. The first deploy creates the database and gets the
+11. Push to main, or re-run the latest CI run on main. The first deploy creates the database and gets the
     certificate.
 
 The repository must be public: installed clients read releases from it without a token, and the API's
@@ -416,7 +435,7 @@ then `http://localhost:8081/admin`.
 
 ### Moving to another server
 
-1. Set up the new server up to and including step 6, and Tailscale as in [Admin pages](#admin-pages).
+1. Set up the new server up to and including step 7, and Tailscale as in [Admin pages](#admin-pages).
 2. On the old server, stop the API and dump the database:
    ```bash
    cd ~/modsdude

@@ -7,6 +7,9 @@
 #
 # The images are pinned to exact versions, so nothing changes under the server without a commit. Newer
 # ones are taken by changing the tag here and shipping.
+#
+# The memory limits are sized for a server with under 1 GB of RAM. A container that reaches its limit is
+# killed and restarted rather than starving the rest; the API's garbage collector also sizes its heap to it.
 
 name: modsdude
 
@@ -23,6 +26,9 @@ services:
     # differently, which corrupts the indexes of a database created under the old one.
     image: postgres:17.11-trixie
     restart: unless-stopped
+    # max_connections covers the API's pool (Maximum Pool Size below) plus backups and psql.
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=40"]
+    mem_limit: 256m
     environment:
       POSTGRES_USER: modsdude
       POSTGRES_DB: modsdude
@@ -42,11 +48,15 @@ services:
     image: modsdude-api:current
     pull_policy: never
     restart: unless-stopped
+    mem_limit: 400m
     depends_on:
       db:
         condition: service_healthy
     environment:
-      ConnectionStrings__Database: Host=db;Port=5432;Username=modsdude;Password=${POSTGRES_PASSWORD:?};Database=modsdude
+      ConnectionStrings__Database: Host=db;Port=5432;Username=modsdude;Password=${POSTGRES_PASSWORD:?};Database=modsdude;Maximum Pool Size=25
+      # Maps JIT code once instead of twice, which saves tens of MB, at the cost of the write-xor-execute
+      # hardening against injected code.
+      DOTNET_EnableWriteXorExecute: "0"
       Storage__StorageAccountName: ${STORAGE_ACCOUNT_NAME:?}
       Backups__StorageAccountName: ${BACKUP_STORAGE_ACCOUNT_NAME:?}
       AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:?}
@@ -70,6 +80,7 @@ services:
   caddy:
     image: caddy:2.11.7
     restart: unless-stopped
+    mem_limit: 128m
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:?}
     ports:
