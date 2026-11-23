@@ -5,10 +5,6 @@
 	handle @admin {
 		respond 404
 	}
-	handle / {
-		root * /etc/caddy/site
-		file_server
-	}
 	handle {
 		reverse_proxy api:8080
 	}
