@@ -1,0 +1,246 @@
+@* What the account pages and the admin pages share: the client's palette, and the same recipes as its
+   controls. Each layout adds only what its own pages need. *@
+@await Html.PartialAsync("/Shared/_Palette.cshtml")
+<style>
+    :root {
+        color-scheme: dark;
+        --accent-glow-soft: color-mix(in srgb, var(--accent-glow) 32%, transparent);
+        --card-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035), 0 6px 18px color-mix(in srgb, var(--shadow) 16%, transparent);
+        --modal-shadow: 0 10px 32px color-mix(in srgb, var(--shadow) 35%, transparent);
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--window);
+        color: var(--text-primary);
+        font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    a {
+        color: var(--accent-text);
+        text-decoration: none;
+    }
+
+    a:hover {
+        text-decoration: underline;
+    }
+
+    a:focus-visible, button:focus-visible, summary:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    .muted {
+        color: var(--text-muted);
+    }
+
+    .code {
+        font-family: "Cascadia Mono", Consolas, ui-monospace, monospace;
+    }
+
+    .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-secondary);
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .brand-mark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--badge-radius);
+        background: var(--accent);
+        color: var(--on-accent);
+        font-size: 12px;
+        font-weight: 700;
+        box-shadow: 0 0 10px var(--accent-glow-soft);
+    }
+
+    .card {
+        border: 1px solid var(--card-stroke);
+        border-radius: var(--card-radius);
+        background: var(--card);
+        box-shadow: var(--card-shadow);
+    }
+
+    .well {
+        border: 1px solid var(--inset-stroke);
+        border-radius: var(--well-radius);
+        background: var(--inset);
+    }
+
+    button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 34px;
+        padding: 0 14px;
+        border: 1px solid var(--raised-stroke);
+        border-radius: var(--control-radius);
+        background: var(--raised);
+        color: var(--text-primary);
+        font: inherit;
+        font-size: 13px;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+
+    button:hover {
+        border-color: var(--strong-stroke);
+        background: color-mix(in srgb, var(--raised), white 4%);
+    }
+
+    button:active {
+        color: var(--text-secondary);
+    }
+
+    button.accent {
+        border-color: rgb(0 0 0 / 0.25);
+        background: var(--accent);
+        color: var(--on-accent);
+        font-weight: 600;
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 4px 12px var(--accent-glow-soft);
+    }
+
+    button.accent:hover {
+        background: color-mix(in srgb, var(--accent) 90%, var(--window));
+    }
+
+    button.accent:active {
+        color: var(--on-accent-secondary);
+    }
+
+    button.danger {
+        border-color: var(--critical-border);
+        background: var(--critical-tint);
+        color: var(--critical-text);
+    }
+
+    button.danger:hover {
+        border-color: var(--critical);
+        background: var(--critical);
+        color: var(--window);
+    }
+
+    button:disabled, button:disabled:hover {
+        border-color: var(--raised-stroke);
+        background: var(--raised);
+        color: var(--text-disabled);
+        box-shadow: none;
+        cursor: not-allowed;
+    }
+
+    input[type="text"], input[type="email"], input[type="password"], input[type="search"], input[type="number"], select, textarea {
+        min-height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--text-control-border);
+        border-radius: var(--control-radius);
+        background: var(--inset);
+        color: var(--text-primary);
+        font: inherit;
+    }
+
+    input:hover, select:hover, textarea:hover {
+        border-color: var(--raised-stroke);
+    }
+
+    input:focus-visible, select:focus-visible, textarea:focus-visible {
+        border-color: var(--accent);
+        outline: none;
+        box-shadow: 0 0 0 3px var(--accent-tint);
+    }
+
+    input::placeholder {
+        color: var(--text-muted);
+    }
+
+    textarea {
+        padding: 8px 12px;
+        resize: vertical;
+    }
+
+    select[size] {
+        padding: 4px;
+    }
+
+    option {
+        padding: 4px 8px;
+        border-radius: var(--segment-radius);
+        background: var(--inset);
+    }
+
+    option:checked {
+        background: var(--accent-tint);
+        color: var(--accent-text);
+    }
+
+    .badge {
+        --badge-fill: var(--raised);
+        --badge-edge: var(--raised-stroke);
+        --badge-ink: var(--text-secondary);
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border: 1px solid var(--badge-edge);
+        border-radius: var(--badge-radius);
+        background: var(--badge-fill);
+        color: var(--badge-ink);
+        font-size: 11px;
+        font-weight: 600;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    .badge.success {
+        --badge-fill: var(--success-tint);
+        --badge-edge: var(--success-border);
+        --badge-ink: var(--success-text);
+    }
+
+    .badge.info {
+        --badge-fill: var(--info-tint);
+        --badge-edge: var(--info-border);
+        --badge-ink: var(--info-text);
+    }
+
+    .badge.critical {
+        --badge-fill: var(--critical-tint);
+        --badge-edge: var(--critical-border);
+        --badge-ink: var(--critical-text);
+    }
+
+    .notice {
+        margin: 0;
+        padding: 10px 14px;
+        border: 1px solid var(--success-border);
+        border-radius: var(--well-radius);
+        background: var(--success-tint);
+        color: var(--success-text);
+    }
+
+    .notice.caution {
+        border-color: var(--caution-border);
+        background: var(--caution-tint);
+        color: var(--caution-text);
+    }
+
+    .notice.error {
+        border-color: var(--critical-border);
+        background: var(--critical-tint);
+        color: var(--critical-text);
+    }
+</style>

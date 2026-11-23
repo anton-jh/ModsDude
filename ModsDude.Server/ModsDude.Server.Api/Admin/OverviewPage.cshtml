@@ -9,21 +9,21 @@
     var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 }
 
-<section>
+<section class="card">
     <h2>Users and repos</h2>
     <div class="tiles">
-        <div class="tile"><div class="label">Users</div><div class="value">@AdminFormat.Count(Model.UserCount)</div></div>
-        <div class="tile"><div class="label">Active, @AdminWindows.ActiveUserShortDays days</div><div class="value">@AdminFormat.Count(Model.ActiveShortUserCount)</div></div>
-        <div class="tile"><div class="label">Active, @AdminWindows.ActiveUserLongDays days</div><div class="value">@AdminFormat.Count(Model.ActiveLongUserCount)</div></div>
-        <div class="tile"><div class="label">Trusted</div><div class="value">@AdminFormat.Count(Model.TrustedUserCount)</div></div>
-        <div class="tile"><div class="label">Blocked</div><div class="value">@AdminFormat.Count(Model.BlockedUserCount)</div></div>
-        <div class="tile"><div class="label">Repos</div><div class="value">@AdminFormat.Count(Model.RepoCount)</div></div>
-        <div class="tile"><div class="label">Archived repos</div><div class="value">@AdminFormat.Count(Model.ArchivedRepoCount)</div></div>
-        <div class="tile"><div class="label">Open invites</div><div class="value">@AdminFormat.Count(Model.OpenInviteCount)</div></div>
+        <div class="tile well"><div class="label">Users</div><div class="value">@AdminFormat.Count(Model.UserCount)</div></div>
+        <div class="tile well"><div class="label">Active, @AdminWindows.ActiveUserShortDays days</div><div class="value">@AdminFormat.Count(Model.ActiveShortUserCount)</div></div>
+        <div class="tile well"><div class="label">Active, @AdminWindows.ActiveUserLongDays days</div><div class="value">@AdminFormat.Count(Model.ActiveLongUserCount)</div></div>
+        <div class="tile well"><div class="label">Trusted</div><div class="value">@AdminFormat.Count(Model.TrustedUserCount)</div></div>
+        <div class="tile well"><div class="label">Blocked</div><div class="value">@AdminFormat.Count(Model.BlockedUserCount)</div></div>
+        <div class="tile well"><div class="label">Repos</div><div class="value">@AdminFormat.Count(Model.RepoCount)</div></div>
+        <div class="tile well"><div class="label">Archived repos</div><div class="value">@AdminFormat.Count(Model.ArchivedRepoCount)</div></div>
+        <div class="tile well"><div class="label">Open invites</div><div class="value">@AdminFormat.Count(Model.OpenInviteCount)</div></div>
     </div>
 </section>
 
-<section>
+<section class="card">
     <h2>Storage</h2>
     @if (Model.StorageSampledOn is not DateOnly sampledOn)
     {
@@ -33,7 +33,7 @@
     {
         <div class="muted">Sampled on @AdminFormat.Date(sampledOn).</div>
 
-        <div class="table-scroll">
+        <div class="well table-scroll">
             <table>
                 <thead>
                     <tr>
@@ -60,8 +60,8 @@
         </div>
 
         <div class="tiles">
-            <div class="tile"><div class="label">Mod versions scheduled for deletion</div><div class="value">@AdminFormat.Bytes(Model.ScheduledModBytes)</div></div>
-            <div class="tile"><div class="label">Savegame snapshots scheduled for deletion</div><div class="value">@AdminFormat.Bytes(Model.ScheduledSavegameBytes)</div></div>
+            <div class="tile well"><div class="label">Mod versions scheduled for deletion</div><div class="value">@AdminFormat.Bytes(Model.ScheduledModBytes)</div></div>
+            <div class="tile well"><div class="label">Savegame snapshots scheduled for deletion</div><div class="value">@AdminFormat.Bytes(Model.ScheduledSavegameBytes)</div></div>
         </div>
     }
 
@@ -111,7 +111,7 @@
 
         <details class="toggle">
             <summary>Show as table</summary>
-            <div class="table-scroll">
+            <div class="well table-scroll">
                 <table>
                     <thead>
                         <tr>
@@ -140,7 +140,7 @@
     }
 </section>
 
-<section>
+<section class="card">
     <h2>Backups</h2>
     @switch (Model.BackupListing)
     {
@@ -149,13 +149,13 @@
             break;
 
         case BackupListing.Unavailable:
-            <p><span class="status Unavailable">Unavailable</span></p>
+            <p><span class="badge critical">Unavailable</span></p>
             break;
     }
 
     @if (Model.Backups is { } backups)
     {
-        <div class="table-scroll">
+        <div class="well table-scroll">
             <table>
                 <thead>
                     <tr>
@@ -174,7 +174,7 @@
                     {
                         <tr>
                             <td>@tier.Tier</td>
-                            <td>@if (tier.Freshness is { } freshness) { <span class="status @freshness">@AdminFormat.Freshness(freshness)</span> }</td>
+                            <td>@if (tier.Freshness is { } freshness) { <span class="badge @AdminFormat.Tone(freshness)">@AdminFormat.Freshness(freshness)</span> }</td>
                             <td>@(tier.Newest is { } newest ? AdminFormat.Time(newest.TakenAt.UtcDateTime) : "")</td>
                             <td class="number">@(tier.Newest is { } newestAge ? AdminFormat.Age(Model.BackupsCheckedAt - newestAge.TakenAt) : "")</td>
                             <td class="number">@(tier.Newest is { } newestSize ? AdminFormat.Bytes(newestSize.Length) : "")</td>
@@ -188,7 +188,7 @@
         </div>
 
         <div class="tiles">
-            <div class="tile"><div class="label">Total stored</div><div class="value">@AdminFormat.Bytes(backups.TotalBytes)</div></div>
+            <div class="tile well"><div class="label">Total stored</div><div class="value">@AdminFormat.Bytes(backups.TotalBytes)</div></div>
         </div>
 
         @if (backups.Unrecognised.Count > 0)
@@ -206,10 +206,10 @@
     }
 </section>
 
-<section>
+<section class="card">
     <h2>Traffic, last @AdminWindows.TrafficDays days</h2>
     <div class="muted">Counted when links are issued, so a cancelled or retried transfer still counts.</div>
-    <div class="table-scroll">
+    <div class="well table-scroll">
         <table>
             <thead>
                 <tr>
@@ -236,7 +236,7 @@
     </div>
 </section>
 
-<section>
+<section class="card">
     <h2>Largest mod versions</h2>
     @if (Model.LargestModVersions.Count == 0)
     {
@@ -244,7 +244,7 @@
     }
     else
     {
-        <div class="table-scroll">
+        <div class="well table-scroll">
             <table>
                 <thead>
                     <tr>
@@ -270,7 +270,7 @@
     }
 </section>
 
-<section>
+<section class="card">
     <h2>Largest savegames</h2>
     @if (Model.LargestSavegames.Count == 0)
     {
@@ -278,7 +278,7 @@
     }
     else
     {
-        <div class="table-scroll">
+        <div class="well table-scroll">
             <table>
                 <thead>
                     <tr>

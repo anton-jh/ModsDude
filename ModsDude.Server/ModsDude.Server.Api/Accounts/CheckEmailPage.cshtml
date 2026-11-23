@@ -6,7 +6,7 @@
 
 <h1>Check your email</h1>
 
-<dl>
+<dl class="well">
     <dt>Sent to</dt>
     <dd>@Model.Email</dd>
 </dl>
@@ -20,7 +20,7 @@
 
 @if (Model.CouldNotSend)
 {
-    <p class="form-error">Could not send the email. Try again in a moment.</p>
+    <p class="notice error">Could not send the email. Try again in a moment.</p>
 }
 
 <form method="post">

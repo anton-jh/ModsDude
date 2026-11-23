@@ -4,11 +4,11 @@
     ViewData[AdminLayout.SectionKey] = AdminSection.TrustCodes;
 }
 
-<section>
+<section class="card">
     <h2>Trust codes</h2>
     <div class="muted">Lets one user create repos. Single use.</div>
 
-    <form method="post" asp-page-handler="Issue" class="toolbar actions">
+    <form method="post" asp-page-handler="Issue" class="toolbar">
         <input type="hidden" name="requestId" value="@Model.IssueRequestId">
         <select name="expiresInHours" aria-label="Expires in">
             @foreach (var expiry in AdminExpiryOptions.All)
@@ -21,7 +21,7 @@
 
     @if (Model.Issued is { } issued)
     {
-        <div class="panel">
+        <div class="well issued">
             <div class="code">@issued.Code</div>
             <div class="muted">Expires @AdminFormat.Time(issued.ExpiresAt)</div>
         </div>
@@ -33,7 +33,7 @@
     }
     else
     {
-        <div class="table-scroll">
+        <div class="well table-scroll">
             <table>
                 <thead>
                     <tr>
@@ -50,7 +50,7 @@
                     {
                         <tr>
                             <td class="code">@row.Code</td>
-                            <td><span class="status @row.Status">@row.Status</span></td>
+                            <td><span class="badge @AdminFormat.Tone(row.Status)">@row.Status</span></td>
                             <td>@AdminFormat.Time(row.Created)</td>
                             <td>@AdminFormat.Time(row.ExpiresAt)</td>
                             <td>@(row.RedeemedBy ?? "")</td>
