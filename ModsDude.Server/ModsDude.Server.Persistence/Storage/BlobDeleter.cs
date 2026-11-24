@@ -8,8 +8,8 @@ using ModsDude.Server.Persistence.DbContexts;
 namespace ModsDude.Server.Persistence.Storage;
 
 /// <summary>
-/// Deletes the queued candidates that <see cref="BlobDeletionRule"/> clears, one at a time, recording each
-/// one it deletes. Only ever called once the gate has let the run delete.
+/// Deletes one queued candidate where <see cref="BlobDeletionRule"/> clears it, and records the delete.
+/// Only ever called once the gate has let the caller delete.
 /// </summary>
 public class BlobDeleter(
     ApplicationDbContext dbContext,
@@ -18,38 +18,7 @@ public class BlobDeleter(
     ILogger<BlobDeleter> logger)
     : IBlobDeleter
 {
-    public async Task<int> DeleteQueuedAsync(StorageMaintenanceSettings settings, CancellationToken cancellationToken)
-    {
-        var now = timeService.Now();
-
-        var queued = await dbContext.BlobDeletionCandidates
-            .AsNoTracking()
-            .OrderBy(x => x.Container)
-            .ThenBy(x => x.BlobName)
-            .ToListAsync(cancellationToken);
-
-        var deleted = 0;
-
-        foreach (var candidate in queued)
-        {
-            if (await ProcessAsync(candidate, now, settings.MinimumBlobAge, cancellationToken))
-            {
-                deleted++;
-            }
-        }
-
-        logger.LogInformation("Deleted {Deleted} of {Queued} queued blobs.", deleted, queued.Count);
-
-        return deleted;
-    }
-
-    public Task<bool> DeleteNowAsync(BlobDeletionCandidate candidate, CancellationToken cancellationToken)
-    {
-        return ProcessAsync(candidate, timeService.Now(), TimeSpan.Zero, cancellationToken);
-    }
-
-
-    private async Task<bool> ProcessAsync(BlobDeletionCandidate candidate, DateTime now, TimeSpan minimumAge, CancellationToken cancellationToken)
+    public async Task<BlobDeletionResult> DeleteAsync(BlobDeletionCandidate candidate, TimeSpan minimumAge, CancellationToken cancellationToken)
     {
         var container = StorageContainerNames.Of(candidate.Container);
 
@@ -58,51 +27,67 @@ public class BlobDeleter(
         var isReferenced = await dbContext.IsReferencedAsync(candidate.Container, candidate.BlobName, cancellationToken);
         var isRequeued = !await dbContext.BlobDeletionCandidates.AnyAsync(x => x.Id == candidate.Id && x.Requeued == candidate.Requeued, cancellationToken);
 
-        var decision = BlobDeletionRule.Decide(candidate, stored, isReferenced, isRequeued, now, minimumAge);
+        var decision = BlobDeletionRule.Decide(candidate, stored, isReferenced, isRequeued, timeService.Now(), minimumAge);
 
         switch (decision.Verdict)
         {
             case BlobDeletionVerdict.Keep:
                 logger.LogInformation("Kept {Name} in {Container} for a later run: {Reason}.", candidate.BlobName, container, decision.Reason);
-                return false;
+                return BlobDeletionResult.Kept;
 
             case BlobDeletionVerdict.Drop:
                 await DropAsync(candidate, cancellationToken);
                 logger.LogInformation("Dropped {Name} in {Container} from the deletion queue: {Reason}.", candidate.BlobName, container, decision.Reason);
-                return false;
+                return stored is null ? BlobDeletionResult.Gone : BlobDeletionResult.Dropped;
 
             case BlobDeletionVerdict.Delete:
                 // Not cancelled once sent, nor is recording it below: a delete that goes through with no
                 // record is one nobody can find to restore.
-                if (!await blobs.DeleteAsync(candidate.Container, candidate.BlobName, stored!.Version!, CancellationToken.None))
+                var deletion = await blobs.DeleteAsync(candidate.Container, candidate.BlobName, stored!.Version!, CancellationToken.None);
+
+                if (deletion == BlobDeleteResult.Changed)
                 {
-                    logger.LogInformation("Kept {Name} in {Container}: it changed or went while it was being deleted.", candidate.BlobName, container);
-                    return false;
+                    logger.LogInformation("Kept {Name} in {Container}: it changed while it was being deleted.", candidate.BlobName, container);
+                    return BlobDeletionResult.Kept;
                 }
 
-                try
-                {
-                    dbContext.DeletedBlobs.Add(new DeletedBlob(candidate, stored, now));
-                    await dbContext.SaveChangesAsync(CancellationToken.None);
-                    dbContext.ChangeTracker.Clear();
-                }
-                catch (Exception exception)
-                {
-                    logger.LogError(exception, "Deleted {Name} ({Version}) in {Container} but could not record it.", candidate.BlobName, stored.Version, container);
-                    throw;
-                }
-
+                // Gone as well as deleted: storage answers a retried delete whose first answer was lost
+                // as if the blob had never been there, and nothing else deletes blobs.
+                await RecordAsync(candidate, stored, container);
                 await DropAsync(candidate, CancellationToken.None);
 
-                logger.LogInformation("Deleted {Name} ({Bytes} bytes) in {Container}, queued as {Reason}.", candidate.BlobName, stored.Length, container, candidate.Reason);
-                return true;
+                logger.LogInformation(
+                    "Deleted {Name} ({Bytes} bytes) in {Container}, queued as {Reason}{Gone}.",
+                    candidate.BlobName, stored.Length, container, candidate.Reason, deletion == BlobDeleteResult.Gone ? "; storage said it was already gone" : "");
+                return BlobDeletionResult.Deleted;
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(decision), decision.Verdict, null);
         }
     }
 
-    /// <summary>Only while nothing has queued the blob again since it was read; a requeued row waits for its new delay.</summary>
+
+    private async Task RecordAsync(BlobDeletionCandidate candidate, StoredBlob stored, string container)
+    {
+        var record = new DeletedBlob(candidate, stored, timeService.Now());
+
+        try
+        {
+            dbContext.DeletedBlobs.Add(record);
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Deleted {Name} ({Version}) in {Container} but could not record it.", candidate.BlobName, stored.Version, container);
+            throw;
+        }
+        finally
+        {
+            dbContext.Entry(record).State = EntityState.Detached;
+        }
+    }
+
+    /// <summary>Only while nothing has queued the blob again since it was read; a requeued row waits for the next run.</summary>
     private Task<int> DropAsync(BlobDeletionCandidate candidate, CancellationToken cancellationToken)
     {
         return dbContext.BlobDeletionCandidates

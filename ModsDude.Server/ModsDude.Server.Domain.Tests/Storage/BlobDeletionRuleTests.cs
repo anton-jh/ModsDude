@@ -29,6 +29,30 @@ public class BlobDeletionRuleTests
     }
 
     [Fact]
+    public void An_upload_whose_blob_is_not_there_yet_stays_queued_while_it_may_still_be_under_way()
+    {
+        var upload = Candidate(BlobDeletionReason.UploadIssued, queuedAt: _now.AddHours(-1));
+
+        Assert.Equal(BlobDeletionVerdict.Keep, Decide(upload, null, isReferenced: false).Verdict);
+    }
+
+    [Fact]
+    public void An_upload_whose_blob_never_came_is_dropped_once_the_minimum_age_has_passed()
+    {
+        var upload = Candidate(BlobDeletionReason.UploadIssued, queuedAt: _now - _minimumAge);
+
+        Assert.Equal(BlobDeletionVerdict.Drop, Decide(upload, null, isReferenced: false).Verdict);
+    }
+
+    [Fact]
+    public void A_removed_reference_whose_blob_is_gone_is_dropped_however_recently_it_was_queued()
+    {
+        var removed = Candidate(BlobDeletionReason.ReferenceRemoved, queuedAt: _now);
+
+        Assert.Equal(BlobDeletionVerdict.Drop, Decide(removed, null, isReferenced: false).Verdict);
+    }
+
+    [Fact]
     public void A_blob_written_too_recently_waits_even_when_nothing_refers_to_it()
     {
         // A registration claims the blob before it commits; the claim is what makes it recent.
@@ -94,9 +118,11 @@ public class BlobDeletionRuleTests
 
     private static BlobDeletionCandidate Candidate(
         BlobDeletionReason reason = BlobDeletionReason.ReferenceRemoved,
-        string? expectedVersion = null)
+        string? expectedVersion = null,
+        DateTime queuedAt = default)
     {
-        return new BlobDeletionCandidate(StorageContainer.Mods, _name, reason, expectedVersion: expectedVersion, requestedBy: expectedVersion is null ? null : "admin");
+        return new BlobDeletionCandidate(
+            StorageContainer.Mods, _name, reason, expectedVersion: expectedVersion, requestedBy: expectedVersion is null ? null : "admin", queuedAt: queuedAt);
     }
 
     private static StoredBlob Stored(double ageDays, string version = "v1")

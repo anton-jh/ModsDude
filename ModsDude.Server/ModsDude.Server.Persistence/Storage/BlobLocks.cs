@@ -11,9 +11,6 @@ namespace ModsDude.Server.Persistence.Storage;
 /// </summary>
 public static class BlobLocks
 {
-    private const int _advisoryLockNamespace = 3;
-
-
     /// <summary>Waits for the lock. Disposing the result releases it.</summary>
     public static async Task<IAsyncDisposable> LockBlobAsync(
         this ApplicationDbContext dbContext,
@@ -30,7 +27,7 @@ public static class BlobLocks
 
         try
         {
-            await dbContext.Database.ExecuteSqlAsync($"SELECT pg_advisory_lock({_advisoryLockNamespace}, hashtext({key}))", cancellationToken);
+            await dbContext.Database.ExecuteSqlAsync($"SELECT pg_advisory_lock({AdvisoryLockSpaces.Blob}, hashtext({key}))", cancellationToken);
             locked = true;
         }
         finally
@@ -49,7 +46,7 @@ public static class BlobLocks
     {
         public async ValueTask DisposeAsync()
         {
-            await dbContext.Database.ExecuteSqlAsync($"SELECT pg_advisory_unlock({_advisoryLockNamespace}, hashtext({key}))", CancellationToken.None);
+            await dbContext.Database.ExecuteSqlAsync($"SELECT pg_advisory_unlock({AdvisoryLockSpaces.Blob}, hashtext({key}))", CancellationToken.None);
             await dbContext.Database.CloseConnectionAsync();
         }
     }

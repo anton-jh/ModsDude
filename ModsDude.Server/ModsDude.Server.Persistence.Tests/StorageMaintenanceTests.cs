@@ -18,7 +18,7 @@ namespace ModsDude.Server.Persistence.Tests;
 /// </summary>
 public class StorageMaintenanceTests(StorageDatabaseFixture fixture) : IClassFixture<StorageDatabaseFixture>, IAsyncLifetime
 {
-    private static readonly StorageMaintenanceSettings _settings = new(TimeSpan.FromDays(1), 14);
+    private static readonly StorageMaintenanceSettings _settings = new(TimeSpan.FromDays(1), 14, 30);
 
     private readonly FakeBlobContainers _blobs = new();
     private DateTime _now = new(2026, 11, 1, 4, 0, 0, DateTimeKind.Utc);
@@ -322,7 +322,7 @@ public class StorageMaintenanceTests(StorageDatabaseFixture fixture) : IClassFix
     {
         await GivenBoundStorageAsync();
 
-        await using var other = new NpgsqlConnection(fixture.ConnectionString);
+        await using var other = UnpooledConnection();
         await other.OpenAsync();
         await using (var command = new NpgsqlCommand("SELECT pg_advisory_lock(2, 0)", other))
         {
@@ -437,6 +437,143 @@ public class StorageMaintenanceTests(StorageDatabaseFixture fixture) : IClassFix
     }
 
     [Fact]
+    public async Task An_upload_whose_blob_is_not_there_yet_stays_queued_and_is_collected_once_it_lands()
+    {
+        await GivenBoundStorageAsync();
+        var (repoId, _) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);
+        var name = BlobNames.Mod(repoId, new ModId("a_mod"), new ModVersionId("1"));
+        await QueueAsync(StorageContainer.Mods, name);
+        _now = Assert.Single(await CandidatesAsync()).QueuedAt.AddHours(1);
+
+        await RunAsync();
+        Assert.Single(await CandidatesAsync());
+
+        _blobs.Put(StorageContainer.Mods, name, lastModified: _now);
+        _now = _now.AddDays(2);
+        var outcome = await RunAsync();
+
+        Assert.Equal(1, outcome.Deleted);
+        Assert.Equal([(StorageContainer.Mods, name)], _blobs.Deleted);
+    }
+
+    [Fact]
+    public async Task An_upload_whose_blob_never_came_is_dropped_after_the_minimum_age()
+    {
+        await GivenBoundStorageAsync();
+        var (repoId, _) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);
+        await QueueAsync(StorageContainer.Mods, BlobNames.Mod(repoId, new ModId("a_mod"), new ModVersionId("1")));
+        _now = Assert.Single(await CandidatesAsync()).QueuedAt.AddDays(1);
+
+        await RunAsync();
+
+        Assert.Empty(await CandidatesAsync());
+    }
+
+    [Fact]
+    public async Task A_removed_reference_queued_again_while_its_drop_is_decided_stays_queued()
+    {
+        await GivenBoundStorageAsync();
+        var (repoId, _) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);
+        await StorageTestData.GivenAModVersionAsync(fixture.CreateDbContext, repoId, "a_mod", "1");
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.ModVersions.Where(x => x.RepoId == repoId).ExecuteDeleteAsync();
+        }
+
+        // There is no blob, so the run drops the row it read; the row queued again in between stays.
+        _blobs.AfterGet = async (container, blobName) =>
+        {
+            _blobs.AfterGet = null;
+            await QueueAsync(container, blobName);
+        };
+        await RunAsync();
+
+        Assert.Equal(1, Assert.Single(await CandidatesAsync()).Requeued);
+    }
+
+    [Fact]
+    public async Task A_delete_whose_answer_was_lost_is_still_recorded()
+    {
+        await GivenBoundStorageAsync();
+        var (repoId, _) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);
+        var name = BlobNames.Mod(repoId, new ModId("a_mod"), new ModVersionId("1"));
+        _blobs.Put(StorageContainer.Mods, name, lastModified: _now.AddDays(-30));
+        await QueueAsync(StorageContainer.Mods, name, admin: true);
+        _blobs.LoseDeleteAnswers = true;
+
+        var outcome = await RunAsync();
+
+        Assert.Equal(1, outcome.Deleted);
+        Assert.Empty(await CandidatesAsync());
+
+        using var dbContext = fixture.CreateDbContext();
+        Assert.Equal(name, (await dbContext.DeletedBlobs.SingleAsync()).BlobName);
+    }
+
+    [Fact]
+    public async Task A_run_that_fails_partway_records_each_delete_when_it_happened_and_counts_them()
+    {
+        await GivenBoundStorageAsync();
+        var (repoId, _) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);
+        var names = Enumerable.Range(1, 3).Select(x => BlobNames.Mod(repoId, new ModId("a_mod"), new ModVersionId(x.ToString()))).Order(StringComparer.Ordinal).ToList();
+        foreach (var name in names)
+        {
+            _blobs.Put(StorageContainer.Mods, name, lastModified: _now.AddDays(-30));
+            await QueueAsync(StorageContainer.Mods, name, admin: true);
+        }
+
+        var started = _now;
+        _blobs.BeforeDelete = (_, _) =>
+        {
+            _now = _now.AddMinutes(1);
+
+            if (_blobs.Deleted.Count == 2)
+            {
+                throw new InvalidOperationException("Storage broke.");
+            }
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync());
+
+        using var dbContext = fixture.CreateDbContext();
+        Assert.Equal(2, (await dbContext.StorageMaintenanceStatuses.SingleAsync()).DeletedInLastRun);
+        Assert.Equal(
+            [(names[0], started.AddMinutes(1)), (names[1], started.AddMinutes(2))],
+            (await dbContext.DeletedBlobs.OrderBy(x => x.BlobName).ToListAsync()).Select(x => (x.BlobName, x.Deleted)));
+    }
+
+    [Fact]
+    public async Task Deleted_blobs_are_forgotten_once_storage_no_longer_keeps_them()
+    {
+        await GivenBoundStorageAsync();
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            var candidate = new BlobDeletionCandidate(StorageContainer.Images, "ab/forgotten", BlobDeletionReason.ReferenceRemoved);
+            dbContext.DeletedBlobs.Add(new DeletedBlob(candidate, new StoredBlob("ab/forgotten", _now, 1, "v1", new Dictionary<string, string>()), _now.AddDays(-46)));
+            dbContext.DeletedBlobs.Add(new DeletedBlob(candidate, new StoredBlob("ab/kept", _now, 1, "v1", new Dictionary<string, string>()), _now.AddDays(-44)));
+            await dbContext.SaveChangesAsync();
+        }
+
+        _blobs.SoftDeleteDays = null;
+        await RunAsync();
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            Assert.Equal(2, await dbContext.DeletedBlobs.CountAsync());
+        }
+
+        _blobs.SoftDeleteDays = 45;
+        await RunAsync();
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            Assert.Equal("ab/kept", (await dbContext.DeletedBlobs.SingleAsync()).BlobName);
+        }
+    }
+
+    [Fact]
     public async Task The_file_of_a_deleted_mod_version_is_deleted_at_once_for_a_new_upload()
     {
         await GivenBoundStorageAsync();
@@ -497,7 +634,7 @@ public class StorageMaintenanceTests(StorageDatabaseFixture fixture) : IClassFix
         await GivenBoundStorageAsync();
         var (repoId, _) = await GivenADeletedModVersionAsync();
 
-        await using var other = new NpgsqlConnection(fixture.ConnectionString);
+        await using var other = UnpooledConnection();
         await other.OpenAsync();
         await using (var command = new NpgsqlCommand("SELECT pg_advisory_lock(2, 0)", other))
         {
@@ -509,12 +646,45 @@ public class StorageMaintenanceTests(StorageDatabaseFixture fixture) : IClassFix
     }
 
     [Fact]
+    public async Task The_file_of_a_deleted_mod_version_that_is_already_gone_counts_as_deleted()
+    {
+        await GivenBoundStorageAsync();
+        var (repoId, name) = await GivenADeletedModVersionAsync();
+        _blobs.Remove(StorageContainer.Mods, name);
+
+        Assert.Equal(ReleasedModFileDeletion.Deleted, await DeleteReleasedAsync(repoId));
+        Assert.Empty(await CandidatesAsync());
+    }
+
+    [Fact]
+    public async Task Deleting_the_file_of_a_deleted_mod_version_waits_for_a_registration_holding_its_lock()
+    {
+        await GivenBoundStorageAsync();
+        var (repoId, name) = await GivenADeletedModVersionAsync();
+
+        await using var registration = UnpooledConnection();
+        await registration.OpenAsync();
+        Assert.True(await TryBlobLockAsync(registration, $"{StorageContainer.Mods}/{name}"));
+
+        var deletion = DeleteReleasedAsync(repoId);
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        Assert.False(deletion.IsCompleted);
+
+        await StorageTestData.GivenAModVersionAsync(fixture.CreateDbContext, repoId, "a_mod", "1");
+        await UnlockBlobAsync(registration, $"{StorageContainer.Mods}/{name}");
+
+        Assert.Equal(ReleasedModFileDeletion.Registered, await deletion);
+        Assert.Empty(_blobs.Deleted);
+        Assert.Empty(await CandidatesAsync());
+    }
+
+    [Fact]
     public async Task A_blob_lock_is_held_until_it_is_released()
     {
         const string name = "repo/mod/1";
         var key = $"{StorageContainer.Mods}/{name}";
 
-        await using var other = new NpgsqlConnection(fixture.ConnectionString);
+        await using var other = UnpooledConnection();
         await other.OpenAsync();
 
         using (var dbContext = fixture.CreateDbContext())
@@ -599,6 +769,20 @@ public class StorageMaintenanceTests(StorageDatabaseFixture fixture) : IClassFix
         command.Parameters.AddWithValue("key", key);
 
         return (bool)(await command.ExecuteScalarAsync())!;
+    }
+
+    /// <summary>A session of its own, whose locks end with it: a pooled one keeps them until it is reused.</summary>
+    private NpgsqlConnection UnpooledConnection()
+    {
+        return new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString);
+    }
+
+    private static async Task UnlockBlobAsync(NpgsqlConnection connection, string key)
+    {
+        await using var command = new NpgsqlCommand("SELECT pg_advisory_unlock(3, hashtext(@key))", connection);
+        command.Parameters.AddWithValue("key", key);
+
+        await command.ExecuteScalarAsync();
     }
 
     private async Task<StorageBinding?> BindingAsync()

@@ -1,6 +1,4 @@
-using Azure;
 using Azure.Storage.Blobs;
-using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
@@ -41,21 +39,9 @@ internal class SavegameStorageService(
 
     public async Task<long?> GetSavegameSize(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
     {
-        try
-        {
-            var properties = await GetBlobClient(repoId, savegameId, contentHash).GetPropertiesAsync(cancellationToken: cancellationToken);
+        var stored = await blobContainers.GetAsync(StorageContainer.Savegames, BlobNames.Savegame(repoId, savegameId, contentHash), cancellationToken);
 
-            return properties.Value.ContentLength;
-        }
-        catch (RequestFailedException exception) when (exception.Status == 404)
-        {
-            return null;
-        }
-    }
-
-    public async Task<bool> TryReuseSavegame(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
-    {
-        return await blobContainers.ClaimAsync(StorageContainer.Savegames, BlobNames.Savegame(repoId, savegameId, contentHash), null, cancellationToken) is not null;
+        return stored?.Length;
     }
 
     public Task<string> GetUploadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
@@ -70,7 +56,7 @@ internal class SavegameStorageService(
         return GetSasLink(repoId, savegameId, contentHash, BlobSasPermissions.Read, cancellationToken);
     }
 
-    public async Task<bool> ClaimSavegame(RepoId repoId, SavegameId savegameId, string contentHash, SavegameBlobLabel label, CancellationToken cancellationToken)
+    public async Task<bool> ClaimSavegame(RepoId repoId, SavegameId savegameId, string contentHash, SavegameBlobLabel? label, CancellationToken cancellationToken)
     {
         return await blobContainers.ClaimAsync(StorageContainer.Savegames, BlobNames.Savegame(repoId, savegameId, contentHash), label, cancellationToken) is not null;
     }

@@ -34,9 +34,6 @@ public class StorageMaintenance(
     ILogger<StorageMaintenance> logger)
     : IStorageMaintenance
 {
-    private const int _advisoryLockNamespace = 2;
-
-
     public async Task<StorageMaintenanceOutcome> RunAsync(StorageMaintenanceSettings settings, CancellationToken cancellationToken)
     {
         await using var runLock = await TryLockAsync(cancellationToken);
@@ -55,6 +52,8 @@ public class StorageMaintenance(
         {
             var inspection = await gatekeeper.InspectAsync(settings.MinimumSoftDeleteDays, cancellationToken);
             refusals.AddRange(inspection.Decision.WriteRefusals);
+
+            await PruneDeletedBlobsAsync(settings.DeletedBlobRetentionDays, inspection.SoftDeleteDays, cancellationToken);
 
             if (inspection.Decision.MayWrite)
             {
@@ -79,7 +78,23 @@ public class StorageMaintenance(
             if (refusals.Count == 0)
             {
                 await gatekeeper.AdvanceAsync(cancellationToken);
-                deleted = await deleter.DeleteQueuedAsync(settings, cancellationToken);
+
+                var queued = await dbContext.BlobDeletionCandidates
+                    .AsNoTracking()
+                    .OrderBy(x => x.Container)
+                    .ThenBy(x => x.BlobName)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var candidate in queued)
+                {
+                    if (await deleter.DeleteAsync(candidate, settings.MinimumBlobAge, cancellationToken) == BlobDeletionResult.Deleted)
+                    {
+                        deleted++;
+                    }
+                }
+
+                logger.LogInformation("Deleted {Deleted} of {Queued} queued blobs.", deleted, queued.Count);
+
                 await gatekeeper.AdvanceAsync(cancellationToken);
             }
         }
@@ -151,15 +166,21 @@ public class StorageMaintenance(
 
         await gatekeeper.AdvanceAsync(cancellationToken);
 
-        bool deleted;
+        BlobDeletionResult result;
         await using (await dbContext.LockBlobAsync(StorageContainer.Mods, blobName, cancellationToken))
         {
-            deleted = await deleter.DeleteNowAsync(candidate, cancellationToken);
+            result = await deleter.DeleteAsync(candidate, TimeSpan.Zero, cancellationToken);
         }
 
         await gatekeeper.AdvanceAsync(cancellationToken);
 
-        return deleted ? ReleasedModFileDeletion.Deleted : ReleasedModFileDeletion.Refused;
+        return result switch
+        {
+            BlobDeletionResult.Deleted or BlobDeletionResult.Gone => ReleasedModFileDeletion.Deleted,
+            BlobDeletionResult.Dropped => ReleasedModFileDeletion.Registered,
+            BlobDeletionResult.Kept => ReleasedModFileDeletion.Refused,
+            _ => throw new ArgumentOutOfRangeException(nameof(result), result, null)
+        };
     }
 
     public async Task<QueuedDeletions> QueueForDeletionAsync(IReadOnlyCollection<long> findingIds, string operatorName, CancellationToken cancellationToken)
@@ -205,6 +226,26 @@ public class StorageMaintenance(
         return refusals;
     }
 
+    /// <summary>
+    /// Forgets deleted blobs once storage can no longer give them back: after the longer of the setting
+    /// and storage's own soft delete period. Nothing is forgotten while that period can't be read.
+    /// </summary>
+    private async Task PruneDeletedBlobsAsync(int retentionDays, int? softDeleteDays, CancellationToken cancellationToken)
+    {
+        if (softDeleteDays is not int storageDays)
+        {
+            return;
+        }
+
+        var cutoff = timeService.Now().AddDays(-Math.Max(retentionDays, storageDays));
+        var pruned = await dbContext.DeletedBlobs.Where(x => x.Deleted < cutoff).ExecuteDeleteAsync(cancellationToken);
+
+        if (pruned > 0)
+        {
+            logger.LogInformation("Forgot {Count} blobs deleted before {Cutoff}.", pruned, cutoff);
+        }
+    }
+
     private async Task RecordAsync(bool audited, IReadOnlyList<string> refusals, int deleted, CancellationToken cancellationToken)
     {
         dbContext.ChangeTracker.Clear();
@@ -228,7 +269,7 @@ public class StorageMaintenance(
         await dbContext.Database.OpenConnectionAsync(cancellationToken);
 
         var acquired = await dbContext.Database
-            .SqlQuery<bool>($"SELECT pg_try_advisory_lock({_advisoryLockNamespace}, 0) AS \"Value\"")
+            .SqlQuery<bool>($"SELECT pg_try_advisory_lock({AdvisoryLockSpaces.StorageMaintenanceRun}, 0) AS \"Value\"")
             .SingleAsync(cancellationToken);
 
         if (acquired)
@@ -245,7 +286,7 @@ public class StorageMaintenance(
     {
         public async ValueTask DisposeAsync()
         {
-            await dbContext.Database.ExecuteSqlAsync($"SELECT pg_advisory_unlock({_advisoryLockNamespace}, 0)", CancellationToken.None);
+            await dbContext.Database.ExecuteSqlAsync($"SELECT pg_advisory_unlock({AdvisoryLockSpaces.StorageMaintenanceRun}, 0)", CancellationToken.None);
             await dbContext.Database.CloseConnectionAsync();
         }
     }
@@ -265,6 +306,9 @@ public enum ReleasedModFileDeletion
 
     /// <summary>The file is not one a deleted mod version left behind.</summary>
     NotReleased,
+
+    /// <summary>The file was one a deleted mod version left behind, and a version refers to it again.</summary>
+    Registered,
 
     /// <summary>The file is one a deleted mod version left behind, and it stays for now.</summary>
     Refused

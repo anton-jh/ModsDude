@@ -32,7 +32,8 @@ public class BlobDeletionCandidate
         RepoId? repoId = null,
         UserId? userId = null,
         string? requestedBy = null,
-        string? expectedVersion = null)
+        string? expectedVersion = null,
+        DateTime queuedAt = default)
     {
         Container = container;
         BlobName = blobName;
@@ -41,6 +42,7 @@ public class BlobDeletionCandidate
         UserId = userId;
         RequestedBy = requestedBy;
         ExpectedVersion = expectedVersion;
+        QueuedAt = queuedAt;
     }
 
 

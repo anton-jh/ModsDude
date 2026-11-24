@@ -94,6 +94,8 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
                     break;
                 case ReleasedModFileDeletion.NotReleased:
                     return TypedResults.BadRequest(Problems.ModFileAlreadyPresent(new(request.RepoId), new(request.ModId), new(request.VersionId), stored.RecordedContentHash));
+                case ReleasedModFileDeletion.Registered:
+                    return TypedResults.BadRequest(Problems.ModVersionAlreadyRegistered(new(request.RepoId), new(request.ModId), new(request.VersionId)));
                 case ReleasedModFileDeletion.Refused:
                     return TypedResults.BadRequest(Problems.ModFileAwaitingDeletion(new(request.RepoId), new(request.ModId), new(request.VersionId)));
             }

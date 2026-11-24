@@ -12,8 +12,9 @@ namespace ModsDude.Server.Api.ErrorHandling;
 /// <para>
 /// Expected outcomes are typed results returned by the endpoints. What reaches here is what cannot be
 /// returned from where it happens: <see cref="NotAuthenticatedException"/>, thrown below the handlers
-/// by <c>GetUserId</c> and <c>CheckIsAllowedTo</c>; a request that could not be read at all; a value
-/// the domain refused that no endpoint check stopped first; and genuine failures.
+/// by <c>GetUserId</c> and <c>CheckIsAllowedTo</c>; <see cref="BlobBusyException"/>, thrown from deep
+/// inside storage; a request that could not be read at all; a value the domain refused that no
+/// endpoint check stopped first; and genuine failures.
 /// </para>
 /// <para>
 /// A <see cref="DomainValidationException"/> reaching here is logged as a warning, because it means an
@@ -53,6 +54,10 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
             case BadHttpRequestException badRequest:
                 logger.LogInformation(badRequest, "Request {Method} {Path} could not be read.", method, path);
                 return (badRequest.StatusCode, Problems.InvalidRequest("The request could not be read."));
+
+            case BlobBusyException blobBusy:
+                logger.LogWarning(blobBusy, "Request {Method} {Path} gave up claiming a blob.", method, path);
+                return (StatusCodes.Status409Conflict, Problems.FileBusy);
 
             case DomainValidationException domainValidation:
                 logger.LogWarning(domainValidation, "Request {Method} {Path} carried a value the domain refused.", method, path);

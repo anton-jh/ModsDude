@@ -501,8 +501,9 @@ then `http://localhost:8081/admin`.
    ```
 5. Open the admin Storage page. If a container's marker is at a later generation than the database, a
    maintenance run or an upload of a deleted mod version's id advanced it after the backup, and storage
-   maintenance refuses to delete anything. Check that no blob the database refers to is missing, then
-   choose Bind storage to this database.
+   maintenance refuses to delete anything. If the page lists blobs the database refers to as missing,
+   undelete them from soft delete in the portal (the container's Show deleted blobs, then Undelete),
+   and run maintenance again until none are missing. Then choose Bind storage to this database.
 
 ### Upgrading PostgreSQL
 

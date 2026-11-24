@@ -3,6 +3,7 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Microsoft.Extensions.Logging;
 using ModsDude.Server.Application.Dependencies;
+using ModsDude.Server.Application.Exceptions;
 using ModsDude.Server.Domain.Storage;
 using System.Runtime.CompilerServices;
 
@@ -76,11 +77,18 @@ internal class BlobContainers(
             {
                 var properties = (await blobClient.GetPropertiesAsync(cancellationToken: cancellationToken)).Value;
                 var metadata = Metadata(properties.Metadata);
+                var conditions = new BlobRequestConditions { IfMatch = properties.ETag };
 
-                await blobClient.SetMetadataAsync(
-                    new Dictionary<string, string>(label?.ApplyTo(metadata) ?? metadata),
-                    new BlobRequestConditions { IfMatch = properties.ETag },
-                    cancellationToken);
+                try
+                {
+                    await blobClient.SetMetadataAsync(new Dictionary<string, string>(label?.ApplyTo(metadata) ?? metadata), conditions, cancellationToken);
+                }
+                catch (RequestFailedException exception) when (exception.Status == 400 && label is not null)
+                {
+                    // The label is for people; the write is what claims the blob.
+                    logger.LogWarning(exception, "Storage refused the label for {Name} in container {Container}. Claiming it without one.", blobName, StorageContainerNames.Of(container));
+                    await blobClient.SetMetadataAsync(new Dictionary<string, string>(metadata), conditions, cancellationToken);
+                }
 
                 return new StoredBlob(blobName, properties.LastModified, properties.ContentLength, properties.ETag.ToString(), metadata);
             }
@@ -93,10 +101,14 @@ internal class BlobContainers(
                 // Something wrote to the blob, or deleted it, between the read and the write. Only this
                 // call's own write proves the blob is there, so it reads again.
             }
+            catch (RequestFailedException exception) when (exception.Status == 412)
+            {
+                throw new BlobBusyException(container, blobName, exception);
+            }
         }
     }
 
-    public async Task<bool> DeleteAsync(StorageContainer container, string blobName, string version, CancellationToken cancellationToken)
+    public async Task<BlobDeleteResult> DeleteAsync(StorageContainer container, string blobName, string version, CancellationToken cancellationToken)
     {
         try
         {
@@ -104,11 +116,11 @@ internal class BlobContainers(
                 .GetBlobClient(blobName)
                 .DeleteIfExistsAsync(conditions: new BlobRequestConditions { IfMatch = new ETag(version) }, cancellationToken: cancellationToken);
 
-            return response.Value;
+            return response.Value ? BlobDeleteResult.Deleted : BlobDeleteResult.Gone;
         }
         catch (RequestFailedException exception) when (exception.Status == 412)
         {
-            return false;
+            return BlobDeleteResult.Changed;
         }
     }
 

@@ -20,15 +20,13 @@ public sealed record BlobDeletionDecision(BlobDeletionVerdict Verdict, string Re
 /// <remarks>
 /// <para>
 /// The caller reads the blob before it asks the database whether anything refers to it, and deletes
-/// only on the version it read. A registration claims its blob before it commits, and the claim
+/// only on the version it read. Whatever is about to refer to a blob claims it first, and the claim
 /// writes to the blob: claimed before the read, the blob is too recent to judge; claimed after it, the
 /// version has moved and the delete fails. Either way a blob that is about to be referred to stays.
 /// </para>
 /// <para>
-/// A restore refers to a blob without claiming it, because the snapshot it copies refers to it already.
-/// If that snapshot is deleted at the same moment, the reference moves from one row to another while
-/// the blob looks unreferenced in between. Deleting the snapshot queues the blob again, so the caller
-/// asks whether the row is still as it read it after the reference check, and a requeued blob stays.
+/// An upload's candidate is queued before its bytes exist, so a blob that is not there yet stays queued
+/// until the upload can no longer be under way.
 /// </para>
 /// </remarks>
 public static class BlobDeletionRule
@@ -51,7 +49,9 @@ public static class BlobDeletionRule
 
         if (stored is null)
         {
-            return new(BlobDeletionVerdict.Drop, "it is gone");
+            return candidate.Reason == BlobDeletionReason.UploadIssued && now - candidate.QueuedAt < minimumAge
+                ? new(BlobDeletionVerdict.Keep, "its upload may still be under way")
+                : new(BlobDeletionVerdict.Drop, "it is gone");
         }
 
         if (stored.Version is null)

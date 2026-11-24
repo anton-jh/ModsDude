@@ -130,9 +130,38 @@ public class HttpModFileDownloaderTests
     [Fact]
     public async Task A_blob_replaced_mid_download_fails_rather_than_being_spliced()
     {
+        var storage = new FakeBlobStorage(Bytes(_chunk * 4), contentHash: "aaa")
+        {
+            WriteAt = (_chunk * 2, "bbb")
+        };
+
+        using var download = await Open(storage);
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => ReadAll(download));
+
+        Assert.Equal(HttpStatusCode.PreconditionFailed, exception.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_blob_whose_metadata_was_written_mid_download_arrives_whole()
+    {
+        var storage = new FakeBlobStorage(Bytes(_chunk * 6), contentHash: "aaa")
+        {
+            WriteAt = (_chunk * 2, "AAA")
+        };
+
+        using var download = await Open(storage);
+
+        Assert.Equal(storage.Blob, await ReadAll(download));
+        Assert.Contains(storage.Requests, x => x.Offset == _chunk * 2 && x.IfMatch is null);
+    }
+
+    [Fact]
+    public async Task A_blob_with_no_content_hash_that_changes_mid_download_fails()
+    {
         var storage = new FakeBlobStorage(Bytes(_chunk * 4))
         {
-            Faults = (offset, _) => offset == _chunk * 2 ? Fault.PreconditionFailed : Fault.None
+            WriteAt = (_chunk * 2, null)
         };
 
         using var download = await Open(storage);
@@ -301,20 +330,24 @@ public class HttpModFileDownloaderTests
         public void Report(long value) => report(value);
     }
 
-    private enum Fault { None, ServerError, Truncate, Stall, PreconditionFailed }
+    private enum Fault { None, ServerError, Truncate, Stall }
 
     private sealed record Request(long? Offset, EntityTagHeaderValue? IfMatch);
 
     /// <summary>Blob storage's side of a GET: ranges, ETags and If-Match, and faults on demand.</summary>
-    private sealed class FakeBlobStorage(byte[] blob) : HttpMessageHandler
+    /// <param name="contentHash">What the blob's content hash metadata says, or null where it has none.</param>
+    private sealed class FakeBlobStorage(byte[] blob, string? contentHash = null) : HttpMessageHandler
     {
         private readonly ConcurrentDictionary<long, int> _attempts = new();
+        private readonly Lock _gate = new();
         private int _concurrent;
         private int _maxConcurrent;
+        private EntityTagHeaderValue _eTag = new("\"0x8DC\"");
+        private string? _contentHash = contentHash;
 
 
         public byte[] Blob { get; } = blob;
-        public EntityTagHeaderValue ETag { get; } = new("\"0x8DC\"");
+        public EntityTagHeaderValue ETag => _eTag;
         public ConcurrentQueue<Request> Requests { get; } = new();
         public int MaxConcurrent => Volatile.Read(ref _maxConcurrent);
 
@@ -323,6 +356,12 @@ public class HttpModFileDownloaderTests
 
         /// <summary>Given the range's offset and which attempt at it this is, from one.</summary>
         public Func<long, int, Fault> Faults { get; init; } = (_, _) => Fault.None;
+
+        /// <summary>
+        /// Just before the first request for this offset is answered, the blob is written: it gets a new
+        /// version, with this content hash.
+        /// </summary>
+        public (long Offset, string? ContentHash)? WriteAt { get; init; }
 
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -343,14 +382,27 @@ public class HttpModFileDownloaderTests
                 }
 
                 var offset = range?.From ?? 0;
-                var fault = Faults(offset, _attempts.AddOrUpdate(offset, 1, (_, x) => x + 1));
+                var attempt = _attempts.AddOrUpdate(offset, 1, (_, x) => x + 1);
+                var fault = Faults(offset, attempt);
+
+                if (WriteAt is { } write && write.Offset == offset && attempt == 1)
+                {
+                    lock (_gate)
+                    {
+                        _eTag = new EntityTagHeaderValue("\"0x8DD\"");
+                        _contentHash = write.ContentHash;
+                    }
+                }
+
+                if (ifMatch is not null && ifMatch != ETag)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.PreconditionFailed) { Content = new StringContent("<Error>changed</Error>") };
+                }
 
                 switch (fault)
                 {
                     case Fault.ServerError:
                         return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("<Error>busy</Error>") };
-                    case Fault.PreconditionFailed:
-                        return new HttpResponseMessage(HttpStatusCode.PreconditionFailed) { Content = new StringContent("<Error>changed</Error>") };
                     case Fault.Stall:
                         await Task.Delay(Timeout.Infinite, cancellationToken);
                         break;
@@ -388,6 +440,11 @@ public class HttpModFileDownloaderTests
             var response = new HttpResponseMessage(status) { Content = new ByteArrayContent(body) };
             response.Headers.ETag = ETag;
             response.Content.Headers.ContentRange = contentRange;
+
+            if (_contentHash is not null)
+            {
+                response.Headers.Add("x-ms-meta-sha256", _contentHash);
+            }
 
             return response;
         }

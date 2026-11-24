@@ -186,7 +186,7 @@ game's mod folders on. The other folder sources start off and are never remember
 kept.
 
 **Upload, then register, per mod.** At most one unregistered blob per mod in flight, and storage
-maintenance deletes those at its first run once they are a day old. A version that is registered always has its file.
+maintenance deletes those once they are a day old, including one still uploading when a run looked. A version that is registered always has its file.
 
 **Order is computed by the client, stored by the server.** The server never parses version strings, so a
 new game needs no server change. Asserting both neighbours turns a concurrent insert into a retry

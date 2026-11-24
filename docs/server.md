@@ -138,10 +138,11 @@ which deletes it later.
 
 Mod and savegame blobs carry a label in their metadata: repo, game, who added the blob and when, and the
 mod version's file name or the savegame's name. It is written once, when the blob is first claimed
-(registering a mod version, checking in or publishing a savegame), and identifies a blob after the rows
+(registering a mod version, checking in, publishing or restoring a savegame), and identifies a blob after the rows
 that referred to it are gone. A savegame blob is shared by every snapshot with those bytes, so its label
 describes the savegame and the first check-in. Values are percent-encoded UTF-8, because metadata is
 ASCII only, and each is cut short at 512 encoded characters so a label always fits in storage's 8 KiB.
+A label storage refuses anyway is left out, and the blob is claimed without it.
 
 ### Background jobs
 
@@ -151,7 +152,7 @@ classes only fetch and carry out. The ModHub crawl's sweep, poll and refresh log
 
 | Job | When | Does |
 | --- | --- | --- |
-| `storage-maintenance` | 04:00 UTC, and from the admin Storage page | Audits storage against the database, labels blobs, deletes queued blobs (see below) |
+| `storage-maintenance` | 02:00 UTC, clear of the retention jobs, and from the admin Storage page | Audits storage against the database, labels blobs, deletes queued blobs (see below) |
 | `retention-schedule` | 05:00 Stockholm | Dates rows that [retention](domain.md#retention) made eligible, clears dates that no longer apply |
 | `retention-delete` | 06:00 Stockholm | Deletes rows that are due and still eligible for the reason they were dated |
 | `storage-statistics` | 03:30 UTC | Records stored bytes and blob counts per container and repo, replacing that day's earlier sample. Retried by Hangfire |
@@ -189,23 +190,34 @@ anything refers to it, then whether the row was queued again since it was read, 
 (`BlobDeletionRule`):
 
 - name doesn't parse, no ETag, written less than a day ago, or queued again → keep for a later run;
+- an upload's blob that isn't there yet, queued less than a day ago → keep, since the upload may still be
+  under way;
 - gone, referred to, or changed since an admin chose it → drop from the queue;
-- otherwise → delete, conditional on the ETag just read, and record it in `DeletedBlobs` with its size
-  and metadata. Neither the delete nor the record is cancelled once started.
+- otherwise → delete, conditional on the ETag just read, and record it in `DeletedBlobs` with its size,
+  metadata and the time it was deleted. Storage answering that the blob had already gone counts as
+  deleted: that is what a retried delete hears when the first answer was lost. Neither the delete nor the
+  record is cancelled once started.
 
-A registration, check-in, publish, image set or avatar claims its blob before it commits
-(`IBlobContainers.ClaimAsync`): it writes the blob's metadata on the ETag it read, reading again if that
-fails. Claimed before the run's read, the blob is too recent to judge; claimed after it, the ETag has
-moved and the delete fails. A restore refers to a blob without claiming it, because the snapshot it copies
-refers to it already. If that snapshot is deleted at the same moment, deleting it queues the blob again,
-which the run sees after its reference check.
+A registration, check-in, publish, restore, image set or avatar claims its blob before it commits, and so
+does a savegame upload link that reuses a stored blob (`IBlobContainers.ClaimAsync`): it writes the blob's
+metadata on the ETag it read, reading again if that fails. Claimed before the run's read, the blob is too
+recent to judge; claimed after it, the ETag has moved and the delete fails. A claim that still fails after
+three reads answers `FileBusy`. A claim gives the blob a new ETag, which the client's ranged downloads
+carry on through (see [Sync](sync.md#executing)).
+
+`DeletedBlobs` lists a deleted blob for 30 days (`DeletedBlobRetentionDays`), or for as long as the
+account's soft delete keeps it where that is longer. Nothing is forgotten while the soft delete setting
+can't be read.
 
 **A deleted mod version's file** is deleted at once when an upload link is asked for the same version id,
 so a fixed build can be uploaded under it (`DeleteReleasedModFileAsync`). It needs the run lock, a gate
 that would let a run delete now, and a last run that deleted freely; otherwise the endpoint answers
-`FileAwaitingDeletion` and the file waits for the run. It skips the minimum age, so it holds a per-blob
-advisory lock (`BlobLocks`) that a registration holds from its claim until its commit. It advances the
-generation before and after, like a run.
+`FileAwaitingDeletion` and the file waits for the run. A file that has already gone counts as deleted, and
+one a registration refers to again answers `AlreadyRegistered`. It skips the minimum age, so it holds a
+per-blob advisory lock (`BlobLocks`) that a registration holds from its claim until its commit. It
+advances the generation before and after, like a run.
+
+The advisory lock ids are listed in `AdvisoryLockSpaces`.
 
 **The gate** refuses all writes (labels, markers) and deletes when:
 
@@ -221,12 +233,14 @@ or can't be read, and while any referenced blob is missing.
 the advance that reached it. Each container holds a `modsdude-storage-binding` marker blob with the
 binding id, generation and advance id as JSON. Every deleting run advances the generation in the database
 and in every marker, in two phases (`PendingGeneration`, `PendingAdvanceId`), so a database restored from
-a backup, or a second database on the same storage, is behind the markers and refuses. Two copies
-advancing at once name the same generation but different advance ids, so neither accepts the other's
-markers. A run binds storage only when it is entirely empty, and marks an
-empty new container. Anything else is bound by hand on the admin Storage page, which writes a generation
-past every marker it finds. A marker holding only a GUID, from before generations, is upgraded when it
-matches a binding that has never advanced.
+a backup, or a second database on the same storage, is behind the markers once the other has advanced,
+and refuses. Two copies at the same generation, such as a backup taken since the last advance, look
+identical until one of them advances, and the other refuses from then on. A blob the first one deleted
+that the other refers to can be undeleted from soft delete. Two copies advancing at once name the same
+generation but different advance ids, so neither accepts the other's markers. A run binds storage only
+when it is entirely empty, and marks an empty new container. Anything else is bound by hand on the
+admin Storage page, which writes a generation past every marker it finds. A marker holding only a GUID,
+from before generations, is upgraded when it matches a binding that has never advanced.
 
 A missed run is skipped, not caught up at startup, so a crash loop can't become a delete loop. The
 recurring job is not retried.

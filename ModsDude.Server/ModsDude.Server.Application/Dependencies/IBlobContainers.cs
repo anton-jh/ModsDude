@@ -26,11 +26,11 @@ public interface IBlobContainers
     /// make the blob referenced, before that commits.
     /// </summary>
     /// <returns>The blob as read just before the write, or null where there is none.</returns>
+    /// <exception cref="Exceptions.BlobBusyException">The blob kept changing between the read and the write.</exception>
     Task<StoredBlob?> ClaimAsync(StorageContainer container, string blobName, BlobLabel? label, CancellationToken cancellationToken);
 
     /// <summary>Deletes the blob while it is still at <paramref name="version"/>.</summary>
-    /// <returns>Whether it was deleted: false where it had gone or changed.</returns>
-    Task<bool> DeleteAsync(StorageContainer container, string blobName, string version, CancellationToken cancellationToken);
+    Task<BlobDeleteResult> DeleteAsync(StorageContainer container, string blobName, string version, CancellationToken cancellationToken);
 
     /// <summary>Adds <paramref name="label"/> to the blob's metadata while it is still at <see cref="StoredBlob.Version"/>.</summary>
     /// <returns>Whether it was written: false where the blob had gone or changed, or storage refused the metadata.</returns>
@@ -49,6 +49,17 @@ public interface IBlobContainers
     Task<int?> GetSoftDeleteDaysAsync(CancellationToken cancellationToken);
 }
 
+
+public enum BlobDeleteResult
+{
+    Deleted,
+
+    /// <summary>There was no blob by that name.</summary>
+    Gone,
+
+    /// <summary>The blob is no longer at the version asked for, and stays.</summary>
+    Changed
+}
 
 /// <param name="Marker">The marker, or null where there is none or it can't be read.</param>
 /// <param name="Version">The marker blob's version, or null where there is no marker blob.</param>

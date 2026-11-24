@@ -15,7 +15,7 @@ public class StorageMaintenanceJob(
 {
     public const string JobId = "storage-maintenance";
 
-    /// <summary>A recurring job id whose class no longer exists. Removed so Hangfire stops trying to run it.</summary>
+    /// <summary>A recurring job id with no job behind it. Removed so Hangfire never tries to run it.</summary>
     private const string _removedJobId = "blob-reclamation";
 
 
@@ -60,7 +60,8 @@ public class StorageMaintenanceJob(
             return;
         }
 
-        var settings = new StorageMaintenanceSettings(options.Value.MinimumBlobAge, options.Value.MinimumSoftDeleteDays);
+        var settings = new StorageMaintenanceSettings(
+            options.Value.MinimumBlobAge, options.Value.MinimumSoftDeleteDays, options.Value.DeletedBlobRetentionDays);
         var outcome = await maintenance.RunAsync(settings, cancellationToken);
 
         // Failed rather than returned from, so a refusal shows in the dashboard as well as on the admin page.

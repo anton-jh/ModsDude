@@ -50,14 +50,6 @@ public interface ISavegameStorageService
     Task<long?> GetSavegameSize(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Whether these bytes are already stored for this savegame, marking the blob as just written
-    /// where they are. True is the answer that makes a re-check-in free: the address is the hash, so a
-    /// blob that is there is the same save. The mark is what stops a deletion run deleting a blob it
-    /// read as unreferenced before this upload came along to reuse it.
-    /// </summary>
-    Task<bool> TryReuseSavegame(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
-
-    /// <summary>
     /// A link the client uploads the packed save over. The client names the hash before it uploads,
     /// because the hash is the address - which means it has to have hashed the file already, and the
     /// bytes it then sends can be checked against the name it asked for.
@@ -69,7 +61,12 @@ public interface ISavegameStorageService
     /// <summary>
     /// Whether these bytes are stored for this savegame, labelling the blob where it carries no label
     /// yet. The write gives the blob a new version, so a deletion run that read it before this call
-    /// cannot delete it. Called by whatever is about to make the blob referenced.
+    /// cannot delete it. Called by whatever is about to make the blob referenced, or to reuse it.
     /// </summary>
-    Task<bool> ClaimSavegame(RepoId repoId, SavegameId savegameId, string contentHash, SavegameBlobLabel label, CancellationToken cancellationToken);
+    /// <remarks>
+    /// True is the answer that makes a re-check-in free: the address is the hash, so a blob that is
+    /// there is the same save.
+    /// </remarks>
+    /// <param name="label">Null where the caller does not know the savegame well enough to describe it.</param>
+    Task<bool> ClaimSavegame(RepoId repoId, SavegameId savegameId, string contentHash, SavegameBlobLabel? label, CancellationToken cancellationToken);
 }

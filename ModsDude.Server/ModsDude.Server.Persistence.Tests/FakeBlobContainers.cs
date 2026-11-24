@@ -37,6 +37,9 @@ public class FakeBlobContainers : IBlobContainers
     /// <summary>Whether a marker write is refused as if somebody else had written it first.</summary>
     public Func<StorageContainer, bool> RefuseMarkerWrite { get; set; } = _ => false;
 
+    /// <summary>Whether a delete that goes through answers as if the blob had already gone.</summary>
+    public bool LoseDeleteAnswers { get; set; }
+
     public List<(StorageContainer Container, string Name)> Deleted { get; } = [];
 
 
@@ -59,6 +62,8 @@ public class FakeBlobContainers : IBlobContainers
     {
         _blobs[container][name] = _blobs[container][name] with { Version = NextVersion(), LastModified = Now };
     }
+
+    public void Remove(StorageContainer container, string name) => _blobs[container].Remove(name);
 
     public StoredBlob? Find(StorageContainer container, string name) => _blobs[container].GetValueOrDefault(name);
 
@@ -111,19 +116,25 @@ public class FakeBlobContainers : IBlobContainers
         return Task.FromResult<StoredBlob?>(current);
     }
 
-    public Task<bool> DeleteAsync(StorageContainer container, string blobName, string version, CancellationToken cancellationToken)
+    public Task<BlobDeleteResult> DeleteAsync(StorageContainer container, string blobName, string version, CancellationToken cancellationToken)
     {
         BeforeDelete?.Invoke(container, blobName);
 
-        if (Find(container, blobName)?.Version != version)
+        if (Find(container, blobName) is not { } current)
         {
-            return Task.FromResult(false);
+            return Task.FromResult(BlobDeleteResult.Gone);
+        }
+
+        if (current.Version != version)
+        {
+            return Task.FromResult(BlobDeleteResult.Changed);
         }
 
         _blobs[container].Remove(blobName);
         Deleted.Add((container, blobName));
 
-        return Task.FromResult(true);
+        // What a retried delete whose first answer was lost hears.
+        return Task.FromResult(LoseDeleteAnswers ? BlobDeleteResult.Gone : BlobDeleteResult.Deleted);
     }
 
     public Task<bool> WriteLabelAsync(StorageContainer container, StoredBlob blob, BlobLabel label, CancellationToken cancellationToken)

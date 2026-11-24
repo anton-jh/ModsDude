@@ -124,6 +124,29 @@ public class BlobDeletionQueueTests(DatabaseFixture fixture)
     }
 
     [Fact]
+    public async Task Deleting_a_user_queues_their_picture()
+    {
+        var avatar = TestHashes.Of($"avatar-{Guid.NewGuid()}");
+        var userId = new UserId($"user-{Guid.NewGuid()}");
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            var user = new User(userId, new DisplayName("Anton"), DateTime.UtcNow);
+            user.SetAvatar(avatar, DateTime.UtcNow);
+            dbContext.Users.Add(user);
+            await dbContext.SaveChangesAsync();
+        }
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.Users.Where(x => x.Id == userId).ExecuteDeleteAsync();
+        }
+
+        var candidate = Assert.Single(await CandidatesAsync(BlobNames.Image(avatar)));
+        Assert.Equal((StorageContainer.Images, BlobDeletionReason.ReferenceRemoved, userId), (candidate.Container, candidate.Reason, candidate.UserId!.Value));
+    }
+
+    [Fact]
     public async Task Queuing_a_blob_again_moves_when_it_was_queued_and_counts_the_requeue()
     {
         var (repoId, userId) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);

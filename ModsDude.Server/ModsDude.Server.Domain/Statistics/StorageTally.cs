@@ -1,4 +1,4 @@
-﻿using ModsDude.Server.Domain.Storage;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Repos;
 
 namespace ModsDude.Server.Domain.Statistics;
