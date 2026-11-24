@@ -113,7 +113,7 @@ public class SavegameSnapshot
 
     /// <summary>
     /// SHA-256 of the packed save, lowercase hex, and <b>the address the blob is stored at</b>
-    /// within the savegame - see <see cref="Mods.BlobReclamation.TryParseSavegameBlobName"/>.
+    /// within the savegame - see <see cref="Storage.BlobNames.Savegame"/>.
     /// Addressing by content rather than by snapshot number is what makes two concurrent check-ins
     /// write two different blobs instead of racing for one name, and what makes a restore a pure
     /// metadata operation.

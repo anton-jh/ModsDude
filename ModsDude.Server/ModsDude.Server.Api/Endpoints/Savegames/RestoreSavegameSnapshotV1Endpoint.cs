@@ -8,9 +8,11 @@ using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
+using ModsDude.Server.Persistence.Storage;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Savegames;
@@ -33,9 +35,10 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// <para>
 /// <b>No bytes move.</b> A snapshot is addressed by content, so the restored snapshot names the hash
 /// it was copied from and the blob it points at is already there - which is what makes restoring a
-/// 400 MB save a metadata write. It carries the source's <c>ProfileRevision</c> too, because that
-/// describes the play in the file rather than the moment the restore was clicked; the profile comes
-/// from the savegame, which is the same one either way since nothing moves a save between them.
+/// 400 MB save a metadata write. The blob is still claimed, like any blob about to be referred to.
+/// It carries the source's <c>ProfileRevision</c> too, because that describes the play in the file
+/// rather than the moment the restore was clicked; the profile comes from the savegame, which is the
+/// same one either way since nothing moves a save between them.
 /// </para>
 /// <para>
 /// Member, like any other check-in. It discards nothing, and the history makes it visible and
@@ -62,6 +65,7 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
         ITimeService timeService,
         IUnitOfWork unitOfWork,
         IRetentionUpkeep retentionUpkeep,
+        ISavegameStorageService savegameStorageService,
         CancellationToken cancellationToken)
     {
         if (RequestChecks.Label(request.Label, SavegameSnapshot.MaximumLabelLength) is { } invalid)
@@ -107,9 +111,16 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
 
         var now = timeService.Now();
 
-        // The blob is not checked for. Its address is already named by a snapshot that is registered,
-        // so anything that would fail here has failed for the source too - and a restore is the one
-        // thing that can still be useful when a blob has gone: it moves nothing.
+        // Claimed, so a deletion run cannot delete the blob while the source snapshot is deleted
+        // before this commits. A blob that has gone is not refused over: its address is already named
+        // by a registered snapshot, so anything that would fail here has failed for the source too.
+        var context = await BlobLabelContext.ReadAsync(dbContext, savegame.RepoId, userId, cancellationToken);
+        var label = new SavegameBlobLabel(
+            context.RepoId, context.RepoName, context.Game, context.AddedBy, context.AddedByName, now,
+            savegame.Id, savegame.Name.Value);
+
+        await savegameStorageService.ClaimSavegame(savegame.RepoId, savegame.Id, source.ContentHash, label, cancellationToken);
+
         var snapshot = savegame.CreateSnapshot(
             source.ProfileRevision,
             source.ContentHash,

@@ -18,7 +18,7 @@ internal class SavegameEntityTypeConfiguration : IEntityTypeConfiguration<Savega
         builder.Property(x => x.Version).IsConcurrencyToken();
 
         // Cascade: a deleted repo takes its savegames with it. A savegame outside a repo is not
-        // addressable by anything, and the blobs behind it are reclaimed by the sweep afterwards.
+        // addressable by anything, and the blobs behind it are left to storage maintenance.
         builder.HasOne<Repo>()
             .WithMany()
             .HasForeignKey(x => x.RepoId)

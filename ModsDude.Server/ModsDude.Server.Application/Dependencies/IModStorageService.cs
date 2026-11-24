@@ -1,8 +1,10 @@
-﻿using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Storage;
 
 namespace ModsDude.Server.Application.Dependencies;
-public interface IModStorageService : IReclaimableContainer
+
+public interface IModStorageService
 {
     /// <summary>
     /// The blob metadata entry the uploading client writes the file's SHA-256 into. The API never
@@ -20,21 +22,14 @@ public interface IModStorageService : IReclaimableContainer
     Task<StoredModFile?> GetStoredMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
 
     /// <summary>
-    /// <see cref="GetStoredMod"/>, and a write to the blob that changes what storage calls its state,
-    /// so a reclamation sweep that listed it before this call cannot delete it. Called by whatever
-    /// is about to make the blob referenced.
+    /// <see cref="GetStoredMod"/>, and a write to the blob that labels it where it carries no label yet.
+    /// The write gives the blob a new version, so a deletion run that read it before this call cannot
+    /// delete it. Called by whatever is about to make the blob referenced.
     /// </summary>
-    Task<StoredModFile?> ClaimStoredMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
+    Task<StoredModFile?> ClaimStoredMod(RepoId repoId, ModId modId, ModVersionId versionId, ModBlobLabel label, CancellationToken cancellationToken);
 
     Task<string> GetUploadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
     Task<string> GetDownloadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
-    Task DeleteMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Every mod blob there is, streamed rather than returned whole so that the reclamation sweep
-    /// does not have to hold a container listing in memory before it can start.
-    /// </summary>
-    IAsyncEnumerable<StoredBlob> ListStoredMods(CancellationToken cancellationToken);
 }
 
 

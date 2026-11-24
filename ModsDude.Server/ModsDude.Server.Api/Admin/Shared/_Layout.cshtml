@@ -443,6 +443,88 @@
     .facts dd {
         margin: 0;
         font-variant-numeric: tabular-nums;
+        overflow-wrap: anywhere;
+    }
+
+    .notice ul {
+        margin: 6px 0 0;
+        padding-left: 20px;
+    }
+
+    .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-self: stretch;
+        border-bottom: 1px solid var(--row-divider);
+    }
+
+    .tabs a {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: -1px;
+        padding: 8px 12px;
+        border-bottom: 2px solid transparent;
+        color: var(--text-secondary);
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .tabs a:hover {
+        color: var(--text-primary);
+        text-decoration: none;
+    }
+
+    .tabs a[aria-current="page"] {
+        border-bottom-color: var(--accent);
+        color: var(--text-primary);
+    }
+
+    .pager {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        font-size: 13px;
+    }
+
+    .rows .selectable-row {
+        position: relative;
+    }
+
+    .rows > .selectable-row:not(:last-child) > details > summary,
+    .rows > .selectable-row:not(:last-child) > details[open] > .row-details {
+        border-bottom: 1px solid var(--row-divider);
+    }
+
+    .rows.selectable .rows-header {
+        position: relative;
+        padding-left: 64px;
+    }
+
+    .rows.selectable summary {
+        padding-left: 64px;
+    }
+
+    .rows.selectable summary::before {
+        left: 42px;
+    }
+
+    .rows.selectable .row-details {
+        padding-left: 64px;
+    }
+
+    .rows .select {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 37px;
+        cursor: pointer;
     }
 
     @@media (max-width: 48rem) {
@@ -580,6 +662,7 @@
         <a href="/admin/repos" aria-current="@Current(AdminSection.Repos)">Repos</a>
         <a href="/admin/users" aria-current="@Current(AdminSection.Users)">Users</a>
         <a href="/admin/trust-codes" aria-current="@Current(AdminSection.TrustCodes)">Trust codes</a>
+        <a href="/admin/storage" aria-current="@Current(AdminSection.Storage)">Storage</a>
         <a href="/admin/jobs">Jobs</a>
     </nav>
 </header>
@@ -642,6 +725,75 @@
             labelCells(headings, summary.children);
         }
     }
+
+    // A list with checkboxes: select every row on the page at once, and say what is selected.
+    function selectionOf() {
+        const list = document.querySelector("[data-selection]");
+        const boxes = list ? [...list.querySelectorAll("input[name=ids]:not(:disabled)")] : [];
+        return { list, boxes, chosen: boxes.filter(box => box.checked) };
+    }
+
+    function bytes(count) {
+        const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+        let size = count;
+        let unit = 0;
+        while (size >= 1024 && unit < units.length - 1) {
+            size /= 1024;
+            unit++;
+        }
+        return `${unit === 0 ? size : size.toFixed(1)} ${units[unit]}`;
+    }
+
+    function showSelection() {
+        const { list, boxes, chosen } = selectionOf();
+        if (!list) {
+            return;
+        }
+
+        const total = chosen.reduce((sum, box) => sum + Number(box.dataset.bytes), 0);
+        const summary = document.querySelector("[data-selection-summary]");
+        if (summary) {
+            summary.textContent = chosen.length === 0 ? "None selected" : `${chosen.length} selected, ${bytes(total)}`;
+        }
+
+        const submit = document.querySelector("[data-selection-submit]");
+        if (submit) {
+            submit.disabled = chosen.length === 0;
+        }
+
+        const all = list.querySelector("[data-select-all]");
+        if (all) {
+            all.checked = boxes.length > 0 && chosen.length === boxes.length;
+            all.indeterminate = chosen.length > 0 && chosen.length < boxes.length;
+        }
+    }
+
+    document.addEventListener("change", event => {
+        if (event.target.matches("[data-select-all]")) {
+            selectionOf().boxes.forEach(box => box.checked = event.target.checked);
+        }
+
+        if (event.target.matches("[data-select-all], [data-selection] input[name=ids]")) {
+            showSelection();
+        }
+    });
+
+    document.addEventListener("submit", event => {
+        if (!event.target.matches("[data-confirm-selection]")) {
+            return;
+        }
+
+        const { chosen } = selectionOf();
+        const total = chosen.reduce((sum, box) => sum + Number(box.dataset.bytes), 0);
+        const names = chosen.slice(0, 10).map(box => box.dataset.name);
+        const more = chosen.length > names.length ? `\n...and ${chosen.length - names.length} more` : "";
+
+        if (!confirm(`Delete ${chosen.length} blobs (${bytes(total)})? The next run deletes them.\n\n${names.join("\n")}${more}`)) {
+            event.preventDefault();
+        }
+    });
+
+    showSelection();
 
     // A search box narrows the list it names to the options whose text contains what was typed.
     document.addEventListener("input", event => {

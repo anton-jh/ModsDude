@@ -1,6 +1,6 @@
-using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Statistics;
+using ModsDude.Server.Domain.Storage;
 
 namespace ModsDude.Server.Domain.Tests.Statistics;
 
@@ -133,7 +133,7 @@ public class StorageTallyTests
 
     private static StoredBlob Blob(string name, long length)
     {
-        return new StoredBlob(name, DateTimeOffset.UnixEpoch, length, null);
+        return new StoredBlob(name, DateTimeOffset.UnixEpoch, length, null, new Dictionary<string, string>());
     }
 
     private static Dictionary<RepoId, long> Registered(params (RepoId RepoId, long Bytes)[] entries)

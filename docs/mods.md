@@ -58,7 +58,9 @@ Importing first asks about any likely copies (`x (1)`, `x - Copy`). Then, for up
 and each mod's versions one after another:
 
 1. Get an upload link. `FileAlreadyPresent` means a previous attempt uploaded it already, and the file is
-   hashed to adopt it; `AlreadyRegistered` counts as done.
+   hashed to adopt it; `AlreadyRegistered` counts as done. A deleted version's file is deleted when its id
+   is uploaded again; `FileAwaitingDeletion` means it can't be yet, and the version fails with "try again
+   later" (see [Server](server.md#storage-maintenance)).
 2. Upload in blocks, hashing (SHA-256) as it goes and recording the hash in blob metadata. The upload is
    retried per block, renews its link, and fails on a stall.
 3. Register the version at its computed position.
@@ -183,8 +185,8 @@ game's mod folders on. The other folder sources start off and are never remember
 **Import on save, not on drag.** Cancel stays meaningful, and the repo doesn't fill with mods nobody
 kept.
 
-**Upload, then register, per mod.** At most one orphaned blob per mod in flight, and reclamation cleans
-those up. A version that is registered always has its file.
+**Upload, then register, per mod.** At most one unregistered blob per mod in flight, and storage
+maintenance deletes those once they are a day old, including one still uploading when a run looked. A version that is registered always has its file.
 
 **Order is computed by the client, stored by the server.** The server never parses version strings, so a
 new game needs no server change. Asserting both neighbours turns a concurrent insert into a retry

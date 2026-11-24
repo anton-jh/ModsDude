@@ -19,6 +19,7 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
     private readonly Dictionary<ModVersionIdentity, RegisterModRequest> _registrations = [];
     private readonly List<ServerCall> _journal = [];
     private readonly Dictionary<ModVersionIdentity, string?> _stored = [];
+    private readonly HashSet<ModVersionIdentity> _awaitingDeletion = [];
     private readonly Dictionary<ModKey, List<ModDto>> _registered = [];
     private readonly Dictionary<ModVersionIdentity, long> _linkedSizes = [];
 
@@ -97,6 +98,15 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
         }
     }
 
+    /// <summary>The file of a deleted version that the server can't delete yet.</summary>
+    public void PlaceFileAwaitingDeletion(ModVersionIdentity identity)
+    {
+        lock (_lock)
+        {
+            _awaitingDeletion.Add(identity);
+        }
+    }
+
     public void Seed(ModKey modId, params string[] versions)
     {
         foreach (var version in versions)
@@ -155,6 +165,11 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
             if (IsRegistered(identity))
             {
                 throw Problem(ProblemType.AlreadyRegistered, null);
+            }
+
+            if (_awaitingDeletion.Contains(identity))
+            {
+                throw Problem(ProblemType.FileAwaitingDeletion, null);
             }
 
             if (_stored.TryGetValue(identity, out var recorded))

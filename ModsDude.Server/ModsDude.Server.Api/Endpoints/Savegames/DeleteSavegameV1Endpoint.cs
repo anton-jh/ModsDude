@@ -28,8 +28,8 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// </para>
 /// <para>
 /// The blobs are not deleted here. They are addressed by content and several snapshots can name one,
-/// so the reclamation sweep is what removes them once nothing refers to them - the same bargain as
-/// a deleted mod's file.
+/// so storage maintenance removes them once nothing refers to them - the same bargain as a deleted
+/// mod's file.
 /// </para>
 /// </remarks>
 public class DeleteSavegameV1Endpoint : IEndpoint

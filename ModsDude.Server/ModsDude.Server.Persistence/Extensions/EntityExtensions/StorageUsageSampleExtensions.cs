@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Domain.Statistics;
+using ModsDude.Server.Domain.Storage;
 
 namespace ModsDude.Server.Persistence.Extensions.EntityExtensions;
 public static class StorageUsageSampleExtensions

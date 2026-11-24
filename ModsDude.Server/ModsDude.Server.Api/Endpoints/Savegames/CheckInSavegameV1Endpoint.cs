@@ -14,6 +14,7 @@ using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
+using ModsDude.Server.Persistence.Storage;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Savegames;
@@ -113,8 +114,14 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         }
 
         // A snapshot whose blob is absent is a head nobody can check out. A refused check-in is
-        // retried by uploading and asking again.
-        if (!await savegameStorageService.CheckIfSavegameExists(savegame.RepoId, savegame.Id, request.ContentHash, cancellationToken))
+        // retried by uploading and asking again. Claiming is what stops a deletion run that read the
+        // blob as unreferenced deleting it from under this check-in.
+        var context = await BlobLabelContext.ReadAsync(dbContext, savegame.RepoId, userId, cancellationToken);
+        var label = new SavegameBlobLabel(
+            context.RepoId, context.RepoName, context.Game, context.AddedBy, context.AddedByName, timeService.Now(),
+            savegame.Id, savegame.Name.Value);
+
+        if (!await savegameStorageService.ClaimSavegame(savegame.RepoId, savegame.Id, request.ContentHash, label, cancellationToken))
         {
             return TypedResults.BadRequest(Problems.SavegameFileDoesNotExist(savegame.RepoId, savegame.Id, request.ContentHash));
         }

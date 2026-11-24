@@ -7,6 +7,7 @@ using ModsDude.Server.Application.Exceptions;
 using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Storage;
 using System.Security.Claims;
 using System.Security.Cryptography;
 
@@ -84,6 +85,9 @@ public class UploadImageV1Endpoint : IEndpoint
                 return TypedResults.BadRequest(Problems.InvalidImageFormat);
             }
         }
+
+        // Queued before it is stored, so an image nothing ever comes to refer to is collected.
+        await dbContext.QueueUploadAsync(StorageContainer.Images, BlobNames.Image(hash), null, user.Id, cancellationToken);
 
         using var forUpload = image.OpenReadStream();
 

@@ -5,6 +5,7 @@ using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Backups;
 using ModsDude.Server.Domain.Invites;
 using ModsDude.Server.Domain.Statistics;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
@@ -44,6 +45,10 @@ public class OverviewPageModel(
     public IReadOnlyList<LargestModVersionRow> LargestModVersions { get; private set; } = [];
     public IReadOnlyList<LargestSavegameRow> LargestSavegames { get; private set; } = [];
 
+    /// <summary>Why the last storage maintenance run deleted nothing. Empty when it was free to.</summary>
+    public IReadOnlyList<string> StorageRefusals { get; private set; } = [];
+    public int MissingBlobCount { get; private set; }
+
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
@@ -54,6 +59,14 @@ public class OverviewPageModel(
         await LoadBackupsAsync(now, cancellationToken);
         await LoadTrafficAsync(now, cancellationToken);
         await LoadLargestAsync(cancellationToken);
+        await LoadStorageMaintenanceAsync(cancellationToken);
+    }
+
+
+    private async Task LoadStorageMaintenanceAsync(CancellationToken cancellationToken)
+    {
+        StorageRefusals = (await dbContext.StorageMaintenanceStatuses.AsNoTracking().SingleOrDefaultAsync(cancellationToken))?.Refusals ?? [];
+        MissingBlobCount = await dbContext.StorageAuditFindings.CountAsync(x => x.Kind == StorageFindingKind.Missing, cancellationToken);
     }
 
 

@@ -190,15 +190,27 @@ public sealed class HttpModFileDownloader : IModFileDownloader
 /// One blob read as consecutive ranges over several connections, and handed out in file order.
 /// </summary>
 /// <remarks>
+/// <para>
 /// A queue of chunk fetches, oldest first: reading drains the front, and every chunk consumed lets
 /// another start at the back. Each chunk retries on its own, so a dropped connection costs a range
 /// rather than the file.
+/// </para>
+/// <para>
+/// Every range is pinned to the version the first answer came from, so a blob replaced mid-download
+/// fails rather than splicing two files together. Storage also gives a blob a new version when only
+/// its metadata is written, as the server does whenever it claims a file, so a range refused for its
+/// version is asked for again unpinned, and the download carries on under the new version when that
+/// still names the same content hash and length.
+/// </para>
 /// </remarks>
 internal sealed class RangedDownloadStream : Stream
 {
+    /// <summary>The metadata the uploading client writes the file's SHA-256 into, as storage sends it back.</summary>
+    private const string _contentHashHeader = "x-ms-meta-sha256";
+
     private readonly HttpClient _httpClient;
     private readonly string _link;
-    private readonly EntityTagHeaderValue? _entityTag;
+    private readonly string? _contentHash;
     private readonly long _length;
     private readonly RangedDownloadOptions _options;
     private readonly SemaphoreSlim _connections;
@@ -209,6 +221,7 @@ internal sealed class RangedDownloadStream : Stream
 
     private long _scheduled;
     private long _position;
+    private volatile EntityTagHeaderValue? _entityTag;
     private Chunk? _current;
     private int _currentOffset;
     private bool _disposed;
@@ -233,9 +246,8 @@ internal sealed class RangedDownloadStream : Stream
         _limiter = limiter;
         _received = new ReceivedBytes(bytesReceived, length);
 
-        // Pinned to the version the first answer came from, so a blob replaced mid-download fails
-        // rather than splicing two files together. The hash would catch that too, but this says why.
         _entityTag = first.Headers.ETag;
+        _contentHash = ContentHashOf(first);
 
         _connections = new SemaphoreSlim(options.ConnectionsPerFile);
         _lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -438,19 +450,55 @@ internal sealed class RangedDownloadStream : Stream
 
     private async Task<Chunk> FetchOnceAsync(long offset, int length, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, _link);
-        request.Headers.Range = new RangeHeaderValue(offset, offset + length - 1);
-
-        if (_entityTag is not null)
-        {
-            request.Headers.IfMatch.Add(_entityTag);
-        }
-
         using var stall = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         stall.CancelAfter(_options.StallTimeout);
 
-        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, stall.Token);
+        using (var pinned = await SendRangeAsync(offset, length, _entityTag, stall.Token))
+        {
+            if (pinned.StatusCode is not HttpStatusCode.PreconditionFailed || _contentHash is null)
+            {
+                return await ReadRangeAsync(pinned, offset, length, stall, cancellationToken);
+            }
+        }
 
+        using var unpinned = await SendRangeAsync(offset, length, null, stall.Token);
+
+        await HttpModFileDownloader.EnsureSuccessAsync(unpinned, cancellationToken);
+
+        if (!string.Equals(ContentHashOf(unpinned), _contentHash, StringComparison.OrdinalIgnoreCase) ||
+            unpinned.Content.Headers.ContentRange?.Length != _length)
+        {
+            throw new HttpRequestException(
+                "The file was replaced while it was being downloaded.",
+                null,
+                HttpStatusCode.PreconditionFailed);
+        }
+
+        _entityTag = unpinned.Headers.ETag;
+
+        return await ReadRangeAsync(unpinned, offset, length, stall, cancellationToken);
+    }
+
+    private async Task<HttpResponseMessage> SendRangeAsync(long offset, int length, EntityTagHeaderValue? ifMatch, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, _link);
+        request.Headers.Range = new RangeHeaderValue(offset, offset + length - 1);
+
+        if (ifMatch is not null)
+        {
+            request.Headers.IfMatch.Add(ifMatch);
+        }
+
+        return await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+    }
+
+    private async Task<Chunk> ReadRangeAsync(
+        HttpResponseMessage response,
+        long offset,
+        int length,
+        CancellationTokenSource stall,
+        CancellationToken cancellationToken)
+    {
         await HttpModFileDownloader.EnsureSuccessAsync(response, cancellationToken);
 
         if (response.StatusCode is not HttpStatusCode.PartialContent ||
@@ -537,6 +585,12 @@ internal sealed class RangedDownloadStream : Stream
             IOException => true,
             _ => false
         };
+    }
+
+
+    private static string? ContentHashOf(HttpResponseMessage response)
+    {
+        return response.Headers.TryGetValues(_contentHashHeader, out var values) ? values.FirstOrDefault() : null;
     }
 
 

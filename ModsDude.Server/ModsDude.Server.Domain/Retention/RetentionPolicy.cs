@@ -52,9 +52,9 @@ public record RetentionChanges<TKey>(
 
 /// <summary>
 /// Decides which rows of one history - a savegame's snapshots, a profile's revisions, a mod's
-/// versions - are due to go, and keeps the schedules recorded on them honest. Pure, for the reason
-/// <see cref="Mods.BlobReclamation"/> is: this is the part that can destroy somebody's data, and it
-/// is the part that can be tested without a database.
+/// versions - are due to go, and keeps the schedules recorded on them honest. Pure, because this is
+/// the part that can destroy somebody's data, and it is the part that can be tested without a
+/// database.
 /// </summary>
 /// <remarks>
 /// <para>

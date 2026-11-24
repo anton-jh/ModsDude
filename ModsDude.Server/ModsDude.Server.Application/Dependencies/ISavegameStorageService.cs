@@ -1,6 +1,6 @@
-using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 
 namespace ModsDude.Server.Application.Dependencies;
 
@@ -25,13 +25,11 @@ namespace ModsDude.Server.Application.Dependencies;
 /// </para>
 /// <para>
 /// The repo and savegame still appear in the path even though the hash alone would identify the
-/// bytes. Deduplication across savegames is worth much less than a savegame's blobs being deletable
-/// by knowing only the savegame - and the reclamation sweep can read an address off a name without
-/// consulting anything, which is what
-/// <see cref="BlobReclamation.TryParseSavegameBlobName"/> relies on.
+/// bytes. Deduplication across savegames is worth much less than a blob naming the repo and savegame
+/// it belongs to, which <see cref="BlobNames.TryParseSavegame"/> reads off the name alone.
 /// </para>
 /// </remarks>
-public interface ISavegameStorageService : IReclaimableContainer
+public interface ISavegameStorageService
 {
     /// <summary>
     /// The blob metadata entry the uploading client writes the packed save's SHA-256 into. The API
@@ -46,20 +44,10 @@ public interface ISavegameStorageService : IReclaimableContainer
     /// </summary>
     Task EnsureContainerExists(CancellationToken cancellationToken);
 
-    Task<bool> CheckIfSavegameExists(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
-
     /// <summary>
     /// How many bytes the stored save holds, or <c>null</c> when there is no such blob.
     /// </summary>
     Task<long?> GetSavegameSize(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Whether these bytes are already stored for this savegame, marking the blob as just written
-    /// where they are. True is the answer that makes a re-check-in free: the address is the hash, so a
-    /// blob that is there is the same save. The mark is what stops the reclamation sweep deleting a
-    /// blob it listed as unreferenced before this upload came along to reuse it.
-    /// </summary>
-    Task<bool> TryReuseSavegame(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
 
     /// <summary>
     /// A link the client uploads the packed save over. The client names the hash before it uploads,
@@ -71,9 +59,14 @@ public interface ISavegameStorageService : IReclaimableContainer
     Task<string> GetDownloadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Every savegame blob there is, streamed rather than returned whole so that the reclamation
-    /// sweep does not have to hold a container listing in memory before it can start. See
-    /// <see cref="IModStorageService.ListStoredMods"/>.
+    /// Whether these bytes are stored for this savegame, labelling the blob where it carries no label
+    /// yet. The write gives the blob a new version, so a deletion run that read it before this call
+    /// cannot delete it. Called by whatever is about to make the blob referenced, or to reuse it.
     /// </summary>
-    IAsyncEnumerable<StoredBlob> ListStoredSavegames(CancellationToken cancellationToken);
+    /// <remarks>
+    /// True is the answer that makes a re-check-in free: the address is the hash, so a blob that is
+    /// there is the same save.
+    /// </remarks>
+    /// <param name="label">Null where the caller does not know the savegame well enough to describe it.</param>
+    Task<bool> ClaimSavegame(RepoId repoId, SavegameId savegameId, string contentHash, SavegameBlobLabel? label, CancellationToken cancellationToken);
 }

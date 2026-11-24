@@ -1,4 +1,4 @@
-using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Repos;
 
 namespace ModsDude.Server.Domain.Statistics;
@@ -13,7 +13,7 @@ public class StorageTally
 
     public void Add(StorageContainer container, StoredBlob blob)
     {
-        var key = (container, OwningRepo(container, blob.Name));
+        var key = (container, BlobNames.OwningRepo(container, blob.Name));
         var total = _stored.GetValueOrDefault(key);
 
         _stored[key] = new StoredTotal(total.Bytes + blob.Length, total.Count + 1);
@@ -50,17 +50,6 @@ public class StorageTally
         })];
     }
 
-
-    private static RepoId? OwningRepo(StorageContainer container, string blobName)
-    {
-        return container switch
-        {
-            StorageContainer.Mods => BlobReclamation.TryParseModBlobName(blobName, out var mod) ? mod.RepoId : null,
-            StorageContainer.Savegames => BlobReclamation.TryParseSavegameBlobName(blobName, out var savegame) ? savegame.RepoId : null,
-            StorageContainer.Images => null,
-            _ => throw new ArgumentOutOfRangeException(nameof(container), container, null)
-        };
-    }
 
     private static long? Registered(
         StorageContainer container,

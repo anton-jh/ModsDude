@@ -94,8 +94,8 @@ public class SavegameDeletionTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// A savegame outside a repo is addressable by nothing, and the blobs behind it are reclaimed by
-    /// the sweep afterwards. The interesting part is that the cascade has to reach through the
+    /// A savegame outside a repo is addressable by nothing, and the blobs behind it are left to
+    /// storage maintenance. The interesting part is that the cascade has to reach through the
     /// savegame to its snapshots while those snapshots still hold a <c>Restrict</c> key onto the
     /// profile revisions the same delete is removing.
     /// </summary>

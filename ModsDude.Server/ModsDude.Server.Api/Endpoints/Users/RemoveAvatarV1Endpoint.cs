@@ -12,7 +12,7 @@ namespace ModsDude.Server.Api.Endpoints.Users;
 
 /// <summary>
 /// Takes the caller's picture away, leaving their initial on their tag's colour. The image itself is
-/// left where it is: another user may point at the same bytes, and the reclamation sweep deletes it
+/// left where it is: another user may point at the same bytes, and storage maintenance deletes it
 /// once nothing does.
 /// </summary>
 public class RemoveAvatarV1Endpoint : IEndpoint

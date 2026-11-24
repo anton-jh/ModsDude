@@ -14,6 +14,8 @@ using ModsDude.Server.Persistence.EntityTypeConfigurations;
 using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
+using ModsDude.Server.Persistence.Storage;
+using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
 
@@ -30,6 +32,7 @@ public class RegisterModV1Endpoint : IEndpoint
     public async Task<Results<Ok<ModDto>, BadRequest<CustomProblemDetails>>> RegisterMod(
         Guid repoId,
         RegisterModRequest request,
+        ClaimsPrincipal claimsPrincipal,
         IModStorageService storageService,
         ApplicationDbContext dbContext,
         ITimeService timeService,
@@ -62,12 +65,20 @@ public class RegisterModV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InvalidContentHash(request.ContentHash));
         }
 
+        var context = await BlobLabelContext.ReadAsync(dbContext, new RepoId(repoId), claimsPrincipal.GetUserId(), cancellationToken);
+        var label = new ModBlobLabel(
+            context.RepoId, context.RepoName, context.Game, context.AddedBy, context.AddedByName, timeService.Now(),
+            modId, versionId, request.DisplayName, request.FileName);
+
+        // Held until the registration commits; see IStorageMaintenance.DeleteReleasedModFileAsync.
+        await using var fileLock = await dbContext.LockBlobAsync(StorageContainer.Mods, BlobNames.Mod(new RepoId(repoId), modId, versionId), cancellationToken);
+
         // Metadata is never written for a file nobody has: the blob has to be there first. Its size is read
         // off it while claiming it, rather than being taken from the request - nothing the client says
         // about the bytes can be checked, and this is the one place they are looked at. Claiming is what
-        // stops a reclamation sweep that listed the blob as an orphan deleting it from under this
+        // stops a deletion run that read the blob as unreferenced deleting it from under this
         // registration.
-        if (await storageService.ClaimStoredMod(new RepoId(repoId), modId, versionId, cancellationToken) is not { } stored)
+        if (await storageService.ClaimStoredMod(new RepoId(repoId), modId, versionId, label, cancellationToken) is not { } stored)
         {
             return TypedResults.BadRequest(Problems.ModFileDoesNotExist(new RepoId(repoId), modId, versionId));
         }

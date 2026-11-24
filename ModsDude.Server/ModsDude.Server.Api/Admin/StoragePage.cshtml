@@ -1,0 +1,425 @@
+@page "/admin/storage"
+@model StoragePageModel
+@using ModsDude.Server.Domain.Storage
+@{
+    ViewData[AdminLayout.SectionKey] = AdminSection.Storage;
+
+    var inspection = Model.Inspection;
+    var mayRebind = inspection is { Decision.MayWrite: false };
+
+    string MarkerState(ContainerState state)
+    {
+        if (state.MarkerIsUnreadable)
+        {
+            return "Unreadable";
+        }
+
+        if (inspection!.Binding is not { } binding)
+        {
+            return state.Marker is null ? "Unbound" : "Foreign";
+        }
+
+        return binding.Judge(state.Marker).ToString();
+    }
+
+    string MarkerTone(string state) => state switch
+    {
+        nameof(ContainerBinding.Bound) => "success",
+        nameof(ContainerBinding.Unbound) or nameof(ContainerBinding.Legacy) => "info",
+        _ => "critical"
+    };
+
+    string? Time(DateTime? time) => time is DateTime value ? AdminFormat.Time(value) : null;
+
+    string SortName(StorageSort sort) => sort switch
+    {
+        StorageSort.Name => "Name",
+        StorageSort.Size => "Largest first",
+        StorageSort.Time => "Newest first",
+        _ => sort.ToString()
+    };
+}
+
+<section class="card">
+    <h2>Binding</h2>
+
+    @if (inspection is null)
+    {
+        <div class="notice error">Storage can't be reached.</div>
+    }
+    else
+    {
+        <dl class="facts">
+            <div><dt>Storage account</dt><dd>@inspection.StorageAccount</dd></div>
+            <div><dt>Binding</dt><dd>@(inspection.Binding?.BindingId.ToString() ?? "None")</dd></div>
+            <div><dt>Generation</dt><dd>@(inspection.Binding is { } binding ? binding.PendingGeneration is long pending ? $"{binding.Generation} → {pending}" : binding.Generation.ToString() : "")</dd></div>
+            <div>
+                <dt>Soft delete</dt>
+                <dd>
+                    @if (inspection.SoftDeleteDays is int days)
+                    {
+                        <span class="badge @(days >= Model.MinimumSoftDeleteDays ? "success" : "critical")">@(days == 0 ? "Off" : $"{days} days")</span>
+                    }
+                    else
+                    {
+                        <span class="badge critical">Can't be read</span>
+                    }
+                </dd>
+            </div>
+            <div><dt>Last run</dt><dd>@(Time(Model.Status?.LastRun) ?? "Never")</dd></div>
+            <div><dt>Last audit</dt><dd>@(Time(Model.Status?.LastAudit) ?? "Never")</dd></div>
+            <div><dt>Deleted in last run</dt><dd>@AdminFormat.Count(Model.Status?.DeletedInLastRun ?? 0)</dd></div>
+        </dl>
+
+        <div class="well table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Container</th>
+                        <th>Marker</th>
+                        <th>Binding</th>
+                        <th>Generation</th>
+                        <th>Empty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var container in inspection.Containers)
+                    {
+                        var state = MarkerState(container.State);
+                        <tr>
+                            <td>@StorageContainerNames.Of(container.State.Container)</td>
+                            <td><span class="badge @MarkerTone(state)">@state</span></td>
+                            <td class="code">@(container.State.Marker?.BindingId.ToString() ?? "")</td>
+                            <td>@(container.State.Marker?.Generation?.ToString() ?? "")</td>
+                            <td>@(container.State.IsEmpty ? "Yes" : "No")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        var refusedNow = inspection.Decision.WriteRefusals.Concat(inspection.Decision.DeleteRefusals).ToList();
+        if (refusedNow.Count > 0)
+        {
+            <div class="notice error">
+                <strong>Deleting is blocked</strong>
+                <ul>
+                    @foreach (var refusal in refusedNow)
+                    {
+                        <li>@refusal</li>
+                    }
+                </ul>
+            </div>
+        }
+    }
+
+    @if (Model.Status is { Refusals.Count: > 0 } status)
+    {
+        <div class="notice caution">
+            <strong>The last run deleted nothing</strong>
+            <ul>
+                @foreach (var refusal in status.Refusals)
+                {
+                    <li>@refusal</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <div class="toolbar">
+        <form method="post" asp-page-handler="Run">
+            <button type="submit" class="accent">Run now</button>
+        </form>
+        @if (mayRebind)
+        {
+            <form method="post" asp-page-handler="Bind" data-confirm="Bind storage account @inspection!.StorageAccount to this database? Any other database that uses it stops deleting from it, and this one deletes what its own queue holds.">
+                <button type="submit" class="danger">Bind storage to this database</button>
+            </form>
+        }
+    </div>
+</section>
+
+<section class="card">
+    <h2>Blobs</h2>
+
+    <div class="tabs" role="navigation" aria-label="Lists">
+        @foreach (var view in Enum.GetValues<StorageView>())
+        {
+            <a href="@Model.Link(view)" aria-current="@(view == Model.View ? "page" : null)">
+                @view <span class="badge @(view == StorageView.Missing && Model.Counts.GetValueOrDefault(view) > 0 ? "critical" : "")">@AdminFormat.Count(Model.Counts.GetValueOrDefault(view))</span>
+            </a>
+        }
+    </div>
+
+    <form method="get" class="toolbar">
+        <input type="hidden" name="view" value="@Model.View">
+        <select name="container" aria-label="Container">
+            <option value="">All containers</option>
+            @foreach (var container in StorageContainerNames.All)
+            {
+                <option value="@container" selected="@(Model.Filter.Container == container)">@StorageContainerNames.Of(container)</option>
+            }
+        </select>
+        <select name="repo" aria-label="Repo">
+            <option value="">All repos</option>
+            @foreach (var repo in Model.RepoOptions)
+            {
+                <option value="@repo.Id" selected="@(Model.Filter.Repo == repo.Id)">@repo.Name@(repo.IsDeleted ? " (deleted)" : "")</option>
+            }
+        </select>
+        <select name="game" aria-label="Game">
+            <option value="">All games</option>
+            @foreach (var game in Model.GameOptions)
+            {
+                <option value="@game" selected="@(Model.Filter.Game == game)">@game</option>
+            }
+        </select>
+        <select name="sort" aria-label="Sort">
+            @foreach (var sort in Enum.GetValues<StorageSort>())
+            {
+                <option value="@sort" selected="@(Model.Filter.Sort == sort)">@SortName(sort)</option>
+            }
+        </select>
+        <button type="submit">Apply</button>
+    </form>
+
+    @if (Model.Findings is { } findings)
+    {
+        @if (findings.Total == 0)
+        {
+            <p class="muted">Nothing here.</p>
+        }
+        else
+        {
+            var selectable = Model.View == StorageView.Unreferenced;
+
+            @if (selectable)
+            {
+                <form method="post" asp-page-handler="Delete" id="delete-form" class="toolbar" data-confirm-selection>
+                    <input type="hidden" name="container" value="@Model.Filter.Container">
+                    <input type="hidden" name="repo" value="@Model.Filter.Repo">
+                    <input type="hidden" name="game" value="@Model.Filter.Game">
+                    <input type="hidden" name="sort" value="@Model.Filter.Sort">
+                    <input type="hidden" name="page" value="@findings.Number">
+                    <button type="submit" class="danger" data-selection-submit disabled>Delete selected</button>
+                    <span class="muted" data-selection-summary>None selected</span>
+                </form>
+            }
+
+            <div class="well rows @(selectable ? "selectable" : "")" style="--columns: minmax(12rem, 3fr) 6.5rem minmax(8rem, 2fr) 6rem 10rem 8rem" data-selection>
+                <div class="rows-header">
+                    @if (selectable)
+                    {
+                        <label class="select"><input type="checkbox" data-select-all aria-label="Select every blob on this page"></label>
+                    }
+                    <span>Blob</span>
+                    <span>Container</span>
+                    <span>Repo</span>
+                    <span class="number">Size</span>
+                    <span>Last modified</span>
+                    <span>Queue</span>
+                </div>
+
+                @foreach (var row in findings.Items)
+                {
+                    <div class="selectable-row">
+                        @if (selectable)
+                        {
+                            <label class="select">
+                                <input type="checkbox" name="ids" value="@row.Id" form="delete-form" disabled="@(row.Version is null)"
+                                       data-bytes="@row.SizeBytes" data-name="@StorageContainerNames.Of(row.Container)/@row.BlobName" aria-label="Select @row.Title">
+                            </label>
+                        }
+                        <details>
+                            <summary>
+                                <span title="@row.BlobName">@row.Title</span>
+                                <span>@StorageContainerNames.Of(row.Container)</span>
+                                <span>@row.Repo.Name@(row.Repo.IsDeleted ? " (deleted)" : "")</span>
+                                <span class="number">@(Model.View == StorageView.Missing ? "" : AdminFormat.Bytes(row.SizeBytes))</span>
+                                <span>@Time(row.LastModified)</span>
+                                <span>@(row.Queue is not null ? "Queued" : "")</span>
+                            </summary>
+                            <div class="row-details">
+                                <dl class="facts">
+                                    <div><dt>Blob</dt><dd class="code">@row.BlobName</dd></div>
+                                    <div><dt>Container</dt><dd>@StorageContainerNames.Of(row.Container)</dd></div>
+                                    @if (Model.View != StorageView.Missing)
+                                    {
+                                        <div><dt>Size</dt><dd>@AdminFormat.Bytes(row.SizeBytes) (@AdminFormat.Count(row.SizeBytes) bytes)</dd></div>
+                                        <div><dt>Last modified</dt><dd>@Time(row.LastModified)</dd></div>
+                                        <div><dt>Version</dt><dd class="code">@row.Version</dd></div>
+                                    }
+                                    @if (row.Repo.Id is Guid repoId)
+                                    {
+                                        <div><dt>Repo</dt><dd>@row.Repo.Name @(row.Repo.IsDeleted ? "(deleted)" : "")</dd></div>
+                                        <div><dt>Repo id</dt><dd class="code">@repoId</dd></div>
+                                    }
+                                    @if (row.Game is not null)
+                                    {
+                                        <div><dt>Game</dt><dd>@row.Game</dd></div>
+                                    }
+                                    @foreach (var fact in row.Address)
+                                    {
+                                        <div><dt>@fact.Caption</dt><dd class="code">@fact.Value</dd></div>
+                                    }
+                                </dl>
+
+                                @if (row.Queue is { } queued)
+                                {
+                                    <h3>Deletion queue</h3>
+                                    <dl class="facts">
+                                        <div><dt>Reason</dt><dd>@queued.Reason</dd></div>
+                                        <div><dt>Queued by</dt><dd>@(queued.QueuedBy ?? "")</dd></div>
+                                        <div><dt>Queued</dt><dd>@Time(queued.QueuedAt)</dd></div>
+                                    </dl>
+                                }
+
+                                @if (row.Referrers.Count > 0)
+                                {
+                                    <h3>Referred to by</h3>
+                                    <ul>
+                                        @foreach (var referrer in row.Referrers)
+                                        {
+                                            <li>@referrer</li>
+                                        }
+                                    </ul>
+                                }
+
+                                <h3>Label</h3>
+                                @if (row.Label.Count == 0)
+                                {
+                                    <p class="muted">No metadata.</p>
+                                }
+                                else
+                                {
+                                    <dl class="facts">
+                                        @foreach (var fact in row.Label)
+                                        {
+                                            <div><dt>@fact.Caption</dt><dd>@fact.Value</dd></div>
+                                        }
+                                    </dl>
+                                }
+                            </div>
+                        </details>
+                    </div>
+                }
+            </div>
+
+            <partial name="_Pager" model="AdminPager.For(findings, Model.Link)" />
+        }
+    }
+
+    @if (Model.Queue is { } queuePage)
+    {
+        @if (queuePage.Total == 0)
+        {
+            <p class="muted">Nothing is queued.</p>
+        }
+        else
+        {
+            <div class="well table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Blob</th>
+                            <th>Container</th>
+                            <th>Repo</th>
+                            <th>Reason</th>
+                            <th>Queued by</th>
+                            <th>Queued</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in queuePage.Items)
+                        {
+                            <tr>
+                                <td class="code">@row.BlobName</td>
+                                <td>@StorageContainerNames.Of(row.Container)</td>
+                                <td>@row.Repo.Name@(row.Repo.IsDeleted ? " (deleted)" : "")</td>
+                                <td>@row.Queue.Reason</td>
+                                <td>@(row.Queue.QueuedBy ?? "")</td>
+                                <td>@Time(row.Queue.QueuedAt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <partial name="_Pager" model="AdminPager.For(queuePage, Model.Link)" />
+        }
+    }
+
+    @if (Model.Deleted is { } deletedPage)
+    {
+        @if (deletedPage.Total == 0)
+        {
+            <p class="muted">Nothing has been deleted.</p>
+        }
+        else
+        {
+            <div class="well rows" style="--columns: minmax(12rem, 3fr) 6.5rem minmax(8rem, 2fr) 6rem 10rem minmax(8rem, 1fr)">
+                <div class="rows-header">
+                    <span>Blob</span>
+                    <span>Container</span>
+                    <span>Repo</span>
+                    <span class="number">Size</span>
+                    <span>Deleted</span>
+                    <span>Reason</span>
+                </div>
+
+                @foreach (var row in deletedPage.Items)
+                {
+                    <details>
+                        <summary>
+                            <span title="@row.BlobName">@row.Title</span>
+                            <span>@StorageContainerNames.Of(row.Container)</span>
+                            <span>@row.Repo.Name@(row.Repo.IsDeleted ? " (deleted)" : "")</span>
+                            <span class="number">@AdminFormat.Bytes(row.SizeBytes)</span>
+                            <span>@AdminFormat.Time(row.Deleted)</span>
+                            <span>@row.Reason</span>
+                        </summary>
+                        <div class="row-details">
+                            <dl class="facts">
+                                <div><dt>Blob</dt><dd class="code">@row.BlobName</dd></div>
+                                <div><dt>Container</dt><dd>@StorageContainerNames.Of(row.Container)</dd></div>
+                                <div><dt>Size</dt><dd>@AdminFormat.Bytes(row.SizeBytes) (@AdminFormat.Count(row.SizeBytes) bytes)</dd></div>
+                                <div><dt>Last modified</dt><dd>@AdminFormat.Time(row.LastModified)</dd></div>
+                                <div><dt>Deleted</dt><dd>@AdminFormat.Time(row.Deleted)</dd></div>
+                                <div><dt>Reason</dt><dd>@row.Reason</dd></div>
+                                @if (row.RequestedBy is not null)
+                                {
+                                    <div><dt>Chosen by</dt><dd>@row.RequestedBy</dd></div>
+                                }
+                                @if (row.Game is not null)
+                                {
+                                    <div><dt>Game</dt><dd>@row.Game</dd></div>
+                                }
+                                @foreach (var fact in row.Address)
+                                {
+                                    <div><dt>@fact.Caption</dt><dd class="code">@fact.Value</dd></div>
+                                }
+                            </dl>
+
+                            <h3>Label</h3>
+                            @if (row.Label.Count == 0)
+                            {
+                                <p class="muted">No metadata.</p>
+                            }
+                            else
+                            {
+                                <dl class="facts">
+                                    @foreach (var fact in row.Label)
+                                    {
+                                        <div><dt>@fact.Caption</dt><dd>@fact.Value</dd></div>
+                                    }
+                                </dl>
+                            }
+                        </div>
+                    </details>
+                }
+            </div>
+
+            <partial name="_Pager" model="AdminPager.For(deletedPage, Model.Link)" />
+        }
+    }
+</section>

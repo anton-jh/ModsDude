@@ -1,11 +1,9 @@
-﻿using Azure;
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using ModsDude.Server.Application.Dependencies;
-using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Storage;
 using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 
 namespace ModsDude.Server.Storage.Services;
 
@@ -15,10 +13,10 @@ namespace ModsDude.Server.Storage.Services;
 /// versions, mods and repos work at all.
 /// </summary>
 internal class ModImageStorageService(
-    BlobServiceClient blobServiceClient)
+    BlobServiceClient blobServiceClient,
+    IBlobContainers blobContainers)
     : IModImageStorageService
 {
-    private const string _imagesContainerName = "mod-images";
     private const int _reuseConcurrency = 16;
 
 
@@ -28,7 +26,7 @@ internal class ModImageStorageService(
     public async Task EnsureContainerExists(CancellationToken cancellationToken)
     {
         await blobServiceClient
-            .GetBlobContainerClient(_imagesContainerName)
+            .GetBlobContainerClient(StorageContainerNames.Of(StorageContainer.Images))
             .CreateIfNotExistsAsync(cancellationToken: cancellationToken);
     }
 
@@ -78,79 +76,15 @@ internal class ModImageStorageService(
     }
 
 
-    public async IAsyncEnumerable<StoredBlob> ListStoredImages([EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        var container = blobServiceClient.GetBlobContainerClient(_imagesContainerName);
-
-        await foreach (var blob in container.GetBlobsAsync(cancellationToken: cancellationToken))
-        {
-            if (ContainerBindingMarker.IsMarker(blob.Name))
-            {
-                continue;
-            }
-
-            // See ModStorageService.ListStoredMods on the missing timestamp.
-            yield return new StoredBlob(
-                blob.Name,
-                blob.Properties.LastModified ?? DateTimeOffset.MaxValue,
-                blob.Properties.ContentLength ?? 0,
-                blob.Properties.ETag?.ToString());
-        }
-    }
-
-    public Task<bool> DeleteStoredBlob(StoredBlob blob, CancellationToken cancellationToken)
-        => StoredBlobDeletion.DeleteIfUnchangedAsync(blobServiceClient.GetBlobContainerClient(_imagesContainerName), blob, cancellationToken);
-
-    public Task<Guid?> ReadBindingMarker(CancellationToken cancellationToken)
-        => ContainerBindingMarker.ReadAsync(blobServiceClient.GetBlobContainerClient(_imagesContainerName), cancellationToken);
-
-    public Task WriteBindingMarker(Guid bindingId, CancellationToken cancellationToken)
-        => ContainerBindingMarker.WriteAsync(blobServiceClient.GetBlobContainerClient(_imagesContainerName), bindingId, cancellationToken);
-
-
     private async Task<bool> TryReuseOne(string hash, CancellationToken cancellationToken)
     {
-        var blobClient = GetBlobClient(hash);
-
-        try
-        {
-            var properties = await blobClient.GetPropertiesAsync(cancellationToken: cancellationToken);
-
-            // Rewriting the metadata it already has is the cheapest write there is, and any write gives
-            // the blob a new ETag - which is what the sweep's delete is conditional on.
-            await blobClient.SetMetadataAsync(
-                properties.Value.Metadata,
-                new BlobRequestConditions { IfMatch = properties.Value.ETag },
-                cancellationToken);
-
-            return true;
-        }
-        catch (RequestFailedException exception) when (exception.Status == 404)
-        {
-            return false;
-        }
-        catch (RequestFailedException exception) when (exception.Status == 412)
-        {
-            // Written by somebody else between the read and the write, which moved the ETag just the
-            // same. The bytes are the same either way: the address is their hash.
-            return true;
-        }
+        return await blobContainers.ClaimAsync(StorageContainer.Images, BlobNames.Image(hash), null, cancellationToken) is not null;
     }
 
     private BlobClient GetBlobClient(string hash)
     {
         return blobServiceClient
-            .GetBlobContainerClient(_imagesContainerName)
-            .GetBlobClient(BuildImageBlobName(hash));
-    }
-
-    /// <summary>
-    /// The two-character prefix keeps a flat container from becoming one enormous listing partition.
-    /// </summary>
-    private static string BuildImageBlobName(string hash)
-    {
-        var validated = Sha256Hex.Validated(hash);
-
-        return $"{validated[..2]}/{validated}";
+            .GetBlobContainerClient(StorageContainerNames.Of(StorageContainer.Images))
+            .GetBlobClient(BlobNames.Image(hash));
     }
 }

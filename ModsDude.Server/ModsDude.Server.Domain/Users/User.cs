@@ -44,7 +44,7 @@ public class User
     /// <remarks>
     /// It shares the store mod art lives in rather than having one of its own: it is the same shape
     /// of thing - a small image, immutable at its address, cached forever by every client that draws
-    /// it - and the reclamation sweep counts these addresses as referenced alongside mod versions'.
+    /// it - and storage maintenance counts these addresses as referenced alongside mod versions'.
     /// </remarks>
     public string? AvatarHash { get; private set; }
 

@@ -9,6 +9,24 @@
     var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 }
 
+@if (Model.MissingBlobCount > 0 || Model.StorageRefusals.Count > 0)
+{
+    <div class="notice error">
+        <strong>Storage needs attention</strong>
+        <ul>
+            @if (Model.MissingBlobCount > 0)
+            {
+                <li>@AdminFormat.Count(Model.MissingBlobCount) blobs the database refers to are missing.</li>
+            }
+            @foreach (var refusal in Model.StorageRefusals)
+            {
+                <li>@refusal</li>
+            }
+        </ul>
+        <a href="/admin/storage">Open Storage</a>
+    </div>
+}
+
 <section class="card">
     <h2>Users and repos</h2>
     <div class="tiles">

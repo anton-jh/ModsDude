@@ -12,7 +12,7 @@ public class TokenPruningJob(
 {
     public const string JobId = "token-pruning";
 
-    /// <summary>Daily at 04:30 UTC, after blob reclamation.</summary>
+    /// <summary>Daily at 04:30 UTC, after storage maintenance.</summary>
     private const string _cron = "30 4 * * *";
 
 

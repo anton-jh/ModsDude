@@ -50,8 +50,8 @@ internal class SavegameSnapshotEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.Origin).HasConversion<string>();
         builder.Property(x => x.Label).HasMaxLength(SavegameSnapshot.MaximumLabelLength);
 
-        // Answers "which blob addresses are still referred to?" for the reclamation sweep, which
-        // reads every snapshot in the system and must not do it by scanning them. Deliberately not
+        // Answers "is this blob address still referred to?" for storage maintenance, which asks it of
+        // every blob it audits or deletes and must not do it by scanning snapshots. Deliberately not
         // unique: a snapshot's bytes are addressed by content, so a restore copies an old snapshot
         // forward under the same hash and several snapshots legitimately share one blob.
         builder.HasIndex(x => new { x.RepoId, x.SavegameId, x.ContentHash });

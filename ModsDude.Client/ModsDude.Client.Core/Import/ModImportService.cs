@@ -1137,6 +1137,12 @@ public sealed class ModImportService(
             {
                 return await AdoptStoredFileAsync(version, placement, exception.Result.ContentHash, cancellationToken);
             }
+            catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.FileAwaitingDeletion)
+            {
+                Refuse(version, ModImportStatus.Failed, "The file of the deleted version with this id can't be replaced yet. Try again later.", exception);
+
+                return VersionOutcome.Done;
+            }
 
             var total = Chosen(version).FileLength;
 

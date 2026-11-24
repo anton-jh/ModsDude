@@ -4,6 +4,7 @@ using ModsDude.Server.Domain.Profiles;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Retention;
 using ModsDude.Server.Domain.Savegames;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Persistence.Extensions.EntityExtensions;
@@ -440,42 +441,6 @@ public static class SavegameExtensions
     }
 
     /// <summary>
-    /// Every blob address any savegame snapshot still refers to, across every repo. What the
-    /// reclamation sweep reads to decide that a stored blob is garbage.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Projected and deduplicated in the database rather than materialized. Snapshots are addressed by
-    /// content, so a restore copies an older snapshot forward under the same hash and several snapshots
-    /// legitimately share one address - what the sweep needs is the set of addresses, not one entry
-    /// per snapshot. Loading the entities to build it would read every savegame ever checked in.
-    /// </para>
-    /// <para>
-    /// The record struct is built after the round trip because a provider cannot see through its
-    /// constructor, exactly as the mod sweep does it.
-    /// </para>
-    /// <para>
-    /// Must be read <b>after</b> the blobs are listed, not before. A blob written before the listing
-    /// and registered during it is then seen as registered; the other order misses it and deletes
-    /// live data, however long the grace period is - see <see cref="BlobReclamation"/>.
-    /// </para>
-    /// </remarks>
-    public static async Task<IReadOnlySet<SavegameBlobAddress>> GetRegisteredBlobAddressesAsync(
-        this DbSet<SavegameSnapshot> dbSet,
-        CancellationToken cancellationToken)
-    {
-        var rows = await dbSet
-            .AsNoTracking()
-            .Select(x => new { x.RepoId, x.SavegameId, x.ContentHash })
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-        return rows
-            .Select(x => new SavegameBlobAddress(x.RepoId, x.SavegameId, x.ContentHash))
-            .ToHashSet();
-    }
-
-    /// <summary>
     /// The bytes of every distinct blob address, per repo. Snapshots sharing an address share one blob,
     /// so it counts once.
     /// </summary>
@@ -516,13 +481,8 @@ public static class SavegameExtensions
     /// Drops the named snapshots of one savegame.
     /// </summary>
     /// <remarks>
-    /// <b>Rows only. The blobs are left to the reclamation sweep</b>, and that is the safety property
-    /// rather than an omission: snapshots are addressed by content, so a restore and a night that
-    /// changed nothing both leave two snapshots naming one blob. Deleting bytes here would mean asking
-    /// whether any other snapshot still refers to them, in a transaction, every time - and getting it
-    /// wrong destroys the save a different snapshot still points at. The sweep already asks exactly
-    /// that question of the whole store, so pruning stops at the rows and the bytes fall out on the
-    /// next pass.
+    /// Rows only. Each deleted row queues its blob through the database's delete trigger, and the
+    /// deletion run deletes it once no other snapshot refers to it; see <see cref="BlobDeletionCandidate"/>.
     /// </remarks>
     public static Task<int> DeleteSnapshotsAsync(
         this DbSet<SavegameSnapshot> dbSet,

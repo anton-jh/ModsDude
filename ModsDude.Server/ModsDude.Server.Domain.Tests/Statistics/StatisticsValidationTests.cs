@@ -1,6 +1,7 @@
 using ModsDude.Server.Domain.Exceptions;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Statistics;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Domain.Tests.Statistics;
