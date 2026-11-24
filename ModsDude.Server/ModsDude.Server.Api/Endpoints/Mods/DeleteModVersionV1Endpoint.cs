@@ -28,11 +28,9 @@ public class DeleteModVersionV1Endpoint : IEndpoint
     private static async Task<Results<Ok, BadRequest<CustomProblemDetails>>> Delete(
         Guid repoId, string modId, string versionId,
         ApplicationDbContext dbContext,
-        IModStorageService storageService,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
         IRetentionUpkeep retentionUpkeep,
-        ILogger<DeleteModVersionV1Endpoint> logger,
         CancellationToken cancellationToken)
     {
         if (RequestChecks.ModId(modId, versionId) is { } invalidId)
@@ -63,6 +61,7 @@ public class DeleteModVersionV1Endpoint : IEndpoint
 
         var remaining = siblings.Where(x => x != modVersion).ToList();
 
+        // Its file is queued for deletion by the database's delete trigger.
         dbContext.ModVersions.Remove(modVersion);
         ModVersionSequencer.CloseGap(remaining, modVersion, timeService.Now());
 
@@ -88,8 +87,6 @@ public class DeleteModVersionV1Endpoint : IEndpoint
 
         // One version fewer can turn a mod that was outside its window into one winding down.
         await retentionUpkeep.ReleaseModsAsync(modVersion.RepoId, [modVersion.ModId], cancellationToken);
-
-        await ModFileCleanup.DeleteAsync(storageService, logger, modVersion.RepoId, modVersion.ModId, [modVersion.Id], cancellationToken);
 
         return TypedResults.Ok();
     }

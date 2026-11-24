@@ -14,6 +14,7 @@ using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
+using ModsDude.Server.Persistence.Storage;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Savegames;
@@ -131,7 +132,14 @@ public class PublishSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }
 
-        if (!await savegameStorageService.CheckIfSavegameExists(repo, savegameId, request.ContentHash, cancellationToken))
+        // Claiming is what stops a deletion run that read the blob as unreferenced deleting it from
+        // under this publish.
+        var context = await BlobLabelContext.ReadAsync(dbContext, repo, userId, cancellationToken);
+        var label = new SavegameBlobLabel(
+            context.RepoId, context.RepoName, context.Game, context.AddedBy, context.AddedByName, timeService.Now(),
+            savegameId, new SavegameName(request.Name).Value);
+
+        if (!await savegameStorageService.ClaimSavegame(repo, savegameId, request.ContentHash, label, cancellationToken))
         {
             return TypedResults.BadRequest(Problems.SavegameFileDoesNotExist(repo, savegameId, request.ContentHash));
         }

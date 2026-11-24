@@ -1,5 +1,6 @@
 using ModsDude.Server.Domain.Exceptions;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Storage;
 
 namespace ModsDude.Server.Domain.Statistics;
 
@@ -50,17 +51,10 @@ public class StorageUsageSample
 
     /// <summary>
     /// The bytes the database says should be stored, or <c>null</c> where it does not record sizes
-    /// (images). Stored bytes above this are orphans waiting for blob reclamation.
+    /// (images). Stored bytes above this are blobs nothing refers to, waiting for storage maintenance.
     /// </summary>
     public long? RegisteredBytes { get; private set; }
 }
 
 
 public readonly record struct StorageUsageSampleId(Guid Value);
-
-public enum StorageContainer
-{
-    Mods,
-    Savegames,
-    Images
-}

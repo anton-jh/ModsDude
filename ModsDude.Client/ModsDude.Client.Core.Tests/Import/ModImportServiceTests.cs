@@ -194,6 +194,22 @@ public class ModImportServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_deleted_versions_file_the_server_cannot_delete_yet_fails_the_version()
+    {
+        var version = Local("FS25_Plough", "1.0");
+
+        _server.PlaceFileAwaitingDeletion(version.Identity);
+
+        var result = await ImportAsync([version]);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(ModImportStatus.Failed, item.Status);
+        Assert.NotNull(item.Message);
+        Assert.Empty(_server.CallsOf(ServerCallKind.Upload));
+        Assert.Empty(_server.CallsOf(ServerCallKind.Register));
+    }
+
+    [Fact]
     public async Task A_stored_file_whose_contents_nobody_recorded_is_not_registered_against()
     {
         var version = Local("FS25_Plough", "1.0");

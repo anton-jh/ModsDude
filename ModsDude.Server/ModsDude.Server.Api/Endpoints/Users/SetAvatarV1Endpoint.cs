@@ -46,7 +46,7 @@ public class SetAvatarV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InvalidImageHash(request.Hash));
         }
 
-        // Reusing also stops a reclamation sweep that listed the image as unreferenced deleting it.
+        // Reusing is also the claim that stops a storage maintenance run that read the image as unreferenced deleting it.
         var missing = await imageStorageService.TryReuse([request.Hash], cancellationToken);
         if (missing.Count > 0)
         {

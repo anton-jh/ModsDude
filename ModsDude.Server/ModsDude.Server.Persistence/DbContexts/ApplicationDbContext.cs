@@ -46,6 +46,10 @@ public class ApplicationDbContext(DbContextOptions options)
     public required DbSet<FileTransfer> FileTransfers { get; init; }
     public required DbSet<StorageUsageSample> StorageUsageSamples { get; init; }
     public required DbSet<StorageBinding> StorageBindings { get; init; }
+    public required DbSet<BlobDeletionCandidate> BlobDeletionCandidates { get; init; }
+    public required DbSet<DeletedBlob> DeletedBlobs { get; init; }
+    public required DbSet<StorageAuditFinding> StorageAuditFindings { get; init; }
+    public required DbSet<StorageMaintenanceStatus> StorageMaintenanceStatuses { get; init; }
     public required DbSet<UserAccount> UserAccounts { get; init; }
     public required DbSet<DataProtectionKey> DataProtectionKeys { get; init; }
 

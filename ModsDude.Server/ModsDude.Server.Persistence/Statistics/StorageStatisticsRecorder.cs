@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ModsDude.Server.Application.Dependencies;
-using ModsDude.Server.Domain.Mods;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Statistics;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
@@ -10,9 +10,7 @@ namespace ModsDude.Server.Persistence.Statistics;
 
 public class StorageStatisticsRecorder(
     ApplicationDbContext dbContext,
-    IModStorageService modStorage,
-    ISavegameStorageService savegameStorage,
-    IModImageStorageService imageStorage,
+    IBlobContainers blobs,
     ILogger<StorageStatisticsRecorder> logger)
     : IStorageStatisticsRecorder
 {
@@ -23,9 +21,13 @@ public class StorageStatisticsRecorder(
     {
         var tally = new StorageTally();
 
-        await AddAsync(tally, StorageContainer.Mods, modStorage.ListStoredMods(cancellationToken));
-        await AddAsync(tally, StorageContainer.Savegames, savegameStorage.ListStoredSavegames(cancellationToken));
-        await AddAsync(tally, StorageContainer.Images, imageStorage.ListStoredImages(cancellationToken));
+        foreach (var container in StorageContainerNames.All)
+        {
+            await foreach (var blob in blobs.ListAsync(container, cancellationToken))
+            {
+                tally.Add(container, blob);
+            }
+        }
 
         var samples = tally.ToSamples(
             date,
@@ -49,14 +51,5 @@ public class StorageStatisticsRecorder(
         await transaction.CommitAsync(cancellationToken);
 
         logger.LogInformation("Recorded {Count} storage usage samples for {Date}.", samples.Count, date);
-    }
-
-
-    private static async Task AddAsync(StorageTally tally, StorageContainer container, IAsyncEnumerable<StoredBlob> blobs)
-    {
-        await foreach (var blob in blobs)
-        {
-            tally.Add(container, blob);
-        }
     }
 }

@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IModStorageService, ModStorageService>();
         services.AddScoped<IModImageStorageService, ModImageStorageService>();
         services.AddScoped<ISavegameStorageService, SavegameStorageService>();
+        services.AddScoped<IBlobContainers, BlobContainers>();
         services.AddScoped<IBackupStorageService>(sp => new BackupStorageService(
             hasBackupStorage ? sp.GetRequiredService<IAzureClientFactory<BlobServiceClient>>().CreateClient(_backupClientName) : null,
             sp.GetRequiredService<ILogger<BackupStorageService>>()));

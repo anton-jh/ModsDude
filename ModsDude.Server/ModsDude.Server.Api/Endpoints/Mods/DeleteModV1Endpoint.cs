@@ -30,9 +30,7 @@ public class DeleteModV1Endpoint : IEndpoint
     private static async Task<Results<Ok, BadRequest<CustomProblemDetails>>> Delete(
         Guid repoId, string modId,
         ApplicationDbContext dbContext,
-        IModStorageService storageService,
         IUnitOfWork unitOfWork,
-        ILogger<DeleteModV1Endpoint> logger,
         CancellationToken cancellationToken)
     {
         if (RequestChecks.ModId(modId) is { } invalidId)
@@ -52,7 +50,8 @@ public class DeleteModV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.ModInUse(new RepoId(repoId), new ModId(modId)));
         }
 
-        // No gap to close: the whole run of sequence numbers goes with the mod.
+        // No gap to close: the whole run of sequence numbers goes with the mod. Each version's file is
+        // queued for deletion by the database's delete trigger.
         dbContext.ModVersions.RemoveRange(versions);
 
         // Off every ignore list in the repo, with its dismissed versions, in the same commit. A mod that is
@@ -69,8 +68,6 @@ public class DeleteModV1Endpoint : IEndpoint
             // Pinned by a revision saved since the check above.
             return TypedResults.BadRequest(Problems.ModInUse(new RepoId(repoId), new ModId(modId)));
         }
-
-        await ModFileCleanup.DeleteAsync(storageService, logger, new RepoId(repoId), new ModId(modId), versions.Select(x => x.Id), cancellationToken);
 
         return TypedResults.Ok();
     }

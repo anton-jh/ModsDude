@@ -1,0 +1,24 @@
+@model AdminPager
+
+@if (Model.Count > 1)
+{
+    <div class="pager" role="navigation" aria-label="Pages">
+        @if (Model.Number > 1)
+        {
+            <a class="button" href="@Model.Link(Model.Number - 1)">Previous</a>
+        }
+        else
+        {
+            <button type="button" disabled>Previous</button>
+        }
+        <span class="muted">Page @Model.Number of @Model.Count</span>
+        @if (Model.Number < Model.Count)
+        {
+            <a class="button" href="@Model.Link(Model.Number + 1)">Next</a>
+        }
+        else
+        {
+            <button type="button" disabled>Next</button>
+        }
+    </div>
+}

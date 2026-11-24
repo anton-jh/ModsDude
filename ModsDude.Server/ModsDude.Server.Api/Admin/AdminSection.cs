@@ -6,7 +6,8 @@ public enum AdminSection
     Overview,
     Repos,
     Users,
-    TrustCodes
+    TrustCodes,
+    Storage
 }
 
 

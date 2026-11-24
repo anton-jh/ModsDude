@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.EntityTypeConfigurations;
 
@@ -35,8 +36,8 @@ public static class RepoExtensions
     /// dependants and the dependencies together. The caller decides whether the repo may go.
     /// </summary>
     /// <remarks>
-    /// The blobs stay. They are addressed by content and shared, so the reclamation sweep removes
-    /// them once nothing refers to them.
+    /// The blobs are queued for deletion by the database's delete triggers, row by row; see
+    /// <see cref="BlobDeletionCandidate"/>.
     /// </remarks>
     public static async Task DeleteWithContentsAsync(this ApplicationDbContext dbContext, Repo repo, CancellationToken cancellationToken)
     {

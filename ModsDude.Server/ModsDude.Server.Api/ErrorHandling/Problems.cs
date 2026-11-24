@@ -311,6 +311,13 @@ public static class Problems
         ContentHash = contentHash
     };
 
+    public static CustomProblemDetails ModFileAwaitingDeletion(RepoId repoId, ModId modId, ModVersionId modVersionId) => new()
+    {
+        Type = ProblemType.FileAwaitingDeletion,
+        Title = "The file of a deleted mod version is still stored",
+        Detail = $"The file of deleted version '{modVersionId.Value}' of mod '{modId.Value}' in repo '{repoId.Value}' can't be deleted yet, so the version can't be uploaded again for now."
+    };
+
     public static CustomProblemDetails ModVersionInUse(RepoId repoId, ModId modId, ModVersionId modVersionId) => new()
     {
         Type = ProblemType.ModInUse,
@@ -671,6 +678,10 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "file-already-present")]
         [JsonStringEnumMemberName(_typeBaseUri + "file-already-present")]
         FileAlreadyPresent,
+
+        [EnumMember(Value = _typeBaseUri + "file-awaiting-deletion")]
+        [JsonStringEnumMemberName(_typeBaseUri + "file-awaiting-deletion")]
+        FileAwaitingDeletion,
 
         [EnumMember(Value = _typeBaseUri + "already-registered")]
         [JsonStringEnumMemberName(_typeBaseUri + "already-registered")]

@@ -21,6 +21,7 @@ using ModsDude.Server.Application.Services;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Retention;
 using ModsDude.Server.Persistence.Statistics;
+using ModsDude.Server.Persistence.Storage;
 using ModsDude.Server.ModHub;
 using ModsDude.Server.ModHub.Extensions;
 using ModsDude.Server.Storage.Extensions;
@@ -145,7 +146,11 @@ builder.Services.AddScoped<UserLoadingMiddleware>();
 builder.Services.AddScoped<ClientBuildMiddleware>();
 
 builder.Services
-    .Configure<BlobReclamationOptions>(builder.Configuration.GetSection(BlobReclamationOptions.SectionName));
+    .Configure<StorageMaintenanceOptions>(builder.Configuration.GetSection(StorageMaintenanceOptions.SectionName));
+builder.Services.AddScoped<IStorageMaintenance, StorageMaintenance>();
+builder.Services.AddScoped<IStorageGatekeeper, StorageGatekeeper>();
+builder.Services.AddScoped<IStorageAuditor, StorageAuditor>();
+builder.Services.AddScoped<IBlobDeleter, BlobDeleter>();
 
 builder.Services
     .Configure<StorageStatisticsOptions>(builder.Configuration.GetSection(StorageStatisticsOptions.SectionName));
@@ -350,7 +355,7 @@ if (!isDescribingOnly)
     var recurringJobs = app.Services.GetRequiredService<IRecurringJobManager>();
 
     RetentionJobs.Register(recurringJobs, app.Services.GetRequiredService<IOptions<RetentionOptions>>().Value);
-    BlobReclamationJob.Register(recurringJobs, app.Services.GetRequiredService<IOptions<BlobReclamationOptions>>().Value);
+    StorageMaintenanceJob.Register(recurringJobs, app.Services.GetRequiredService<IOptions<StorageMaintenanceOptions>>().Value);
     StorageStatisticsJob.Register(recurringJobs, app.Services.GetRequiredService<IOptions<StorageStatisticsOptions>>().Value);
     TokenPruningJob.Register(recurringJobs);
     ModHubCrawlJob.Register(recurringJobs, app.Services.GetRequiredService<IOptions<ModHubOptions>>().Value, app.Logger);

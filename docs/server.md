@@ -133,36 +133,103 @@ The user-delegation key is cached for a day. Links are backdated five minutes to
 Each issued link is recorded as a `FileTransfer` for the traffic statistics. The API authenticates to
 Azure with a service principal from environment variables.
 
-Deleting a mod version commits the database change first and deletes the blob after. A stranded blob is
-harmless and reclamation picks it up; a registration without a blob would break every client that pins
-it.
+Deleting a row that refers to a blob queues the blob for [storage maintenance](#storage-maintenance),
+which deletes it later.
+
+Mod and savegame blobs carry a label in their metadata: repo, game, who added the blob and when, and the
+mod version's file name or the savegame's name. It is written once, when the blob is first claimed
+(registering a mod version, checking in or publishing a savegame), and identifies a blob after the rows
+that referred to it are gone. A savegame blob is shared by every snapshot with those bytes, so its label
+describes the savegame and the first check-in. Values are percent-encoded UTF-8, because metadata is
+ASCII only, and each is cut short at 512 encoded characters so a label always fits in storage's 8 KiB.
 
 ### Background jobs
 
 Hangfire stores its state in the application database, in its own `hangfire` schema outside the EF
-migrations. The reclamation and retention decisions live in pure, tested code; their Hangfire classes only
-fetch and carry out. The ModHub crawl's sweep, poll and refresh logic still lives in its Hangfire class.
+migrations. The storage maintenance and retention decisions live in pure, tested code; their Hangfire
+classes only fetch and carry out. The ModHub crawl's sweep, poll and refresh logic still lives in its Hangfire class.
 
 | Job | When | Does |
 | --- | --- | --- |
-| `blob-reclamation` | 04:00 UTC | Deletes blobs nothing refers to |
+| `storage-maintenance` | 04:00 UTC, and from the admin Storage page | Audits storage against the database, labels blobs, deletes queued blobs (see below) |
 | `retention-schedule` | 05:00 Stockholm | Dates rows that [retention](domain.md#retention) made eligible, clears dates that no longer apply |
 | `retention-delete` | 06:00 Stockholm | Deletes rows that are due and still eligible for the reason they were dated |
 | `storage-statistics` | 03:30 UTC | Records stored bytes and blob counts per container and repo, replacing that day's earlier sample. Retried by Hangfire |
 | `modhub-crawl` | 19:00 Stockholm | Crawls ModHub (see below) |
 
-**Reclamation** is the only code apart from the delete endpoints that deletes blobs, so it is guarded
-heavily:
+### Storage maintenance
 
-- It lists blobs before reading registrations, so a registration made in between is already covered.
-- It ignores blobs younger than a day, which is well past an upload link's lifetime.
-- It never deletes a blob whose name doesn't parse.
-- Each delete is conditional on the ETag the listing saw.
-- Each container holds a `modsdude-storage-binding` marker blob carrying the GUID of the database's
-  `StorageBinding` row. If any container belongs to another database, or carries a marker the database
-  doesn't know, the whole sweep is refused (`ReclamationGate`). An unbound container also refuses the
-  sweep if it would lose at least 20 blobs and more than half of them.
-- A missed run is skipped, not caught up at startup, so a crash loop can't become a delete loop.
+The only code that deletes blobs. It deletes what the database has queued.
+
+**The queue** (`BlobDeletionCandidates`, one row per blob) is filled by the database function
+`queue_blob_deletion`:
+
+- Delete triggers on `ModVersions`, `SavegameSnapshots` and `ModImageReference`, and an update or delete
+  trigger on `Users.AvatarHash`, queue the blob a row referred to. They fire for every statement and
+  cascade, including `ExecuteDelete` and deleting a repo or savegame.
+- The upload link endpoints and the image upload queue the blob before it is written, so an upload that
+  is never registered is collected too.
+- The admin Storage page queues blobs chosen by hand, with the ETag the audit saw.
+
+Queuing a blob again moves `QueuedAt` (the database's clock) and bumps `Requeued`, so a run that read the
+row before never drops it.
+
+**A run** (`StorageMaintenance`, under a Postgres advisory lock; a second run does nothing):
+
+1. Inspect: the binding, each container's marker, and the account's soft delete setting
+   (`StorageGate`).
+2. Audit: list every container, then read what the database refers to, and replace
+   `StorageAuditFindings` with the unreferenced, unrecognised and missing blobs. A missing name is
+   checked again on its own, because a blob registered during the listing looks missing. Referenced mod
+   and savegame blobs with no label are labelled from the database.
+3. Delete, only if nothing refused: advance the generation, process every queued candidate, advance again.
+
+Each run processes the whole queue. For each candidate it reads the blob, then asks the database whether
+anything refers to it, then whether the row was queued again since it was read, and decides
+(`BlobDeletionRule`):
+
+- name doesn't parse, no ETag, written less than a day ago, or queued again → keep for a later run;
+- gone, referred to, or changed since an admin chose it → drop from the queue;
+- otherwise → delete, conditional on the ETag just read, and record it in `DeletedBlobs` with its size
+  and metadata. Neither the delete nor the record is cancelled once started.
+
+A registration, check-in, publish, image set or avatar claims its blob before it commits
+(`IBlobContainers.ClaimAsync`): it writes the blob's metadata on the ETag it read, reading again if that
+fails. Claimed before the run's read, the blob is too recent to judge; claimed after it, the ETag has
+moved and the delete fails. A restore refers to a blob without claiming it, because the snapshot it copies
+refers to it already. If that snapshot is deleted at the same moment, deleting it queues the blob again,
+which the run sees after its reference check.
+
+**A deleted mod version's file** is deleted at once when an upload link is asked for the same version id,
+so a fixed build can be uploaded under it (`DeleteReleasedModFileAsync`). It needs the run lock, a gate
+that would let a run delete now, and a last run that deleted freely; otherwise the endpoint answers
+`FileAwaitingDeletion` and the file waits for the run. It skips the minimum age, so it holds a per-blob
+advisory lock (`BlobLocks`) that a registration holds from its claim until its commit. It advances the
+generation before and after, like a run.
+
+**The gate** refuses all writes (labels, markers) and deletes when:
+
+- a container's marker names another binding, or none while the container holds blobs;
+- a marker is at a generation this database isn't at, or can't be read;
+- the binding names another storage account;
+- the database has no binding and storage isn't entirely empty.
+
+It also refuses deletes, but not writes, while soft delete is off, keeps blobs for fewer than 14 days,
+or can't be read, and while any referenced blob is missing.
+
+**Binding.** `StorageBinding` holds the binding id, the storage account host, a generation and the id of
+the advance that reached it. Each container holds a `modsdude-storage-binding` marker blob with the
+binding id, generation and advance id as JSON. Every deleting run advances the generation in the database
+and in every marker, in two phases (`PendingGeneration`, `PendingAdvanceId`), so a database restored from
+a backup, or a second database on the same storage, is behind the markers and refuses. Two copies
+advancing at once name the same generation but different advance ids, so neither accepts the other's
+markers. A run binds storage only when it is entirely empty, and marks an
+empty new container. Anything else is bound by hand on the admin Storage page, which writes a generation
+past every marker it finds. A marker holding only a GUID, from before generations, is upgraded when it
+matches a binding that has never advanced.
+
+A missed run is skipped, not caught up at startup, so a crash loop can't become a delete loop. The
+recurring job is not retried.
 
 **Retention** deletion checks the policy again rather than trusting the date, and clears stale dates
 before deciding what is due, so both jobs are idempotent. The writes that can make a row ineligible clear
@@ -208,6 +275,9 @@ section, and tables and expandable rows in inset wells.
 | Repos | Rename, archive, restore, delete, prune, invites, members and their levels |
 | Users | Rename, remove avatar, block and unblock, grant and revoke trust, memberships |
 | Trust codes | Issue, change expiry, revoke |
+| Storage | Binding, markers and soft delete; run maintenance; bind by hand; unreferenced, missing and unrecognised blobs from the last audit with their labels; choose unreferenced blobs to delete; the queue; deleted blobs |
+
+The Overview shows a notice while blobs are missing or the last maintenance run deleted nothing.
 
 The Hangfire dashboard is at `/admin/jobs`.
 
@@ -269,9 +339,14 @@ metadata lets registration refuse a mismatch without the server reading the byte
 snapshots) have primary keys that start with `RepoId`. A query can't forget to scope by repo, and a pin
 or snapshot can't refer to another repo's rows.
 
-**Reclamation and retention are built to be run by an attacker.** Anyone with dashboard access can trigger
-them repeatedly or concurrently. Every run re-derives its decisions from the current data, deletes
-conditionally, and refuses to sweep at all when storage looks like it belongs to another database.
+**Blobs are deleted only when the database says so.** Deciding by absence turns a wrong, reset or
+restored database into an empty storage account. Queuing on delete means such a database deletes nothing,
+or only its own queued blobs, and the gate refuses it anyway. Soft delete on the account makes every
+delete recoverable for its retention period.
+
+**Storage maintenance and retention are built to be run by an attacker.** Anyone with dashboard access can
+trigger them repeatedly or concurrently. Every run re-derives its decisions from the current data, deletes
+conditionally, and refuses to delete at all when storage looks like it belongs to another database.
 
 **The crawler is a guest on someone else's site.** It is slow and polite, stops on anything unexpected,
 and is scoped to the one game module that needs it.

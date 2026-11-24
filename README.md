@@ -49,8 +49,10 @@ development and production need an Azure storage account for files. Use one per 
   containers on startup.
 - Whoever the server runs as needs **Storage Blob Data Contributor** on the account. The server signs its
   SAS links with a user delegation key, so no account keys are involved.
-- Never point two databases at one storage account. The nightly blob reclamation job deletes blobs its
-  database doesn't reference.
+- The server must also be able to read the account's soft delete setting, or storage maintenance never
+  deletes anything; see [Azure](#azure).
+- Never point two databases at one storage account. Storage maintenance binds the account to one
+  database and refuses to delete for any other; the admin Storage page can take it over.
 
 ### Settings
 
@@ -118,7 +120,7 @@ The API listens on `https://localhost:7035`, and on `https://localhost:7036` for
 | --- | --- |
 | `https://localhost:7035/swagger` | Swagger UI. Development only; sign in with the Authorize button. |
 | `https://localhost:7035/account` | The account pages: sign in, change password and email. |
-| `https://localhost:7036/admin` | Admin pages: overview, repos, users, trust codes. |
+| `https://localhost:7036/admin` | Admin pages: overview, repos, users, trust codes, storage. |
 | `https://localhost:7036/admin/jobs` | Hangfire dashboard. |
 | `https://localhost:7035/health` | The running build number. |
 
@@ -221,7 +223,12 @@ The server signs in to storage as a service principal:
    Contributor or Owner, which can read the account keys, would let a stolen server delete the backups.
    Check under Access control (IAM) → Role assignments on the backup account, including roles it inherits
    from its resource group and subscription.
-4. Create a client secret. Its value, the application (client) ID and the directory (tenant) ID go in
+4. On the production storage account, under Access control (IAM), add a custom role such as
+   `ModsDude soft delete reader` with only the action `Microsoft.Storage/storageAccounts/blobServices/read`,
+   and assign it to `modsdude-vps` there. Storage maintenance reads the soft delete setting with it and
+   refuses to delete while it can't. The built-in role with this action, Storage Account Contributor, can
+   read the account keys.
+5. Create a client secret. Its value, the application (client) ID and the directory (tenant) ID go in
    `.env`.
 
 Client secrets expire. When it has, uploads fail and the API logs that it could not reach the containers
@@ -483,14 +490,19 @@ then `http://localhost:8081/admin`.
    ```bash
    az storage blob restore --resource-group <resource group> --account-name <production account> --time-to-restore <yyyy-MM-ddTHH:mm:ssZ>
    ```
-   Not earlier than Last modified: blobs uploaded while the dump ran would be missing. Later is safe,
-   because the blob reclamation job removes what the database doesn't refer to. Nothing can be restored to
-   before point-in-time restore was turned on. Wait for the restore to finish; the CLI waits by itself.
+   Not earlier than Last modified: blobs uploaded while the dump ran would be missing. Later is safe:
+   blobs the restored database doesn't refer to show as unreferenced on the admin Storage page, to delete
+   there by hand. Nothing can be restored to before point-in-time restore was turned on. Wait for the
+   restore to finish; the CLI waits by itself.
 4. Restore the database and start the API:
    ```bash
    docker compose exec -T db pg_restore --username modsdude --dbname modsdude --clean --if-exists --no-owner < ~/modsdude.dump
    docker compose start api
    ```
+5. Open the admin Storage page. If a container's marker is at a later generation than the database, a
+   maintenance run or an upload of a deleted mod version's id advanced it after the backup, and storage
+   maintenance refuses to delete anything. Check that no blob the database refers to is missing, then
+   choose Bind storage to this database.
 
 ### Upgrading PostgreSQL
 

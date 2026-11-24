@@ -32,7 +32,7 @@ namespace ModsDude.Server.Api.Endpoints.Savegames;
 /// </para>
 /// <para>
 /// <b>Rows only.</b> Several snapshots legitimately share one blob - the address is the content hash
-/// - so the bytes are left to the reclamation sweep, which asks whether anything still refers to the
+/// - so the bytes are left to storage maintenance, which asks whether anything still refers to the
 /// address. Deleting them here would mean re-asking that in this transaction and destroying
 /// somebody's save when the answer came out wrong. Same bargain as <see cref="RetentionSweeper"/>.
 /// </para>

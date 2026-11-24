@@ -6,6 +6,7 @@ using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Storage;
 
 namespace ModsDude.Server.Persistence.Tests;
 
@@ -110,11 +111,9 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
     }
 
     /// <summary>
-    /// The property that lets pruning stop at the rows and leave the bytes to the sweep. Snapshots are
-    /// addressed by content, so a restore - and a night that changed nothing - leaves two snapshots
-    /// naming one blob. If deleting one row could take the address out of the registered set, the
-    /// next sweep would delete a blob the surviving snapshot still points at, and the save behind it
-    /// is gone.
+    /// Snapshots are addressed by content, so a restore - and a night that changed nothing - leaves two
+    /// snapshots naming one blob. If deleting one row could take the name out of the referenced set,
+    /// the deletion run would delete a blob the surviving snapshot still points at.
     /// </summary>
     [Fact]
     public async Task A_blob_two_snapshots_share_stays_registered_when_one_of_them_is_pruned()
@@ -136,14 +135,14 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
 
         using var verification = fixture.CreateDbContext();
 
-        var registered = await verification.SavegameSnapshots.GetRegisteredBlobAddressesAsync(CancellationToken.None);
+        var registered = await verification.GetReferencedNamesAsync(StorageContainer.Savegames, CancellationToken.None);
 
-        Assert.Contains(new SavegameBlobAddress(repoId, savegameId, shared), registered);
+        Assert.Contains(BlobNames.Savegame(repoId, savegameId, shared), registered);
     }
 
     /// <summary>
     /// The other side of it: an address no surviving snapshot names must fall out of the set, or the
-    /// sweep never reclaims anything and pruning saves no storage at all.
+    /// audit never reports it.
     /// </summary>
     [Fact]
     public async Task An_address_the_last_snapshot_naming_it_was_pruned_from_stops_being_registered()
@@ -165,15 +164,15 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
 
         using var verification = fixture.CreateDbContext();
 
-        var registered = await verification.SavegameSnapshots.GetRegisteredBlobAddressesAsync(CancellationToken.None);
+        var registered = await verification.GetReferencedNamesAsync(StorageContainer.Savegames, CancellationToken.None);
 
-        Assert.DoesNotContain(new SavegameBlobAddress(repoId, savegameId, dropped), registered);
-        Assert.Contains(new SavegameBlobAddress(repoId, savegameId, HashOf('d')), registered);
+        Assert.DoesNotContain(BlobNames.Savegame(repoId, savegameId, dropped), registered);
+        Assert.Contains(BlobNames.Savegame(repoId, savegameId, HashOf('d')), registered);
     }
 
     /// <summary>
-    /// The sweep reads the whole store rather than one repo, and the addresses come back
-    /// deduplicated by the database. Two savegames that happen to hold identical bytes are still two
+    /// The whole store is read rather than one repo, and the names come back deduplicated by the
+    /// database. Two savegames that happen to hold identical bytes are still two
     /// addresses, because the savegame id is part of the path.
     /// </summary>
     [Fact]
@@ -190,10 +189,10 @@ public class SavegameRetentionQueryTests(DatabaseFixture fixture)
 
         using var dbContext = fixture.CreateDbContext();
 
-        var registered = await dbContext.SavegameSnapshots.GetRegisteredBlobAddressesAsync(CancellationToken.None);
+        var registered = await dbContext.GetReferencedNamesAsync(StorageContainer.Savegames, CancellationToken.None);
 
-        Assert.Contains(new SavegameBlobAddress(repoId, first, shared), registered);
-        Assert.Contains(new SavegameBlobAddress(repoId, second, shared), registered);
+        Assert.Contains(BlobNames.Savegame(repoId, first, shared), registered);
+        Assert.Contains(BlobNames.Savegame(repoId, second, shared), registered);
     }
 
 

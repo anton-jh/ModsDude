@@ -84,8 +84,8 @@ public class SetModVersionImagesV1Endpoint : IEndpoint
 
         // Never blocking registration does not mean never checking: a reference to an address
         // nothing was uploaded to renders as a permanently broken image. Reusing is the check, and
-        // also what stops a reclamation sweep that listed an image as unreferenced deleting it from
-        // under this call.
+        // also the claim that stops a storage maintenance run that read an image as unreferenced
+        // deleting it from under this call.
         var missing = await imageStorageService.TryReuse([.. requested.Select(x => x.Hash).Distinct()], cancellationToken);
 
         if (missing.FirstOrDefault() is string absent)

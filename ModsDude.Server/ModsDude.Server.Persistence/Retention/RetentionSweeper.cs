@@ -32,7 +32,7 @@ namespace ModsDude.Server.Persistence.Retention;
 /// write-time clearing in <see cref="RetentionUpkeep"/> only ever affects what the dates look like.
 /// </para>
 /// <para>
-/// <b>Rows only.</b> Savegame and mod blobs are left to the reclamation sweep, which already asks the
+/// <b>Rows only.</b> Savegame and mod blobs are left to storage maintenance, which already asks the
 /// one question that makes deleting bytes safe: whether anything still refers to the address.
 /// </para>
 /// </remarks>

@@ -953,22 +953,224 @@ namespace ModsDude.Server.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ModsDude.Server.Domain.Storage.BlobDeletionCandidate", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BlobName")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Container")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExpectedVersion")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("QueuedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("RepoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequestedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("Requeued")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Container", "BlobName")
+                        .IsUnique()
+                        .HasDatabaseName("IX_BlobDeletionCandidates_Container_BlobName");
+
+                    b.ToTable("BlobDeletionCandidates", t =>
+                        {
+                            t.HasCheckConstraint("CK_BlobDeletionCandidates_AdminIsComplete", "\"Reason\" <> 'Admin' OR (\"ExpectedVersion\" IS NOT NULL AND \"RequestedBy\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_BlobDeletionCandidates_Container", "\"Container\" IN ('Images', 'Mods', 'Savegames')");
+
+                            t.HasCheckConstraint("CK_BlobDeletionCandidates_Reason", "\"Reason\" IN ('Admin', 'ReferenceRemoved', 'UploadIssued')");
+                        });
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Storage.DeletedBlob", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BlobName")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Container")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("Deleted")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LastModified")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Metadata")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequestedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Deleted");
+
+                    b.ToTable("DeletedBlobs");
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Storage.StorageAuditFinding", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BlobName")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Container")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("LastModified")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Metadata")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("RepoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Version")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind", "Container", "BlobName")
+                        .IsUnique();
+
+                    b.ToTable("StorageAuditFindings");
+                });
+
             modelBuilder.Entity("ModsDude.Server.Domain.Storage.StorageBinding", b =>
                 {
                     b.Property<int>("Id")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("AdvanceId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("BindingId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("Created")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long>("Generation")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("PendingAdvanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("PendingGeneration")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageAccount")
+                        .IsConcurrencyToken()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.HasKey("Id");
 
                     b.ToTable("StorageBindings", t =>
                         {
+                            t.HasCheckConstraint("CK_StorageBindings_GenerationNotNegative", "\"Generation\" >= 0");
+
+                            t.HasCheckConstraint("CK_StorageBindings_PendingHasAdvanceId", "(\"PendingGeneration\" IS NULL) = (\"PendingAdvanceId\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_StorageBindings_PendingIsNext", "\"PendingGeneration\" IS NULL OR \"PendingGeneration\" = \"Generation\" + 1");
+
                             t.HasCheckConstraint("CK_StorageBindings_Singleton", "\"Id\" = 1");
+                        });
+                });
+
+            modelBuilder.Entity("ModsDude.Server.Domain.Storage.StorageMaintenanceStatus", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DeletedInLastRun")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("LastAudit")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastRun")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.PrimitiveCollection<List<string>>("Refusals")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("StorageMaintenanceStatuses", t =>
+                        {
+                            t.HasCheckConstraint("CK_StorageMaintenanceStatus_Singleton", "\"Id\" = 1");
                         });
                 });
 

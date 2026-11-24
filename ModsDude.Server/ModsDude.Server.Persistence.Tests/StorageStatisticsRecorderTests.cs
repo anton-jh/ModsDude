@@ -4,6 +4,7 @@ using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Statistics;
+using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Domain.Users;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Statistics;
@@ -29,10 +30,10 @@ public class StorageStatisticsRecorderTests(DatabaseFixture fixture)
         var date = new DateOnly(2001, 1, 1);
         var (repoId, savegameId) = await GivenARepo(modVersionSizes: [100, 200], snapshots: [(_hash, 1000), (_hash, 1000), (_otherHash, 50)]);
 
-        var storage = new FakeBlobStorage();
-        storage.Mods.Add(Blob($"{repoId.Value}/a_mod/1", 10));
-        storage.Mods.Add(Blob($"{repoId.Value}/a_mod/2", 999));
-        storage.Savegames.Add(Blob($"{repoId.Value}/{savegameId.Value}/{_hash}", 1000));
+        var storage = new FakeBlobContainers();
+        storage.Put(StorageContainer.Mods, $"{repoId.Value}/a_mod/1", 10);
+        storage.Put(StorageContainer.Mods, $"{repoId.Value}/a_mod/2", 999);
+        storage.Put(StorageContainer.Savegames, $"{repoId.Value}/{savegameId.Value}/{_hash}", 1000);
 
         await Record(storage, date);
 
@@ -52,13 +53,13 @@ public class StorageStatisticsRecorderTests(DatabaseFixture fixture)
         var date = new DateOnly(2001, 1, 2);
         var (repoId, _) = await GivenARepo(modVersionSizes: [100], snapshots: []);
 
-        var first = new FakeBlobStorage();
-        first.Mods.Add(Blob($"{repoId.Value}/a_mod/1", 10));
+        var first = new FakeBlobContainers();
+        first.Put(StorageContainer.Mods, $"{repoId.Value}/a_mod/1", 10);
         await Record(first, date);
 
-        var second = new FakeBlobStorage();
-        second.Mods.Add(Blob($"{repoId.Value}/a_mod/1", 10));
-        second.Mods.Add(Blob($"{repoId.Value}/a_mod/2", 20));
+        var second = new FakeBlobContainers();
+        second.Put(StorageContainer.Mods, $"{repoId.Value}/a_mod/1", 10);
+        second.Put(StorageContainer.Mods, $"{repoId.Value}/a_mod/2", 20);
         await Record(second, date);
 
         var samples = await SamplesOn(date);
@@ -75,11 +76,11 @@ public class StorageStatisticsRecorderTests(DatabaseFixture fixture)
         var today = yesterday.AddDays(1);
         var (repoId, _) = await GivenARepo(modVersionSizes: [], snapshots: []);
 
-        var storage = new FakeBlobStorage();
-        storage.Mods.Add(Blob($"{repoId.Value}/a_mod/1", 10));
+        var storage = new FakeBlobContainers();
+        storage.Put(StorageContainer.Mods, $"{repoId.Value}/a_mod/1", 10);
         await Record(storage, yesterday);
 
-        storage.Mods.Add(Blob($"{repoId.Value}/a_mod/2", 20));
+        storage.Put(StorageContainer.Mods, $"{repoId.Value}/a_mod/2", 20);
         await Record(storage, today);
 
         Assert.Equal(10, Assert.Single(await SamplesOn(yesterday), x => x.RepoId == repoId).StoredBytes);
@@ -92,12 +93,12 @@ public class StorageStatisticsRecorderTests(DatabaseFixture fixture)
         var date = new DateOnly(2001, 1, 5);
         var (repoId, _) = await GivenARepo(modVersionSizes: [], snapshots: []);
 
-        var storage = new FakeBlobStorage();
-        storage.Mods.Add(Blob($"{repoId.Value}/a_mod/1", 10));
+        var storage = new FakeBlobContainers();
+        storage.Put(StorageContainer.Mods, $"{repoId.Value}/a_mod/1", 10);
         await Record(storage, date);
 
         using var cancellation = new CancellationTokenSource();
-        storage.Mods.Add(Blob($"{repoId.Value}/a_mod/2", 20));
+        storage.Put(StorageContainer.Mods, $"{repoId.Value}/a_mod/2", 20);
         storage.BeforeEachBlob = _ => cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Record(storage, date, cancellation.Token));
@@ -111,11 +112,11 @@ public class StorageStatisticsRecorderTests(DatabaseFixture fixture)
         var date = new DateOnly(2001, 1, 6);
         var (repoId, _) = await GivenARepo(modVersionSizes: [], snapshots: []);
 
-        var storage = new FakeBlobStorage();
-        storage.Mods.Add(Blob($"{repoId.Value}/a_mod/1", 10));
+        var storage = new FakeBlobContainers();
+        storage.Put(StorageContainer.Mods, $"{repoId.Value}/a_mod/1", 10);
         await Record(storage, date);
 
-        storage.Images.Add(Blob($"{_hash[..2]}/{_hash}", 5));
+        storage.Put(StorageContainer.Images, $"{_hash[..2]}/{_hash}", 5);
         storage.BeforeEachBlob = blob =>
         {
             if (blob.Name.StartsWith(_hash[..2], StringComparison.Ordinal))
@@ -137,8 +138,8 @@ public class StorageStatisticsRecorderTests(DatabaseFixture fixture)
         var date = new DateOnly(2001, 1, 7);
         var (repoId, _) = await GivenARepo(modVersionSizes: [], snapshots: []);
 
-        var storage = new FakeBlobStorage();
-        storage.Mods.Add(Blob($"{repoId.Value}/a_mod/1", 10));
+        var storage = new FakeBlobContainers();
+        storage.Put(StorageContainer.Mods, $"{repoId.Value}/a_mod/1", 10);
 
         var runs = Enumerable.Range(0, 8).Select(_ => Task.Run(() => Record(storage, date)));
 
@@ -182,11 +183,11 @@ public class StorageStatisticsRecorderTests(DatabaseFixture fixture)
     }
 
 
-    private async Task Record(FakeBlobStorage storage, DateOnly date, CancellationToken cancellationToken = default)
+    private async Task Record(FakeBlobContainers storage, DateOnly date, CancellationToken cancellationToken = default)
     {
         using var dbContext = fixture.CreateDbContext();
 
-        var recorder = new StorageStatisticsRecorder(dbContext, storage, storage, storage, NullLogger<StorageStatisticsRecorder>.Instance);
+        var recorder = new StorageStatisticsRecorder(dbContext, storage, NullLogger<StorageStatisticsRecorder>.Instance);
 
         await recorder.RecordAsync(date, cancellationToken);
     }
@@ -196,11 +197,6 @@ public class StorageStatisticsRecorderTests(DatabaseFixture fixture)
         using var dbContext = fixture.CreateDbContext();
 
         return await dbContext.StorageUsageSamples.GetOnDateAsync(date, CancellationToken.None);
-    }
-
-    private static StoredBlob Blob(string name, long length)
-    {
-        return new StoredBlob(name, _timestamp, length, null);
     }
 
     private async Task<(RepoId RepoId, SavegameId SavegameId)> GivenARepo(long[] modVersionSizes, (string Hash, long Size)[] snapshots)

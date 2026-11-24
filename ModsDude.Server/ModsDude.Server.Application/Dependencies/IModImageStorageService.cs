@@ -1,8 +1,6 @@
-﻿using ModsDude.Server.Domain.Mods;
-
 namespace ModsDude.Server.Application.Dependencies;
 
-public interface IModImageStorageService : IReclaimableContainer
+public interface IModImageStorageService
 {
     /// <summary>
     /// Creates the image container if it is not there. Called once at startup, because every other
@@ -13,8 +11,8 @@ public interface IModImageStorageService : IReclaimableContainer
     Task EnsureContainerExists(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Writes to each stored image so a reclamation sweep that listed it before this call cannot delete
-    /// it, and returns the hashes that are not stored. Called by whatever is about to make the images
+    /// Writes to each stored image so a deletion run that read it before this call cannot delete it,
+    /// and returns the hashes that are not stored. Called by whatever is about to make the images
     /// referenced.
     /// </summary>
     Task<IReadOnlyCollection<string>> TryReuse(IReadOnlyCollection<string> hashes, CancellationToken cancellationToken);
@@ -29,10 +27,4 @@ public interface IModImageStorageService : IReclaimableContainer
     /// returned stream.
     /// </summary>
     Task<Stream?> Download(string hash, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Every stored image, for the reclamation sweep. See
-    /// <see cref="IModStorageService.ListStoredMods"/>.
-    /// </summary>
-    IAsyncEnumerable<StoredBlob> ListStoredImages(CancellationToken cancellationToken);
 }

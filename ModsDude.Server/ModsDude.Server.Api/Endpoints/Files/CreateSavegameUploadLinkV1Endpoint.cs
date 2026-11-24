@@ -11,6 +11,7 @@ using ModsDude.Server.Domain.Statistics;
 using ModsDude.Server.Domain.Storage;
 using ModsDude.Server.Persistence.DbContexts;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
+using ModsDude.Server.Persistence.Storage;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Files;
@@ -101,6 +102,14 @@ public class CreateSavegameUploadLinkV1Endpoint : IEndpoint
         {
             return TypedResults.Ok(new CreateSavegameUploadLinkResponse(null, true, savegameStorageService.ContentHashMetadataKey));
         }
+
+        // Queued before the link exists, so a blob uploaded and never checked in is collected.
+        await dbContext.QueueUploadAsync(
+            StorageContainer.Savegames,
+            BlobNames.Savegame(new RepoId(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash),
+            new RepoId(request.RepoId),
+            userId,
+            cancellationToken);
 
         var link = await savegameStorageService.GetUploadLink(new(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash, cancellationToken);
 
