@@ -165,9 +165,9 @@ The only code that deletes blobs. It deletes what the database has queued.
 **The queue** (`BlobDeletionCandidates`, one row per blob) is filled by the database function
 `queue_blob_deletion`:
 
-- Delete triggers on `ModVersions`, `SavegameSnapshots` and `ModImageReference`, and an update or delete
-  trigger on `Users.AvatarHash`, queue the blob a row referred to. They fire for every statement and
-  cascade, including `ExecuteDelete` and deleting a repo or savegame.
+- Triggers on `ModVersions`, `SavegameSnapshots`, `ModImageReference` and `Users.AvatarHash` queue the
+  blob a row referred to when the row is deleted or the columns that name the blob change. They fire for
+  every statement and cascade, including `ExecuteDelete` and deleting a repo or savegame.
 - The upload link endpoints and the image upload queue the blob before it is written, so an upload that
   is never registered is collected too.
 - The admin Storage page queues blobs chosen by hand, with the ETag the audit saw.
@@ -190,13 +190,14 @@ anything refers to it, then whether the row was queued again since it was read, 
 (`BlobDeletionRule`):
 
 - name doesn't parse, no ETag, written less than a day ago, or queued again → keep for a later run;
-- an upload's blob that isn't there yet, queued less than a day ago → keep, since the upload may still be
-  under way;
+- a blob that isn't there, queued less than a day ago, whatever it was queued as → keep, since an upload
+  may still be under way;
 - gone, referred to, or changed since an admin chose it → drop from the queue;
-- otherwise → delete, conditional on the ETag just read, and record it in `DeletedBlobs` with its size,
-  metadata and the time it was deleted. Storage answering that the blob had already gone counts as
-  deleted: that is what a retried delete hears when the first answer was lost. Neither the delete nor the
-  record is cancelled once started.
+- otherwise → record it in `DeletedBlobs` with its size, metadata and the time, then delete it,
+  conditional on the ETag just read. A delete refused because the blob changed removes the record; a
+  delete that fails otherwise keeps it, since it may have gone through. Storage answering that the blob
+  had already gone counts as deleted: that is what a retried delete hears when the first answer was lost.
+  Neither the record nor the delete is cancelled once started.
 
 A registration, check-in, publish, restore, image set or avatar claims its blob before it commits, and so
 does a savegame upload link that reuses a stored blob (`IBlobContainers.ClaimAsync`): it writes the blob's

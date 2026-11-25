@@ -248,6 +248,29 @@ public class StorageMaintenanceTests(StorageDatabaseFixture fixture) : IClassFix
         Assert.Equal(0, outcome.Deleted);
         Assert.NotNull(_blobs.Find(StorageContainer.Mods, name));
         Assert.Single(await CandidatesAsync());
+
+        using var dbContext = fixture.CreateDbContext();
+        Assert.Empty(await dbContext.DeletedBlobs.ToListAsync());
+    }
+
+    [Fact]
+    public async Task A_delete_is_recorded_before_it_is_sent()
+    {
+        await GivenBoundStorageAsync();
+        var (repoId, _) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);
+        var name = BlobNames.Mod(repoId, new ModId("a_mod"), new ModVersionId("1"));
+        _blobs.Put(StorageContainer.Mods, name, lastModified: _now.AddDays(-30));
+        await QueueAsync(StorageContainer.Mods, name);
+
+        var recordedWhenSent = new List<string>();
+        _blobs.BeforeDelete = (_, _) =>
+        {
+            using var dbContext = fixture.CreateDbContext();
+            recordedWhenSent.AddRange(dbContext.DeletedBlobs.Select(x => x.BlobName));
+        };
+        await RunAsync();
+
+        Assert.Equal([name], recordedWhenSent);
     }
 
     [Fact]
@@ -512,7 +535,7 @@ public class StorageMaintenanceTests(StorageDatabaseFixture fixture) : IClassFix
     }
 
     [Fact]
-    public async Task A_run_that_fails_partway_records_each_delete_when_it_happened_and_counts_them()
+    public async Task A_run_that_fails_partway_keeps_the_record_of_the_delete_that_failed_and_counts_only_those_that_went_through()
     {
         await GivenBoundStorageAsync();
         var (repoId, _) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);
@@ -538,8 +561,9 @@ public class StorageMaintenanceTests(StorageDatabaseFixture fixture) : IClassFix
 
         using var dbContext = fixture.CreateDbContext();
         Assert.Equal(2, (await dbContext.StorageMaintenanceStatuses.SingleAsync()).DeletedInLastRun);
+        // The failed delete may have gone through, so its record stays.
         Assert.Equal(
-            [(names[0], started.AddMinutes(1)), (names[1], started.AddMinutes(2))],
+            [(names[0], started), (names[1], started.AddMinutes(1)), (names[2], started.AddMinutes(2))],
             (await dbContext.DeletedBlobs.OrderBy(x => x.BlobName).ToListAsync()).Select(x => (x.BlobName, x.Deleted)));
     }
 
@@ -651,6 +675,7 @@ public class StorageMaintenanceTests(StorageDatabaseFixture fixture) : IClassFix
         await GivenBoundStorageAsync();
         var (repoId, name) = await GivenADeletedModVersionAsync();
         _blobs.Remove(StorageContainer.Mods, name);
+        _now = Assert.Single(await CandidatesAsync()).QueuedAt;
 
         Assert.Equal(ReleasedModFileDeletion.Deleted, await DeleteReleasedAsync(repoId));
         Assert.Empty(await CandidatesAsync());
