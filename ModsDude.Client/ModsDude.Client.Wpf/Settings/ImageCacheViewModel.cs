@@ -31,7 +31,7 @@ public partial class ImageCacheViewModel(
 
     public string UsageSummary => Usage switch
     {
-        null => "Measuring...",
+        null => "Measuring…",
         { Entries: 0 } => "Empty",
         _ => $"{ByteSize.Describe(Usage.TotalBytes)} in {Usage.Entries} images"
     };

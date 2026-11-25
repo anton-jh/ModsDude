@@ -38,7 +38,7 @@ public sealed partial class BuildMismatchViewModel : ObservableObject, IDisposab
 
     public bool HasActions => CanUpdate || IsClientBehind is false;
 
-    public string Title => IsClientBehind ? "Update required" : "The server is out of date";
+    public string Title => IsClientBehind ? "Update required" : "Server out of date";
 
     public string ClientBuild => AppBuild.Description;
 

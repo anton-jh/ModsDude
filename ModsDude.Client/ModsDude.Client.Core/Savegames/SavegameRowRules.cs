@@ -107,6 +107,6 @@ public static class SavegameRowRules
     /// </remarks>
     public static string DescribeActivation(string profileName, int? pinnedRevision)
         => pinnedRevision is int revision
-            ? $"'{profileName}' rev {revision}"
+            ? $"'{profileName}' revision {revision}"
             : $"'{profileName}'";
 }

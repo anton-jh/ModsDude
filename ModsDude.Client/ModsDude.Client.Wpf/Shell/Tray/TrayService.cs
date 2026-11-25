@@ -129,7 +129,7 @@ public sealed class TrayService(
             _restart.Visibility = updates.ReadyBuild is null ? Visibility.Collapsed : Visibility.Visible;
         }
 
-        _icon?.ToolTipText = $"{_name} - {summary}";
+        _icon?.ToolTipText = $"{_name} · {summary}";
     }
 
     /// <summary>
@@ -148,7 +148,7 @@ public sealed class TrayService(
 
         _icon?.ShowNotification(
             $"{_name} is still running",
-            "It keeps watching your mod folders from the tray. Right-click the icon to quit.",
+            "Still watching your mod folders from the tray. Right-click the icon to quit.",
             NotificationIcon.Info);
     }
 

@@ -35,14 +35,11 @@ public partial class ModVersionArbitrationModalViewModel : ModalViewModel
         ? "Where does this version go?"
         : $"Where do these {Mods.Count} mods' versions go?";
 
-    public string Message =>
-        "The version strings do not say which release came first. Put each floating version where it "
-        + "belongs; the ones already in the repo cannot move, because registering only ever inserts "
-        + "around them.";
+    public string Message => "Oldest first. Versions already in the repo stay in place.";
 
     public string SkipMessage => Mods.Count == 1
-        ? "Skipping leaves this mod unregistered. The rest of the import carries on, and this one can be imported again later."
-        : $"Skipping leaves these {Mods.Count} mods unregistered. The rest of the import carries on, and they can be imported again later.";
+        ? "Skipping leaves this mod out of the import."
+        : $"Skipping leaves these {Mods.Count} mods out of the import.";
 
     /// <summary>
     /// The intended final order per mod, or null where the user declined to say. A null answer skips

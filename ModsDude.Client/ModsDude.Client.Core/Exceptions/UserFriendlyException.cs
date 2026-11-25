@@ -25,12 +25,12 @@ public class UserFriendlyException(
 
     public static UserFriendlyException WrapUnknown(Exception exception)
     {
-        return new UserFriendlyException("Something broke", inner: exception);
+        return new UserFriendlyException("Something went wrong", inner: exception);
     }
 
     public static UserFriendlyException RepoNoModSupport()
     {
-        return new("The configured game adapter does not support mods");
+        return new("This game has no mod support");
     }
 
 

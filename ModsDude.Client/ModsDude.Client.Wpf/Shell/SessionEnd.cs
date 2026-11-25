@@ -50,7 +50,7 @@ public sealed class SessionEnd(
 
         bool stopped;
 
-        using (backgroundTasks.Begin("Stopping running work"))
+        using (backgroundTasks.Begin("Stopping work"))
         {
             stopped = await session.StopAllAsync(CancellationToken.None);
         }

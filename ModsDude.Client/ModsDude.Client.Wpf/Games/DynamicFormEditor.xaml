@@ -15,7 +15,7 @@
                 <StackPanel Orientation="Vertical" IsEnabled="{Binding CanBeModified}" Margin="0 0 0 16">
                     <Label Content="{Binding Title}" Margin="0 0 0 12"/>
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="Pick folder" Command="{Binding PickFolderCommand}" />
+                        <Button Content="Select folder" Command="{Binding PickFolderCommand}" />
                         <TextBox Text="{Binding Value, Mode=TwoWay}" IsReadOnly="True" Width="250" Margin="8 0 0 0" />
                         <Button Content="Clear"
                                 Margin="8 0 0 0"

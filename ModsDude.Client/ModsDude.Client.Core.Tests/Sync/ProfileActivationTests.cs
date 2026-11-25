@@ -59,7 +59,7 @@ public class ProfileActivationTests
         var target = new ActiveProfile(_repoId, _profileId);
         var kind = ProfileActivation.Describe(target, target);
 
-        Assert.Equal("Re-apply rev 4", ProfileActivation.Label(kind, 4));
+        Assert.Equal("Re-apply revision 4", ProfileActivation.Label(kind, 4));
         Assert.Equal("Re-apply", ProfileActivation.Label(kind, null));
     }
 

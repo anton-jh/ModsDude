@@ -71,7 +71,7 @@
                     <StackPanel>
                         <TextBlock Text="Add what is missing"
                                    Style="{DynamicResource BodyStrongTextBlockStyle}" />
-                        <TextBlock Text="Brings in every mod this profile does not already hold, and leaves the ones it does at the versions they are pinned to."
+                        <TextBlock Text="Keeps the current versions of mods already here"
                                    Margin="0 2 0 0"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -84,7 +84,7 @@
                     <StackPanel>
                         <TextBlock Text="Replace this list"
                                    Style="{DynamicResource BodyStrongTextBlockStyle}" />
-                        <TextBlock Text="Makes this profile's list identical to the other one's, taking out anything the other profile does not hold. Not written until you save."
+                        <TextBlock Text="Removes mods the other profile does not have"
                                    Margin="0 2 0 0"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />

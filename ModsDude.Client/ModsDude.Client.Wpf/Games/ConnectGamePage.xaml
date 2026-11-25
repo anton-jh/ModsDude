@@ -21,9 +21,9 @@
                 <TextBlock Margin="0 0 0 16"
                            TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                    <Run Text="Points ModsDude at your installation of" />
+                    <Run Text="Where" />
                     <Run Text="{Binding GameName, Mode=OneWay}" FontWeight="SemiBold" />
-                    <Run Text="on this machine. It is configured once and offered under every repo about that game." />
+                    <Run Text="is installed on this machine. Used by every repo for this game." />
                 </TextBlock>
 
                 <shared:Surface Style="{StaticResource Card}">

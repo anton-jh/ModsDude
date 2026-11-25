@@ -176,7 +176,7 @@ public static class NoticeBuilder
             DriftStatus.Drifted when gap is not null => (
                 $"'{game.Name}' is behind {profile}{inFolder}",
                 null,
-                [new NoticeFact("Applied", $"rev {gap.From}"), new NoticeFact("Current", $"rev {gap.To}")],
+                [new NoticeFact("Applied", $"Revision {gap.From}"), new NoticeFact("Current", $"Revision {gap.To}")],
                 NoticeSeverity.Pending),
 
             DriftStatus.Drifted => (
@@ -188,13 +188,13 @@ public static class NoticeBuilder
             DriftStatus.NotApplied => (
                 report.AppliedProfileName is string applied
                     ? $"'{game.Name}' is still on '{applied}'{inFolder}"
-                    : $"'{game.Name}' is still on the mod list it was last applied to{inFolder}",
-                "Disregard if the profile is currently applying",
+                    : $"'{game.Name}' is still on its last applied profile{inFolder}",
+                null,
                 [],
                 NoticeSeverity.Pending),
 
             DriftStatus.FolderRepointed => (
-                $"'{game.Name}' has a mod folder nothing has been applied to",
+                $"'{game.Name}' has a new mod folder with nothing applied",
                 null,
                 entry.Target is GameModFolder target ? [new NoticeFact("Folder", target.ModFolder)] : [],
                 NoticeSeverity.Pending),
@@ -258,7 +258,7 @@ public static class NoticeBuilder
                 LockedDriftReason.FileRemoved => $"'{first.DisplayName}' is locked{version} and is no longer installed{inFolder}",
                 _ => $"'{first.DisplayName}' is locked{version} and its file has changed{inFolder}"
             }
-            : $"{locked.Count} locked mods in '{game.Name}' are not what they were locked at{inFolder}";
+            : $"{locked.Count} locked mods in '{game.Name}' do not match their lock{inFolder}";
 
         // Locked pins never show under Updates, and one whose file changed is still offered by the
         // folder, so it would not show under Not in sources either.
@@ -269,7 +269,7 @@ public static class NoticeBuilder
             $"locked/{game.Identity}/{entry.Target?.Target.Key.Value ?? "-"}",
             NoticeSeverity.Critical,
             headline,
-            "Hosting a savegame on the wrong version may damage it.",
+            "The wrong version can damage a savegame.",
             footnote: null,
             // No revision on this one's re-apply: the folder card beside it owns the mod half, and
             // two buttons in one column disagreeing about a number would be worse.
@@ -334,16 +334,16 @@ public static class NoticeBuilder
 
         var headline = first.Kind switch
         {
-            SavegameDriftKind.UncheckedInPlay => $"{save} holds play that exists nowhere else",
+            SavegameDriftKind.UncheckedInPlay => $"{save} has progress that is not checked in",
             SavegameDriftKind.TakenOverAndCheckedIn => $"{save} has been checked in by somebody else",
-            SavegameDriftKind.TakenOver when first.TakenBy is SavegameClaimHolder holder => $"{save} was taken over by {holder.DisplayName}",
+            SavegameDriftKind.TakenOver when first.TakenBy is SavegameClaimHolder holder => $"{save} is now checked out to {holder.DisplayName}",
             SavegameDriftKind.TakenOver => $"{save} is no longer checked out to you",
-            _ =>$"{save} is on the wrong mod list"
+            _ => $"{save} does not match this mod folder"
         };
 
         var actions = new List<NoticeAction>
         {
-            new(NoticeActionKind.OpenSavegame, "Open the save") { IsPrimary = true }
+            new(NoticeActionKind.OpenSavegame, "Open savegame") { IsPrimary = true }
         };
 
         // A savegame in compatibility mode whose folder has moved off its revision is the one savegame problem a
@@ -374,40 +374,35 @@ public static class NoticeBuilder
     private static string DescribeSavegame(SavegameDrift drift, string save) => drift.Kind switch
     {
         SavegameDriftKind.UncheckedInPlay =>
-            $"{save} has been played since it was checked out, and that play exists nowhere but this disk "
-                + "until it is checked in.",
+            "That progress is only on this machine until it is checked in.",
 
         SavegameDriftKind.TakenOverAndCheckedIn =>
-            $"{save} has been checked in by somebody else - they are on snapshot {drift.HeadSnapshot}, this "
-                + $"machine is holding snapshot {drift.HeldSnapshot}. Checking in from here forks it, and will "
-                + "be refused unless you force it.",
+            $"Their snapshot is {drift.HeadSnapshot}. This machine has snapshot {drift.HeldSnapshot}. "
+                + "Checking in from here must be forced and overwrites their progress.",
 
-        // Once somebody else has it there are two copies of one save, whether or not either side has
-        // played yet - so the sentence is about which check-in wins, not about a fork still to come.
+        // Once somebody else has it checked out there are two copies of one savegame, whether or not
+        // either side has played yet, so the sentence is about which check-in wins.
         SavegameDriftKind.TakenOver when drift.TakenBy is SavegameClaimHolder holder =>
-            $"{holder.DisplayName} checked {save} out on {holder.TakenAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)}, "
-                + $"so the claim is theirs now. The copy here and theirs are two versions of the same save: whoever "
-                + "checks in second has to force it, and that overwrites the other's play.",
+            $"{holder.DisplayName} checked it out on {holder.TakenAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)}. "
+                + "Whoever checks in second overwrites the other's progress.",
 
-        // Taken and then let go again without a check-in: nobody holds it, and the head is still the
-        // snapshot held here, so nothing has been lost yet and a check-in from here goes through.
+        // Checked out by somebody else and given up again without a check-in: nobody has it checked
+        // out, and the head is still the snapshot here, so a check-in from here goes through.
         SavegameDriftKind.TakenOver =>
-            $"Somebody took {save} over and has since let it go without checking anything in, so this machine "
-                + "no longer holds the claim. Checking in from here still works.",
+            "Nobody has it checked out now. You can still check it in.",
 
         // Two sentences for one kind, because the rule reaches it two ways and only one of them is
         // about numbers. Against another profile entirely, putting the two revisions side by side
         // would be comparing integers belonging to different mod lists - which is the thing the
         // design refuses, said by the notice meant to explain it.
         SavegameDriftKind.PlayedOnAnotherModList when drift.RunsOnAnotherProfile =>
-            $"{save} follows a different mod list from the one this mod folder is on. Playing it on the "
-                + "wrong mod list is what damages a save.",
+            $"{save} uses a different profile from this mod folder. The wrong profile can damage a savegame.",
 
         SavegameDriftKind.PlayedOnAnotherModList =>
-            $"{save} runs on revision {drift.TargetRevision} of its mod list and this mod folder is on "
-                + $"revision {drift.AppliedRevision}. Playing it on the wrong mod list is what damages a save.",
+            $"{save} needs revision {drift.TargetRevision} and this mod folder is on revision {drift.AppliedRevision}. "
+                + "The wrong revision can damage a savegame.",
 
-        _ => $"{save} no longer agrees with what the repo holds."
+        _ => $"{save} no longer matches the repo."
     };
 
 
@@ -425,9 +420,9 @@ public static class NoticeBuilder
         return Make(
             SavegameKey(first.SavegameId),
             NoticeSeverity.Critical,
-            $"{save} is from a repo you can't open",
+            $"{save} is from a repo you are not in",
             kinds.Any(x => x.Kind is SavegameDriftKind.UncheckedInPlay)
-                ? "It has been played since it was checked out."
+                ? "It has progress that is not checked in."
                 : null,
             footnote: null,
             actions: [new(NoticeActionKind.StopTracking, "Stop tracking") { IsPrimary = true }],
@@ -457,18 +452,16 @@ public static class NoticeBuilder
             var first = found[0];
 
             var outcome = first.Removed
-                ? "The bad copy has been dropped and will be downloaded again when something needs it."
-                : "It could not be dropped - something still has the file open - and will be caught again "
-                    + "on the next check.";
+                ? "It was removed and downloads again when needed."
+                : "It could not be removed while the file is in use. It is checked again next time.";
 
-            var more = found.Count > 1 ? $" {found.Count - 1} more were found the same way." : "";
+            var more = found.Count > 1 ? $" {found.Count - 1} more were affected." : "";
 
             yield return Make(
                 $"store/{volume.Key}",
                 NoticeSeverity.Critical,
-                $"The game wrote into the mod cache on {volume.Key}",
-                $"'{first.DisplayName}' was written straight into the cache, which every repo on that drive "
-                    + $"shares. {outcome}{more}",
+                $"A game changed a mod in the store on {volume.Key}",
+                $"'{first.DisplayName}' was changed inside the store. {outcome}{more}",
                 footnote: null,
                 actions: [new(NoticeActionKind.OpenLog, "Open log folder")],
                 subject: null);
@@ -501,10 +494,10 @@ public static class NoticeBuilder
             NoticeSeverity.Warning,
             reposLoaded
                 ? $"'{gameName}' belongs to a repo you are not in"
-                : $"'{gameName}' has drifted",
+                : $"'{gameName}' does not match its profile",
             reposLoaded
-                ? "Nothing here can act on it."
-                : "Checking which repo it belongs to...",
+                ? null
+                : "Checking which repo it belongs to…",
             footnote: null,
             actions: [],
             subject: new NoticeSubject(game, gameName),
@@ -543,7 +536,7 @@ public static class NoticeBuilder
     private static string ReapplyLabel(DriftCandidate game, INoticeEnvironment environment)
         => game.ActiveProfile is ActiveProfile active
             && environment.RequiredRevision(game.Identity, active.ProfileId) is int revision
-                ? $"Re-apply rev {revision}"
+                ? $"Re-apply revision {revision}"
                 : "Re-apply now";
 
     /// <summary>

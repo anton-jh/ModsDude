@@ -163,7 +163,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
     [NotifyPropertyChangedFor(nameof(HasStatusLine))]
     private string? _remaining;
 
-    /// <summary>"and 2 more taking a while", for the rows past <see cref="MaxRows"/>.</summary>
+    /// <summary>"+2 more", for the rows past <see cref="MaxRows"/>.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMoreSubtasks))]
     private string? _moreSubtasks;
@@ -524,8 +524,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         MoreSubtasks = snapshot.Hidden switch
         {
             0 => null,
-            1 => "and 1 more taking a while",
-            var n => $"and {n} more taking a while"
+            var n => $"+{n} more"
         };
 
         IsVisible = true;
@@ -629,7 +628,7 @@ public partial class BackgroundTaskViewModel : ObservableObject, IBackgroundTask
         // this is so that something that starts to is not silently half-reported.
         if (snapshot.MoreSteps > 0)
         {
-            parts.Add(snapshot.MoreSteps == 1 ? "and 1 more step" : $"and {snapshot.MoreSteps} more steps");
+            parts.Add(snapshot.MoreSteps == 1 ? "+1 step" : $"+{snapshot.MoreSteps} steps");
         }
 
         return parts.Count > 0 ? string.Join(" · ", parts) : null;

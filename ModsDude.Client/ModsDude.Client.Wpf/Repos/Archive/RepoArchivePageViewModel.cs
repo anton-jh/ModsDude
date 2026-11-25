@@ -241,7 +241,7 @@ public partial class RepoArchivePageViewModel : PageViewModel, IDisposable
         {
             await _profileStore.RestoreAsync(_repo.Id, item.Id, name, CancellationToken.None);
 
-            _toasts.Show($"'{name ?? item.Name}' is back in the sidebar.");
+            _toasts.Show($"Restored '{name ?? item.Name}'");
         }, item, "profile");
     }
 
@@ -254,7 +254,7 @@ public partial class RepoArchivePageViewModel : PageViewModel, IDisposable
                 token => _savegamesClient.RestoreSavegameV1Async(_repo.Id, item.Id, new RestoreRequest { Name = name }, token),
                 CancellationToken.None);
 
-            _toasts.Show($"'{name ?? item.Name}' is back in the repo's saves.");
+            _toasts.Show($"Restored '{name ?? item.Name}'");
         }, item, "savegame");
     }
 
@@ -276,9 +276,9 @@ public partial class RepoArchivePageViewModel : PageViewModel, IDisposable
                 var renamed = await NameModalViewModel.AskAsync(
                     _modalService,
                     "That name is taken",
-                    $"Something else in this repo is called '{item.Name}' now. Give this {what} another name to bring it back.",
+                    $"Something else in this repo is called '{item.Name}'. Enter another name for this {what}.",
                     $"{item.Name} (restored)",
-                    "Restore it",
+                    "Restore",
                     async name =>
                     {
                         try
@@ -330,18 +330,17 @@ public partial class RepoArchivePageViewModel : PageViewModel, IDisposable
             // this is the deletion letting go, not the archiving.
             _games.StopTracking(item.Id);
 
-            _toasts.Show($"'{item.Name}' is gone for good. Any game that was on it is no longer tracking a profile.");
+            _toasts.Show($"Deleted '{item.Name}'");
 
             await ReloadAsync();
         }
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.ProfileInUseBySavegame)
         {
-            // The one thing that outlives archiving: a save whose mod list is gone is not
-            // restorable, which is the only thing that made keeping it worth anything.
+            // The one thing that outlives archiving: a savegame whose profile is gone cannot be
+            // restored.
             await _modalService.Show(ConfirmationModalViewModel.Refusal(
-                "A savegame still needs it",
-                $"'{item.Name}' cannot be deleted while a savegame follows it or was played on one of "
-                    + "its revisions. Archive or delete those savegames first."));
+                "A savegame still uses it",
+                $"Savegames still use '{item.Name}'. Archive or delete them first."));
         }
         catch (Exception exception)
         {
@@ -366,7 +365,7 @@ public partial class RepoArchivePageViewModel : PageViewModel, IDisposable
         {
             await _savegames.WriteAsync(_repo.Id, token => _savegamesClient.DeleteSavegameV1Async(_repo.Id, item.Id, token), CancellationToken.None);
 
-            _toasts.Show($"'{item.Name}' is gone for good.");
+            _toasts.Show($"Deleted '{item.Name}'");
 
             await ReloadAsync();
         }

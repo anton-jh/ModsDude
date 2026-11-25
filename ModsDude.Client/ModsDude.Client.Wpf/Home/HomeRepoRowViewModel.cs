@@ -39,7 +39,7 @@ public sealed partial class HomeRepoRowViewModel(HomeRepoListViewModel owner, Ho
     public string? PickerEmptyText => State.HasProfiles
         ? null
         : State.ProfilesLoaded ? "No profiles"
-        : ProfilesFailed ? "Could not load the profiles"
+        : ProfilesFailed ? "Could not load profiles"
         : "Loading…";
 
     public bool HasPickerEmptyText => PickerEmptyText is not null;

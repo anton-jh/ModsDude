@@ -799,7 +799,7 @@ public class ModImportServiceTests : IDisposable
 
         var item = Assert.Single(result.Items);
         Assert.Equal(ModImportStatus.Registered, item.Status);
-        Assert.Contains("Imagery", item.Message);
+        Assert.Contains("Images", item.Message);
         Assert.Equal(Vs("1.0"), _server.VersionsOf(Mod("FS25_Plough")));
     }
 

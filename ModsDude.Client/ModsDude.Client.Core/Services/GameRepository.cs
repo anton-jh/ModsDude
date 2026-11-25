@@ -24,7 +24,7 @@ public sealed record FolderClaim(string Path, Game? Owner)
     {
         return Owner is Game owner
             ? $"'{Path}' already belongs to '{owner.Name}'."
-            : $"Two of this game's folders are both '{Path}'.";
+            : $"'{Path}' is used twice.";
     }
 }
 
@@ -184,8 +184,11 @@ public class GameRepository : IGameRepository
 
             case TargetRefresh.HoldsSavegame:
                 throw new UserFriendlyException(
-                    "Check in the savegame first",
-                    $"'{game.Name}' holds a checked-out savegame, so its settings were not changed.");
+                    $"'{game.Name}' has a savegame checked out",
+                    $"'{game.Name}' holds a checked-out savegame, so its settings were not changed.")
+                {
+                    Hint = "Check it in first."
+                };
         }
     }
 
@@ -321,8 +324,11 @@ public class GameRepository : IGameRepository
         if (outcome is DisconnectOutcome.HoldsSavegame)
         {
             throw new UserFriendlyException(
-                "Check in the savegame first",
-                $"'{game.Name}' holds a checked-out savegame, so it was not disconnected.");
+                $"'{game.Name}' has a savegame checked out",
+                $"'{game.Name}' holds a checked-out savegame, so it was not disconnected.")
+            {
+                Hint = "Check it in first."
+            };
         }
 
         Games.Remove(game);

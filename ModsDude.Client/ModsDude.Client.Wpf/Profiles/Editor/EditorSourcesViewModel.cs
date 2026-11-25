@@ -137,7 +137,7 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
 
         Chips.Add(new ModSourceViewModel(
             new ModSourceStatus(
-                new ModSource(ModSourceId.Repo, "This repo", "Everything this repo has registered", ModSourceKind.Repo),
+                new ModSource(ModSourceId.Repo, "This repo", "All mods in this repo", ModSourceKind.Repo),
                 IncludeRegistered,
                 view.Visible.Count(x => x.IsOnServer),
                 null),
@@ -318,11 +318,11 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
         {
             var confirmation = new ConfirmationModalViewModel(
                 $"Unload {chip.Name}?",
-                $"{ProfileModsEditorSummary.Mods(dependent.Count)} in your draft come only from {chip.Name} "
-                    + "and will be taken out with it.",
+                $"{ProfileModsEditorSummary.Mods(dependent.Count)} in your unsaved changes come only from {chip.Name} "
+                    + "and will be removed.",
                 IconKind.Question,
                 "Unload",
-                "Keep it");
+                "Cancel");
 
             await _modalService.Show(confirmation);
 

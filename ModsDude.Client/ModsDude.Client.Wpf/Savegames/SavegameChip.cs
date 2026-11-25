@@ -46,7 +46,7 @@ public sealed record SavegameChip(string Text, SavegameChipTone Tone)
 public static class SavegameWording
 {
     /// <summary>What a savegame that follows no profile says where a profile's name would go.</summary>
-    public const string NoModList = "No mod list";
+    public const string NoModList = "No profile";
 
     /// <summary>
     /// The profile a savegame follows, by the name the server read with it - which is there for an

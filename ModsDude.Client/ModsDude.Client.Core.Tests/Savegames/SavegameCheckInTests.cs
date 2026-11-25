@@ -255,7 +255,7 @@ public class SavegameCheckInTests
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(
             () => harness.CheckIn.CheckInAsync(harness.Game, Guid.NewGuid(), null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None));
 
-        Assert.Contains("not holding", exception.UserMessage);
+        Assert.Contains("not checked out on this machine", exception.UserMessage);
     }
 
     /// <summary>

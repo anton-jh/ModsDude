@@ -445,7 +445,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             || subject.ProfileId is not Guid profileId
             || subject.Review is not NoticeReview review)
         {
-            card?.ReportStatus("There is no mod folder on this one to look at.");
+            card?.ReportStatus("Nothing to review.");
 
             return;
         }
@@ -459,7 +459,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
         if (await _navigation.GoToAsync(repoId, destination) is false)
         {
-            card?.ReportStatus("That profile could not be opened from here - pick it in the sidebar.");
+            card?.ReportStatus("Could not open the profile. Select it in the sidebar.");
         }
     }
 
@@ -474,7 +474,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
         if (await _navigation.GoToAsync(repoId, new RepoDestination.Savegame(savegameId)) is false)
         {
-            card?.ReportStatus("That save could not be opened from here - pick its repo in the sidebar.");
+            card?.ReportStatus("Could not open the savegame. Select its repo in the sidebar.");
         }
     }
 
@@ -493,7 +493,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
         if (_goneRepos.IsGone(repoId) is false)
         {
-            card?.ReportStatus("Its repo can't be checked right now. Try again in a moment.");
+            card?.ReportStatus("Could not check the repo. Try again in a moment.");
 
             return;
         }
@@ -530,7 +530,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
         {
             // The same window a Review button is missing in: a notice can be up before the repo list
             // has arrived. Saying so beats a button that does nothing when pressed.
-            card?.ReportStatus("The repo this game follows has not loaded yet. Try again in a moment.");
+            card?.ReportStatus("The repo is still loading. Try again in a moment.");
 
             return;
         }
@@ -542,7 +542,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             return;
         }
 
-        card?.ReportStatus("Re-applying...");
+        card?.ReportStatus("Re-applying…");
 
         // Pure apply - the game already follows this profile, which is why it is drifted from it.
         var result = await _applyService.ApplyAsync(
@@ -568,12 +568,12 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     {
         if (_friends.News.FirstOrDefault(x => FriendActivityRules.NoticeKey(x.Activity) == notice.Key)?.Activity is not { } activity)
         {
-            card?.ReportStatus("They have moved on since - look on the repo's overview for what they are on now.");
+            card?.ReportStatus("They have switched since. See the repo overview.");
 
             return;
         }
 
-        card?.ReportStatus("Switching...");
+        card?.ReportStatus("Switching…");
 
         var (message, _) = await _follow.FollowAsync(activity, CancellationToken.None);
 

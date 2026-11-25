@@ -22,7 +22,7 @@
                 <shared:Surface Style="{StaticResource Card}" Visibility="{Binding HasNoRepos, Converter={StaticResource BoolToVisibilityConverter}}">
                     <StackPanel Orientation="Vertical">
                         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="You are not in any repo yet." />
+                                   Text="No repos yet" />
                         <Button Margin="0 12 0 0"
                                 HorizontalAlignment="Left"
                                 Style="{DynamicResource AccentButtonStyle}"
@@ -38,7 +38,7 @@
                             <TextBlock Margin="0 0 0 12"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        Visibility="{Binding Friends.CouldNotRead, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       Text="Could not load what friends are on." />
+                                       Text="Could not load friend activity" />
                             <home:HomeRepoList DataContext="{Binding RepoList}" />
                         </StackPanel>
                     </GroupBox>

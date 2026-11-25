@@ -100,13 +100,13 @@ public sealed class BlockedRevisionViewModel
         Reason = dto.Reason switch
         {
             BlockedRevisionReason.IsHead
-                => "This is the profile's current revision. Editing the profile is what replaces it; it can never be deleted on its own.",
+                => "The current revision cannot be deleted",
             BlockedRevisionReason.CheckedOut => checkouts.Count == 1
-                ? "A savegame is checked out and may be playing on it. It can go once that save is checked in."
-                : $"{checkouts.Count} savegames are checked out and may be playing on it. It can go once they are checked in.",
+                ? "A savegame using it is checked out. Check it in first."
+                : $"{checkouts.Count} savegames using it are checked out. Check them in first.",
             _ => snapshots.Count == 1
-                ? "A savegame snapshot was played on it. Delete that snapshot first, and this revision can go."
-                : $"{snapshots.Count} savegame snapshots were played on it. Delete those first, and this revision can go."
+                ? "A savegame snapshot was played on it. Delete that snapshot first."
+                : $"{snapshots.Count} savegame snapshots were played on it. Delete them first."
         };
     }
 
@@ -151,7 +151,7 @@ public partial class SavegameSnapshotLinkViewModel
 
     /// <summary>A save somebody has checked out, named with who has it - they are who to ask.</summary>
     public static SavegameSnapshotLinkViewModel ForCheckout(CheckedOutSavegameRefDto dto, Action<Guid> goTo)
-        => new(dto.SavegameId, $"{dto.SavegameName} · checked out by {dto.HeldBy.DisplayName}", goTo);
+        => new(dto.SavegameId, $"{dto.SavegameName} · checked out to {dto.HeldBy.DisplayName}", goTo);
 
 
     public string Label { get; }

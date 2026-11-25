@@ -33,7 +33,7 @@
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                                        Visibility="{Binding HasNoGames, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       Text="Not applied." />
+                                       Text="Not applied" />
 
                             <ItemsControl ItemsSource="{Binding Games}"
                                           Visibility="{Binding HasGames, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -87,7 +87,6 @@
 
                                             <TextBlock Grid.Column="0" Margin="0 0 24 0">
                                                 <Hyperlink Style="{StaticResource TextLink}"
-                                                           ToolTip="Open it on the Saves list"
                                                            Command="{Binding OpenCommand}">
                                                     <Run Text="{Binding Name, Mode=OneWay}" />
                                                 </Hyperlink>
@@ -109,9 +108,7 @@
                             <Button Margin="0 12 0 0"
                                     HorizontalAlignment="Left"
                                     MinWidth="110"
-                                    Content="Publish a save"
-                                    ToolTip="{Binding PublishToolTip}"
-                                    ToolTipService.ShowOnDisabled="True"
+                                    Content="Publish a savegame"
                                     Command="{Binding PublishCommand}"
                                     Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </StackPanel>

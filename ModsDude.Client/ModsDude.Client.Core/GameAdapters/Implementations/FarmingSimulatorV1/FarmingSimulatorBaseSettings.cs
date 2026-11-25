@@ -15,7 +15,7 @@ public class FarmingSimulatorBaseSettings : DynamicForm<FarmingSimulatorBaseSett
     {
         if (GameVersion is null)
         {
-            yield return new("Pick which game in the series this repo is for.", nameof(GameVersion));
+            yield return new("Select a game version.", nameof(GameVersion));
         }
     }
 }

@@ -47,9 +47,6 @@ public partial class RepoInviteViewModel : ObservableObject
         WillRevoke = invite.Status is InviteStatus.Active or InviteStatus.InviterLostAccess;
 
         ActionText = WillRevoke ? "Revoke" : "Remove";
-        ActionToolTip = WillRevoke
-            ? "Stops the code working for good, and takes it off this list."
-            : "Takes it off this list. It already stopped working.";
 
         Uses = invite.MaximumUses is int maximum
             ? $"{invite.Uses} of {maximum} joins"
@@ -84,8 +81,6 @@ public partial class RepoInviteViewModel : ObservableObject
 
     /// <summary>What the row's one button says, which is the only thing that differs between the two.</summary>
     public string ActionText { get; }
-
-    public string ActionToolTip { get; }
 
     /// <summary>Successful joins, against the cap if there is one.</summary>
     public string Uses { get; }

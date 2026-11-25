@@ -53,7 +53,7 @@ public class SavegameHoldsTests
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(() => harness.CheckIn.CheckInAsync(
             harness.Game, harness.Server.SavegameId, null, keepPlaying: false, force: false, takeOver: false, CancellationToken.None));
 
-        Assert.Contains("no longer has the folder", exception.UserMessage);
+        Assert.Contains("savegame folder", exception.UserMessage);
     }
 
     /// <summary>

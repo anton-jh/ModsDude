@@ -14,4 +14,7 @@ public sealed record HeldSavegameName(string? Name, string? OtherRepoName)
     public string Quoted => Name is null
         ? "the savegame checked out here"
         : OtherRepoName is null ? $"'{Name}'" : $"'{Name}' ({OtherRepoName})";
+
+    /// <summary>How a sentence that says it is checked out starts.</summary>
+    public string Subject => Name is null ? "A savegame" : Quoted;
 }

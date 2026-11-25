@@ -66,10 +66,13 @@ public partial class AccountViewModel : ObservableObject
     /// </summary>
     public bool NeedsTrustCode => IsTrusted is false;
 
-    /// <summary>Four digits, shown in the rail's label - the one place a user can read their own tag.</summary>
+    /// <summary>Four digits that tell users with the same name apart.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TagText))]
     [NotifyPropertyChangedFor(nameof(Description))]
     private string? _tag;
+
+    public string? TagText => Tag is null ? null : $"#{Tag}";
 
     /// <summary>Null until the server has answered, so nothing is drawn in a colour that is about to change.</summary>
     [ObservableProperty]
@@ -82,8 +85,8 @@ public partial class AccountViewModel : ObservableObject
 
     public bool HasAvatar => Avatar is not null;
 
-    /// <summary>Name and tag together, for the tooltip - the one place a user can read their own tag.</summary>
-    public string Description => Tag is null ? DisplayName : $"{DisplayName} {Tag}";
+    /// <summary>Name and tag together, for the blocked and sign-in screens.</summary>
+    public string Description => TagText is null ? DisplayName : $"{DisplayName} {TagText}";
 
 
 
@@ -115,5 +118,5 @@ public partial class AccountViewModel : ObservableObject
     }
 
     private static string Describe(SignedInAccount? account)
-        => account?.DisplayName ?? "Signing in...";
+        => account?.DisplayName ?? "Signing in…";
 }

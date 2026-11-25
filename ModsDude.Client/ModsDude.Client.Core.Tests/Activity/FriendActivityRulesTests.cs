@@ -57,7 +57,7 @@ public class FriendActivityRulesTests
     public void The_follow_button_names_a_revision_only_where_the_friend_is_held_on_one()
     {
         Assert.Equal("Use this profile", FriendActivityRules.FollowLabel(Row()));
-        Assert.Equal("Use rev 4", FriendActivityRules.FollowLabel(Row(pinned: 4)));
+        Assert.Equal("Use revision 4", FriendActivityRules.FollowLabel(Row(pinned: 4)));
     }
 
     [Fact]

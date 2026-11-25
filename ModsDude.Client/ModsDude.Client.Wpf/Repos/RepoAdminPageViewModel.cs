@@ -73,7 +73,7 @@ public partial class RepoAdminPageViewModel : PageViewModel, IDisposable
         BaseSettingsEditor.MarkSaved();
         OnHasChangesChanged();
 
-        _toasts.Show($"Saved the settings for {OriginalName}.");
+        _toasts.Show($"Saved settings for '{OriginalName}'");
     }
 
     /// <summary>

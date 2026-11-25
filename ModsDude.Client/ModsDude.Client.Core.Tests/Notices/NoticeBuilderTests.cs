@@ -96,7 +96,7 @@ public class NoticeBuilderTests
 
         Assert.Equal("'Big Map' is locked at 1.4.2 and is no longer installed in the 'mods' folder", locked.Headline);
         Assert.Equal([new NoticeFact("Big Map", "Missing")], locked.Facts);
-        Assert.Equal("Hosting a savegame on the wrong version may damage it.", locked.Body);
+        Assert.Equal("The wrong version can damage a savegame.", locked.Body);
     }
 
     /// <summary>
@@ -120,7 +120,7 @@ public class NoticeBuilderTests
 
         var locked = Assert.Single(notices, x => x.Key.StartsWith("locked/"));
 
-        Assert.Equal("6 locked mods in 'Farming Simulator 25' are not what they were locked at in the 'mods' folder", locked.Headline);
+        Assert.Equal("6 locked mods in 'Farming Simulator 25' do not match their lock in the 'mods' folder", locked.Headline);
         Assert.Equal(
             [
                 new NoticeFact("Alpha", "Wrong version"),
@@ -178,14 +178,14 @@ public class NoticeBuilderTests
 
         Assert.Equal(NoticeSeverity.Pending, notice.Severity);
         Assert.Equal("'Farming Simulator 25' is behind 'Season 4' in the 'mods' folder", notice.Headline);
-        Assert.Equal([new NoticeFact("Applied", "rev 3"), new NoticeFact("Current", "rev 6")], notice.Facts);
+        Assert.Equal([new NoticeFact("Applied", "Revision 3"), new NoticeFact("Current", "Revision 6")], notice.Facts);
         Assert.Null(notice.Body);
         Assert.Null(notice.Footnote);
 
         Assert.Equal(
             [
                 new NoticeAction(NoticeActionKind.Review, "Review"),
-                new NoticeAction(NoticeActionKind.Reapply, "Update to rev 6") { IsPrimary = true }
+                new NoticeAction(NoticeActionKind.Reapply, "Update to revision 6") { IsPrimary = true }
             ],
             notice.Actions);
 
@@ -201,7 +201,7 @@ public class NoticeBuilderTests
     {
         var notice = Assert.Single(Build(Behind(applied: 6, current: 4)));
 
-        Assert.Equal("Re-apply rev 4", notice.Actions.Single(x => x.IsPrimary).Label);
+        Assert.Equal("Re-apply revision 4", notice.Actions.Single(x => x.IsPrimary).Label);
         Assert.Equal(new NoticeReview.RevisionChanges(new RevisionGap(6, 4)), notice.Subject?.Review);
     }
 
@@ -294,11 +294,11 @@ public class NoticeBuilderTests
         Assert.Equal(3, notices.Count);
         Assert.All(notices, x => Assert.Equal(NoticeSeverity.Critical, x.Severity));
 
-        Assert.Contains(notices, x => x.Headline.Contains("holds play that exists nowhere else"));
+        Assert.Contains(notices, x => x.Headline.Contains("has progress that is not checked in"));
         Assert.Contains(notices, x => x.Headline.Contains("has been checked in by somebody else"));
-        Assert.Contains(notices, x => x.Headline.Contains("is on the wrong mod list"));
+        Assert.Contains(notices, x => x.Headline.Contains("does not match this mod folder"));
 
-        // Check in, discard and stop tracking all live on the repo's saves list beside the row.
+        // Check in, discard and stop tracking all live on the repo's savegames list beside the row.
         Assert.All(notices, x => Assert.Equal(NoticeActionKind.OpenSavegame, x.Actions[0].Kind));
     }
 
@@ -321,8 +321,8 @@ public class NoticeBuilderTests
 
         var notice = Assert.Single(notices);
 
-        Assert.Contains("has been played since it was checked out", notice.Body);
-        Assert.Contains("has been checked in by somebody else", notice.Body);
+        Assert.Contains("only on this machine until it is checked in", notice.Body);
+        Assert.Contains("Their snapshot is", notice.Body);
     }
 
     [Fact]
@@ -338,8 +338,8 @@ public class NoticeBuilderTests
                 ]
             })));
 
-        Assert.Equal("'Testing stuff' is from a repo you can't open", notice.Headline);
-        Assert.Equal("It has been played since it was checked out.", notice.Body);
+        Assert.Equal("'Testing stuff' is from a repo you are not in", notice.Headline);
+        Assert.Equal("It has progress that is not checked in.", notice.Body);
         Assert.Equal(NoticeBuilder.SavegameKey(_savegameId), notice.Key);
 
         var action = Assert.Single(notice.Actions);
@@ -360,7 +360,7 @@ public class NoticeBuilderTests
                 SavegameDrift = [Save("one", SavegameDriftKind.RepoGone)]
             })));
 
-        Assert.Equal("'one' is from a repo you can't open", notice.Headline);
+        Assert.Equal("'one' is from a repo you are not in", notice.Headline);
         Assert.Null(notice.Body);
     }
 
@@ -412,9 +412,9 @@ public class NoticeBuilderTests
             })));
 
         Assert.Equal(NoticeSeverity.Critical, notice.Severity);
-        Assert.Equal("'one' was taken over by Bob", notice.Headline);
-        Assert.Contains("Bob checked 'one' out on", notice.Body);
-        Assert.Contains("whoever checks in second has to force it", notice.Body);
+        Assert.Equal("'one' is now checked out to Bob", notice.Headline);
+        Assert.Contains("Bob checked it out on", notice.Body);
+        Assert.Contains("Whoever checks in second overwrites", notice.Body);
     }
 
     /// <summary>
@@ -431,7 +431,7 @@ public class NoticeBuilderTests
             })));
 
         Assert.Equal("'one' is no longer checked out to you", notice.Headline);
-        Assert.Contains("Checking in from here still works", notice.Body);
+        Assert.Contains("You can still check it in", notice.Body);
     }
 
     /// <summary>
@@ -454,8 +454,8 @@ public class NoticeBuilderTests
 
         var notice = Assert.Single(notices);
 
-        Assert.Contains(notice.Actions, x => x.Label == "Re-apply rev 4");
-        Assert.Contains("runs on revision 4", notice.Body);
+        Assert.Contains(notice.Actions, x => x.Label == "Re-apply revision 4");
+        Assert.Contains("needs revision 4", notice.Body);
     }
 
     /// <summary>
@@ -477,7 +477,7 @@ public class NoticeBuilderTests
         var notice = Assert.Single(notices);
 
         Assert.DoesNotContain(notice.Actions, x => x.Kind is NoticeActionKind.Reapply);
-        Assert.Contains("follows a different mod list", notice.Body);
+        Assert.Contains("uses a different profile", notice.Body);
     }
 
     /// <summary>
@@ -485,7 +485,7 @@ public class NoticeBuilderTests
     /// drive is the problem. It was a line inside a card headlined with a game's name.
     /// </summary>
     [Fact]
-    public void The_shared_cache_is_its_own_notice_per_volume()
+    public void The_shared_store_is_its_own_notice_per_volume()
     {
         var notices = Build(
             [],
@@ -502,8 +502,8 @@ public class NoticeBuilderTests
 
         var d = Assert.Single(notices, x => x.Key == @"store/D:\");
 
-        Assert.Equal(@"The game wrote into the mod cache on D:\", d.Headline);
-        Assert.Contains("1 more were found the same way.", d.Body);
+        Assert.Equal(@"A game changed a mod in the store on D:\", d.Headline);
+        Assert.Contains("1 more were affected.", d.Body);
     }
 
     /// <summary>
@@ -541,8 +541,8 @@ public class NoticeBuilderTests
 
         var notice = Assert.Single(notices);
 
-        Assert.Equal("'Farming Simulator 25' has drifted", notice.Headline);
-        Assert.Equal("Checking which repo it belongs to...", notice.Body);
+        Assert.Equal("'Farming Simulator 25' does not match its profile", notice.Headline);
+        Assert.Equal("Checking which repo it belongs to…", notice.Body);
     }
 
     /// <summary>

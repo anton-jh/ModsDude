@@ -333,7 +333,7 @@ public class ReposPageModel(
 
         if (!ModelState.IsValid || maximumUses is <= 0)
         {
-            return ShowError(repoId, "Max joins must be at least 1.");
+            return ShowError(repoId, "Max uses must be at least 1.");
         }
 
         var now = timeService.Now();

@@ -172,7 +172,7 @@ public partial class ArchivePageViewModel : PageViewModel, IDisposable
         {
             await _repoStore.RestoreRepo(item.Id, CancellationToken.None);
 
-            _toasts.Show($"'{item.Name}' is back in your repos.");
+            _toasts.Show($"Restored '{item.Name}'");
 
             await ReloadAsync();
         }
@@ -203,7 +203,7 @@ public partial class ArchivePageViewModel : PageViewModel, IDisposable
         {
             await _repoStore.DeleteRepo(item.Id, CancellationToken.None);
 
-            _toasts.Show($"'{item.Name}' is gone for good.");
+            _toasts.Show($"Deleted '{item.Name}'");
 
             await ReloadAsync();
         }

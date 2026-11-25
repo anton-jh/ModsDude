@@ -11,10 +11,9 @@ namespace ModsDude.Client.Wpf.Mods;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>The refusal used to be the end of the road.</b> "A profile depends on it" is true and
-/// unactionable: a repo has several profiles, each with hundreds of revisions, and a version pinned
-/// once long ago is as undeletable as one pinned now. Naming them turns a wall into a list, and
-/// linking them turns the list into a next step.
+/// <b>Names and links every revision.</b> A repo has several profiles, each with hundreds of
+/// revisions, and a version used once long ago is as undeletable as one used now, so each is
+/// listed and linked as a next step.
 /// </para>
 /// <para>
 /// <b>The head revision is called out separately.</b> Every other revision can be pruned; the head
@@ -58,22 +57,20 @@ public partial class ModDependentsModalViewModel : ModalViewModel
     public string Title => "Still in use";
 
     public string Message => Profiles.Count == 1
-        ? $"{What} is pinned by one profile's history, so the repo cannot let go of it yet."
-        : $"{What} is pinned by {Profiles.Count} profiles' histories, so the repo cannot let go of it yet.";
+        ? $"{What} is used in 1 profile's history."
+        : $"{What} is used in {Profiles.Count} profiles' histories.";
 
     /// <summary>
     /// What to actually do, said once rather than repeated per row. Two different jobs, and which
     /// one applies is decided by whether a head revision is in the list.
     /// </summary>
     public string Advice => Profiles.Any(x => x.IncludesHead)
-        ? "A profile still pins it in its current revision: take the mod out there and save first. "
-            + "After that, an admin can prune the older revisions that hold it."
-        : "An admin can prune these revisions from each profile's history, and the mod becomes deletable.";
+        ? "Remove it from the current revision and save. Then an admin can prune the older revisions."
+        : "An admin can prune these revisions to make it deletable.";
 
     public bool Truncated { get; }
 
-    public string TruncationNote =>
-        "There are more than this list shows. Pruning what is here will reveal the rest.";
+    public string TruncationNote => "More not shown. Prune these to see the rest.";
 
 
     [RelayCommand]
@@ -123,8 +120,8 @@ public partial class ProfileDependentViewModel
     public ObservableCollection<RevisionLinkViewModel> Revisions { get; }
 
     public string Summary => Revisions.Count == 1
-        ? "1 revision pins it"
-        : $"{Revisions.Count} revisions pin it";
+        ? "1 revision uses it"
+        : $"{Revisions.Count} revisions use it";
 }
 
 

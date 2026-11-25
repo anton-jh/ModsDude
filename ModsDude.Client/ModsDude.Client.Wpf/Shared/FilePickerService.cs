@@ -8,7 +8,7 @@ public class FilePickerService : IFilePickerService
     {
         var openFolderDialog = new OpenFolderDialog()
         {
-            Title = "Pick a folder",
+            Title = "Select a folder",
             Multiselect = false
         };
 
@@ -31,7 +31,7 @@ public class FilePickerService : IFilePickerService
     {
         var openFileDialog = new OpenFileDialog()
         {
-            Title = "Pick a picture",
+            Title = "Select a picture",
             Filter = "Pictures|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp;*.tif;*.tiff|All files|*.*",
             Multiselect = false
         };

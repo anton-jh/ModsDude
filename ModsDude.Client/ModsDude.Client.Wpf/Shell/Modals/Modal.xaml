@@ -47,7 +47,7 @@
                 <UniformGrid Margin="20 24" Rows="1">
 
                     <!-- The affirmative, alone where there is nothing to choose between: a modal
-                         that says "Ok" on both buttons is reporting rather than asking, and the second
+                         that says "OK" on both buttons is reporting rather than asking, and the second
                          button exists only to be read twice. -->
                     <Button Margin="4"
                             Content="{Binding YesText}"

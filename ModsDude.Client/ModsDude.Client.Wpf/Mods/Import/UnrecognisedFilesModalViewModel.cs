@@ -53,7 +53,7 @@ public partial class UnrecognisedFilesModalViewModel : ModalViewModel
 
         Count = names.Count;
         Names = [.. names.Take(_namesShown)];
-        MoreText = names.Count > _namesShown ? $"...and {names.Count - _namesShown} more" : null;
+        MoreText = names.Count > _namesShown ? $"and {names.Count - _namesShown} more" : null;
 
         if (string.IsNullOrWhiteSpace(lastFolder) is false)
         {
@@ -62,13 +62,13 @@ public partial class UnrecognisedFilesModalViewModel : ModalViewModel
     }
 
 
-    public string Title => "These are not in the repo";
+    public string Title => "Files not in the repo";
 
     public int Count { get; }
 
     public string Summary => Count == 1
-        ? "1 installed file is not registered in this repo, so nothing else has a copy of it:"
-        : $"{Count} installed files are not registered in this repo, so nothing else has a copy of them:";
+        ? "1 installed file is not in this repo and has no other copy:"
+        : $"{Count} installed files are not in this repo and have no other copy:";
 
     public IReadOnlyList<string> Names { get; }
 
@@ -110,7 +110,7 @@ public partial class UnrecognisedFilesModalViewModel : ModalViewModel
     /// <summary>Why the folder cannot be used yet, or null where it can or is not the choice.</summary>
     public string? FolderProblem
         => Destination is UnrecognisedDestination.Folder && IsUsableFolder(Folder) is false
-            ? "Pick a folder that exists on this computer."
+            ? "Select a folder that exists on this computer."
             : null;
 
     public bool HasFolderProblem => FolderProblem is not null;

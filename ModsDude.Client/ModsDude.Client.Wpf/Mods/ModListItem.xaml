@@ -146,7 +146,6 @@
                                        Text="{Binding SizeText}"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Style="{DynamicResource CaptionTextBlockStyle}"
-                                       ToolTip="The size of the file in the repo"
                                        Visibility="{Binding HasSize, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                             <Border Margin="8 0 0 0"
@@ -217,7 +216,7 @@
                                Text="&#xE72E;"
                                FontFamily="{DynamicResource SymbolThemeFontFamily}"
                                Foreground="{DynamicResource LockedTextBrush}"
-                               ToolTip="Version-sensitive. Batch updates leave this mod alone."
+                               ToolTip="Version-sensitive. Bulk updates skip this mod."
                                Visibility="{Binding ShowsAdapterLockIcon, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                     <!-- Shares one slot between the facts that mean "look at this row before it goes
@@ -384,13 +383,13 @@
                                                 ToolTip="{Binding Actions.Restriction}" ToolTipService.ShowOnDisabled="True"
                                                 Command="{Binding Actions.ReorderVersions}"
                                                 CommandParameter="{Binding}" />
-                                        <Button Content="Delete this version"
+                                        <Button Content="Delete version"
                                                 HorizontalContentAlignment="Left"
                                                 Style="{DynamicResource SubtleMenuButton}"
                                                 ToolTip="{Binding Actions.Restriction}" ToolTipService.ShowOnDisabled="True"
                                                 Command="{Binding Actions.DeleteVersion}"
                                                 CommandParameter="{Binding}" />
-                                        <Button Content="Delete the whole mod"
+                                        <Button Content="Delete mod"
                                                 HorizontalContentAlignment="Left"
                                                 Style="{DynamicResource SubtleMenuButton}"
                                                 ToolTip="{Binding Actions.Restriction}" ToolTipService.ShowOnDisabled="True"

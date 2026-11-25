@@ -48,12 +48,11 @@ public partial class CopyProfileModsModalViewModel : ModalViewModel
 
     public string Title => "Copy a mod list";
 
-    public string Message => $"Takes the mod list from another profile in this repo and brings it into {TargetName}. "
-        + "Nothing is written until you save.";
+    public string Message => $"Select a profile to copy into '{TargetName}'.";
 
     public bool HasProfiles => Profiles.Count > 0;
 
-    public string EmptyText => "This repo has no other profile to copy from.";
+    public string EmptyText => "No other profiles";
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]

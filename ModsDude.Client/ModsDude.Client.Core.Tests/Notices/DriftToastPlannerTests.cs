@@ -185,8 +185,8 @@ public class DriftToastPlannerTests
         var longText = string.Join(' ', Enumerable.Repeat("word", 100));
         var cut = Observe(new DriftToastPlanner(), [Make("a", NoticeSeverity.Warning, body: longText)]);
 
-        Assert.True(cut!.Body.Length <= DriftToastPlanner.MaxBodyLength + 3);
-        Assert.EndsWith("...", cut.Body);
+        Assert.True(cut!.Body.Length <= DriftToastPlanner.MaxBodyLength);
+        Assert.EndsWith("…", cut.Body);
     }
 
 
@@ -239,7 +239,7 @@ public class DriftToastPlannerTests
         Assert.False(DriftToastPlanner.IsPlayInProgress(SaveNotice(), SaveDrift(SavegameDriftKind.UncheckedInPlay), _ => false));
     }
 
-    /// <summary>The wrong mod list is what damages a save, and that is worth hearing mid-game.</summary>
+    /// <summary>The wrong profile is what damages a savegame, and that is worth hearing mid-game.</summary>
     [Theory]
     [InlineData(SavegameDriftKind.PlayedOnAnotherModList)]
     [InlineData(SavegameDriftKind.TakenOver)]
@@ -271,7 +271,7 @@ public class DriftToastPlannerTests
     [Fact]
     public void A_save_the_game_has_no_name_for_is_still_reminded_about()
     {
-        Assert.Equal("Check in the savegame you have checked out", new DriftToastPlanner().Remind(Played(name: null)).Title);
+        Assert.Equal("Check in your savegame", new DriftToastPlanner().Remind(Played(name: null)).Title);
     }
 
     /// <summary>The drift check after the game closes finds what the reminder already said.</summary>

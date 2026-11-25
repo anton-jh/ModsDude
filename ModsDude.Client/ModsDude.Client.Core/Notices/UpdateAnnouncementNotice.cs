@@ -17,10 +17,10 @@ public static class UpdateAnnouncementNotice
 
     public static Notice For(DateTime announcedAt)
     {
-        const string headline = "An update is on its way";
+        const string headline = "Update starting soon";
 
-        const string body = "It starts soon and takes a few minutes. Save your changes now: the server goes "
-            + "offline, and ModsDude needs a restart afterwards.";
+        const string body = "The server goes offline for a few minutes. Save your changes now. "
+            + "ModsDude needs a restart afterwards.";
 
         return new Notice(
             Key,

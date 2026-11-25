@@ -24,7 +24,7 @@ public sealed partial class LoginPageViewModel(
 
     public string Status => State switch
     {
-        LoginState.SigningIn => "Signing in...",
+        LoginState.SigningIn => "Signing in…",
         LoginState.NeedsUser => "Not signed in",
         _ => "Could not sign in"
     };

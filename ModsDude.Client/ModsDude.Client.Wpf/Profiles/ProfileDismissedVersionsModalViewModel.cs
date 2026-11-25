@@ -27,7 +27,7 @@ public partial class ProfileDismissedVersionsModalViewModel : ModalViewModel
 
     public string Title => "Dismissed versions";
 
-    public string Message => "Dismissed versions are never offered as updates. Pick the ones to offer again.";
+    public string Message => "Select the versions to offer as updates again.";
 
     /// <summary>Empty until something is confirmed, so a dismissed modal restores nothing.</summary>
     public IReadOnlyList<ModVersionIdentity> Result { get; private set; } = [];
@@ -36,13 +36,15 @@ public partial class ProfileDismissedVersionsModalViewModel : ModalViewModel
 
     public string ConfirmText => SelectedCount switch
     {
-        0 => "Restore nothing",
+        0 => "Restore",
         1 => "Restore 1 version",
         _ => $"Restore {SelectedCount} versions"
     };
 
 
-    [RelayCommand]
+    private bool CanConfirm() => SelectedCount > 0;
+
+    [RelayCommand(CanExecute = nameof(CanConfirm))]
     private void Confirm()
     {
         Result = [.. Items.Where(x => x.IsSelected).Select(x => x.Identity)];
@@ -70,6 +72,7 @@ public partial class ProfileDismissedVersionsModalViewModel : ModalViewModel
 
         OnPropertyChanged(nameof(SelectedCount));
         OnPropertyChanged(nameof(ConfirmText));
+        ConfirmCommand.NotifyCanExecuteChanged();
     }
 }
 

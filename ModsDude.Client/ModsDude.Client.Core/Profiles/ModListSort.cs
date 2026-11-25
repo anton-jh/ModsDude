@@ -76,10 +76,10 @@ public sealed record ModListSort(ModListSortKind Kind = ModListSortKind.Name, st
 
     public string DirectionText => (Kind, Ascending) switch
     {
-        (ModListSortKind.Date, true) => "Oldest first. Click to reverse.",
-        (ModListSortKind.Date, false) => "Newest first. Click to reverse.",
-        (_, true) => "A to Z. Click to reverse.",
-        _ => "Z to A. Click to reverse."
+        (ModListSortKind.Date, true) => "Oldest first",
+        (ModListSortKind.Date, false) => "Newest first",
+        (_, true) => "A to Z",
+        _ => "Z to A"
     };
 
 

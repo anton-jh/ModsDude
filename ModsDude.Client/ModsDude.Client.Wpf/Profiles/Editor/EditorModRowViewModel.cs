@@ -181,8 +181,8 @@ public sealed partial class AvailableModRowViewModel : EditorModRowViewModel
     private bool _isPickable = true;
 
     public string IgnoreTooltip => IsIgnored
-        ? "Ignored. Click to stop ignoring this mod in this profile."
-        : "Ignore this mod in this profile. It is hidden from this list until you show ignored mods.";
+        ? "Stop ignoring"
+        : "Ignore in this profile";
 
 
     public void Update(AvailableModRow state, bool pickable)
@@ -267,9 +267,9 @@ public sealed partial class PinnedModRowViewModel : EditorModRowViewModel
                 return string.Empty;
             }
 
-            var move = update.ImportsOnSave ? $"Update to {update.To}. Saving imports it." : $"Update to {update.To}.";
+            var move = update.ImportsOnSave ? $"Update to {update.To} · imported on save" : $"Update to {update.To}";
 
-            return IsLocked ? $"{move} Locked, so batch updates leave it alone." : move;
+            return IsLocked ? $"{move} · locked" : move;
         }
     }
 
@@ -281,16 +281,17 @@ public sealed partial class PinnedModRowViewModel : EditorModRowViewModel
 
             if (lockState.IsLocked is false)
             {
-                return "Hold this mod at this version in this profile. Batch updates will skip it.";
+                return "Lock this version. Update all skips it.";
             }
 
-            var source = lockState.Source is ProfileModLockSource.Profile
-                ? "Locked in this profile, by you. Other profiles are unaffected."
-                : "Version-sensitive, as the game adapter read it from the mod file.";
+            var source = lockState.Source switch
+            {
+                ProfileModLockSource.Profile => "Locked in this profile",
+                ProfileModLockSource.Both => "Locked in this profile · version-sensitive",
+                _ => "Version-sensitive"
+            };
 
-            return lockState.CanBeUnlockedByProfile
-                ? $"{source} Batch updates leave it alone; unticking this releases it."
-                : $"{source} Batch updates leave it alone, and unticking this does not release it.";
+            return lockState.CanBeUnlockedByProfile ? source : $"{source} · cannot be unlocked";
         }
     }
 

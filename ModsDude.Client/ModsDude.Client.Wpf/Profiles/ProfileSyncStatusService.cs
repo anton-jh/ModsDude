@@ -119,7 +119,7 @@ public sealed class ProfileSyncStatusService : IProfileSyncStatusService
     public static string Describe(ProfileSyncState state) => state switch
     {
         ProfileSyncState.InSync => "In sync",
-        ProfileSyncState.Drifted => "Drifted",
+        ProfileSyncState.Drifted => "Out of sync",
         ProfileSyncState.NotApplied => "Not applied",
         ProfileSyncState.Applying => "Applying…",
         _ => ""

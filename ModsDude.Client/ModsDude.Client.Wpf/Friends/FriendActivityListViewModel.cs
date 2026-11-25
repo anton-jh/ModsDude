@@ -82,8 +82,8 @@ public sealed partial class FriendActivityListViewModel : ObservableObject, IDis
     public string? EmptyText => HasGroups
         ? null
         : !_friends.HasLoaded
-            ? CouldNotRead ? "Could not reach the server to see what your friends are on." : "Looking..."
-            : "Nobody else in this repo has activated one of its profiles in the last week.";
+            ? CouldNotRead ? "Could not load friend activity" : "Loading…"
+            : "No friend activity this week";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EmptyText))]

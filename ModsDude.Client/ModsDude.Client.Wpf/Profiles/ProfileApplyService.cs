@@ -258,7 +258,7 @@ public sealed class ProfileApplyService(
         }
 
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Stopping);
-        using var task = backgroundTasks.Begin($"Downloading the mods '{profileName}' needs", cancel: stop.Cancel);
+        using var task = backgroundTasks.Begin($"Downloading mods for '{profileName}'", cancel: stop.Cancel);
 
         task.DeclareTransfers(TransferDirection.Download);
 
@@ -294,7 +294,7 @@ public sealed class ProfileApplyService(
 
         if (missing > 0)
         {
-            parts.Add(missing == 1 ? "1 mod is missing from the server" : $"{missing} mods are missing from the server");
+            parts.Add(missing == 1 ? "1 mod is missing from the repo" : $"{missing} mods are missing from the repo");
         }
 
         if (outOfSpace > 0)
@@ -368,7 +368,7 @@ public sealed class ProfileApplyService(
             return new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Refused,
-                $"'{game.Name}' is holding {name.Quoted}, which follows a mod list, so it was left as it is. "
+                $"{name.Subject} is checked out on '{game.Name}'. Nothing changed. "
                     + SavegameRefusals.FreeHeld("it", goneRepos.IsGone(held.RepoId)));
         }
 
@@ -380,7 +380,7 @@ public sealed class ProfileApplyService(
             return new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Deactivated,
-                $"'{game.Name}' no longer follows a profile. Its mod folders were left exactly as they are.");
+                $"Deactivated '{game.Name}'. Its mod folders were not changed.");
         }
 
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Stopping);
@@ -390,7 +390,7 @@ public sealed class ProfileApplyService(
         try
         {
             using var planning = backgroundTasks.Begin(
-                $"Working out what would be cleared from '{game.Name}'", cancel: stop.Cancel);
+                $"Checking what to clear from '{game.Name}'", cancel: stop.Cancel);
 
             attempt = await TryPlanAsync(
                 repo, game, Guid.Empty, null, null, stop.Token, Report(planning, progress), clearAll: true);
@@ -412,14 +412,14 @@ public sealed class ProfileApplyService(
             return new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Deactivated,
-                $"'{game.Name}' no longer follows a profile, but its mod folders could not be cleared. {attempt.Describe()}");
+                $"Deactivated '{game.Name}', but could not clear its mod folders. {attempt.Describe()}");
         }
 
         var consent = await ConsentedAsync(game, plans, confirmPlan: true, clearing: true);
 
         if (consent.Given is false)
         {
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was left as it is.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was not changed.");
         }
 
         if (consent.QuarantineFolder is string keepIn)
@@ -507,8 +507,8 @@ public sealed class ProfileApplyService(
             var name = await NameHeldAsync(repo, game, refusal.SavegameId, cancellationToken);
 
             var reason = refusal.Refusal is SavegameApplyRefusal.CompatibilityModeIsHeld
-                ? $"'{game.Name}' is holding {name.Quoted} in compatibility mode on rev {refusal.Revision}. It was left as it is."
-                : $"'{game.Name}' is holding {name.Quoted}, which follows another mod list, so it was left as it is. "
+                ? $"{name.Subject} is checked out on '{game.Name}' in compatibility mode (revision {refusal.Revision}). Nothing changed."
+                : $"{name.Subject} is checked out on '{game.Name}'. Nothing changed. "
                     + SavegameRefusals.FreeHeld("it", goneRepos.IsGone(refusal.RepoId));
 
             return new ProfileApplyOutcome(game, ProfileApplyStatus.Refused, reason);
@@ -530,7 +530,7 @@ public sealed class ProfileApplyService(
             // modal the user declines, and a strip entry that outlived that would describe work
             // nobody agreed to.
             using var planning = backgroundTasks.Begin(
-                $"Working out what would change in '{game.Name}'", cancel: stop.Cancel);
+                $"Checking what changes in '{game.Name}'", cancel: stop.Cancel);
 
             attempt = await TryPlanAsync(
                 repo, game, profileId, profileName, revision, stop.Token, Report(planning, progress));
@@ -551,7 +551,7 @@ public sealed class ProfileApplyService(
             return Record(activate, repo, game, profileId, pinned, checkedOutSavegame, new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Unavailable,
-                $"'{game.Name}' was left as it is, and will keep showing as drifted until it can be applied. {attempt.Describe()}"));
+                $"Could not apply to '{game.Name}'. {attempt.Describe()}"));
         }
 
         // Before the confirmation, and like the savegame refusal it leaves the activation unrecorded:
@@ -571,7 +571,7 @@ public sealed class ProfileApplyService(
 
         if (consent.Given is false)
         {
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was left as it is.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Declined, $"'{game.Name}' was not changed.");
         }
 
         // Where the unrecognised files go is part of the answer, and the plans were made before it was
@@ -794,7 +794,7 @@ public sealed class ProfileApplyService(
         }
         catch (OperationCanceledException)
         {
-            return new ProfileApplyOutcome(game, ProfileApplyStatus.Stopped, $"{where} was stopped part way.");
+            return new ProfileApplyOutcome(game, ProfileApplyStatus.Stopped, $"{where} was stopped partway.");
         }
         catch (GameRunningException exception)
         {
@@ -811,8 +811,8 @@ public sealed class ProfileApplyService(
             return new ProfileApplyOutcome(
                 game,
                 ProfileApplyStatus.Unavailable,
-                $"{where} is in use - a running game or a server mid-session holds its folder. "
-                    + (clearing ? "It was not fully cleared." : "It was left drifted."));
+                $"{where} is in use. "
+                    + (clearing ? "It was not fully cleared." : "It does not match its profile."));
         }
     }
 
@@ -821,10 +821,8 @@ public sealed class ProfileApplyService(
     /// than one to tell apart.
     /// </summary>
     /// <remarks>
-    /// A game with one target names nothing, so every sentence here reads exactly as it did before
-    /// targets existed - and <see cref="ProfileApplyOutcome.Combine"/> then folds three identical
-    /// sentences into one. A game with three names the folder, because "2 mods could not be applied"
-    /// without saying <em>where</em> is the complaint this phase exists to answer.
+    /// A game with one target names only the game, and <see cref="ProfileApplyOutcome.Combine"/> folds
+    /// identical sentences into one. A game with several names the folder, so a failure says where.
     /// </remarks>
     private static string Where(Game game, ModSyncPlan plan)
     {
@@ -839,15 +837,15 @@ public sealed class ProfileApplyService(
             ? new ConfirmationModalViewModel(
                 $"Clear the mods from '{game.Name}'?",
                 string.Join("\n\n", plans.Select(Describe))
-                    + $"\n\n'{game.Name}' will no longer follow a profile, and every mod in the folders above is taken out.",
+                    + $"\n\n'{game.Name}' will no longer follow a profile, and every mod in the folders above is removed.",
                 IconKind.Question,
-                "Clear mods",
+                "Clear",
                 "Cancel")
             : new ConfirmationModalViewModel(
                 $"Apply to '{game.Name}'?",
                 $"{DescribeDownloads(PlannedDownloads.Across(plans))}\n\n"
                     + string.Join("\n\n", plans.Select(Describe))
-                    + "\n\nAnything the profile does not pin is taken out of the folder.",
+                    + "\n\nAnything not in the profile is removed from the folder.",
                 IconKind.Question,
                 "Apply",
                 "Cancel");
@@ -866,7 +864,7 @@ public sealed class ProfileApplyService(
     {
         if (downloads.IsAny is false)
         {
-            return "Nothing to download - every mod it needs is already on this machine.";
+            return "Nothing to download";
         }
 
         var mods = downloads.Count == 1 ? "1 mod" : $"{downloads.Count} mods";
@@ -882,11 +880,11 @@ public sealed class ProfileApplyService(
         if (plan.InstallCount > 0) lines.Add($"{plan.InstallCount} to install");
         if (plan.ReplaceCount > 0) lines.Add($"{plan.ReplaceCount} to replace");
         if (plan.UninstallCount > 0) lines.Add($"{plan.UninstallCount} to uninstall");
-        if (plan.QuarantineCount > 0) lines.Add($"{plan.QuarantineCount} to move to the Recycle Bin or a folder you choose");
+        if (plan.QuarantineCount > 0) lines.Add($"{plan.QuarantineCount} not in the repo to move to the Recycle Bin or a folder");
         if (plan.RenameCount > 0) lines.Add($"{plan.RenameCount} to rename");
-        if (plan.UnlinkCount > 0) lines.Add($"{plan.UnlinkCount} to copy instead of link");
+        if (plan.UnlinkCount > 0) lines.Add($"{plan.UnlinkCount} to refresh");
 
-        return $"{plan.ModFolder}\n\n{string.Join('\n', lines)}\n{plan.KeepCount} already correct.";
+        return $"{plan.ModFolder}\n\n{string.Join('\n', lines)}\n{plan.KeepCount} up to date";
     }
 
     public async Task<UnrecognisedFilesChoice?> ConfirmUnrecognisedAsync(IReadOnlyList<ModSyncPlan> plans)
@@ -930,13 +928,6 @@ public sealed class ProfileApplyService(
     /// <summary>
     /// Which revision an apply ended on, said out loud only where it is not the profile's latest.
     /// </summary>
-    /// <remarks>
-    /// "Now matches" is a sentence about following the profile, and it stops being true on its own
-    /// terms the moment the folder is put somewhere behind head. Saying the number is what keeps the
-    /// ordinary case silent and the pinned one honest, without the caller having to know a savegame is
-    /// involved. A caller that named a revision gets the plainer half of it: nothing is holding that
-    /// savegame yet, so there is no checked-out save to explain the number by.
-    /// </remarks>
     private string Pinned(Game game, Guid profileId, int? revision)
     {
         if (revision is int named)
@@ -944,16 +935,9 @@ public sealed class ProfileApplyService(
             return $" revision {named}";
         }
 
-        if (heldSavegames.GetRequiredRevision(game.Identity, profileId) is not int held)
-        {
-            return "";
-        }
-
-        // The game's own pin only counts where no savegame is doing the pinning - the one that is
-        // held is the better reason to give, and the two agree while it is.
-        return heldSavegames.FindProfileHold(game.Identity) is null && game.PinnedRevision == held
-            ? $" revision {held}, which is where this game is held"
-            : $" revision {held}, which is what the savegame checked out there runs on";
+        return heldSavegames.GetRequiredRevision(game.Identity, profileId) is int required
+            ? $" revision {required}"
+            : "";
     }
 
     private async Task<HeldSavegameName> NameHeldAsync(Repo repo, Game game, Guid savegameId, CancellationToken cancellationToken)
@@ -973,8 +957,8 @@ public sealed class ProfileApplyService(
             .FirstOrDefault();
 
         return holder is null
-            ? $"'{game.Name}' is busy. It was left as it is; try again in a moment."
-            : $"{holder} is still running, so '{game.Name}' was left as it is. It will be free when that finishes.";
+            ? $"'{game.Name}' is busy. Try again in a moment."
+            : $"{holder} is running. Try again when it finishes.";
     }
 
     /// <summary>

@@ -46,15 +46,13 @@
                             Margin="8 0 0 0"
                             VerticalAlignment="Center"
                             Content="Restore"
-                            ToolTip="Brings it back into the repo. You will be asked for another name if this one has been taken since."
                             Visibility="{Binding CanRestore, Converter={StaticResource BoolToVisibilityConverter}}"
                             Command="{Binding RestoreCommand}" />
 
                     <Button Grid.Column="2"
                             Margin="8 0 0 0"
                             VerticalAlignment="Center"
-                            Content="Delete for good"
-                            ToolTip="Permanent. This is the only place it can be done from."
+                            Content="Delete permanently"
                             Visibility="{Binding CanDelete, Converter={StaticResource BoolToVisibilityConverter}}"
                             Command="{Binding DeleteCommand}" />
                 </Grid>
@@ -63,17 +61,11 @@
     </shared:AppPage.Resources>
 
     <Border Style="{StaticResource PageBody}">
-        <Grid RowDefinitions="auto auto *">
+        <Grid RowDefinitions="auto *">
 
             <navigation:PageTitle Grid.Row="0" Text="Archive" Style="{StaticResource PageColumn}" />
 
-            <TextBlock Grid.Row="1" Style="{StaticResource PageColumn}"
-                       Margin="0 0 0 16"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="Profiles and savegames that have been put away. They still exist and anything pointing at them still does - they are out of the lists, and they no longer hold their names." />
-
-            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel Style="{StaticResource PageColumn}">
 
                     <TextBlock Text="Profiles"
@@ -98,7 +90,7 @@
                                TextAlignment="Center"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="Nothing has been archived in this repo."
+                               Text="Nothing archived"
                                Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </StackPanel>
             </ScrollViewer>

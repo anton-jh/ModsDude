@@ -20,8 +20,7 @@ internal static class SavegameRefusals
     /// The refusal for a verb that needs the repo's game on this machine. For a game that connects by
     /// itself, not connected can only mean not installed here.
     /// </summary>
-    /// <param name="why">Why the verb needs the game, said before how to connect it.</param>
-    public static ConfirmationModalViewModel NotConnected(Repo repo, string why)
+    public static ConfirmationModalViewModel NotConnected(Repo repo)
     {
         var automatic = GameRepository.ConnectsAutomatically(repo.Adapter);
 
@@ -29,8 +28,8 @@ internal static class SavegameRefusals
             automatic
                 ? $"{repo.Adapter.GameDisplayName} was not found on this machine"
                 : "No game is connected here",
-            $"{why} " + (automatic
-                ? "Launch it once so it creates its data folder, then try again."
-                : $"Use 'Connect game' in {repo.Name} first."));
+            automatic
+                ? "Launch the game once, then try again."
+                : $"Use 'Connect game' in {repo.Name} first.");
     }
 }

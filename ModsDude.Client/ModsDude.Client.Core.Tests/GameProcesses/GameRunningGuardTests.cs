@@ -32,7 +32,7 @@ public class GameRunningGuardTests
         var refusal = Assert.Throws<GameRunningException>(() => guard.EnsureNotRunning(Keys.Game(), "Farming Simulator 25"));
 
         Assert.Equal("Farming Simulator 25", refusal.GameName);
-        Assert.Contains("Can't tell", refusal.UserMessage);
+        Assert.Contains("Could not tell", refusal.UserMessage);
     }
 
 

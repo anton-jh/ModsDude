@@ -97,7 +97,7 @@ public class RemoteModDownloaderTests : IDisposable
 
         var exception = await Assert.ThrowsAsync<RemoteDownloadException>(() => run.DownloadAsync(offer, null, CancellationToken.None));
 
-        Assert.Equal("The download points somewhere that is not allowed.", exception.UserMessage);
+        Assert.Equal("The download link is not allowed.", exception.UserMessage);
         Assert.DoesNotContain(_cdn.Requests, x => x.Host == "evil.test");
     }
 
@@ -124,7 +124,7 @@ public class RemoteModDownloaderTests : IDisposable
 
         var exception = await Assert.ThrowsAsync<RemoteDownloadException>(() => run.DownloadAsync(offer, null, CancellationToken.None));
 
-        Assert.Equal("The download kept redirecting.", exception.UserMessage);
+        Assert.Equal("The download link did not lead to a file.", exception.UserMessage);
     }
 
     [Fact]

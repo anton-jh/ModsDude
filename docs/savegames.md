@@ -153,7 +153,7 @@ The new save's details come from the adapter.
 | `RepoGone` | The save's repo is gone. Offers "Stop tracking" |
 
 Most cards navigate to the save rather than act from the notice. The exceptions are "Stop tracking" and,
-for a compatibility-mode save whose folder moved off its revision, "Re-apply rev N". A hold in a folder
+for a compatibility-mode save whose folder moved off its revision, "Re-apply revision N". A hold in a folder
 the settings no longer name is shown on the repo's Savegames page.
 
 When a game process exits and a held slot has changed since the session started and since the held

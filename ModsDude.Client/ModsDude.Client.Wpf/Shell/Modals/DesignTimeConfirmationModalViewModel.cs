@@ -4,8 +4,10 @@ namespace ModsDude.Client.Wpf.Shell.Modals;
 
 public class DesignTimeConfirmationModalViewModel()
     : ConfirmationModalViewModel(
-        "Confirm deletion",
-        "Are you sure you want to delete xyz?\nThis action cannot be undone!",
-        IconKind.Question)
+        "Really?",
+        "'xyz' is deleted permanently.",
+        IconKind.Warning,
+        "Delete",
+        "Cancel")
 {
 }

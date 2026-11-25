@@ -175,7 +175,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
 
         if (saved == pending.Count)
         {
-            _toasts.Show(saved == 1 ? "Saved 1 level change." : $"Saved {saved} level changes.");
+            _toasts.Show(saved == 1 ? "Saved 1 level change" : $"Saved {saved} level changes");
         }
     }
 
@@ -436,11 +436,11 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
             .ToList();
 
         var title = $"Remove {member.DisplayName} from {_repo.Name}?";
-        var message = $"{member.DisplayName} loses access to its mods, profiles and savegames.";
+        var message = $"{member.DisplayName} loses access to this repo.";
 
         if (held.Count == 0)
         {
-            var confirmation = new ConfirmationModalViewModel(title, message, IconKind.Warning, "Remove", "Keep");
+            var confirmation = new ConfirmationModalViewModel(title, message, IconKind.Warning, "Remove", "Cancel");
 
             await _modalService.Show(confirmation);
 
@@ -452,7 +452,7 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
             $"{message} These savegames stay checked out to them:",
             held,
             "Remove",
-            "Keep");
+            "Cancel");
 
         await _modalService.Show(withHeld);
 
@@ -497,16 +497,16 @@ public partial class RepoMembersPageViewModel : PageViewModel, IDisposable
         var modal = invite.WillRevoke
             ? new ConfirmationModalViewModel(
                 "Revoke this invite?",
-                $"{invite.CreatedBy}'s {invite.Level} invite will stop working for good and leave this list. Anybody who already joined with it stays a member.",
+                $"{invite.CreatedBy}'s {invite.Level} invite stops working permanently. Members who joined with it stay.",
                 IconKind.Warning,
                 "Revoke",
-                "Keep it")
+                "Cancel")
             : new ConfirmationModalViewModel(
                 "Remove this invite?",
-                $"{invite.CreatedBy}'s {invite.Level} invite already stopped working - it is on this list only as the record that it was made. Removing it takes it off for everybody.",
+                $"{invite.CreatedBy}'s {invite.Level} invite is removed from the list for everyone.",
                 IconKind.Question,
                 "Remove",
-                "Keep it");
+                "Cancel");
 
         await _modalService.Show(modal);
 

@@ -37,7 +37,7 @@
 
                                 <Grid Margin="0 6 0 6" ColumnDefinitions="auto *" RowDefinitions="auto auto">
                                     <TextBlock Grid.Row="0" Grid.Column="0"
-                                               Text="Picked"
+                                               Text="Selected"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     <TextBlock Grid.Row="0" Grid.Column="1"
                                                Margin="12 0 0 0"
@@ -85,7 +85,6 @@
                     <Button Grid.Column="1"
                             Margin="4 0 0 0"
                             Content="Stop"
-                            ToolTip="Stops here. Anything already imported stays in the repo."
                             HorizontalAlignment="Stretch"
                             Command="{Binding StopCommand}" />
                 </Grid>

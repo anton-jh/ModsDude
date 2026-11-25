@@ -99,7 +99,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     private HeldSavegameName? _blockingSavegame;
 
     /// <summary>What both buttons say when this repo's game is not connected on this machine.</summary>
-    private const string _notConnected = "This game is not connected here";
+    private const string _notConnected = "Game not connected";
 
 
     /// <param name="isAmbiguous">
@@ -282,47 +282,44 @@ public partial class SavegameListItemViewModel : ObservableObject
 
     /// <summary>
     /// The tooltip on each button: the refusal where there is one, and what the button does where
-    /// there is not. A disabled button whose only explanation is its greyness is what this replaces.
+    /// that is not obvious from its label. Null where there is nothing to add.
     /// </summary>
-    public string CheckOutToolTip => Busy
+    public string? CheckOutToolTip => Busy
         ?? CheckOutBlockedReason
-        ?? (MovesUnpublishedPlay ? "Your copy here has play nobody has checked in. Check it in first." : null)
+        ?? (MovesUnpublishedPlay ? "Your copy has progress that is not checked in. Check it in first." : null)
         ?? (_offer is { ChecksInFirst: not null }
-            ? $"{(_blockingSavegame is { Name: not null } blocking ? blocking.Quoted : "Another savegame")} is checked out here, so checking this one out checks it in first. You are asked before anything changes."
+            ? $"Checks in {(_blockingSavegame is { Name: not null } blocking ? blocking.Quoted : "another savegame")} first"
             : null)
         ?? (_offer is { ActivatesFirst: true } offer
-            ? $"The mod folder is not on what this savegame runs on, so checking it out activates {SavegameRowRules.DescribeActivation(ProfileName, offer.PinnedRevision)} first. You are asked before anything changes."
+            ? $"Activates {SavegameRowRules.DescribeActivation(ProfileName, offer.PinnedRevision)} first"
             : null)
         ?? (IsHeldByMe
-            ? "Writes the newest snapshot into a slot again and renews your claim - which is how this save moves to a different slot, or onto this machine."
+            ? "Writes the latest snapshot to a slot again"
             : Holder is SavegameCheckoutDto holder
-                ? $"{holder.User.DisplayName} has it. Checking it out takes it from them, and they will be told."
-                : "Takes the claim and writes it into a slot, so everybody else can see you have it until you check it in.");
+                ? $"Takes it from {holder.User.DisplayName}"
+                : null);
 
     /// <summary>
-    /// What Take a copy does, and - where the mod folder is elsewhere - that it will ask whether to
-    /// activate the profile, since the copy claims nothing and the mods are the only thing it can change.
-    /// A copy never checks anything in, so where another savegame holds the folder it is not asked.
+    /// Where the mod folder is elsewhere, that Take a copy will ask whether to activate the profile.
+    /// A copy never checks anything in, so where another savegame has the folder it is not asked.
     /// </summary>
-    public string TakeCopyToolTip => Busy
+    public string? TakeCopyToolTip => Busy
         ?? (_offer is { ActivatesFirst: true, ChecksInFirst: null } offer
-            ? $"Writes it into a slot and claims nothing. The mod folder is not on {SavegameRowRules.DescribeActivation(ProfileName, offer.PinnedRevision)}, so you are asked whether to activate it first."
-            : "Writes it into a slot and claims nothing. Whoever holds it keeps holding it.");
+            ? $"Offers to activate {SavegameRowRules.DescribeActivation(ProfileName, offer.PinnedRevision)} first"
+            : null);
 
     /// <summary>
-    /// The button is only there when the save is yours and on this machine. It is greyed out while
-    /// something runs on it, and where the slot holds nothing to upload.
+    /// The button is only there when the savegame is checked out to you and on this machine. It is
+    /// greyed out while something runs on it, and where the slot holds nothing to upload.
     /// </summary>
-    public string CheckInToolTip => Busy
-        ?? (_slotIsEmpty
-            ? "The slot is empty, so there is nothing to check in. Discard gives the save back instead."
-            : "Uploads what is in the slot as a new snapshot and hands the save back, so somebody else can take it. A save that changed nothing mints nothing.");
+    public string? CheckInToolTip => Busy
+        ?? (_slotIsEmpty ? "Slot is empty" : null);
 
     public string DiscardToolTip => Busy
-        ?? "Hands the claim back without minting a snapshot. The local copy goes to the Recycle Bin, so this is for a save taken by mistake rather than one that has been played.";
+        ?? "No snapshot is made. The local copy goes to the Recycle Bin.";
 
     public string DisconnectToolTip => Busy
-        ?? "ModsDude forgets this copy. Nothing on disk changes and the server is not told, so the claim stays yours.";
+        ?? "Your copy stays on disk and checked out to you.";
 
     /// <summary>
     /// Which of the game's savegame folders the local copy is in, where that is worth saying.
@@ -334,7 +331,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// game with several folders, which is the case the game's own slot list used to exist for.
     /// </remarks>
     public string? HoldNote => Hold is { IsUnreachable: false, FolderName: string named }
-        ? $"Your copy is in the '{named}' folder."
+        ? $"Folder: {named}"
         : null;
 
     public bool HasHoldNote => HoldNote is not null;
@@ -348,23 +345,11 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// same kind of statement: which of three folders a save is in is a fact, and a folder that has
     /// left the settings is a save nothing on this machine can open. Only the second is coloured.
     /// </remarks>
-    public string? UnreachableHoldNote
-    {
-        get
-        {
-            if (Hold is not { IsUnreachable: true } hold)
-            {
-                return null;
-            }
-
-            var where = hold.FolderName is string folder
-                ? $"in '{folder}', a folder this game's settings no longer name"
-                : "in a folder this game's settings no longer name";
-
-            return $"Your copy is {where}. It is still on this disk and still claimed - point the settings " +
-                   "back at that folder to check it in, or stop tracking it here.";
-        }
-    }
+    public string? UnreachableHoldNote => Hold is { IsUnreachable: true } hold
+        ? hold.FolderName is string folder
+            ? $"Folder '{folder}' is no longer in the game settings. Add it back to check in."
+            : "Its folder is no longer in the game settings. Add it back to check in."
+        : null;
 
     public bool HasUnreachableHoldNote => UnreachableHoldNote is not null;
 
@@ -688,7 +673,7 @@ public partial class SavegameListItemViewModel : ObservableObject
 
         if (_hasUnpublishedPlay)
         {
-            Chips.Add(new SavegameChip("unpublished play", SavegameChipTone.Caution));
+            Chips.Add(new SavegameChip("Not checked in", SavegameChipTone.Caution));
         }
 
         if (_revisionsBehind > 0)
@@ -717,11 +702,11 @@ public partial class SavegameListItemViewModel : ObservableObject
 
         if (IsHeldByMe)
         {
-            return new SavegameChip("You have it", SavegameChipTone.Accent);
+            return new SavegameChip("Checked out to you", SavegameChipTone.Accent);
         }
 
         var name = holder.User.DisplayName;
 
-        return new SavegameChip($"{name} has it, since {SavegameWording.Ago(holder.TakenAt, _time.GetUtcNow())}", SavegameChipTone.Neutral);
+        return new SavegameChip($"Checked out to {name} · {SavegameWording.Ago(holder.TakenAt, _time.GetUtcNow())}", SavegameChipTone.Neutral);
     }
 }

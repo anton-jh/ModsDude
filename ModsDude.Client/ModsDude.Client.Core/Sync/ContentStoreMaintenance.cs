@@ -137,7 +137,7 @@ public sealed class ContentStoreMaintenance(
         Action? onWaiting = null)
     {
         using var stop = LinkToSession(cancellationToken);
-        using var lease = await Claim(store, "Emptying the quarantine folder of", onWaiting, stop.Token);
+        using var lease = await Claim(store, "Emptying rescued files from", onWaiting, stop.Token);
 
         if (store.IsMarked is false || Directory.Exists(store.QuarantinePath) is false)
         {

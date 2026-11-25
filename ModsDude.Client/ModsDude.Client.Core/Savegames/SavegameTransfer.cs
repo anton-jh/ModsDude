@@ -109,7 +109,7 @@ public sealed class SavegameTransfer(
         catch (InvalidDataException exception)
         {
             throw new UserFriendlyException(
-                "The savegame that arrived is not the one that was asked for",
+                "The downloaded savegame does not match",
                 $"The archive for contents '{downloaded.ContentHash}' did not unpack to them: {exception.Message}",
                 exception);
         }
@@ -145,7 +145,7 @@ public sealed class SavegameTransfer(
         if (link.Link is not string destination || link.UploadId is not Guid uploadId)
         {
             throw new UserFriendlyException(
-                "The server did not offer anywhere to upload the savegame",
+                "Could not upload the savegame",
                 $"CreateSavegameUploadLink answered with neither a link and upload nor alreadyStored for '{packed.ContentHash}'.");
         }
 

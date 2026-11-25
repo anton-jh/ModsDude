@@ -19,14 +19,10 @@
 
                 <!-- How everybody else sees you. Both change here, for every teammate, at once. -->
                 <shared:Surface Style="{StaticResource Card}">
-                    <GroupBox Header="Profile" Padding="0 16 0 16">
+                    <GroupBox Header="Name and picture" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Text="Your name and picture are what everybody in your repos sees beside the things you do." />
-
-                            <StackPanel Orientation="Horizontal" Margin="0 16 0 0">
+                            <StackPanel Orientation="Horizontal">
 
                                 <!-- Held back until the server has answered, like the sidebar's, rather
                                      than drawn in a colour about to change. -->
@@ -43,9 +39,8 @@
                                     </StackPanel>
 
                                     <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Left"
                                                Margin="0 8 0 0"
-                                               Text="The middle of the picture is cut to a square. Without one, you are your initial on your own colour." />
+                                               Text="Cropped to a square" />
                                 </StackPanel>
                             </StackPanel>
 
@@ -65,14 +60,9 @@
                                        Text="{Binding NameError}"
                                        Visibility="{Binding HasNameError, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                            <!-- Said here because it is the question a rename raises: what if somebody
-                                 else is already called that. Nothing happens - the tag tells them apart. -->
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Margin="0 8 0 0">
-                                <Run Text="Names do not have to be unique. Where two people in a list share one, each is shown with their tag - yours is" />
-                                <Run Text="{Binding Account.Tag, Mode=OneWay}" FontFamily="Consolas" /><Run Text="." />
-                            </TextBlock>
+                            <!-- Names need not be unique: the tag tells people with the same name apart. -->
+                            <Label Content="Tag" Margin="0 24 0 8" />
+                            <TextBlock FontFamily="Consolas" Text="{Binding Account.TagText}" />
 
                         </StackPanel>
                     </GroupBox>
@@ -90,22 +80,14 @@
                                      Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                             </TextBlock>
 
-                            <Label Content="Password and email" Margin="0 24 0 8" />
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Text="These open your account page in the browser." />
-                            <StackPanel Orientation="Horizontal" Margin="0 12 0 0">
+                            <StackPanel Orientation="Horizontal" Margin="0 16 0 0">
                                 <Button Content="Change password" Margin="0 0 8 0"
                                         Command="{Binding ChangePasswordCommand}" />
                                 <Button Content="Change email"
                                         Command="{Binding ChangeEmailCommand}" />
                             </StackPanel>
 
-                            <Label Content="Switch user" Margin="0 24 0 8" />
-                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                                       Text="Sign in as somebody else. You stay signed in as yourself until the new sign-in finishes." />
-                            <Button Content="Switch user" Margin="0 12 0 0" HorizontalAlignment="Left"
+                            <Button Content="Switch user" Margin="0 24 0 0" HorizontalAlignment="Left"
                                     Command="{Binding Account.SwitchUserCommand}" />
 
                         </StackPanel>

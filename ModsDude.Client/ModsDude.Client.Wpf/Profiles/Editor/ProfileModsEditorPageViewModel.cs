@@ -167,7 +167,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         PinnedSorting.Changed += Refresh;
 
         AvailableSelection = new ModListSelection(() => AvailableRows, () => [.. _availableRows.Values], AddRows, "Add");
-        PinnedSelection = new ModListSelection(() => PinnedRows, () => [.. _pinnedRows.Values], RemoveRows, "Take out");
+        PinnedSelection = new ModListSelection(() => PinnedRows, () => [.. _pinnedRows.Values], RemoveRows, "Remove");
         AvailableSelection.Changed += OnSelectionChanged;
         PinnedSelection.Changed += OnSelectionChanged;
 
@@ -201,10 +201,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     public ModListSelection PinnedSelection { get; }
 
     public ListSortViewModel AvailableSorting { get; } =
-        new(ModListSortKind.Name, "Date imported", "When the version was imported into the repo. Versions not in the repo count as newest.");
+        new(ModListSortKind.Name, "Date imported", "Versions not in the repo count as newest");
 
     public ListSortViewModel PinnedSorting { get; } =
-        new(ModListSortKind.Name, "Date added", "When the mod entered the profile, or last moved to another version. Unsaved changes count as newest.");
+        new(ModListSortKind.Name, "Date added", "Unsaved changes count as newest");
 
     /// <summary>The attribute keys either list can be sorted by, in the adapter's order.</summary>
     public IReadOnlyList<string> SortAttributes { get; }
@@ -273,11 +273,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     public string RedoTooltip => _history.RedoDescription is string what ? $"Redo: {what} (Ctrl+Y)" : "Nothing to redo";
 
     public string SaveOnlyDescription =>
-        "Saves the profile but leaves your installed mods untouched. Your locked mods stay at the versions " +
-        "the game updated them to. Only if you know exactly what you are doing.";
+        "Installed mods are not changed";
 
     public string UpdateRepoOnlyDescription =>
-        "Moves only the pins whose newer version this repo already holds, so nothing is uploaded.";
+        "Only versions already in the repo";
 
     public string IgnoreSelectedText => Counted("Ignore", PickedAvailable().Count(x => x.IsIgnored is false));
     public string UnignoreSelectedText => Counted("Stop ignoring", PickedAvailable().Count(x => x.IsIgnored));
@@ -300,7 +299,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
 
     /// <summary>Only while editing: during this page's own save, the import holding the repo is the save's.</summary>
     public string? SaveBlockedReason
-        => CanEdit && CanImportHere is false ? "Another import into this repo is currently running." : null;
+        => CanEdit && CanImportHere is false ? "Another import is running in this repo" : null;
 
     public bool HasSaveBlockedReason => SaveBlockedReason is not null;
 
@@ -686,7 +685,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
 
         Commit(
             Draft.Remove(rows.Select(x => x.ModId)),
-            rows.Count == 1 ? $"Took out {rows[0].Name}" : $"Took out {ProfileModsEditorSummary.Mods(rows.Count)}");
+            rows.Count == 1 ? $"Removed {rows[0].Name}" : $"Removed {ProfileModsEditorSummary.Mods(rows.Count)}");
     }
 
     [RelayCommand(CanExecute = nameof(CanEdit))]
@@ -898,22 +897,20 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         var reason = row.State.Lock.Source switch
         {
             ProfileModLockSource.Adapter =>
-                "The game adapter reads it as version-sensitive - a map, typically - so changing its version "
-                    + "partway through a save can corrupt that save.",
+                "Version-sensitive. Changing it partway through a savegame can break that savegame.",
             ProfileModLockSource.Profile =>
-                "You locked it in this profile. Other profiles are not affected either way.",
+                "Locked in this profile.",
             _ =>
-                "The game adapter reads it as version-sensitive and you have locked it in this profile as well. "
-                    + "Changing its version partway through a save can corrupt that save.",
+                "Version-sensitive and locked in this profile. Changing it partway through a savegame can break that savegame.",
         };
 
         var confirmation = new ConfirmationModalViewModel(
             "This mod is locked",
-            $"'{row.Name}' is pinned at {row.Version.VersionId} and locked.\n\n{reason}\n\n"
-                + $"Change '{row.Name}' to {target} in this profile?",
+            $"'{row.Name}' is locked at {row.Version.VersionId}.\n\n{reason}\n\n"
+                + $"Change it to {target}?",
             IconKind.Warning,
-            "Change the version",
-            "Leave it alone");
+            "Change version",
+            "Cancel");
 
         await _modalService.Show(confirmation);
 
@@ -1077,7 +1074,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         }
 
         _activationToast = _toasts.Show(
-            "Do you want to activate this profile?",
+            "Activate this profile?",
             ToastSeverity.Info,
             new ToastAction("Activate", () => _ = AcceptActivationOfferAsync(game)));
     }
@@ -1162,7 +1159,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
 
             if (missing.Count == 0)
             {
-                _toasts.Show($"Nothing to copy - this profile already holds everything {source.Name} does.");
+                _toasts.Show("Nothing to copy");
 
                 return;
             }
@@ -1251,8 +1248,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         var names = asked == 1 ? "name" : "names";
 
         var text = matched == 0
-            ? $"Nothing in the left list matches the {asked} {names} you pasted."
-            : $"Selected {matched} of the {asked} {names} you pasted.";
+            ? $"No matches for the {asked} {names} pasted."
+            : $"Selected {matched} of {asked} {names}.";
 
         if (already > 0)
         {

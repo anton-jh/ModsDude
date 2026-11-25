@@ -1087,7 +1087,7 @@ public class ModSyncServiceTests
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(() => fixture.PlanAsync(revision: 1004));
 
-        Assert.Contains("runs on one revision", exception.UserMessage);
+        Assert.Contains("needs revision", exception.UserMessage);
         Assert.Empty(fixture.Server.RevisionsRequested);
     }
 
@@ -1105,7 +1105,7 @@ public class ModSyncServiceTests
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(() => fixture.PlanAsync());
 
-        Assert.Contains("another mod list", exception.UserMessage);
+        Assert.Contains("another profile", exception.UserMessage);
         Assert.Empty(fixture.Server.RevisionsRequested);
     }
 
@@ -1187,7 +1187,7 @@ public class ModSyncServiceTests
 
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(() => fixture.PlanClearAsync());
 
-        Assert.Contains("follows a mod list", exception.UserMessage);
+        Assert.Contains("needs this mod folder", exception.UserMessage);
     }
 
     [Fact]

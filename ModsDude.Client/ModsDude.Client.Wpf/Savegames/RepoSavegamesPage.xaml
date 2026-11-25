@@ -131,20 +131,13 @@
     <Border Style="{StaticResource PageBody}">
         <Grid RowDefinitions="auto auto *">
 
-            <navigation:PageTitle Grid.Row="0" Text="Saves" />
+            <navigation:PageTitle Grid.Row="0" Text="Savegames" />
 
-            <StackPanel Grid.Row="1" Margin="0 0 0 12" HorizontalAlignment="Left">
-                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                           Text="Every save in this repo, and which profile each one follows. One person holds a save at a time and hands it back explicitly - so checking one out stops anybody else taking it until you check it in. Taking a copy stops nobody." />
-
-                <!-- What the repo's saves add up to. Kept apart from the sentence above, which is about
-                     how saves work and does not change, because this is the number somebody comes to
-                     check when deciding what to prune. -->
-                <TextBlock Margin="0 6 0 0"
-                           Text="{Binding StatisticsText}"
-                           Visibility="{Binding HasStatistics, Converter={StaticResource BoolToVisibilityConverter}}" />
-            </StackPanel>
+            <!-- What the repo's savegames add up to: the number somebody checks when deciding what to prune. -->
+            <TextBlock Grid.Row="1"
+                       Margin="0 0 0 12"
+                       Text="{Binding StatisticsText}"
+                       Visibility="{Binding HasStatistics, Converter={StaticResource BoolToVisibilityConverter}}" />
 
             <Grid Grid.Row="2" ColumnDefinitions="420 *">
 
@@ -294,14 +287,14 @@
                                                                 Header="{Binding CheckOutLabel}"
                                                                 ToolTip="{Binding CheckOutToolTip}"
                                                                 Command="{Binding CheckOutCommand}"
-                                                                CaretToolTip="Other ways to check out"
+                                                                CaretToolTip="More options"
                                                                 Visibility="{Binding ChecksOutAsPrimary, Converter={StaticResource BoolToVisibilityConverter}}">
                                                 <Button Width="300"
                                                         Style="{DynamicResource SubtleMenuButton}"
                                                         Command="{Binding CheckOutInCompatibilityModeCommand}">
                                                     <StackPanel Orientation="Vertical">
                                                         <TextBlock Text="Compatibility mode" FontWeight="SemiBold" />
-                                                        <TextBlock Text="Stays on the revision it was last played on while checked out."
+                                                        <TextBlock Text="Stays on the revision it was last played on"
                                                                    Margin="0 2 0 0"
                                                                    TextWrapping="Wrap"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -348,13 +341,13 @@
                                                                 Header="Take a copy"
                                                                 ToolTip="{Binding TakeCopyToolTip}"
                                                                 Command="{Binding TakeCopyCommand}"
-                                                                CaretToolTip="Other ways to take a copy">
+                                                                CaretToolTip="More options">
                                                 <Button Width="300"
                                                         Style="{DynamicResource SubtleMenuButton}"
                                                         Command="{Binding TakeCopyInCompatibilityModeCommand}">
                                                     <StackPanel Orientation="Vertical">
                                                         <TextBlock Text="Compatibility mode" FontWeight="SemiBold" />
-                                                        <TextBlock Text="Activates the revision it was last played on before writing the copy."
+                                                        <TextBlock Text="Activates the revision it was last played on first"
                                                                    Margin="0 2 0 0"
                                                                    TextWrapping="Wrap"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -379,7 +372,7 @@
                                    Margin="12 4"
                                    HorizontalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="Reading the repo's saves…"
+                                   Text="Loading savegames…"
                                    Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                         <Border Grid.Row="2"
@@ -396,8 +389,7 @@
                                      rest. -->
                                 <Button Margin="8 0 0 0"
                                         Style="{DynamicResource SubtleMenuButton}"
-                                        Content="Publish a save"
-                                        ToolTip="Takes a save already on this machine and makes a savegame of it in this repo."
+                                        Content="Publish a savegame"
                                         Command="{Binding PublishSaveCommand}"
                                         Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>
@@ -422,15 +414,13 @@
                                  answer to keep true. -->
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <Button Style="{DynamicResource SubtleMenuButton}"
-                                        Content="See the profile's history"
-                                        ToolTip="Opens this save's profile, where any two revisions can be compared."
+                                        Content="Profile history"
                                         Command="{Binding CompareRevisionsCommand}" />
 
                                 <!-- A name and nothing else. A savegame cannot be moved between
                                      profiles, so there is no second field to grow here. -->
                                 <Button Style="{DynamicResource SubtleMenuButton}"
                                         Content="Rename"
-                                        ToolTip="Changes what everybody in this repo sees this save called. Its history and whoever holds it are untouched."
                                         Command="{Binding RenameSavegameCommand}"
                                         Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
 
@@ -438,7 +428,6 @@
                                      whoever holds it; it leaves this list and frees its name. -->
                                 <Button Style="{DynamicResource SubtleMenuButton}"
                                         Content="Archive"
-                                        ToolTip="Moves it to the repo's Archive. Nothing about the save changes and it can be brought back."
                                         Command="{Binding ArchiveSavegameCommand}"
                                         Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>
@@ -477,7 +466,7 @@
                                 </ListBox.ItemTemplate>
                             </ListBox>
 
-                            <TextBlock Text="Reading this save's history…"
+                            <TextBlock Text="Loading history…"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        Visibility="{Binding IsLoadingTimeline, Converter={StaticResource BoolToVisibilityConverter}}" />
@@ -580,20 +569,18 @@
 
                             <Button Margin="0 0 8 0"
                                     Style="{DynamicResource AccentButtonStyle}"
-                                    Content="Check this snapshot out"
-                                    ToolTip="An older snapshot is copied forward as the newest one first, so nothing in between is deleted."
+                                    Content="Check out snapshot"
+                                    ToolTip="Restores it as the latest snapshot first"
                                     Command="{Binding CheckOutSnapshotCommand}"
                                     Visibility="{Binding IsMember, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                             <Button Margin="0 0 8 0"
-                                    Content="Take a copy of this snapshot"
-                                    ToolTip="Writes it into a slot and claims nothing. Whoever holds the save keeps holding it."
+                                    Content="Take a copy"
                                     Command="{Binding TakeCopySnapshotCommand}" />
 
                             <!-- Admin only, and never the current snapshot. Also the way an old
                                  profile revision stops being blocked from pruning. -->
-                            <Button Content="Delete this snapshot"
-                                    ToolTip="Removes this copy for good. The current snapshot and the others stay."
+                            <Button Content="Delete snapshot"
                                     Command="{Binding DeleteSnapshotCommand}"
                                     Visibility="{Binding CanPruneSnapshots, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </StackPanel>

@@ -22,7 +22,7 @@
                 <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                            Visibility="{Binding IsHiddenFromMe, Converter={StaticResource BoolToVisibilityConverter}}"
-                           Text="Guests cannot see who else is in a repo, or invite anybody to it. Ask an admin for a higher membership level." />
+                           Text="Guests cannot see members" />
 
                 <shared:Surface Style="{StaticResource Card}" Visibility="{Binding CanSeeMembers, Converter={StaticResource BoolToVisibilityConverter}}">
                     <GroupBox Header="Members" Padding="0 16 0 16">
@@ -61,12 +61,12 @@
                                                           ToolTip="{Binding LevelRestriction}"
                                                           ToolTipService.ShowOnDisabled="True" />
 
-                                                <!-- An unsaved pick is marked rather than sent. The card's
+                                                <!-- An unsaved choice is marked rather than sent. The card's
                                                      Save button is what commits it. -->
                                                 <TextBlock VerticalAlignment="Center" Margin="8 0 0 0"
                                                            Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
                                                            Visibility="{Binding HasPendingLevelChange, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                           Text="unsaved" />
+                                                           Text="Unsaved" />
 
                                                 <!-- Leaving is the same call as being removed, so it is the
                                                      same button, saying which one it is about to do. -->
@@ -172,7 +172,6 @@
                                                          list. Which is which is the row's to say. -->
                                                     <Button Grid.Column="5" Content="{Binding ActionText}"
                                                             VerticalAlignment="Center"
-                                                            ToolTip="{Binding ActionToolTip}"
                                                             Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibilityConverter}}"
                                                             Command="{Binding RequestRemovalCommand}" />
                                                 </Grid>
@@ -180,7 +179,7 @@
                                                 <TextBlock Margin="0 6 0 0"
                                                            Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}"
                                                            Visibility="{Binding IsCopied, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                           Text="Copied to the clipboard." />
+                                                           Text="Copied" />
                                             </StackPanel>
 
                                             <Border.Style>

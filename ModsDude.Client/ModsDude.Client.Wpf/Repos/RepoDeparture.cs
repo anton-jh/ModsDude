@@ -57,7 +57,7 @@ public sealed class RepoDeparture(
 
         await modalService.Value.Show(ConfirmationModalViewModel.Refusal(
             $"'{repo.Name}' is busy",
-            $"{holder} is running. Try again once it has finished."));
+            $"{holder} is running."));
 
         return false;
     }
@@ -67,10 +67,10 @@ public sealed class RepoDeparture(
         var modal = kind is RepoDepartureKind.Leave
             ? new ConfirmationModalViewModel(
                 $"Leave {repo.Name}?",
-                "You lose access to its mods and profiles. Getting back in needs a new invite from somebody still in it.",
+                "You lose access to its mods, profiles and savegames. Rejoining needs a new invite.",
                 IconKind.Warning,
                 "Leave",
-                "Stay")
+                "Cancel")
             : ConfirmationModalViewModel.ConfirmArchive(repo.Name, "repo");
 
         await modalService.Value.Show(modal);
@@ -85,11 +85,12 @@ public sealed class RepoDeparture(
 
         var modal = new ConfirmLossModalViewModel(
             leave ? $"Leave {repo.Name}?" : $"Archive {repo.Name}?",
-            (leave ? "These savegames are checked out here and cannot be checked in once you leave." : "These savegames are checked out here and cannot be checked in once the repo is archived.")
-                + " Their files stay in the game folder.",
+            leave
+                ? "These savegames are checked out here and cannot be checked in after you leave:"
+                : "These savegames are checked out here and cannot be checked in after the repo is archived:",
             [.. held.Select(x => x.Name)],
             leave ? "Leave anyway" : "Archive anyway",
-            leave ? "Stay" : "Keep it",
+            "Cancel",
             leave ? "Check in all, then leave" : "Check in all, then archive");
 
         await modalService.Value.Show(modal);

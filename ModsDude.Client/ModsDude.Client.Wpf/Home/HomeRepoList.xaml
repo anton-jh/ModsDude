@@ -101,7 +101,7 @@
                                                     </StackPanel>
                                                 </StackPanel>
 
-                                                <!-- This machine: the profile the game follows here, and what it holds. -->
+                                                <!-- This machine: the profile the game follows here, and the savegames checked out here. -->
                                                 <StackPanel Grid.Column="1" Orientation="Vertical" Margin="0 0 12 0">
                                                     <WrapPanel Orientation="Horizontal"
                                                                Visibility="{Binding State.CanPickProfile, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -109,8 +109,7 @@
                                                                       Margin="0 0 8 0"
                                                                       IsChecked="{Binding IsPickerOpen, Mode=TwoWay}"
                                                                       IsEnabled="{Binding State.IsIdle}"
-                                                                      Command="{Binding OpenPickerCommand}"
-                                                                      ToolTip="Put this game on a profile of this repo.">
+                                                                      Command="{Binding OpenPickerCommand}">
                                                             <TextBlock TextTrimming="CharacterEllipsis" MaxWidth="240">
                                                                 <Run Text="{Binding State.PickerLabel, Mode=OneWay}" /><Run Text="  ▾" />
                                                             </TextBlock>
@@ -182,7 +181,7 @@
                                                                                Margin="0 0 8 0"
                                                                                VerticalAlignment="Center"
                                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                                               Text="Holding" />
+                                                                               Text="Checked out" />
                                                                     <TextBlock Grid.Column="1"
                                                                                VerticalAlignment="Center"
                                                                                TextTrimming="CharacterEllipsis"

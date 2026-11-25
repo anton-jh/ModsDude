@@ -21,7 +21,7 @@
                    TextWrapping="Wrap"
                    Visibility="{Binding HasPlayedOn, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-        <TextBlock Text="What this snapshot was, for the history (optional)"
+        <TextBlock Text="Note (optional)"
                    Margin="0 16 0 4"
                    Style="{DynamicResource CaptionTextBlockStyle}"
                    Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
@@ -33,7 +33,7 @@
              upload followed immediately by downloading what was just sent. Disabled rather
              than hidden where the save has to be handed back, with the reason beneath. -->
         <CheckBox Margin="0 16 0 0"
-                  Content="Keep playing - keep the save and the claim"
+                  Content="Keep playing"
                   IsEnabled="{Binding CanKeepPlaying}"
                   IsChecked="{Binding KeepPlaying, Mode=TwoWay}" />
 

@@ -44,9 +44,9 @@ public partial class ProfileRevisionViewModel(ProfileRevisionDto revision, bool 
 
     /// <summary>Why pruning keeps this revision, or null where it would not.</summary>
     public string? KeptBecause => IsHead
-        ? "The current list cannot be deleted. Edit the profile to change what it pins."
+        ? "The current revision cannot be deleted"
         : IsPlayedOn
-            ? $"Cannot be deleted while a savegame snapshot was played on it: {PlayedOnList}. Delete those snapshots first."
+            ? $"Savegame snapshots were played on it: {PlayedOnList}. Delete them first."
             : null;
 
     public string PlayedOnText => PlayedOn.Count == 1

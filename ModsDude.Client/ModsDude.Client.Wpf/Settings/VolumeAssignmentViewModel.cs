@@ -40,18 +40,16 @@ public partial class VolumeAssignmentViewModel : ObservableObject
     private string _servingVolume;
 
     public string ModFolderSummary => ModFolderCount == 1
-        ? "1 mod folder here"
-        : $"{ModFolderCount} mod folders here";
+        ? "1 mod folder"
+        : $"{ModFolderCount} mod folders";
 
     /// <summary>
     /// Both sides of the choice, in the same words either way. A store on another disk is a
     /// deliberate trade of sync time for space, not a misconfiguration.
     /// </summary>
     public string TradeOff => IsServedByOwnStore
-        ? "Mods are hardlinked into the mod folder, so installing costs nothing on top of the store " +
-          "and switching profiles takes seconds."
-        : $"Mods are copied in from the store on {ServingVolume}, so this disk holds only the profile in use " +
-          $"while the cache lives on {ServingVolume}. Every install and replace becomes a cross-disk copy, so syncing takes longer.";
+        ? "No extra space · fast sync"
+        : "Less space used on this disk · slower sync";
 
     public bool IsServedByOwnStore => string.Equals(ServingVolume, VolumeRoot, StringComparison.OrdinalIgnoreCase);
 
@@ -65,8 +63,8 @@ public partial class VolumeAssignmentViewModel : ObservableObject
     private static string DescribeOption(string volumeRoot, string candidate)
     {
         return string.Equals(volumeRoot, candidate, StringComparison.OrdinalIgnoreCase)
-            ? $"Its own store on {candidate} - hardlink, no extra space"
-            : $"The store on {candidate} - copy, less space used here";
+            ? $"Own store on {candidate}"
+            : $"Store on {candidate}";
     }
 }
 
@@ -87,11 +85,7 @@ public partial class ContentStoreViewModel(
     [ObservableProperty]
     private string _path = path;
 
-    /// <summary>
-    /// The cap, in the units somebody types. Nothing on the row derives from it any more: the size
-    /// limit is kept by the app rather than by a button the user has to find, so there is no label to
-    /// keep in step with the box.
-    /// </summary>
+    /// <summary>The cap, in the units somebody types. The app keeps the store within it.</summary>
     [ObservableProperty]
     private double _maxSizeGigabytes = maxSizeGigabytes;
 
@@ -112,7 +106,7 @@ public partial class ContentStoreViewModel(
     /// likely to want emptied - a disk that used to hold a game and now holds only its cache.
     /// </summary>
     public string ServedSummary => Served.Count == 0
-        ? "Not serving any mod folder right now"
+        ? "Serves no mod folders"
         : $"Serves {string.Join(", ", Served)}";
 
     /// <summary>
@@ -131,7 +125,7 @@ public partial class ContentStoreViewModel(
     /// <summary>What is on disk, in one line.</summary>
     public string UsageSummary => Usage switch
     {
-        null => "Measuring...",
+        null => "Measuring…",
         { Entries: 0 } => "Empty",
         _ => $"{ByteSize.Describe(Usage.TotalBytes)} in {Usage.Entries} files"
     };
@@ -140,14 +134,12 @@ public partial class ContentStoreViewModel(
     /// Why the store's size and the space it would give back are two different numbers.
     /// </summary>
     /// <remarks>
-    /// <b>Only the part the button cannot say.</b> The amount lives on the button now - see
-    /// <see cref="ReclaimLabel"/> - so all that is left to explain is the gap between it and the size
-    /// above, and that gap only exists on a hardlink-served disk. On a copy-served one the two numbers
-    /// are equal and this says nothing at all.
+    /// The amount is on the button (<see cref="ReclaimLabel"/>), so this says only the gap between it
+    /// and the size above. That gap exists only on a hardlink-served disk; on a copy-served one this
+    /// says nothing.
     /// </remarks>
     public string ReclaimSummary => Usage is { Entries: > 0 } usage && usage.TotalBytes > usage.ReclaimableBytes
-        ? $"{ByteSize.Describe(usage.TotalBytes - usage.ReclaimableBytes)} of that is shared with an "
-          + "installed mod folder and already costs nothing extra."
+        ? $"{ByteSize.Describe(usage.TotalBytes - usage.ReclaimableBytes)} in use by mod folders"
         : "";
 
     public bool HasReclaimSummary => ReclaimSummary.Length > 0;
@@ -168,14 +160,12 @@ public partial class ContentStoreViewModel(
     public bool HasQuarantine => Usage?.QuarantineBytes > 0;
 
     /// <summary>
-    /// Said in full, because this is the one part of a store that is not re-downloadable: these are
-    /// files sync found in a mod folder that no repo registers, moved here because the Recycle Bin
-    /// would not take them.
+    /// The one part of a store that is not re-downloadable: files sync found in a mod folder that no
+    /// repo registers, moved here because the Recycle Bin would not take them.
     /// </summary>
     public string QuarantineSummary => Usage is null
         ? string.Empty
-        : $"{ByteSize.Describe(Usage.QuarantineBytes)} of rescued files that sync could not recycle. "
-          + "Nothing in the repo holds these, so emptying this sends them to the Recycle Bin rather than deleting them.";
+        : $"Rescued files: {ByteSize.Describe(Usage.QuarantineBytes)} · not in any repo";
 
 
     [RelayCommand]

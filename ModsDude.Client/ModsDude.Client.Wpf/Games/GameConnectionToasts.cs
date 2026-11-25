@@ -27,12 +27,12 @@ public sealed class GameConnectionToasts(IGameRepository gameRepository, IToastS
     {
         foreach (var game in e.NewItems?.OfType<Game>() ?? [])
         {
-            toasts.Show($"Connected {game.Name}.");
+            toasts.Show($"Connected {game.Name}");
         }
 
         foreach (var game in e.OldItems?.OfType<Game>() ?? [])
         {
-            toasts.Show($"Disconnected {game.Name}.");
+            toasts.Show($"Disconnected {game.Name}");
         }
     }
 }

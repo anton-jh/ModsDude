@@ -17,9 +17,9 @@ public sealed class SavegameCompatibilityStepViewModel : WizardStepViewModel
         int latestRevision,
         SavegameCompatibilityVerdict verdict)
     {
-        Intro = $"The mod list has changed since '{savegameName}' was last played.";
-        PlayedText = $"{profileName} rev {playedRevision}";
-        LatestText = $"{profileName} rev {latestRevision}";
+        Intro = $"The profile has changed since '{savegameName}' was last played.";
+        PlayedText = $"{profileName} revision {playedRevision}";
+        LatestText = $"{profileName} revision {latestRevision}";
         AddedCount = verdict.AddedCount;
         RemovedCount = verdict.RemovedCount;
         ChangedCount = verdict.VersionChangedCount;
@@ -27,8 +27,8 @@ public sealed class SavegameCompatibilityStepViewModel : WizardStepViewModel
 
         Choices =
         [
-            new WizardChoice("Compatibility mode", () => Result = SavegameRevisionMode.Compatibility) { IsDefault = true },
-            new WizardChoice("Latest", () => Result = SavegameRevisionMode.Latest) { IsAccent = false }
+            new WizardChoice("Use compatibility mode", () => Result = SavegameRevisionMode.Compatibility) { IsDefault = true },
+            new WizardChoice("Use latest", () => Result = SavegameRevisionMode.Latest) { IsAccent = false }
         ];
     }
 

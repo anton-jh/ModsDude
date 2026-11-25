@@ -21,7 +21,7 @@ internal static class SavegameRequirements
     public static SavegameTarget RequireTarget(this ILocalSavegameAdapter adapter, Game game, SavegameSlotRef slot)
         => adapter.SavegameTargets[slot.Target]
             ?? throw new UserFriendlyException(
-                $"'{game.Name}' no longer has the folder that save is in",
+                $"'{game.Name}' no longer has that savegame folder set",
                 $"No savegame folder is configured for target '{slot.Target}' of game '{game.Identity}', so slot '{slot.Slot}' cannot be reached. Point the settings back at it, or disconnect the savegame to stop tracking it here.")
             {
                 Hint = "Point the settings back at it, or stop tracking the savegame here."
@@ -49,7 +49,7 @@ internal static class SavegameRequirements
         }
 
         throw new UserFriendlyException(
-            $"'{game.Name}' is already holding a savegame",
+            $"'{game.Name}' already has a savegame checked out",
             $"Savegame '{blocking.SavegameId}' is checked out in game '{game.Identity}' and follows profile '{blocking.ProfileId}', so its mod folder is spoken for. Check that one in before taking '{savegameName}'.")
         {
             Hint = "Check that one in first."
@@ -79,12 +79,12 @@ internal static class SavegameRequirements
             "That slot is empty",
             $"Slot '{slot}' of game '{game.Identity}' holds nothing a savegame is made of, so there is nothing to upload.")
         {
-            Hint = "Discard the savegame instead, or put the save back in its slot."
+            Hint = "Discard the savegame instead, or put it back in its slot."
         };
 
     public static SavegameCheckoutBinding RequireBinding(this ISavegameBindingStore bindings, Game game, Guid savegameId)
         => bindings.GetBinding(game.Identity, savegameId)
             ?? throw new UserFriendlyException(
-                "This machine is not holding that savegame",
+                "That savegame is not checked out on this machine",
                 $"No checkout binding for savegame '{savegameId}' in game '{game.Identity}'. Only the machine that checked a save out can check it in or discard it.");
 }

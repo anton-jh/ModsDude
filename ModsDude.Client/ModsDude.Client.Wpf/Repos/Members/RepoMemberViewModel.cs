@@ -72,13 +72,13 @@ public partial class RepoMemberViewModel : ObservableObject
                 : "The only admin cannot be removed. Promote somebody else first."
             : mayKick
                 ? null
-                : "You do not have the level to change this membership.";
+                : "Your level cannot change this member";
 
         LevelRestriction = isOnlyAdmin
             ? "The only admin cannot be demoted. Promote somebody else first."
             : mayChange
                 ? null
-                : "You do not have the level to change this membership.";
+                : "Your level cannot change this member";
     }
 
 

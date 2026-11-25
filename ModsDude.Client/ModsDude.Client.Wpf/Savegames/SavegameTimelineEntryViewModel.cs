@@ -174,7 +174,7 @@ public sealed class SavegameTimelineEntryViewModel
             checkout.User.DisplayName,
             // Nothing under a struck-through check-out: the strike says the claim is over, and what
             // ended it is its own row further up rather than a second sentence down here.
-            closed ? "" : "Still held")
+            closed ? "" : "Still checked out")
         {
             IsClosed = closed
         };
@@ -209,8 +209,8 @@ public sealed class SavegameTimelineEntryViewModel
         SavegameSnapshotOrigin.Created => "Published",
         SavegameSnapshotOrigin.CheckedIn => "Checked in",
         SavegameSnapshotOrigin.Forced => snapshot.BaseSnapshot is int forced
-            ? $"Forced in over snapshot {forced}, which stays in the history"
-            : "Forced in over a newer snapshot, which stays in the history",
+            ? $"Checked in over snapshot {forced}"
+            : "Checked in over a newer snapshot",
         SavegameSnapshotOrigin.Restored => snapshot.BaseSnapshot is int restored
             ? $"Restored snapshot {restored}"
             : "Restored an earlier snapshot",
@@ -225,8 +225,8 @@ public sealed class SavegameTimelineEntryViewModel
     private static (string Title, string Detail) DescribeEnd(SavegameCheckoutEndReason? reason) => reason switch
     {
         SavegameCheckoutEndReason.CheckedIn => ("Checked back in", ""),
-        SavegameCheckoutEndReason.TakenOver => ("Taken over", "Somebody else took the save"),
-        SavegameCheckoutEndReason.Discarded => ("Given back", "Without a snapshot"),
-        _ => ("Handed back", "")
+        SavegameCheckoutEndReason.TakenOver => ("Taken over", ""),
+        SavegameCheckoutEndReason.Discarded => ("Discarded", ""),
+        _ => ("Check-out ended", "")
     };
 }

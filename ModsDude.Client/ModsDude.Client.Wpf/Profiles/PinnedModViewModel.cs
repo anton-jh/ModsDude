@@ -28,9 +28,8 @@ public class PinnedModViewModel
 
         LockNote = mod.Lock.Source switch
         {
-            ProfileModLockSource.Both => "Locked by this profile - and version-sensitive besides. "
-                + "Only a member can release it.",
-            ProfileModLockSource.Profile => "Locked by this profile. Only a member can release it.",
+            ProfileModLockSource.Both => "Locked in this profile · version-sensitive",
+            ProfileModLockSource.Profile => "Locked in this profile",
             _ => null
         };
     }

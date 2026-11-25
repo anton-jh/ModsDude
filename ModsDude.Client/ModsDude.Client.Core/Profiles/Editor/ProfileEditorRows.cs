@@ -36,7 +36,7 @@ public sealed record ProfileModVersionOption(CatalogModVersion Version, bool Cou
                 : "Imports on save.";
 
             return CouldNotCompare
-                ? $"{action} The order between this and what the repo holds is not settled, so importing will ask which comes first."
+                ? $"{action} Importing asks where it goes in the version order."
                 : action;
         }
     }

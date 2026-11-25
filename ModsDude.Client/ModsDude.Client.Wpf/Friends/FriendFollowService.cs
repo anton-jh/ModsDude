@@ -38,13 +38,13 @@ public sealed class FriendFollowService(
     {
         if (repoStore.Repos.FirstOrDefault(x => x.Id == activity.RepoId) is not Repo repo)
         {
-            return ("The repo that profile is in has not loaded yet. Try again in a moment.", ToastSeverity.Warning);
+            return ("The repo has not loaded yet. Try again.", ToastSeverity.Warning);
         }
 
         if (FriendActivityRules.ParseGame(activity.Game) is not GameIdentity identity
             || gameRepository.Find(identity) is not Game game)
         {
-            return ("That game is not connected on this machine.", ToastSeverity.Warning);
+            return ("That game is not connected", ToastSeverity.Warning);
         }
 
         var outcome = await applyService.ActivateAsync(

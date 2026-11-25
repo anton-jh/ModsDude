@@ -540,7 +540,7 @@ public static class Problems
     {
         Type = ProblemType.InviteNotFound,
         Title = "No such invite",
-        Detail = "No invite has that code."
+        Detail = "No such invite code."
     };
 
     public static CustomProblemDetails InviteNotUsable(InviteStatus status)
@@ -548,7 +548,7 @@ public static class Problems
         var reason = status switch
         {
             InviteStatus.Expired => "This invite has expired.",
-            InviteStatus.Exhausted => "This invite has been used as many times as it was meant for.",
+            InviteStatus.Exhausted => "This invite has no uses left.",
             InviteStatus.Revoked => "This invite has been revoked.",
             InviteStatus.InviterLostAccess => "The person who made this invite can no longer invite at its level.",
             _ => throw new UnreachableException("An active invite is usable")
@@ -594,7 +594,7 @@ public static class Problems
     {
         Type = ProblemType.TrustCodeNotFound,
         Title = "No such trust code",
-        Detail = "No trust code has that code."
+        Detail = "No such trust code."
     };
 
     public static CustomProblemDetails TrustCodeNotUsable(TrustCodeStatus status)

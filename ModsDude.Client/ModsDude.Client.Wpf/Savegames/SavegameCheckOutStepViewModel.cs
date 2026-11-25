@@ -35,7 +35,7 @@ public sealed record SavegameModsSummary(
 {
     public bool HasLocked => LockedNames.Count > 0;
 
-    public string LockedText => $"Locked, and moving: {string.Join(", ", LockedNames)}.";
+    public string LockedText => $"Locked mods changing: {string.Join(", ", LockedNames)}";
 
     public bool HasConsequence => Consequence is { Length: > 0 };
 }
@@ -187,13 +187,13 @@ public partial class SavegameCheckOutStepViewModel : WizardStepViewModel
             if (Mode is SavegameCheckOutMode.TakeCopy)
             {
                 return SnapshotNumber == _headSnapshot
-                    ? "A copy, and nothing more: nobody is stopped from playing it, and this machine records no claim on it. The slot is an ordinary save of your own from then on."
-                    : $"A copy of snapshot {SnapshotNumber}, and nothing more: nobody is stopped from playing it, and this machine records no claim on it. The slot is an ordinary save of your own from then on.";
+                    ? "A copy only. It is not checked out to you."
+                    : $"A copy of snapshot {SnapshotNumber} only. It is not checked out to you.";
             }
 
             return SnapshotNumber == _headSnapshot
-                ? "Nobody else can check this out until you check it back in."
-                : $"Snapshot {SnapshotNumber} is copied forward as the newest snapshot first - nothing in between is deleted - and that is what lands in the slot. Nobody else can check it out until you check it back in.";
+                ? "Nobody else can check it out until you check it in."
+                : $"Snapshot {SnapshotNumber} is restored as the latest snapshot first. Nobody else can check it out until you check it in.";
         }
     }
 
@@ -270,7 +270,7 @@ public partial class SavegameCheckOutStepViewModel : WizardStepViewModel
 
     public bool IsSlotRefused => SelectedSlot?.IsRefused is true;
 
-    public string BlockedActionLabel => SelectedSlot?.BlockedAction ?? "Check that savegame in first";
+    public string BlockedActionLabel => SelectedSlot?.BlockedAction ?? "Check in that savegame first";
 
     /// <summary>
     /// The consequence of writing into the chosen slot, where there is one. Shown on the step rather
@@ -280,14 +280,14 @@ public partial class SavegameCheckOutStepViewModel : WizardStepViewModel
     {
         null or { IsFreedByCheckIn: true } => null,
         { IsRefused: true } slot => slot.SaveName is { Length: > 0 } name
-            ? $"'{name}' has been played here and never checked in. It exists nowhere else, so nothing may be written over it."
-            : "This slot holds play that has never been checked in. It exists nowhere else, so nothing may be written over it.",
+            ? $"'{name}' has progress that is not checked in. It cannot be replaced."
+            : "This slot has progress that is not checked in. It cannot be replaced.",
         { Availability: Core.Savegames.SavegameSlotAvailability.Unrecognised } slot => slot.SaveName is { Length: > 0 } name
-            ? $"'{name}' is in this slot and is not from this repo. It goes to the Recycle Bin, where you can put it back."
-            : "The save in this slot is not from this repo. It goes to the Recycle Bin, where you can put it back.",
+            ? $"'{name}' is not from this repo. It goes to the Recycle Bin."
+            : "This slot is not from this repo. Its contents go to the Recycle Bin.",
         { Availability: Core.Savegames.SavegameSlotAvailability.HeldClean } slot => slot.OccupyingSavegame is { Name: not null } occupying
-            ? $"{occupying.Quoted} is checked out here and has not been played. It is on the server already, so nothing is lost."
-            : "A checked-out savegame is here and has not been played. It is on the server already, so nothing is lost.",
+            ? $"{occupying.Subject} is checked out here, unchanged since check-out"
+            : "A checked-out savegame is here, unchanged since check-out",
         _ => null
     };
 
@@ -298,7 +298,7 @@ public partial class SavegameCheckOutStepViewModel : WizardStepViewModel
     {
         get
         {
-            var write = Mode is SavegameCheckOutMode.TakeCopy ? "Write the copy" : "Check it out";
+            var write = Mode is SavegameCheckOutMode.TakeCopy ? "Take a copy" : "Check out";
 
             if (SelectedSlot is { IsFreedByCheckIn: true })
             {
@@ -308,9 +308,9 @@ public partial class SavegameCheckOutStepViewModel : WizardStepViewModel
             return SelectedSlot?.Availability switch
             {
                 Core.Savegames.SavegameSlotAvailability.Unrecognised => SelectedSlot.SaveName is { Length: > 0 } name
-                    ? $"{write} - '{name}' goes to the Recycle Bin"
-                    : $"{write} - the save here goes to the Recycle Bin",
-                Core.Savegames.SavegameSlotAvailability.HeldClean => $"{write} over the save here",
+                    ? $"{write} and replace '{name}'"
+                    : $"{write} and replace this slot",
+                Core.Savegames.SavegameSlotAvailability.HeldClean => $"{write} and replace the savegame here",
                 _ => write
             };
         }

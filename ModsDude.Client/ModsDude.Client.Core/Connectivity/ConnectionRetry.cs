@@ -206,14 +206,13 @@ public sealed class ConnectionRetry(
 
         var next = outage.NextAttempt is DateTimeOffset at
             ? $"Trying again at {TimeZoneInfo.ConvertTime(at, _timeProvider.LocalTimeZone):HH:mm:ss}."
-            : "Trying again now...";
+            : "Trying again now…";
 
         var key = $"{KeyPrefix}{ConnectionTarget.SignIn}";
 
         return new Notice(key, key, NoticeSeverity.Pending, "Could not sign in")
         {
-            Body = "The server did not answer, so nothing can be loaded yet. This is tried again on its own "
-                + "- if it goes on, check this machine's internet connection.",
+            Body = "The server did not answer. Check your internet connection.",
             Footnote = $"{tried} {next}",
             CanDismiss = false,
             Actions = [new(NoticeActionKind.RetryConnection, "Retry now") { IsPrimary = true }]

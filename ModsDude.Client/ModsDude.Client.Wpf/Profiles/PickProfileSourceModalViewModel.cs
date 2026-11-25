@@ -33,8 +33,7 @@ public partial class PickProfileSourceModalViewModel : ModalViewModel
 
     public string Title => "Read another profile";
 
-    public string Message => "Puts everything that profile pins into the list on the left, at the version and lock it holds. "
-        + "Nothing is added to this profile until you move it across.";
+    public string Message => "Lists its mods on the left as a source.";
 
     public bool HasProfiles => Profiles.Count > 0;
 
@@ -42,7 +41,7 @@ public partial class PickProfileSourceModalViewModel : ModalViewModel
     /// Says which of the two reasons the list is empty, because they have different answers: a repo
     /// with one profile needs another one made, and a page already reading them all needs nothing.
     /// </summary>
-    public string EmptyText => "There is no other profile here that is not already being read.";
+    public string EmptyText => "No other profiles";
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]

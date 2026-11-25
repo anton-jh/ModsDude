@@ -78,7 +78,7 @@ public sealed class LoopbackCallbackListener : IDisposable
 
             if (!parameters.TryGetValue("state", out var state) || state != expectedState)
             {
-                await RespondAsync(context, HttpStatusCode.BadRequest, "This is not the sign-in ModsDude is waiting for.");
+                await RespondAsync(context, HttpStatusCode.BadRequest, "Unexpected sign-in. Return to ModsDude and try again.");
                 continue;
             }
 
@@ -86,7 +86,7 @@ public sealed class LoopbackCallbackListener : IDisposable
             await RespondAsync(
                 context,
                 HttpStatusCode.OK,
-                succeeded ? "You're signed in. You can close this tab and return to ModsDude." : "Sign-in did not finish. Return to ModsDude to try again.");
+                succeeded ? "Signed in. You can close this tab and return to ModsDude." : "Sign-in did not finish. Return to ModsDude to try again.");
 
             return parameters;
         }
