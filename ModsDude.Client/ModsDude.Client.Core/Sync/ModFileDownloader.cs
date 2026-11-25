@@ -139,6 +139,20 @@ public sealed class HttpModFileDownloader : IModFileDownloader
                 response.Content.Headers.ContentRange is { From: 0, To: long to, Length: long total } &&
                 to + 1 < total)
             {
+                // Ranges can only be held to one version of the file through a strong ETag. Without one,
+                // a file replaced mid-download would be spliced together from both, so it is read whole.
+                if (response.Headers.ETag is not { IsWeak: false })
+                {
+                    response.Dispose();
+                    response = await SendAsync(link, null, cancellationToken);
+                    await EnsureSuccessAsync(response, cancellationToken);
+
+                    return new ModFileDownload(
+                        new ThrottledReadStream(await response.Content.ReadAsStreamAsync(cancellationToken), _limiter),
+                        response.Content.Headers.ContentLength,
+                        response);
+                }
+
                 var stream = new RangedDownloadStream(
                     _httpClient, link, response, (int)(to + 1), total, _options, _limiter, bytesReceived, cancellationToken);
 
@@ -196,8 +210,9 @@ public sealed class HttpModFileDownloader : IModFileDownloader
 /// rather than the file.
 /// </para>
 /// <para>
-/// Every range is pinned to the version the first answer came from, so a blob replaced mid-download
-/// fails rather than splicing two files together. Storage also gives a blob a new version when only
+/// Every range is pinned to the version the first answer came from, by its strong ETag, so a blob
+/// replaced mid-download fails rather than splicing two files together. A file served without one is
+/// never read in ranges. Storage also gives a blob a new version when only
 /// its metadata is written, as the server does whenever it claims a file, so a range refused for its
 /// version is asked for again unpinned, and the download carries on under the new version when that
 /// still names the same content hash and length.
@@ -221,7 +236,7 @@ internal sealed class RangedDownloadStream : Stream
 
     private long _scheduled;
     private long _position;
-    private volatile EntityTagHeaderValue? _entityTag;
+    private volatile EntityTagHeaderValue _entityTag;
     private Chunk? _current;
     private int _currentOffset;
     private bool _disposed;
@@ -246,7 +261,7 @@ internal sealed class RangedDownloadStream : Stream
         _limiter = limiter;
         _received = new ReceivedBytes(bytesReceived, length);
 
-        _entityTag = first.Headers.ETag;
+        _entityTag = first.Headers.ETag ?? throw new ArgumentException("A ranged download needs the opening answer's ETag.", nameof(first));
         _contentHash = ContentHashOf(first);
 
         _connections = new SemaphoreSlim(options.ConnectionsPerFile);
@@ -466,7 +481,8 @@ internal sealed class RangedDownloadStream : Stream
         await HttpModFileDownloader.EnsureSuccessAsync(unpinned, cancellationToken);
 
         if (!string.Equals(ContentHashOf(unpinned), _contentHash, StringComparison.OrdinalIgnoreCase) ||
-            unpinned.Content.Headers.ContentRange?.Length != _length)
+            unpinned.Content.Headers.ContentRange?.Length != _length ||
+            unpinned.Headers.ETag is not { IsWeak: false } repinned)
         {
             throw new HttpRequestException(
                 "The file was replaced while it was being downloaded.",
@@ -474,7 +490,7 @@ internal sealed class RangedDownloadStream : Stream
                 HttpStatusCode.PreconditionFailed);
         }
 
-        _entityTag = unpinned.Headers.ETag;
+        _entityTag = repinned;
 
         return await ReadRangeAsync(unpinned, offset, length, stall, cancellationToken);
     }

@@ -129,7 +129,8 @@ The client records the file's SHA-256 in blob metadata while uploading, because 
   failed import can be retried.
 - **`AlreadyRegistered`**: the version is already in the repo.
 
-The user-delegation key is cached for a day. Links are backdated five minutes to allow for clock skew.
+Download links are issued only for a registered mod version or for bytes a snapshot holds, so a blob
+waiting to be collected can't be read. The user-delegation key is cached for a day. Links are backdated five minutes to allow for clock skew.
 Each issued link is recorded as a `FileTransfer` for the traffic statistics. The API authenticates to
 Azure with a service principal from environment variables.
 

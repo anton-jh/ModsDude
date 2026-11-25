@@ -37,13 +37,6 @@ internal class SavegameStorageService(
             .CreateIfNotExistsAsync(cancellationToken: cancellationToken);
     }
 
-    public async Task<long?> GetSavegameSize(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
-    {
-        var stored = await blobContainers.GetAsync(StorageContainer.Savegames, BlobNames.Savegame(repoId, savegameId, contentHash), cancellationToken);
-
-        return stored?.Length;
-    }
-
     public Task<string> GetUploadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
     {
         // Put Block needs Write. The link could overwrite an existing blob; the client's commit sends

@@ -45,11 +45,6 @@ public interface ISavegameStorageService
     Task EnsureContainerExists(CancellationToken cancellationToken);
 
     /// <summary>
-    /// How many bytes the stored save holds, or <c>null</c> when there is no such blob.
-    /// </summary>
-    Task<long?> GetSavegameSize(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
-
-    /// <summary>
     /// A link the client uploads the packed save over. The client names the hash before it uploads,
     /// because the hash is the address - which means it has to have hashed the file already, and the
     /// bytes it then sends can be checked against the name it asked for.
