@@ -183,6 +183,20 @@ public class HttpModFileDownloaderTests
         Assert.Single(storage.Requests);
     }
 
+    [Theory]
+    [InlineData(EntityTag.None)]
+    [InlineData(EntityTag.Weak)]
+    public async Task A_file_served_without_a_strong_etag_is_read_whole_rather_than_in_ranges(EntityTag entityTag)
+    {
+        var storage = new FakeBlobStorage(Bytes(_chunk * 5)) { EntityTag = entityTag };
+
+        using var download = await Open(storage);
+
+        Assert.Equal(storage.Blob, await ReadAll(download));
+        Assert.Equal(storage.Blob.Length, download.Length);
+        Assert.Equal([0L, null], storage.Requests.Select(x => x.Offset));
+    }
+
     [Fact]
     public async Task An_empty_blob_downloads_as_nothing()
     {
@@ -332,6 +346,8 @@ public class HttpModFileDownloaderTests
 
     private enum Fault { None, ServerError, Truncate, Stall }
 
+    public enum EntityTag { Strong, Weak, None }
+
     private sealed record Request(long? Offset, EntityTagHeaderValue? IfMatch);
 
     /// <summary>Blob storage's side of a GET: ranges, ETags and If-Match, and faults on demand.</summary>
@@ -352,6 +368,7 @@ public class HttpModFileDownloaderTests
         public int MaxConcurrent => Volatile.Read(ref _maxConcurrent);
 
         public bool IgnoresRange { get; init; }
+        public EntityTag EntityTag { get; init; }
         public TimeSpan Latency { get; init; }
 
         /// <summary>Given the range's offset and which attempt at it this is, from one.</summary>
@@ -438,7 +455,12 @@ public class HttpModFileDownloaderTests
         private HttpResponseMessage Respond(HttpStatusCode status, byte[] body, ContentRangeHeaderValue? contentRange)
         {
             var response = new HttpResponseMessage(status) { Content = new ByteArrayContent(body) };
-            response.Headers.ETag = ETag;
+            response.Headers.ETag = EntityTag switch
+            {
+                EntityTag.Strong => ETag,
+                EntityTag.Weak => new EntityTagHeaderValue(ETag.Tag, isWeak: true),
+                _ => null
+            };
             response.Content.Headers.ContentRange = contentRange;
 
             if (_contentHash is not null)

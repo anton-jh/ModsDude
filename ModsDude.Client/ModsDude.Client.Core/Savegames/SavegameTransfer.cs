@@ -120,32 +120,33 @@ public sealed class SavegameTransfer(
     /// <remarks>
     /// The blob is addressed by its content, so an <c>AlreadyStored</c> link skips the upload entirely.
     /// </remarks>
-    public Task UploadAsync(Guid repoId, Guid savegameId, PackedSavegame packed, IProgress<SavegameProgress>? progress, CancellationToken ct)
+    public Task<Guid?> UploadAsync(Guid repoId, Guid savegameId, PackedSavegame packed, IProgress<SavegameProgress>? progress, CancellationToken ct)
         => Task.Run(() => UploadArchiveAsync(repoId, savegameId, packed, progress, ct), ct);
 
-    private async Task UploadArchiveAsync(Guid repoId, Guid savegameId, PackedSavegame packed, IProgress<SavegameProgress>? progress, CancellationToken ct)
+    private async Task<Guid?> UploadArchiveAsync(Guid repoId, Guid savegameId, PackedSavegame packed, IProgress<SavegameProgress>? progress, CancellationToken ct)
     {
-        Task<CreateSavegameUploadLinkResponse> CreateLinkAsync(CancellationToken cancellationToken)
+        Task<CreateSavegameUploadLinkResponse> CreateLinkAsync(Guid? uploadId, CancellationToken cancellationToken)
             => filesClient.CreateSavegameUploadLinkV1Async(new CreateSavegameUploadLinkRequest
             {
                 RepoId = repoId,
                 SavegameId = savegameId,
                 ContentHash = packed.ContentHash,
-                SizeBytes = packed.SizeBytes
+                SizeBytes = packed.SizeBytes,
+                UploadId = uploadId
             }, cancellationToken);
 
-        var link = await CreateLinkAsync(ct);
+        var link = await CreateLinkAsync(null, ct);
 
         if (link.AlreadyStored)
         {
-            return;
+            return null;
         }
 
-        if (link.Link is not string destination)
+        if (link.Link is not string destination || link.UploadId is not Guid uploadId)
         {
             throw new UserFriendlyException(
                 "The server did not offer anywhere to upload the savegame",
-                $"CreateSavegameUploadLink answered with neither a link nor alreadyStored for '{packed.ContentHash}'.");
+                $"CreateSavegameUploadLink answered with neither a link and upload nor alreadyStored for '{packed.ContentHash}'.");
         }
 
         progress?.Report(new SavegameProgress(SavegameStage.Uploading, 0, packed.SizeBytes));
@@ -159,19 +160,22 @@ public sealed class SavegameTransfer(
                         ? null
                         : new InlineProgress<long>(sent => progress.Report(new SavegameProgress(SavegameStage.Uploading, sent, packed.SizeBytes))),
                     // The address is the contents, so an archive that changed since packing must never
-                    // be committed under it: no snapshot may point at a blob nobody can reproduce.
+                    // be copied there: no snapshot may point at a blob nobody can reproduce.
                     ExpectedHash = packed.ArchiveHash,
-                    // Stored meanwhile is the same outcome as a commit that lost the race: these bytes are there.
-                    RenewLink = async cancellationToken => (await CreateLinkAsync(cancellationToken)).Link
-                        ?? throw new BlobAlreadyExistsException("The savegame was stored by another upload while this one was sending.")
+                    RenewLink = async cancellationToken => (await CreateLinkAsync(uploadId, cancellationToken)).Link
+                        ?? throw new BlobAlreadyExistsException("The savegame was stored by another check-in while this one was uploading.")
                 },
                 ct);
+
+            return uploadId;
         }
         catch (BlobAlreadyExistsException exception)
         {
-            // Another check-in of the same bytes committed first. The address is their hash, so what is
-            // stored is this save.
+            // Another check-in of the same contents stored them first. The address is their hash, so
+            // what is stored is this save.
             logger.LogInformation(exception, "Savegame {SavegameId} content {ContentHash} was already stored in repo {RepoId}.", savegameId, packed.ContentHash, repoId);
+
+            return null;
         }
         catch (UploadedContentChangedException exception)
         {

@@ -44,12 +44,15 @@ public class BlobDeletionRuleTests
         Assert.Equal(BlobDeletionVerdict.Drop, Decide(upload, null, isReferenced: false).Verdict);
     }
 
-    [Fact]
-    public void A_removed_reference_whose_blob_is_gone_is_dropped_however_recently_it_was_queued()
+    [Theory]
+    [InlineData(BlobDeletionReason.ReferenceRemoved)]
+    [InlineData(BlobDeletionReason.Admin)]
+    public void A_blob_that_is_not_there_stays_queued_while_an_upload_may_be_under_way_whatever_it_was_queued_as_last(BlobDeletionReason reason)
     {
-        var removed = Candidate(BlobDeletionReason.ReferenceRemoved, queuedAt: _now);
+        // An upload queued it, and something queued it again as another reason before the bytes came.
+        var requeued = Candidate(reason, queuedAt: _now.AddHours(-1));
 
-        Assert.Equal(BlobDeletionVerdict.Drop, Decide(removed, null, isReferenced: false).Verdict);
+        Assert.Equal(BlobDeletionVerdict.Keep, Decide(requeued, null, isReferenced: false).Verdict);
     }
 
     [Fact]

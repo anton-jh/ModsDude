@@ -1,12 +1,11 @@
-using Azure;
 using Azure.Storage.Blobs;
-using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Storage;
+using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Storage.Services;
 
@@ -17,21 +16,12 @@ internal class ModStorageService(
     ITimeService timeService)
     : IModStorageService
 {
-    /// <summary>
-    /// Sent as <c>x-ms-meta-sha256</c>. The client writes it as it commits, because the API never
-    /// sees the bytes and so cannot compute it.
-    /// </summary>
-    private const string _contentHashMetadataKey = "sha256";
-
-
-    public string ContentHashMetadataKey => _contentHashMetadataKey;
+    public string ContentHashMetadataKey => StoredBlob.ContentHashKey;
 
 
     public async Task EnsureContainerExists(CancellationToken cancellationToken)
     {
-        await blobServiceClient
-            .GetBlobContainerClient(StorageContainerNames.Of(StorageContainer.Mods))
-            .CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+        await Container().CreateIfNotExistsAsync(cancellationToken: cancellationToken);
     }
 
     public async Task<StoredModFile?> GetStoredMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken)
@@ -39,41 +29,35 @@ internal class ModStorageService(
         return ToStoredModFile(await blobContainers.GetAsync(StorageContainer.Mods, BlobNames.Mod(repoId, modId, versionId), cancellationToken));
     }
 
-    public async Task<StoredModFile?> ClaimStoredMod(RepoId repoId, ModId modId, ModVersionId versionId, ModBlobLabel label, CancellationToken cancellationToken)
+    public Task<string> GetUploadLink(RepoId repoId, UserId userId, UploadId uploadId, CancellationToken cancellationToken)
     {
-        return ToStoredModFile(await blobContainers.ClaimAsync(StorageContainer.Mods, BlobNames.Mod(repoId, modId, versionId), label, cancellationToken));
-    }
-
-    public Task<string> GetUploadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken)
-    {
-        // Put Block needs Write. The link could overwrite an existing blob; the client's commit sends
-        // If-None-Match: * so that it never does.
-        return GetSasLink(repoId, modId, versionId, BlobSasPermissions.Create | BlobSasPermissions.Write, cancellationToken);
+        // Put Block needs Write, which could overwrite. The link names the upload's own blob, never an
+        // address anything refers to; registering copies it into place without overwriting.
+        return BlobSasLinks.CreateAsync(
+            keyCache,
+            Container().GetBlobClient(BlobNames.Upload(repoId, userId, uploadId)),
+            BlobSasPermissions.Create | BlobSasPermissions.Write,
+            new DateTimeOffset(timeService.Now()),
+            cancellationToken);
     }
 
     public Task<string> GetDownloadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken)
     {
-        return GetSasLink(repoId, modId, versionId, BlobSasPermissions.Read, cancellationToken);
+        return BlobSasLinks.CreateAsync(
+            keyCache,
+            Container().GetBlobClient(BlobNames.Mod(repoId, modId, versionId)),
+            BlobSasPermissions.Read,
+            new DateTimeOffset(timeService.Now()),
+            cancellationToken);
     }
 
     private static StoredModFile? ToStoredModFile(StoredBlob? blob)
     {
-        return blob is null
-            ? null
-            : new StoredModFile(blob.Length, blob.Metadata.TryGetValue(_contentHashMetadataKey, out var hash) ? hash : null);
+        return blob is null ? null : new StoredModFile(blob.Length, blob.RecordedContentHash);
     }
 
-    private Task<string> GetSasLink(RepoId repoId, ModId modId, ModVersionId versionId, BlobSasPermissions permissions, CancellationToken cancellationToken)
+    private BlobContainerClient Container()
     {
-        var blobClient = GetBlobClient(repoId, modId, versionId);
-
-        return BlobSasLinks.CreateAsync(keyCache, blobClient, permissions, new DateTimeOffset(timeService.Now()), cancellationToken);
-    }
-
-    private BlobClient GetBlobClient(RepoId repoId, ModId modId, ModVersionId versionId)
-    {
-        return blobServiceClient
-            .GetBlobContainerClient(StorageContainerNames.Of(StorageContainer.Mods))
-            .GetBlobClient(BlobNames.Mod(repoId, modId, versionId));
+        return blobServiceClient.GetBlobContainerClient(StorageContainerNames.Of(StorageContainer.Mods));
     }
 }

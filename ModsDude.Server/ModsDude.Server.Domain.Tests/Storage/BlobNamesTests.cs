@@ -2,6 +2,7 @@ using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Storage;
+using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Domain.Tests.Storage;
 
@@ -30,6 +31,48 @@ public class BlobNamesTests
 
         Assert.True(BlobNames.TryParseSavegame(name, out var address));
         Assert.Equal(new SavegameBlobAddress(_repoId, _savegameId, _hash), address);
+    }
+
+    [Fact]
+    public void An_upload_name_reads_back_as_the_repo_the_uploader_and_the_upload()
+    {
+        var uploadId = new UploadId(Guid.Parse("44444444-4444-4444-4444-444444444444"));
+        var name = BlobNames.Upload(_repoId, new UserId("user-1"), uploadId);
+
+        Assert.Equal("uploads/11111111-1111-1111-1111-111111111111/user-1/44444444-4444-4444-4444-444444444444", name);
+        Assert.True(BlobNames.TryParseUpload(name, out var address));
+        Assert.Equal(new UploadBlobAddress(_repoId, new UserId("user-1"), uploadId), address);
+    }
+
+    [Theory]
+    [InlineData(StorageContainer.Mods)]
+    [InlineData(StorageContainer.Savegames)]
+    public void An_upload_is_recognised_in_the_mods_and_savegames_containers_and_owned_by_its_repo(StorageContainer container)
+    {
+        var name = BlobNames.Upload(_repoId, new UserId("user-1"), new UploadId(Guid.NewGuid()));
+
+        Assert.True(BlobNames.IsRecognised(container, name));
+        Assert.Equal(_repoId, BlobNames.OwningRepo(container, name));
+        Assert.False(BlobNames.TryParseMod(name, out _));
+        Assert.False(BlobNames.TryParseSavegame(name, out _));
+    }
+
+    [Theory]
+    [InlineData("uploads/11111111-1111-1111-1111-111111111111/user-1")]
+    [InlineData("staged/11111111-1111-1111-1111-111111111111/user-1/44444444-4444-4444-4444-444444444444")]
+    [InlineData("uploads/not-a-guid/user-1/44444444-4444-4444-4444-444444444444")]
+    [InlineData("uploads/11111111-1111-1111-1111-111111111111/user-1/not-a-guid")]
+    [InlineData("uploads/11111111-1111-1111-1111-111111111111/ user-1/44444444-4444-4444-4444-444444444444")]
+    public void An_upload_name_that_is_not_the_layout_is_not_recognised(string name)
+    {
+        Assert.False(BlobNames.TryParseUpload(name, out _));
+        Assert.False(BlobNames.IsRecognised(StorageContainer.Mods, name));
+    }
+
+    [Fact]
+    public void An_upload_is_never_recognised_in_the_images_container()
+    {
+        Assert.False(BlobNames.IsRecognised(StorageContainer.Images, BlobNames.Upload(_repoId, new UserId("user-1"), new UploadId(Guid.NewGuid()))));
     }
 
     [Fact]

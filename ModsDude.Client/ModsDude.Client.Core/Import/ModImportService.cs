@@ -1075,18 +1075,7 @@ public sealed class ModImportService(
         {
             try
             {
-                try
-                {
-                    return await LinkAndUploadAsync(version, placement, cancellationToken);
-                }
-                catch (BlobAlreadyExistsException exception)
-                {
-                    // Another upload of the same version committed first. Asking for the link again
-                    // reaches what that left: a registration, or a stored file to adopt or refuse.
-                    logger.LogInformation(exception, "Mod {ModId} {VersionId} was stored by another upload first.", version.ModId.Value, version.VersionId.Value);
-
-                    return await LinkAndUploadAsync(version, placement, cancellationToken);
-                }
+                return await LinkAndUploadAsync(version, placement, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -1121,60 +1110,86 @@ public sealed class ModImportService(
 
             try
             {
-                link = await CreateUploadLinkAsync(version, cancellationToken);
+                link = await CreateUploadLinkAsync(version, null, cancellationToken);
             }
-            catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.AlreadyRegistered)
+            catch (ApiException<CustomProblemDetails> exception) when (IsLinkRefusal(exception))
             {
-                // Nothing left to do. This is also what a teammate registering the same version
-                // mid-import looks like from here, which is the same situation: the bytes this
-                // import wanted are in the repo.
-                Record(version, ModImportStatus.AlreadyRegistered);
-                Report(version, ModImportPhase.Completed);
-
-                return VersionOutcome.Done;
-            }
-            catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.FileAlreadyPresent)
-            {
-                return await AdoptStoredFileAsync(version, placement, exception.Result.ContentHash, cancellationToken);
-            }
-            catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.FileAwaitingDeletion)
-            {
-                Refuse(version, ModImportStatus.Failed, "The file of the deleted version with this id can't be replaced yet. Try again later.", exception);
-
-                return VersionOutcome.Done;
+                return await AnswerLinkRefusalAsync(version, placement, exception, cancellationToken);
             }
 
             var total = Chosen(version).FileLength;
 
             Report(version, ModImportPhase.Uploading, 0, total);
 
-            var hash = await uploader.UploadAsync(
-                new ModFileUpload(link.Link, link.ContentHashMetadataKey, Chosen(version).OpenStream)
-                {
-                    BytesTransferred = new InlineProgress<long>(x => Report(version, ModImportPhase.Uploading, x, total)),
-                    // A version picked between differing copies must upload the copy that was picked.
-                    ExpectedHash = ChosenHash(version),
-                    RenewLink = async ct => (await CreateUploadLinkAsync(version, ct)).Link
-                },
-                cancellationToken);
+            string hash;
 
-            return await RegisterAsync(version, placement, hash, cancellationToken);
+            try
+            {
+                hash = await uploader.UploadAsync(
+                    new ModFileUpload(link.Link, link.ContentHashMetadataKey, Chosen(version).OpenStream)
+                    {
+                        BytesTransferred = new InlineProgress<long>(x => Report(version, ModImportPhase.Uploading, x, total)),
+                        // A version picked between differing copies must upload the copy that was picked.
+                        ExpectedHash = ChosenHash(version),
+                        RenewLink = async ct => (await CreateUploadLinkAsync(version, link.UploadId, ct)).Link
+                    },
+                    cancellationToken);
+            }
+            catch (ApiException<CustomProblemDetails> exception) when (IsLinkRefusal(exception))
+            {
+                // Renewing an expired link found the version registered, or its file stored, meanwhile.
+                return await AnswerLinkRefusalAsync(version, placement, exception, cancellationToken);
+            }
+
+            return await RegisterAsync(version, placement, hash, link.UploadId, cancellationToken);
         }
 
-        private Task<CreateModUploadLinkResponse> CreateUploadLinkAsync(CatalogModVersion version, CancellationToken cancellationToken)
+        private static bool IsLinkRefusal(ApiException<CustomProblemDetails> exception)
+            => exception.Result.Type is ProblemType.AlreadyRegistered or ProblemType.FileAlreadyPresent or ProblemType.FileAwaitingDeletion;
+
+        private async Task<VersionOutcome> AnswerLinkRefusalAsync(
+            CatalogModVersion version,
+            PlannedPlacement placement,
+            ApiException<CustomProblemDetails> exception,
+            CancellationToken cancellationToken)
+        {
+            switch (exception.Result.Type)
+            {
+                case ProblemType.AlreadyRegistered:
+                    // Nothing left to do. This is also what a teammate registering the same version
+                    // mid-import looks like from here, which is the same situation: the bytes this
+                    // import wanted are in the repo.
+                    Record(version, ModImportStatus.AlreadyRegistered);
+                    Report(version, ModImportPhase.Completed);
+
+                    return VersionOutcome.Done;
+
+                case ProblemType.FileAlreadyPresent:
+                    return await AdoptStoredFileAsync(version, placement, exception.Result.ContentHash, cancellationToken);
+
+                default:
+                    Refuse(version, ModImportStatus.Failed, "The file of the deleted version with this id can't be replaced yet. Try again later.", exception);
+
+                    return VersionOutcome.Done;
+            }
+        }
+
+        /// <param name="uploadId">Null for a new upload; the upload whose link expired, to renew it.</param>
+        private Task<CreateModUploadLinkResponse> CreateUploadLinkAsync(CatalogModVersion version, Guid? uploadId, CancellationToken cancellationToken)
             => filesClient.CreateModUploadLinkV1Async(
                 new CreateModUploadLinkRequest()
                 {
                     RepoId = request.RepoId,
                     ModId = version.ModId.Value,
                     VersionId = version.VersionId.Value,
-                    SizeBytes = Chosen(version).FileLength
+                    SizeBytes = Chosen(version).FileLength,
+                    UploadId = uploadId
                 },
                 cancellationToken);
 
         /// <summary>
-        /// Finishes an import that already uploaded and then died: the blob is there, nothing is
-        /// registered against it, and no upload link can ever be minted for that address again.
+        /// Finishes an import whose registration copied the file into place and then failed: the blob
+        /// is there, nothing is registered against it, and no upload link is minted for it again.
         /// </summary>
         /// <remarks>
         /// Registering describes the bytes that are really in the blob, so this can only proceed
@@ -1207,13 +1222,15 @@ public sealed class ModImportService(
                 return VersionOutcome.Done;
             }
 
-            return await RegisterAsync(version, placement, ours, cancellationToken);
+            return await RegisterAsync(version, placement, ours, null, cancellationToken);
         }
 
+        /// <param name="uploadId">The upload to copy into place, or null where the file is there already.</param>
         private async Task<VersionOutcome> RegisterAsync(
             CatalogModVersion version,
             PlannedPlacement placement,
             string contentHash,
+            Guid? uploadId,
             CancellationToken cancellationToken)
         {
             Report(version, ModImportPhase.Registering);
@@ -1245,7 +1262,8 @@ public sealed class ModImportService(
                             After = placement.After?.Value,
                             Before = placement.Before?.Value
                         },
-                        Attributes = [.. mod.Attributes.Select(x => new ModAttributeDto() { Key = x.Key, Value = x.Value })]
+                        Attributes = [.. mod.Attributes.Select(x => new ModAttributeDto() { Key = x.Key, Value = x.Value })],
+                        UploadId = uploadId
                     },
                     cancellationToken);
             }
@@ -1255,8 +1273,8 @@ public sealed class ModImportService(
             }
             catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.HashMismatch)
             {
-                // The stored file records other bytes than these: somebody else's upload of the same
-                // version committed first.
+                // The stored file records other bytes than these: somebody else's registration of the
+                // same version stored its file first.
                 Refuse(version, ModImportStatus.ContentMismatch,
                     "A different file is already stored for this mod and version. Registering this one would describe bytes nobody could download.");
 

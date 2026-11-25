@@ -26,7 +26,8 @@ public sealed record BlobDeletionDecision(BlobDeletionVerdict Verdict, string Re
 /// </para>
 /// <para>
 /// An upload's candidate is queued before its bytes exist, so a blob that is not there yet stays queued
-/// until the upload can no longer be under way.
+/// until the upload can no longer be under way. That holds whatever the candidate was queued as last: a
+/// requeue overwrites the reason, and an upload under way must not be forgotten because of it.
 /// </para>
 /// </remarks>
 public static class BlobDeletionRule
@@ -49,7 +50,7 @@ public static class BlobDeletionRule
 
         if (stored is null)
         {
-            return candidate.Reason == BlobDeletionReason.UploadIssued && now - candidate.QueuedAt < minimumAge
+            return now - candidate.QueuedAt < minimumAge
                 ? new(BlobDeletionVerdict.Keep, "its upload may still be under way")
                 : new(BlobDeletionVerdict.Drop, "it is gone");
         }

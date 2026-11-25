@@ -3,8 +3,8 @@ using ModsDude.Server.Domain.Storage;
 namespace ModsDude.Server.Application.Dependencies;
 
 /// <summary>
-/// The three blob containers as plain blobs: claims, and for storage maintenance listing, the binding
-/// markers, labels and conditional deletes. Every write here is conditional on a version read before it.
+/// The three blob containers as plain blobs: claims, copying uploads into place, and for storage
+/// maintenance listing, the binding markers, labels and conditional deletes. Every write here is conditional on a version read before it.
 /// </summary>
 public interface IBlobContainers
 {
@@ -28,6 +28,16 @@ public interface IBlobContainers
     /// <returns>The blob as read just before the write, or null where there is none.</returns>
     /// <exception cref="Exceptions.BlobBusyException">The blob kept changing between the read and the write.</exception>
     Task<StoredBlob?> ClaimAsync(StorageContainer container, string blobName, BlobLabel? label, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Copies an upload to <paramref name="destination"/> inside storage, only while the upload is still
+    /// at the version <paramref name="upload"/> was read at and only where nothing is at the destination
+    /// yet. The copy carries <paramref name="metadata"/> and <paramref name="label"/>, or only the metadata
+    /// where storage refuses the label.
+    /// </summary>
+    Task<BlobPromotion> PromoteAsync(
+        StorageContainer container, StoredBlob upload, string destination,
+        IReadOnlyDictionary<string, string> metadata, BlobLabel label, CancellationToken cancellationToken);
 
     /// <summary>Deletes the blob while it is still at <paramref name="version"/>.</summary>
     Task<BlobDeleteResult> DeleteAsync(StorageContainer container, string blobName, string version, CancellationToken cancellationToken);
@@ -60,6 +70,20 @@ public enum BlobDeleteResult
     /// <summary>The blob is no longer at the version asked for, and stays.</summary>
     Changed
 }
+
+public enum BlobPromotionResult
+{
+    Promoted,
+
+    /// <summary>The upload changed or went before it was copied, and nothing was written.</summary>
+    UploadChanged,
+
+    /// <summary>A blob was at the destination already, and was left as it was.</summary>
+    DestinationExists
+}
+
+/// <param name="Stored">The blob written at the destination, where it was promoted.</param>
+public sealed record BlobPromotion(BlobPromotionResult Result, StoredBlob? Stored);
 
 /// <param name="Marker">The marker, or null where there is none or it can't be read.</param>
 /// <param name="Version">The marker blob's version, or null where there is no marker blob.</param>

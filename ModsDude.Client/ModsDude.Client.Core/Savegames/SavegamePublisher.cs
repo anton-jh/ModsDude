@@ -86,7 +86,7 @@ public sealed class SavegamePublisher(
             // its ids and the server answers it as it did the first time.
             pending = pendingPublishes.Begin(game.Identity, slot, repoId, packed.ContentHash, packed.SlotHash);
 
-            await transfer.UploadAsync(repoId, pending.SavegameId, packed, progress, ct);
+            var uploadId = await transfer.UploadAsync(repoId, pending.SavegameId, packed, progress, ct);
 
             progress?.Report(new SavegameProgress(SavegameStage.Recording, 0, 0));
 
@@ -99,6 +99,7 @@ public sealed class SavegamePublisher(
                 ProfileRevision = target?.Revision,
                 ContentHash = packed.ContentHash,
                 SizeBytes = packed.SizeBytes,
+                UploadId = uploadId,
                 Label = label,
                 Details = details,
                 KeepPlaying = keepPlaying

@@ -7,16 +7,16 @@ using System.Text;
 namespace ModsDude.Client.Core.Import;
 
 /// <summary>
-/// Uploads a mod file to Azure blob storage over the SAS the server minted, staging it in blocks and
-/// stamping the content hash into blob metadata as it commits.
+/// Uploads a file to Azure blob storage over the SAS the server minted, staging it in blocks and
+/// stamping the content hash into blob metadata as it commits. The link names the upload's own blob;
+/// registering or checking in copies it into place.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Staged blocks are what makes the never-register-before-upload invariant survive a torn upload: a
-/// block blob only becomes visible when its block list is committed, so a run that dies partway
-/// leaves nothing behind for <c>CheckIfModExists</c> to lie about. Nothing here resumes an
-/// interrupted upload, deliberately - a resume scheme that committed partial content would give
-/// that guarantee away.
+/// Staged blocks are what keeps a torn upload from being taken for a whole one: a block blob only
+/// becomes visible when its block list is committed, so a run that dies partway leaves nothing behind
+/// to register. Nothing here resumes an interrupted upload, deliberately - a resume scheme that
+/// committed partial content would give that guarantee away.
 /// </para>
 /// <para>
 /// The hash is accumulated over the same buffer the blocks are cut from, so a several-hundred-
@@ -175,11 +175,9 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
                     Content = new StringContent(body.ToString(), Encoding.UTF8, "application/xml")
                 };
 
+                // The link names this upload's own blob, so a commit sent again after its answer was lost
+                // only commits the same blocks again.
                 request.Headers.TryAddWithoutValidation($"x-ms-meta-{contentHashMetadataKey}", hash);
-
-                // Never over a blob that is there already. The link cannot overwrite either, but saying
-                // so here makes the refusal one this code recognises rather than a permission error.
-                request.Headers.TryAddWithoutValidation("If-None-Match", "*");
 
                 return request;
             },
@@ -224,13 +222,6 @@ public sealed class BlockBlobModFileUploader(HttpClient httpClient, TransferLimi
                 }
 
                 var codes = response.Headers.TryGetValues("x-ms-error-code", out var values) ? values.ToList() : [];
-
-                // The commit's condition: somebody else committed a blob at this address first.
-                if (response.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.PreconditionFailed
-                    && codes.Any(x => x is "BlobAlreadyExists" or "ConditionNotMet"))
-                {
-                    throw new BlobAlreadyExistsException($"Failed to {what} the mod file: a file is already stored at its address.");
-                }
 
                 // What an expired link answers. Renewed once per request: a fresh link refused the same
                 // way is a refusal, not an expiry.

@@ -26,6 +26,7 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 {
     private readonly List<SavegameSnapshotDto> _snapshots = [];
     private readonly Dictionary<string, byte[]> _blobs = [];
+    private readonly Dictionary<string, byte[]> _uploads = [];
     private readonly UserDto _me = new() { Id = "me", DisplayName = "Me", Tag = "0002" };
 
     private (Guid RequestId, CheckInSavegameResponse Response)? _lastCheckIn;
@@ -123,8 +124,28 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
 
     public byte[] Blob(string link) => _blobs[link];
 
-    /// <summary>Called by the uploader fake: storage is content-addressed, so the link is the hash.</summary>
-    public void PutBlob(string link, byte[] content) => _blobs[link] = content;
+    /// <summary>Called by the uploader fake. The link names the upload's own blob; checking in copies it to the save's address.</summary>
+    public void PutBlob(string link, byte[] content) => _uploads[link] = content;
+
+    /// <summary>The upload copied to the address where it is not stored yet, as checking in and publishing do.</summary>
+    private bool StoreUpload(string contentHash, Guid? uploadId)
+    {
+        if (_blobs.ContainsKey(contentHash))
+        {
+            return true;
+        }
+
+        if (uploadId is not Guid id || _uploads.TryGetValue(UploadLink(id), out var content) is false)
+        {
+            return false;
+        }
+
+        _blobs[contentHash] = content;
+
+        return true;
+    }
+
+    private static string UploadLink(Guid uploadId) => $"upload:{uploadId}";
 
 
     /// <summary>Refuses a head or a holder other than the one the request saw, as the server does.</summary>
@@ -189,7 +210,7 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
             return Task.FromResult(last.Response);
         }
 
-        if (_blobs.ContainsKey(request.ContentHash) is false)
+        if (StoreUpload(request.ContentHash, request.UploadId) is false)
         {
             // The server refuses a snapshot whose blob is absent, because that is a head nobody can
             // check out. Reproduced so that a client which skips the upload wrongly fails here.
@@ -294,7 +315,7 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
             throw Problem(ProblemType.NameTaken, $"A savegame called '{request.Name}' already exists.");
         }
 
-        if (_blobs.ContainsKey(request.ContentHash) is false)
+        if (StoreUpload(request.ContentHash, request.UploadId) is false)
         {
             throw Problem(ProblemType.NotFound, $"No savegame blob '{request.ContentHash}'.");
         }
@@ -348,12 +369,14 @@ internal sealed class FakeSavegameServer : ISavegamesClient, IFilesClient
         UploadLinkRequests.Add(request);
 
         var stored = _blobs.ContainsKey(request.ContentHash);
+        var uploadId = request.UploadId ?? Guid.NewGuid();
 
         return Task.FromResult(new CreateSavegameUploadLinkResponse
         {
             // The real one answers with no link at all when the bytes are already there, so a client
             // that ignored AlreadyStored would fail loudly rather than upload for nothing.
-            Link = stored ? null : request.ContentHash,
+            Link = stored ? null : UploadLink(uploadId),
+            UploadId = stored ? null : uploadId,
             AlreadyStored = stored,
             ContentHashMetadataKey = "contenthash"
         });

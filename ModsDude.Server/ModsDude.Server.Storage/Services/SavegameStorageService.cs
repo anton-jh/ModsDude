@@ -5,6 +5,7 @@ using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Storage;
+using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Storage.Services;
 
@@ -20,40 +21,34 @@ internal class SavegameStorageService(
     ITimeService timeService)
     : ISavegameStorageService
 {
-    /// <summary>
-    /// Sent as <c>x-ms-meta-sha256</c>. The client writes it as it commits, because the API never
-    /// sees the bytes and so cannot compute it.
-    /// </summary>
-    private const string _contentHashMetadataKey = "sha256";
-
-
-    public string ContentHashMetadataKey => _contentHashMetadataKey;
+    public string ContentHashMetadataKey => StoredBlob.ContentHashKey;
 
 
     public async Task EnsureContainerExists(CancellationToken cancellationToken)
     {
-        await blobServiceClient
-            .GetBlobContainerClient(StorageContainerNames.Of(StorageContainer.Savegames))
-            .CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+        await Container().CreateIfNotExistsAsync(cancellationToken: cancellationToken);
     }
 
-    public async Task<long?> GetSavegameSize(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
+    public Task<string> GetUploadLink(RepoId repoId, UserId userId, UploadId uploadId, CancellationToken cancellationToken)
     {
-        var stored = await blobContainers.GetAsync(StorageContainer.Savegames, BlobNames.Savegame(repoId, savegameId, contentHash), cancellationToken);
-
-        return stored?.Length;
-    }
-
-    public Task<string> GetUploadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
-    {
-        // Put Block needs Write. The link could overwrite an existing blob; the client's commit sends
-        // If-None-Match: * so that it never does.
-        return GetSasLink(repoId, savegameId, contentHash, BlobSasPermissions.Create | BlobSasPermissions.Write, cancellationToken);
+        // Put Block needs Write, which could overwrite. The link names the upload's own blob, never an
+        // address anything refers to; checking in copies it into place without overwriting.
+        return BlobSasLinks.CreateAsync(
+            keyCache,
+            Container().GetBlobClient(BlobNames.Upload(repoId, userId, uploadId)),
+            BlobSasPermissions.Create | BlobSasPermissions.Write,
+            new DateTimeOffset(timeService.Now()),
+            cancellationToken);
     }
 
     public Task<string> GetDownloadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken)
     {
-        return GetSasLink(repoId, savegameId, contentHash, BlobSasPermissions.Read, cancellationToken);
+        return BlobSasLinks.CreateAsync(
+            keyCache,
+            Container().GetBlobClient(BlobNames.Savegame(repoId, savegameId, contentHash)),
+            BlobSasPermissions.Read,
+            new DateTimeOffset(timeService.Now()),
+            cancellationToken);
     }
 
     public async Task<bool> ClaimSavegame(RepoId repoId, SavegameId savegameId, string contentHash, SavegameBlobLabel? label, CancellationToken cancellationToken)
@@ -62,17 +57,8 @@ internal class SavegameStorageService(
     }
 
 
-    private Task<string> GetSasLink(RepoId repoId, SavegameId savegameId, string contentHash, BlobSasPermissions permissions, CancellationToken cancellationToken)
+    private BlobContainerClient Container()
     {
-        var blobClient = GetBlobClient(repoId, savegameId, contentHash);
-
-        return BlobSasLinks.CreateAsync(keyCache, blobClient, permissions, new DateTimeOffset(timeService.Now()), cancellationToken);
-    }
-
-    private BlobClient GetBlobClient(RepoId repoId, SavegameId savegameId, string contentHash)
-    {
-        return blobServiceClient
-            .GetBlobContainerClient(StorageContainerNames.Of(StorageContainer.Savegames))
-            .GetBlobClient(BlobNames.Savegame(repoId, savegameId, contentHash));
+        return blobServiceClient.GetBlobContainerClient(StorageContainerNames.Of(StorageContainer.Savegames));
     }
 }

@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Services;
+using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.RepoMemberships;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Statistics;
@@ -53,14 +55,25 @@ public class CreateModDownloadLinkV1Endpoint : IEndpoint
             return TypedResults.BadRequest(invalidId);
         }
 
-        if (await modStorageService.GetStoredMod(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken) is not { } stored)
+        // Only for a registered version: the file of one that was deleted, or never registered, stays
+        // unreadable while it waits to be collected.
+        var repoId = new RepoId(request.RepoId);
+        var modId = new ModId(request.ModId);
+        var versionId = new ModVersionId(request.VersionId);
+
+        var sizeBytes = await dbContext.ModVersions
+            .Where(x => x.RepoId == repoId && x.ModId == modId && x.Id == versionId)
+            .Select(x => (long?)x.SizeBytes)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (sizeBytes is not long size)
         {
-            return TypedResults.BadRequest(Problems.ModFileDoesNotExist(new(request.RepoId), new(request.ModId), new(request.VersionId)));
+            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No version '{request.VersionId}' of mod '{request.ModId}' found in repo '{request.RepoId}'"));
         }
 
-        var link = await modStorageService.GetDownloadLink(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken);
+        var link = await modStorageService.GetDownloadLink(repoId, modId, versionId, cancellationToken);
 
-        dbContext.FileTransfers.Add(new FileTransfer(new(request.RepoId), userId, TransferredFile.Mod, TransferDirection.Download, stored.SizeBytes, timeService.Now()));
+        dbContext.FileTransfers.Add(new FileTransfer(repoId, userId, TransferredFile.Mod, TransferDirection.Download, size, timeService.Now()));
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(new CreateModDownloadLinkResponse(link));

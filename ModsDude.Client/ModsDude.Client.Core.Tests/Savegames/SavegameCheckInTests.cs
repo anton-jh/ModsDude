@@ -53,6 +53,7 @@ public class SavegameCheckInTests
 
         Assert.Single(harness.Server.UploadLinkRequests);
         Assert.Equal(0, harness.Uploader.Uploads);
+        Assert.Null(Assert.Single(harness.Server.CheckIns).UploadId);
 
         // And the server minted nothing either: a save that changes nothing costs no line of history.
         Assert.Equal(snapshotsBefore, harness.Server.Snapshots.Count);
@@ -73,6 +74,9 @@ public class SavegameCheckInTests
         Assert.Equal(1, harness.Uploader.Uploads);
         Assert.Equal(head.Number + 1, snapshot.Number);
         Assert.Equal("after playing", snapshot.Label);
+
+        // The check-in names the upload, which is what the server copies to the save's address.
+        Assert.NotNull(Assert.Single(harness.Server.CheckIns).UploadId);
 
         // The size is what the server counts the upload's traffic by.
         var uploadLink = Assert.Single(harness.Server.UploadLinkRequests);

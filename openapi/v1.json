@@ -115,6 +115,11 @@
           },
           "takeOver": {
             "type": "boolean"
+          },
+          "uploadId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
           }
         },
         "type": "object"
@@ -270,6 +275,11 @@
             "format": "int64",
             "type": "integer"
           },
+          "uploadId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
+          },
           "versionId": {
             "type": "string"
           }
@@ -283,6 +293,10 @@
             "type": "string"
           },
           "link": {
+            "type": "string"
+          },
+          "uploadId": {
+            "format": "guid",
             "type": "string"
           }
         },
@@ -375,6 +389,11 @@
           "sizeBytes": {
             "format": "int64",
             "type": "integer"
+          },
+          "uploadId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
           }
         },
         "type": "object"
@@ -389,6 +408,11 @@
             "type": "string"
           },
           "link": {
+            "nullable": true,
+            "type": "string"
+          },
+          "uploadId": {
+            "format": "guid",
             "nullable": true,
             "type": "string"
           }
@@ -1041,6 +1065,8 @@
           "https://server.modsdude.com/api/problems/file-already-present",
           "https://server.modsdude.com/api/problems/file-awaiting-deletion",
           "https://server.modsdude.com/api/problems/file-busy",
+          "https://server.modsdude.com/api/problems/upload-changed",
+          "https://server.modsdude.com/api/problems/upload-invalid",
           "https://server.modsdude.com/api/problems/already-registered",
           "https://server.modsdude.com/api/problems/mod-in-use",
           "https://server.modsdude.com/api/problems/cannot-delete-only-mod-version",
@@ -1106,6 +1132,8 @@
           "FileAlreadyPresent",
           "FileAwaitingDeletion",
           "FileBusy",
+          "UploadChanged",
+          "UploadInvalid",
           "AlreadyRegistered",
           "ModInUse",
           "CannotDeleteOnlyModVersion",
@@ -1449,6 +1477,11 @@
           "sizeBytes": {
             "format": "int64",
             "type": "integer"
+          },
+          "uploadId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
           }
         },
         "type": "object"
@@ -1542,6 +1575,11 @@
           },
           "placement": {
             "$ref": "#/components/schemas/ModVersionPlacement"
+          },
+          "uploadId": {
+            "format": "guid",
+            "nullable": true,
+            "type": "string"
           },
           "versionId": {
             "type": "string"

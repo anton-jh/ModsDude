@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using ModsDude.Server.Api.Authorization;
 using ModsDude.Server.Api.ErrorHandling;
 using ModsDude.Server.Application.Authorization;
@@ -64,14 +65,24 @@ public class CreateSavegameDownloadLinkV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }
 
-        if (await savegameStorageService.GetSavegameSize(new(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash, cancellationToken) is not long size)
+        // Only bytes a snapshot holds: those of pruned snapshots, or never checked in, stay unreadable
+        // while they wait to be collected.
+        var repoId = new RepoId(request.RepoId);
+        var savegameId = new SavegameId(request.SavegameId);
+
+        var sizeBytes = await dbContext.SavegameSnapshots
+            .Where(x => x.RepoId == repoId && x.SavegameId == savegameId && x.ContentHash == request.ContentHash)
+            .Select(x => (long?)x.SizeBytes)
+            .MaxAsync(cancellationToken);
+
+        if (sizeBytes is not long size)
         {
-            return TypedResults.BadRequest(Problems.SavegameFileDoesNotExist(new(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash));
+            return TypedResults.BadRequest(Problems.NotFound.With(x => x.Detail = $"No snapshot of savegame '{request.SavegameId}' in repo '{request.RepoId}' holds '{request.ContentHash}'"));
         }
 
-        var link = await savegameStorageService.GetDownloadLink(new(request.RepoId), new SavegameId(request.SavegameId), request.ContentHash, cancellationToken);
+        var link = await savegameStorageService.GetDownloadLink(repoId, savegameId, request.ContentHash, cancellationToken);
 
-        dbContext.FileTransfers.Add(new FileTransfer(new(request.RepoId), userId, TransferredFile.Savegame, TransferDirection.Download, size, timeService.Now()));
+        dbContext.FileTransfers.Add(new FileTransfer(repoId, userId, TransferredFile.Savegame, TransferDirection.Download, size, timeService.Now()));
         await unitOfWork.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(new CreateSavegameDownloadLinkResponse(link));

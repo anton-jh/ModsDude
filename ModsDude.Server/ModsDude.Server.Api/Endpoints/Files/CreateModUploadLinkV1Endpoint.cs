@@ -27,14 +27,20 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
     }
 
 
-    public record CreateModUploadLinkRequest(Guid RepoId, string ModId, string VersionId, long SizeBytes);
+    /// <param name="UploadId">
+    /// Null for a new upload. To renew a link that expired partway, the upload it was issued for: the
+    /// renewed link names the same blob, so the blocks already sent stay usable.
+    /// </param>
+    public record CreateModUploadLinkRequest(Guid RepoId, string ModId, string VersionId, long SizeBytes, Guid? UploadId);
 
     /// <param name="ContentHashMetadataKey">
     /// The blob metadata entry the client must write the file's SHA-256 into as it uploads. Named
     /// here rather than agreed by convention, because the server is the only party that reads it
     /// back and a silent mismatch would only surface as an unrepairable registration much later.
     /// </param>
-    public record CreateModUploadLinkResponse(string Link, string ContentHashMetadataKey);
+    /// <param name="Link">Where to upload: the upload's own blob, never the version's address.</param>
+    /// <param name="UploadId">The upload to name when registering, and when renewing the link.</param>
+    public record CreateModUploadLinkResponse(string Link, Guid UploadId, string ContentHashMetadataKey);
 
 
     public async Task<Results<Ok<CreateModUploadLinkResponse>, BadRequest<CustomProblemDetails>, Forbidden<CustomProblemDetails>>> CreateModUploadLink(
@@ -70,9 +76,10 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
         }
 
         // The refusals below need different responses from the client, so they are distinct problems:
-        // there is nothing left to do for a registered version; an unregistered blob that a failed import
-        // left behind is finished by registering without re-uploading; and the file of a deleted version
-        // is deleted here so the version can be uploaded again, or makes the client try again later.
+        // there is nothing left to do for a registered version; a file copied into place by a
+        // registration that never committed is finished by registering without re-uploading; and the file
+        // of a deleted version is deleted here so the version can be uploaded again, or makes the client
+        // try again later.
         var modVersion = await dbContext.ModVersions.GetAsync(new RepoId(request.RepoId), new ModId(request.ModId), new ModVersionId(request.VersionId), cancellationToken);
         if (modVersion is not null)
         {
@@ -101,19 +108,22 @@ public class CreateModUploadLinkV1Endpoint : IEndpoint
             }
         }
 
-        // Queued before the link exists, so a blob uploaded and never registered is collected.
+        var uploadId = new UploadId(request.UploadId ?? Guid.NewGuid());
+
+        // Queued before the link exists, so an upload that is never registered is collected, and again
+        // when the link is renewed, so an upload under way stays queued as long as it needs.
         await dbContext.QueueUploadAsync(
             StorageContainer.Mods,
-            BlobNames.Mod(new RepoId(request.RepoId), new ModId(request.ModId), new ModVersionId(request.VersionId)),
+            BlobNames.Upload(new RepoId(request.RepoId), userId, uploadId),
             new RepoId(request.RepoId),
             userId,
             cancellationToken);
 
-        var link = await modStorageService.GetUploadLink(new(request.RepoId), new(request.ModId), new(request.VersionId), cancellationToken);
+        var link = await modStorageService.GetUploadLink(new(request.RepoId), userId, uploadId, cancellationToken);
 
         dbContext.FileTransfers.Add(new FileTransfer(new(request.RepoId), userId, TransferredFile.Mod, TransferDirection.Upload, request.SizeBytes, timeService.Now()));
         await unitOfWork.CommitAsync(cancellationToken);
 
-        return TypedResults.Ok(new CreateModUploadLinkResponse(link, modStorageService.ContentHashMetadataKey));
+        return TypedResults.Ok(new CreateModUploadLinkResponse(link, uploadId.Value, modStorageService.ContentHashMetadataKey));
     }
 }

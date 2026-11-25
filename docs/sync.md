@@ -94,7 +94,8 @@ only files ModsDude installed, or that sit at a name the layout is about to use,
 1. Check the game isn't running, take a shared lease on the stores, and check the disk space again.
 2. **Fetch** everything the plan needs into the store (`ModFetcher`): from any store on the machine
    first, otherwise downloaded. Large files download as parallel ranged requests, reassembled into one
-   ordered stream so verification has a single path. Each range is pinned to the first answer's ETag.
+   ordered stream so verification has a single path. Each range is pinned to the first answer's strong
+   ETag; a file served without one, as some remote sources do, downloads as one request.
    A range refused because the ETag moved is asked for again unpinned, and the download carries on when
    that still has the same content hash metadata and length, since the server writes metadata whenever
    it claims a file; otherwise it fails. If a store copy fails verification, the fetcher

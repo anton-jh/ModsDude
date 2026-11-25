@@ -15,6 +15,7 @@ using ModsDude.Server.Persistence.Extensions;
 using ModsDude.Server.Persistence.Extensions.EntityExtensions;
 using ModsDude.Server.Persistence.Retention;
 using ModsDude.Server.Persistence.Storage;
+using System.Diagnostics;
 using System.Security.Claims;
 
 namespace ModsDude.Server.Api.Endpoints.Mods;
@@ -33,7 +34,7 @@ public class RegisterModV1Endpoint : IEndpoint
         Guid repoId,
         RegisterModRequest request,
         ClaimsPrincipal claimsPrincipal,
-        IModStorageService storageService,
+        IStagedUploads stagedUploads,
         ApplicationDbContext dbContext,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
@@ -65,31 +66,37 @@ public class RegisterModV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InvalidContentHash(request.ContentHash));
         }
 
-        var context = await BlobLabelContext.ReadAsync(dbContext, new RepoId(repoId), claimsPrincipal.GetUserId(), cancellationToken);
+        var userId = claimsPrincipal.GetUserId();
+        var context = await BlobLabelContext.ReadAsync(dbContext, new RepoId(repoId), userId, cancellationToken);
         var label = new ModBlobLabel(
             context.RepoId, context.RepoName, context.Game, context.AddedBy, context.AddedByName, timeService.Now(),
             modId, versionId, request.DisplayName, request.FileName);
 
-        // Held until the registration commits; see IStorageMaintenance.DeleteReleasedModFileAsync.
+        // Held until the registration commits; see IStorageMaintenance.DeleteReleasedModFileAsync. It also
+        // keeps two registrations of the version from copying to its address at once.
         await using var fileLock = await dbContext.LockBlobAsync(StorageContainer.Mods, BlobNames.Mod(new RepoId(repoId), modId, versionId), cancellationToken);
 
-        // Metadata is never written for a file nobody has: the blob has to be there first. Its size is read
-        // off it while claiming it, rather than being taken from the request - nothing the client says
-        // about the bytes can be checked, and this is the one place they are looked at. Claiming is what
-        // stops a deletion run that read the blob as unreferenced deleting it from under this
-        // registration.
-        if (await storageService.ClaimStoredMod(new RepoId(repoId), modId, versionId, label, cancellationToken) is not { } stored)
-        {
-            return TypedResults.BadRequest(Problems.ModFileDoesNotExist(new RepoId(repoId), modId, versionId));
-        }
-
-        // The hash the uploader recorded as it committed is the only account of the bytes there is. A
+        // The file has to be at its address before the version refers to it: claimed where it is there
+        // already, or copied there from the upload. Its size is read off it rather than taken from the
+        // request, and the hash the uploader recorded is the only account of the bytes there is - a
         // registration that disagrees with it would send every member's download after a hash the file
         // can never match.
-        if (stored.RecordedContentHash != request.ContentHash)
+        var uploadId = request.UploadId is Guid upload ? new UploadId(upload) : (UploadId?)null;
+        var storing = await stagedUploads.StoreModAsync(new RepoId(repoId), modId, versionId, userId, uploadId, request.ContentHash, label, cancellationToken);
+
+        switch (storing.Outcome)
         {
-            return TypedResults.BadRequest(Problems.ModContentHashMismatch(new RepoId(repoId), modId, versionId, request.ContentHash, stored.RecordedContentHash));
+            case StagedUploadOutcome.Missing:
+                return TypedResults.BadRequest(Problems.ModFileDoesNotExist(new RepoId(repoId), modId, versionId));
+            case StagedUploadOutcome.HashMismatch:
+                return TypedResults.BadRequest(Problems.ModContentHashMismatch(new RepoId(repoId), modId, versionId, request.ContentHash, storing.Blob!.RecordedContentHash));
+            case StagedUploadOutcome.UploadChanged:
+                return TypedResults.BadRequest(Problems.UploadChanged);
+            case StagedUploadOutcome.UploadInvalid:
+                throw new UnreachableException("A mod upload is only ever refused over its hash.");
         }
+
+        var stored = storing.Blob!;
 
         var siblings = await dbContext.ModVersions.GetVersionsOfModAsync(new RepoId(repoId), modId, cancellationToken);
 
@@ -118,7 +125,7 @@ public class RegisterModV1Endpoint : IEndpoint
             Description = request.Description,
             FileName = request.FileName,
             ContentHash = request.ContentHash,
-            SizeBytes = stored.SizeBytes,
+            SizeBytes = stored.Length,
             Locked = request.Locked,
             Attributes = new(request.Attributes.Select(ModAttributeDto.ToModel)),
             Created = timestamp,
@@ -165,6 +172,10 @@ public class RegisterModV1Endpoint : IEndpoint
     }
 
 
+    /// <param name="UploadId">
+    /// The upload to copy to the version's address, from the link it was uploaded over. Null where the
+    /// file is already at the address, as <see cref="Problems.ProblemType.FileAlreadyPresent"/> reports.
+    /// </param>
     /// <param name="FileName">
     /// What the archive is called on the importing machine, extension and all. The mod folder gets
     /// this name verbatim on every machine that applies a profile pinning this version, so it has to
@@ -179,5 +190,6 @@ public class RegisterModV1Endpoint : IEndpoint
         string ContentHash,
         bool Locked,
         ModVersionPlacement Placement,
-        IEnumerable<ModAttributeDto> Attributes);
+        IEnumerable<ModAttributeDto> Attributes,
+        Guid? UploadId);
 }

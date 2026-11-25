@@ -147,6 +147,56 @@ public class BlobDeletionQueueTests(DatabaseFixture fixture)
     }
 
     [Fact]
+    public async Task Renaming_a_mod_version_queues_the_blob_it_named_and_editing_it_otherwise_does_not()
+    {
+        var (repoId, _) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);
+        await StorageTestData.GivenAModVersionAsync(fixture.CreateDbContext, repoId, "a_mod", "1.0.0");
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.Database.ExecuteSqlAsync($"""UPDATE "ModVersions" SET "DisplayName" = 'Renamed' WHERE "RepoId" = {repoId.Value}""");
+            Assert.Empty(await CandidatesAsync(BlobNames.Mod(repoId, new ModId("a_mod"), new ModVersionId("1.0.0"))));
+
+            await dbContext.Database.ExecuteSqlAsync($"""UPDATE "ModVersions" SET "Id" = '2.0.0' WHERE "RepoId" = {repoId.Value}""");
+        }
+
+        Assert.Single(await CandidatesAsync(BlobNames.Mod(repoId, new ModId("a_mod"), new ModVersionId("1.0.0"))));
+    }
+
+    [Fact]
+    public async Task Changing_a_snapshots_content_hash_queues_the_blob_it_named()
+    {
+        var (repoId, userId) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);
+        var before = TestHashes.Of($"save-{Guid.NewGuid()}");
+        var after = TestHashes.Of($"save-{Guid.NewGuid()}");
+        var savegameId = await StorageTestData.GivenASavegameAsync(fixture.CreateDbContext, repoId, userId, before);
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.Database.ExecuteSqlAsync($"""UPDATE "SavegameSnapshots" SET "ContentHash" = {after} WHERE "SavegameId" = {savegameId.Value}""");
+        }
+
+        Assert.Single(await CandidatesAsync(BlobNames.Savegame(repoId, savegameId, before)));
+        Assert.Empty(await CandidatesAsync(BlobNames.Savegame(repoId, savegameId, after)));
+    }
+
+    [Fact]
+    public async Task Changing_an_image_references_hash_queues_the_image_it_named()
+    {
+        var (repoId, _) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);
+        var before = TestHashes.Of($"image-{Guid.NewGuid()}");
+        var after = TestHashes.Of($"image-{Guid.NewGuid()}");
+        await StorageTestData.GivenAModVersionAsync(fixture.CreateDbContext, repoId, "a_mod", "1.0.0", before);
+
+        using (var dbContext = fixture.CreateDbContext())
+        {
+            await dbContext.Database.ExecuteSqlAsync($"""UPDATE "ModImageReference" SET "Hash" = {after} WHERE "Hash" = {before}""");
+        }
+
+        Assert.Single(await CandidatesAsync(BlobNames.Image(before)));
+    }
+
+    [Fact]
     public async Task Queuing_a_blob_again_moves_when_it_was_queued_and_counts_the_requeue()
     {
         var (repoId, userId) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);

@@ -19,9 +19,11 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
     private readonly Dictionary<ModVersionIdentity, RegisterModRequest> _registrations = [];
     private readonly List<ServerCall> _journal = [];
     private readonly Dictionary<ModVersionIdentity, string?> _stored = [];
+    private readonly Dictionary<Guid, (ModVersionIdentity Identity, string ContentHash)> _uploads = [];
     private readonly HashSet<ModVersionIdentity> _awaitingDeletion = [];
     private readonly Dictionary<ModKey, List<ModDto>> _registered = [];
     private readonly Dictionary<ModVersionIdentity, long> _linkedSizes = [];
+    private readonly List<Guid?> _linkedUploads = [];
 
 
     public Guid RepoId { get; } = Guid.NewGuid();
@@ -86,6 +88,18 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
         }
     }
 
+    /// <summary>The upload each link request named, null for a new one, in the order they came.</summary>
+    public IReadOnlyList<Guid?> LinkedUploads
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _linkedUploads];
+            }
+        }
+    }
+
     public IReadOnlyList<ModVersionIdentity> CallsOf(ServerCallKind kind)
         => [.. Journal.Where(x => x.Kind == kind).Select(x => x.Identity)];
 
@@ -122,17 +136,19 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
         Apply(identity, "elsewhere", after, before, assertPlacement: false);
     }
 
-    /// <summary>Somebody else registering the very file already stored for the version.</summary>
-    public void RegisterStoredFileElsewhere(ModVersionIdentity identity)
+    /// <summary>Somebody else storing and registering the very same file for the version.</summary>
+    public void RegisterSameFileElsewhere(ModVersionIdentity identity, string contentHash)
     {
-        var contentHash = _stored[identity] ?? throw new InvalidOperationException($"{identity} is stored without a recorded hash.");
-
+        _stored[identity] = contentHash;
         Apply(identity, contentHash, null, null, assertPlacement: false);
     }
 
-    public string MakeLink(ModVersionIdentity identity) => $"fake://{identity.ModId}/{identity.VersionId}";
+    public static string MakeLink(ModVersionIdentity identity, Guid uploadId) => $"fake://{identity.ModId}/{identity.VersionId}/{uploadId}";
 
-    /// <summary>Called by the fake uploader, which is the only thing that can make a blob appear.</summary>
+    /// <summary>
+    /// Called by the fake uploader, which is the only thing that can make an upload appear. It lands on
+    /// the upload's own blob, as storage's links do; only registering copies it to the version.
+    /// </summary>
     public void CompleteUpload(string link, string contentHash)
     {
         var parts = link["fake://".Length..].Split('/');
@@ -140,12 +156,7 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
 
         lock (_lock)
         {
-            // Upload links create and never overwrite, as storage's do.
-            if (_stored.TryAdd(identity, contentHash) is false)
-            {
-                throw new BlobAlreadyExistsException("Already stored.");
-            }
-
+            _uploads[Guid.Parse(parts[2])] = (identity, contentHash);
             _journal.Add(new ServerCall(ServerCallKind.Upload, identity));
         }
     }
@@ -161,6 +172,7 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
         {
             _journal.Add(new ServerCall(ServerCallKind.Link, identity));
             _linkedSizes[identity] = request.SizeBytes;
+            _linkedUploads.Add(request.UploadId);
 
             if (IsRegistered(identity))
             {
@@ -180,9 +192,12 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
             }
         }
 
+        var uploadId = request.UploadId ?? Guid.NewGuid();
+
         return Task.FromResult(new CreateModUploadLinkResponse()
         {
-            Link = MakeLink(identity),
+            Link = MakeLink(identity, uploadId),
+            UploadId = uploadId,
             ContentHashMetadataKey = ContentHashMetadataKey
         });
     }
@@ -204,10 +219,21 @@ internal sealed class FakeModsDudeServer : IFilesClient, IModsClient
         {
             _journal.Add(new ServerCall(ServerCallKind.Register, identity));
 
-            // Metadata is never written for a file nobody has.
+            // The file is claimed where it is stored already, or copied into place from the upload,
+            // which never replaces a stored file.
             if (_stored.ContainsKey(identity) is false)
             {
-                throw Problem(ProblemType.FileNotFound, null);
+                if (request.UploadId is not Guid uploadId || _uploads.TryGetValue(uploadId, out var upload) is false || upload.Identity != identity)
+                {
+                    throw Problem(ProblemType.FileNotFound, null);
+                }
+
+                if (upload.ContentHash != request.ContentHash)
+                {
+                    throw Problem(ProblemType.HashMismatch, null);
+                }
+
+                _stored[identity] = upload.ContentHash;
             }
 
             if (_stored[identity] != request.ContentHash)

@@ -20,6 +20,9 @@ internal sealed class FakeModFileUploader(FakeModsDudeServer server) : IModFileU
     /// <summary>Runs inside the upload, where a test can cancel or throw partway through a batch.</summary>
     public Func<string, Task>? OnUpload { get; set; }
 
+    /// <summary>Whether each upload renews its link before it commits, as one that outlived its link does.</summary>
+    public bool RenewEveryLink { get; set; }
+
     /// <summary>The hash each upload said its bytes must have, in the order they started.</summary>
     public List<string?> ExpectedHashes { get; } = [];
 
@@ -58,7 +61,9 @@ internal sealed class FakeModFileUploader(FakeModsDudeServer server) : IModFileU
 
             Assert.Equal(FakeModsDudeServer.ContentHashMetadataKey, upload.ContentHashMetadataKey);
 
-            server.CompleteUpload(upload.Link, hash);
+            var link = RenewEveryLink ? await upload.RenewLink!(cancellationToken) : upload.Link;
+
+            server.CompleteUpload(link, hash);
 
             return hash;
         }

@@ -118,18 +118,40 @@ user-delegation SAS links scoped to one blob, and the client transfers directly.
 
 | Container | Address | Notes |
 | --- | --- | --- |
-| `mods` | `{repoId}/{modId}/{versionId}` | Upload, then register. Registration refuses unless the blob exists and its recorded `sha256` matches |
+| `mods` | `{repoId}/{modId}/{versionId}` | Upload, then register |
 | `savegames` | `{repoId}/{savegameId}/{contentHash}` | Content addressed. An address that already exists is reported as `AlreadyStored` |
 | `mod-images` | `{hash[..2]}/{hash}` | Mod image renditions and avatars: small WebP files, uploaded and streamed through the API, cached by clients for a year |
 
-The client records the file's SHA-256 in blob metadata while uploading, because Azure only computes MD5.
+**Uploads.** An upload link names the upload's own blob, `uploads/{repoId}/{userId}/{uploadId}` in the mods
+or savegames container, with Create and Write, which Put Block needs. Write could overwrite whatever the
+link names for as long as it lasts, so no link ever names an address. The link endpoints mint the
+`UploadId`; asking again with it renews the link to the same blob, so staged blocks stay usable. The client
+records the file's SHA-256 in blob metadata as it commits, because Azure only computes MD5.
+
+Registering a mod version, checking in and publishing take the `UploadId` and store the file at its
+address before the row commits (`StagedUploads`):
+
+- a file already at the address is claimed, and the upload is ignored;
+- otherwise the upload is checked: for a mod, its recorded hash must equal the registration's; for a
+  savegame, its length must equal the request's and it must record a valid hash (`UploadInvalid`);
+- the address is queued for deletion, so a copy whose row never commits is collected;
+- `IBlobContainers.PromoteAsync` copies it inside storage with Put Block From URL, 100 MiB at a time and
+  four at once, each pinned to the upload's ETag, then commits with `If-None-Match: *`. Only the recorded
+  hash and the label are written. A changed upload answers `UploadChanged`. A copy that finds the address
+  taken claims what is there.
+
+The stored blob's length is what the row records, never the request's. The server can't look inside a
+savegame archive, so whichever upload of a contents hash is stored first is the one every check-out
+unpacks, and verifies.
+
 `CreateModUploadLink` tells two cases apart:
 
-- **`FileAlreadyPresent`** (carries the recorded hash): the blob exists but isn't registered yet, so a
-  failed import can be retried.
+- **`FileAlreadyPresent`** (carries the recorded hash): a registration copied the file into place and
+  then failed to commit, so registering again without an upload finishes it.
 - **`AlreadyRegistered`**: the version is already in the repo.
 
-The user-delegation key is cached for a day. Links are backdated five minutes to allow for clock skew.
+Download links are issued only for a registered mod version or for bytes a snapshot holds, so a blob
+waiting to be collected can't be read. The user-delegation key is cached for a day. Links are backdated five minutes to allow for clock skew.
 Each issued link is recorded as a `FileTransfer` for the traffic statistics. The API authenticates to
 Azure with a service principal from environment variables.
 
@@ -165,11 +187,13 @@ The only code that deletes blobs. It deletes what the database has queued.
 **The queue** (`BlobDeletionCandidates`, one row per blob) is filled by the database function
 `queue_blob_deletion`:
 
-- Delete triggers on `ModVersions`, `SavegameSnapshots` and `ModImageReference`, and an update or delete
-  trigger on `Users.AvatarHash`, queue the blob a row referred to. They fire for every statement and
-  cascade, including `ExecuteDelete` and deleting a repo or savegame.
-- The upload link endpoints and the image upload queue the blob before it is written, so an upload that
-  is never registered is collected too.
+- Triggers on `ModVersions`, `SavegameSnapshots`, `ModImageReference` and `Users.AvatarHash` queue the
+  blob a row referred to when the row is deleted or the columns that name the blob change. They fire for
+  every statement and cascade, including `ExecuteDelete` and deleting a repo or savegame.
+- The upload link endpoints queue the upload's blob, and again when they renew it; registering, checking
+  in and publishing queue the address before copying to it; the image upload queues the image before it is
+  written. So an upload or a copy that is never registered is collected too. Nothing refers to an upload,
+  so it is deleted once untouched for a day.
 - The admin Storage page queues blobs chosen by hand, with the ETag the audit saw.
 
 Queuing a blob again moves `QueuedAt` (the database's clock) and bumps `Requeued`, so a run that read the
@@ -190,16 +214,18 @@ anything refers to it, then whether the row was queued again since it was read, 
 (`BlobDeletionRule`):
 
 - name doesn't parse, no ETag, written less than a day ago, or queued again → keep for a later run;
-- an upload's blob that isn't there yet, queued less than a day ago → keep, since the upload may still be
-  under way;
+- a blob that isn't there, queued less than a day ago, whatever it was queued as → keep, since an upload
+  may still be under way;
 - gone, referred to, or changed since an admin chose it → drop from the queue;
-- otherwise → delete, conditional on the ETag just read, and record it in `DeletedBlobs` with its size,
-  metadata and the time it was deleted. Storage answering that the blob had already gone counts as
-  deleted: that is what a retried delete hears when the first answer was lost. Neither the delete nor the
-  record is cancelled once started.
+- otherwise → record it in `DeletedBlobs` with its size, metadata and the time, then delete it,
+  conditional on the ETag just read. A delete refused because the blob changed removes the record; a
+  delete that fails otherwise keeps it, since it may have gone through. Storage answering that the blob
+  had already gone counts as deleted: that is what a retried delete hears when the first answer was lost.
+  Neither the record nor the delete is cancelled once started.
 
-A registration, check-in, publish, restore, image set or avatar claims its blob before it commits, and so
-does a savegame upload link that reuses a stored blob (`IBlobContainers.ClaimAsync`): it writes the blob's
+A registration, check-in, publish, restore, image set or avatar claims its blob before it commits, unless
+it has just copied it there, and so does a savegame upload link that reuses a stored blob
+(`IBlobContainers.ClaimAsync`): it writes the blob's
 metadata on the ETag it read, reading again if that fails. Claimed before the run's read, the blob is too
 recent to judge; claimed after it, the ETag has moved and the delete fails. A claim that still fails after
 three reads answers `FileBusy`. A claim gives the blob a new ETag, which the client's ranged downloads
@@ -348,6 +374,10 @@ fetched in bulk, so streaming them with long cache headers is simpler.
 
 **Record the hash at upload, verify it at registration.** Azure only computes MD5. Recording SHA-256 in
 metadata lets registration refuse a mismatch without the server reading the bytes.
+
+**Upload to a blob of the upload's own, copy into place.** Put Block needs Write, which can overwrite. A
+link that named an address could replace a registered file for as long as it lasted, so links name a
+scratch blob, and the server copies it to the address with a condition that only creates.
 
 **Repo-scoped composite keys.** The repo's content tables (mod versions, profiles, revisions, savegames,
 snapshots) have primary keys that start with `RepoId`. A query can't forget to scope by repo, and a pin

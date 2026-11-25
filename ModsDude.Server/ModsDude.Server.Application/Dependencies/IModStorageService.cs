@@ -1,6 +1,7 @@
 using ModsDude.Server.Domain.Mods;
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Storage;
+using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Application.Dependencies;
 
@@ -22,13 +23,12 @@ public interface IModStorageService
     Task<StoredModFile?> GetStoredMod(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
 
     /// <summary>
-    /// <see cref="GetStoredMod"/>, and a write to the blob that labels it where it carries no label yet.
-    /// The write gives the blob a new version, so a deletion run that read it before this call cannot
-    /// delete it. Called by whatever is about to make the blob referenced.
+    /// A link the client uploads over, to the upload's own blob. Registering copies it to the version's
+    /// address. The same <paramref name="uploadId"/> names the same blob, so a renewed link carries on
+    /// where the expired one stopped.
     /// </summary>
-    Task<StoredModFile?> ClaimStoredMod(RepoId repoId, ModId modId, ModVersionId versionId, ModBlobLabel label, CancellationToken cancellationToken);
+    Task<string> GetUploadLink(RepoId repoId, UserId userId, UploadId uploadId, CancellationToken cancellationToken);
 
-    Task<string> GetUploadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
     Task<string> GetDownloadLink(RepoId repoId, ModId modId, ModVersionId versionId, CancellationToken cancellationToken);
 }
 

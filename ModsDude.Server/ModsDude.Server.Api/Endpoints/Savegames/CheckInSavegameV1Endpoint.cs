@@ -60,7 +60,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         CheckInSavegameRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
-        ISavegameStorageService savegameStorageService,
+        IStagedUploads stagedUploads,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
         IRetentionUpkeep retentionUpkeep,
@@ -113,19 +113,6 @@ public class CheckInSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }
 
-        // A snapshot whose blob is absent is a head nobody can check out. A refused check-in is
-        // retried by uploading and asking again. Claiming is what stops a deletion run that read the
-        // blob as unreferenced deleting it from under this check-in.
-        var context = await BlobLabelContext.ReadAsync(dbContext, savegame.RepoId, userId, cancellationToken);
-        var label = new SavegameBlobLabel(
-            context.RepoId, context.RepoName, context.Game, context.AddedBy, context.AddedByName, timeService.Now(),
-            savegame.Id, savegame.Name.Value);
-
-        if (!await savegameStorageService.ClaimSavegame(savegame.RepoId, savegame.Id, request.ContentHash, label, cancellationToken))
-        {
-            return TypedResults.BadRequest(Problems.SavegameFileDoesNotExist(savegame.RepoId, savegame.Id, request.ContentHash));
-        }
-
         var isStale = basedOn != savegame.HeadSnapshot;
 
         if (isStale && !request.Force)
@@ -142,6 +129,23 @@ public class CheckInSavegameV1Endpoint : IEndpoint
                 savegame.Id, await SavegameReads.ToDtoAsync(dbContext, open!, cancellationToken)));
         }
 
+        // A snapshot whose blob is absent is a head nobody can check out, so the save has to be at its
+        // address first: claimed where it is there already, or copied there from the upload. A refused
+        // check-in is retried by uploading and asking again. Left until the refusals above are out of the
+        // way, because copying a large save takes a moment.
+        var context = await BlobLabelContext.ReadAsync(dbContext, savegame.RepoId, userId, cancellationToken);
+        var label = new SavegameBlobLabel(
+            context.RepoId, context.RepoName, context.Game, context.AddedBy, context.AddedByName, timeService.Now(),
+            savegame.Id, savegame.Name.Value);
+
+        var uploadId = request.UploadId is Guid upload ? new UploadId(upload) : (UploadId?)null;
+        var storing = await stagedUploads.StoreSavegameAsync(savegame.RepoId, savegame.Id, request.ContentHash, userId, uploadId, request.SizeBytes, label, cancellationToken);
+
+        if (SavegameStoring.Refusal(storing, savegame.RepoId, savegame.Id, request.ContentHash, request.SizeBytes) is { } refused)
+        {
+            return TypedResults.BadRequest(refused);
+        }
+
         var now = timeService.Now();
 
         var head = await dbContext.SavegameSnapshots.GetRowAsync(
@@ -153,7 +157,7 @@ public class CheckInSavegameV1Endpoint : IEndpoint
             : savegame.CreateSnapshot(
                 profileRevision,
                 request.ContentHash,
-                request.SizeBytes,
+                storing.Blob!.Length,
                 userId,
                 now,
                 request.Label,
@@ -310,8 +314,13 @@ public class CheckInSavegameV1Endpoint : IEndpoint
     /// and only null, for a savegame that follows no mod list.
     /// </param>
     /// <param name="ContentHash">
-    /// SHA-256 of the packed save, which is also the address its blob was uploaded to. Equal to the
+    /// SHA-256 of the save's contents, which is also the address its blob is stored at. Equal to the
     /// head's is how "nothing was played" is recognised.
+    /// </param>
+    /// <param name="SizeBytes">How long the archive is. An upload of another length is refused.</param>
+    /// <param name="UploadId">
+    /// The upload to copy to the save's address, from the link it was uploaded over. Null where the
+    /// upload link answered that the save is already stored.
     /// </param>
     /// <param name="Label">What to call this snapshot in the history. Optional.</param>
     /// <param name="Details">What the client's adapter says about the save as it stands now.</param>
@@ -334,7 +343,8 @@ public class CheckInSavegameV1Endpoint : IEndpoint
         bool Force,
         bool KeepPlaying,
         bool TakeOver,
-        IEnumerable<SavegameDetailDto>? Details);
+        IEnumerable<SavegameDetailDto>? Details,
+        Guid? UploadId);
 
     /// <param name="Snapshot">The snapshot minted, or the head where the save had not changed.</param>
     /// <param name="HoldsClaim">Whether the caller holds the savegame now. The client keeps or hands back its copy by this.</param>

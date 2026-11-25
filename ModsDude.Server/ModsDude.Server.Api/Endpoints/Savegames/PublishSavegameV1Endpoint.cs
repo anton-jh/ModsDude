@@ -73,7 +73,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
         PublishSavegameRequest request,
         ClaimsPrincipal claimsPrincipal,
         ApplicationDbContext dbContext,
-        ISavegameStorageService savegameStorageService,
+        IStagedUploads stagedUploads,
         ITimeService timeService,
         IUnitOfWork unitOfWork,
         IRetentionUpkeep retentionUpkeep,
@@ -132,16 +132,19 @@ public class PublishSavegameV1Endpoint : IEndpoint
             return TypedResults.BadRequest(Problems.InvalidSavegameContentHash(request.ContentHash));
         }
 
-        // Claiming is what stops a deletion run that read the blob as unreferenced deleting it from
-        // under this publish.
+        // The save has to be at its address before the snapshot refers to it: claimed where it is there
+        // already, or copied there from the upload.
         var context = await BlobLabelContext.ReadAsync(dbContext, repo, userId, cancellationToken);
         var label = new SavegameBlobLabel(
             context.RepoId, context.RepoName, context.Game, context.AddedBy, context.AddedByName, timeService.Now(),
             savegameId, new SavegameName(request.Name).Value);
 
-        if (!await savegameStorageService.ClaimSavegame(repo, savegameId, request.ContentHash, label, cancellationToken))
+        var uploadId = request.UploadId is Guid upload ? new UploadId(upload) : (UploadId?)null;
+        var storing = await stagedUploads.StoreSavegameAsync(repo, savegameId, request.ContentHash, userId, uploadId, request.SizeBytes, label, cancellationToken);
+
+        if (SavegameStoring.Refusal(storing, repo, savegameId, request.ContentHash, request.SizeBytes) is { } refused)
         {
-            return TypedResults.BadRequest(Problems.SavegameFileDoesNotExist(repo, savegameId, request.ContentHash));
+            return TypedResults.BadRequest(refused);
         }
 
         var now = timeService.Now();
@@ -156,7 +159,7 @@ public class PublishSavegameV1Endpoint : IEndpoint
         var snapshot = savegame.CreateSnapshot(
             profileRevision,
             request.ContentHash,
-            request.SizeBytes,
+            storing.Blob!.Length,
             userId,
             now,
             request.Label,
@@ -256,7 +259,12 @@ public class PublishSavegameV1Endpoint : IEndpoint
     /// </para>
     /// </param>
     /// <param name="ContentHash">
-    /// SHA-256 of the packed save, which is also the address its blob was uploaded to.
+    /// SHA-256 of the save's contents, which is also the address its blob is stored at.
+    /// </param>
+    /// <param name="SizeBytes">How long the archive is. An upload of another length is refused.</param>
+    /// <param name="UploadId">
+    /// The upload to copy to the save's address, from the link it was uploaded over. Null where the
+    /// upload link answered that the save is already stored.
     /// </param>
     /// <param name="Label">What to call this first snapshot in the history. Optional.</param>
     /// <param name="Details">
@@ -274,7 +282,8 @@ public class PublishSavegameV1Endpoint : IEndpoint
         long SizeBytes,
         string? Label,
         IEnumerable<SavegameDetailDto>? Details,
-        bool KeepPlaying);
+        bool KeepPlaying,
+        Guid? UploadId);
 
     /// <param name="HoldsClaim">Whether the caller holds the savegame now. The client keeps or hands back its copy by this.</param>
     public record PublishSavegameResponse(

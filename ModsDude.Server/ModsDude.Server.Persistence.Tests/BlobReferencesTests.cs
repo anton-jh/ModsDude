@@ -65,6 +65,18 @@ public class BlobReferencesTests(DatabaseFixture fixture)
         Assert.False(await dbContext.IsReferencedAsync(StorageContainer.Images, BlobNames.Image(TestHashes.Of("nobody")), CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData(StorageContainer.Mods)]
+    [InlineData(StorageContainer.Savegames)]
+    public async Task An_upload_is_never_referred_to(StorageContainer container)
+    {
+        using var dbContext = fixture.CreateDbContext();
+
+        var upload = BlobNames.Upload(new RepoId(Guid.NewGuid()), new UserId("uploader"), new UploadId(Guid.NewGuid()));
+
+        Assert.False(await dbContext.IsReferencedAsync(container, upload, CancellationToken.None));
+    }
+
     [Fact]
     public async Task A_name_that_does_not_parse_is_treated_as_referred_to()
     {

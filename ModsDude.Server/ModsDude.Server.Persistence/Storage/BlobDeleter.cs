@@ -41,19 +41,22 @@ public class BlobDeleter(
                 return stored is null ? BlobDeletionResult.Gone : BlobDeletionResult.Dropped;
 
             case BlobDeletionVerdict.Delete:
-                // Not cancelled once sent, nor is recording it below: a delete that goes through with no
-                // record is one nobody can find to restore.
+                // Recorded before the delete is sent, and neither is cancelled once begun: a delete that
+                // goes through with no record is one nobody can find to restore. A delete that fails may
+                // still have gone through, so its record stays; a record of a blob that is still there
+                // is harmless.
+                var record = await RecordAsync(candidate, stored!, container);
                 var deletion = await blobs.DeleteAsync(candidate.Container, candidate.BlobName, stored!.Version!, CancellationToken.None);
 
                 if (deletion == BlobDeleteResult.Changed)
                 {
+                    await ForgetRecordAsync(record, candidate, container);
                     logger.LogInformation("Kept {Name} in {Container}: it changed while it was being deleted.", candidate.BlobName, container);
                     return BlobDeletionResult.Kept;
                 }
 
                 // Gone as well as deleted: storage answers a retried delete whose first answer was lost
                 // as if the blob had never been there, and nothing else deletes blobs.
-                await RecordAsync(candidate, stored, container);
                 await DropAsync(candidate, CancellationToken.None);
 
                 logger.LogInformation(
@@ -67,7 +70,7 @@ public class BlobDeleter(
     }
 
 
-    private async Task RecordAsync(BlobDeletionCandidate candidate, StoredBlob stored, string container)
+    private async Task<DeletedBlob> RecordAsync(BlobDeletionCandidate candidate, StoredBlob stored, string container)
     {
         var record = new DeletedBlob(candidate, stored, timeService.Now());
 
@@ -75,15 +78,30 @@ public class BlobDeleter(
         {
             dbContext.DeletedBlobs.Add(record);
             await dbContext.SaveChangesAsync(CancellationToken.None);
+
+            return record;
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Deleted {Name} ({Version}) in {Container} but could not record it.", candidate.BlobName, stored.Version, container);
+            logger.LogError(exception, "Could not record the deletion of {Name} ({Version}) in {Container}, so it was not deleted.", candidate.BlobName, stored.Version, container);
             throw;
         }
         finally
         {
             dbContext.Entry(record).State = EntityState.Detached;
+        }
+    }
+
+    /// <summary>For a delete known not to have happened. Left behind by a failure here, the record only names a blob that is still there.</summary>
+    private async Task ForgetRecordAsync(DeletedBlob record, BlobDeletionCandidate candidate, string container)
+    {
+        try
+        {
+            await dbContext.DeletedBlobs.Where(x => x.Id == record.Id).ExecuteDeleteAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "{Name} in {Container} was not deleted, but its deletion record could not be removed.", candidate.BlobName, container);
         }
     }
 
