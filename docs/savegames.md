@@ -108,8 +108,9 @@ hashes it:
 
 1. Ask the server for an upload link. A blob already at that hash is `AlreadyStored`, so the upload is
    skipped.
-2. Upload.
-3. Check in against the snapshot the save was based on.
+2. Upload to the upload's own blob. A renewal answered with `AlreadyStored` ends the upload.
+3. Check in against the snapshot the save was based on, naming the upload, which the server copies to the
+   save's address (see [Server](server.md#blob-storage)).
 
 If someone else checked in since, the check-in is refused (`SavegameSnapshotStale`). The user can check
 theirs in anyway, recorded as `Forced`, or leave it for now. A check-in whose hash matches the head creates

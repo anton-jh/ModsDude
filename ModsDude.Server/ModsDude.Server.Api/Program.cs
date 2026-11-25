@@ -151,6 +151,7 @@ builder.Services.AddScoped<IStorageMaintenance, StorageMaintenance>();
 builder.Services.AddScoped<IStorageGatekeeper, StorageGatekeeper>();
 builder.Services.AddScoped<IStorageAuditor, StorageAuditor>();
 builder.Services.AddScoped<IBlobDeleter, BlobDeleter>();
+builder.Services.AddScoped<IStagedUploads, StagedUploads>();
 
 builder.Services
     .Configure<StorageStatisticsOptions>(builder.Configuration.GetSection(StorageStatisticsOptions.SectionName));

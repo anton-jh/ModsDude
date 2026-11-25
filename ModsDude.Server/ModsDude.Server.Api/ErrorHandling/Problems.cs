@@ -297,7 +297,8 @@ public static class Problems
     /// <summary>
     /// An unregistered blob is already at the address, so no upload link can be minted — but the
     /// registration the blob is missing can still be made. <paramref name="contentHash"/> is what
-    /// makes that safe: matching it means this is the client's own orphan from a failed import and
+    /// makes that safe: matching it means this is the client's own file, copied into place by a
+    /// registration that never committed, and
     /// registering describes the bytes that are really there, differing means an id/version
     /// collision between two different builds, which must be reported rather than registered over.
     /// It is <c>null</c> only when the blob predates the metadata being recorded, in which case the
@@ -380,6 +381,21 @@ public static class Problems
         Type = ProblemType.HashMismatch,
         Title = "The content hash does not match the stored file",
         Detail = $"Version '{versionId.Value}' of mod '{modId.Value}' in repo '{repoId.Value}' claims '{claimed}', but the stored file records '{recorded ?? "nothing"}'."
+    };
+
+    /// <summary>The upload changed or went while it was being copied into place. Uploading again can succeed.</summary>
+    public static CustomProblemDetails UploadChanged => new()
+    {
+        Type = ProblemType.UploadChanged,
+        Title = "The upload changed",
+        Detail = "The uploaded file changed or went while the server was storing it."
+    };
+
+    public static CustomProblemDetails SavegameUploadInvalid(long sizeBytes, long uploadedBytes, string? recordedHash) => new()
+    {
+        Type = ProblemType.UploadInvalid,
+        Title = "The upload is not the savegame described",
+        Detail = $"The savegame was described as {sizeBytes} bytes, and the upload is {uploadedBytes} bytes and records content hash '{recordedHash ?? "nothing"}'."
     };
 
     public static CustomProblemDetails InvalidContentHash(string? contentHash) => new()
@@ -694,6 +710,14 @@ public static class Problems
         [EnumMember(Value = _typeBaseUri + "file-busy")]
         [JsonStringEnumMemberName(_typeBaseUri + "file-busy")]
         FileBusy,
+
+        [EnumMember(Value = _typeBaseUri + "upload-changed")]
+        [JsonStringEnumMemberName(_typeBaseUri + "upload-changed")]
+        UploadChanged,
+
+        [EnumMember(Value = _typeBaseUri + "upload-invalid")]
+        [JsonStringEnumMemberName(_typeBaseUri + "upload-invalid")]
+        UploadInvalid,
 
         [EnumMember(Value = _typeBaseUri + "already-registered")]
         [JsonStringEnumMemberName(_typeBaseUri + "already-registered")]

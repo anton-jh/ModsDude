@@ -25,12 +25,13 @@ public class BlockBlobModFileUploaderTests
 
 
     [Fact]
-    public async Task The_commit_refuses_to_replace_a_stored_blob()
+    public async Task The_commit_is_unconditional_so_one_sent_again_after_its_answer_was_lost_succeeds()
     {
+        // The link names the upload's own blob; nothing else is ever there to replace.
         await _uploader.UploadAsync(Upload("content"), CancellationToken.None);
 
         var commit = Assert.Single(_storage.Requests, x => x.Query.Contains("comp=blocklist"));
-        Assert.Equal("*", commit.IfNoneMatch);
+        Assert.Null(commit.IfNoneMatch);
     }
 
     [Fact]
@@ -48,17 +49,17 @@ public class BlockBlobModFileUploaderTests
     [Theory]
     [InlineData(HttpStatusCode.Conflict, "BlobAlreadyExists")]
     [InlineData(HttpStatusCode.PreconditionFailed, "ConditionNotMet")]
-    public async Task A_commit_that_finds_a_blob_already_stored_says_so(HttpStatusCode status, string errorCode)
+    public async Task A_refused_commit_fails_the_upload(HttpStatusCode status, string errorCode)
     {
         _storage.CommitResponse = () => Refusal(status, errorCode);
 
-        await Assert.ThrowsAsync<BlobAlreadyExistsException>(() => _uploader.UploadAsync(Upload("content"), CancellationToken.None));
+        await Assert.ThrowsAsync<HttpRequestException>(() => _uploader.UploadAsync(Upload("content"), CancellationToken.None));
     }
 
     [Theory]
     [InlineData("AuthenticationFailed")]
     [InlineData("AuthorizationPermissionMismatch")]
-    public async Task A_refused_link_is_not_mistaken_for_a_stored_blob(string errorCode)
+    public async Task A_refused_link_fails_the_upload(string errorCode)
     {
         _storage.BlockResponse = () => Refusal(HttpStatusCode.Forbidden, errorCode);
 

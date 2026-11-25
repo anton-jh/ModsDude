@@ -224,6 +224,11 @@ public class StorageRows(ApplicationDbContext dbContext)
             return [new("Image hash", hash)];
         }
 
+        if (BlobNames.TryParseUpload(blobName, out var upload) && container is StorageContainer.Mods or StorageContainer.Savegames)
+        {
+            return [new("Uploaded by", upload.UserId.Value), new("Upload id", upload.UploadId.Value.ToString())];
+        }
+
         return [];
     }
 

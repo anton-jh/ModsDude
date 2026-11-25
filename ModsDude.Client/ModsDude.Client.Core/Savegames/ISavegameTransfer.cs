@@ -33,9 +33,10 @@ public interface ISavegameTransfer
         CancellationToken ct);
 
     /// <summary>
-    /// Puts a packed savegame in storage, or establishes that the same contents are already there.
+    /// Uploads a packed savegame, or establishes that the same contents are already stored.
     /// </summary>
-    Task UploadAsync(Guid repoId, Guid savegameId, PackedSavegame packed, IProgress<SavegameProgress>? progress, CancellationToken ct);
+    /// <returns>The upload to check in or publish with, or null where the contents are already stored.</returns>
+    Task<Guid?> UploadAsync(Guid repoId, Guid savegameId, PackedSavegame packed, IProgress<SavegameProgress>? progress, CancellationToken ct);
 
     /// <summary>
     /// Deletes the temporary archives a run that crashed or was killed left behind. Only while

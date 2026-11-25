@@ -10,6 +10,7 @@ namespace ModsDude.Server.Persistence.Storage;
 /// <summary>
 /// Which blobs the database refers to, as blob names built by <see cref="BlobNames"/>: mod versions
 /// refer to mod blobs, savegame snapshots to savegame blobs, and image references and avatars to images.
+/// Nothing refers to an upload.
 /// </summary>
 public static class BlobReferences
 {
@@ -64,6 +65,9 @@ public static class BlobReferences
             case StorageContainer.Images when BlobNames.TryParseImage(blobName, out var hash):
                 return await dbContext.ModVersions.AnyAsync(x => x.Images.Any(y => y.Hash == hash), cancellationToken)
                     || await dbContext.Users.AnyAsync(x => x.AvatarHash == hash, cancellationToken);
+
+            case StorageContainer.Mods or StorageContainer.Savegames when BlobNames.TryParseUpload(blobName, out _):
+                return false;
 
             default:
                 return true;

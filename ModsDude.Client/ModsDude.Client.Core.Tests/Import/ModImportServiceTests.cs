@@ -58,6 +58,33 @@ public class ModImportServiceTests : IDisposable
 
 
     [Fact]
+    public async Task A_renewed_link_names_the_same_upload_and_the_registration_names_it_too()
+    {
+        _uploader.RenewEveryLink = true;
+
+        var result = await ImportAsync([Local("FS25_Plough", "1.0")]);
+
+        Assert.Equal(ModImportStatus.Registered, Assert.Single(result.Items).Status);
+
+        var (first, renewal) = (_server.LinkedUploads[0], _server.LinkedUploads[1]);
+        Assert.Null(first);
+        Assert.NotNull(renewal);
+        Assert.Equal(renewal, Assert.Single(_server.Registrations).Value.UploadId);
+    }
+
+    [Fact]
+    public async Task A_stored_file_adopted_after_a_failed_registration_is_registered_without_an_upload()
+    {
+        var version = Local("FS25_Plough", "1.0");
+        _server.PlaceOrphan(version.Identity, await HashOf(version));
+
+        var result = await ImportAsync([version]);
+
+        Assert.Equal(ModImportStatus.Registered, Assert.Single(result.Items).Status);
+        Assert.Null(Assert.Single(_server.Registrations).Value.UploadId);
+    }
+
+    [Fact]
     public async Task A_mod_is_linked_uploaded_and_only_then_registered()
     {
         var result = await ImportAsync([Local("FS25_Plough", "1.0")]);
@@ -242,7 +269,7 @@ public class ModImportServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task A_concurrent_upload_of_a_different_build_that_committed_first_is_reported()
+    public async Task A_different_build_stored_for_the_version_while_ours_uploaded_is_reported()
     {
         var version = Local("FS25_Plough", "1.0", content: "our build");
         var theirs = await HashOf(Local("FS25_Plough", "1.0", content: "somebody else's build"));
@@ -255,10 +282,11 @@ public class ModImportServiceTests : IDisposable
 
         var result = await ImportAsync([version]);
 
-        // Their bytes are what is stored, and an upload link cannot overwrite them, so nothing that
-        // describes ours may be registered.
+        // Their bytes are what is stored, and copying ours into place never replaces them, so nothing
+        // that describes ours may be registered.
         Assert.Equal(ModImportStatus.ContentMismatch, Assert.Single(result.Items).Status);
-        Assert.Empty(_server.CallsOf(ServerCallKind.Register));
+        Assert.Empty(_server.VersionsOf(Mod("FS25_Plough")));
+        Assert.Equal(theirs, _server.RecordedHash(version.Identity));
     }
 
     [Fact]
@@ -402,7 +430,7 @@ public class ModImportServiceTests : IDisposable
     [Fact]
     public async Task A_version_whose_predecessor_failed_is_placed_where_that_leaves_it()
     {
-        _uploader.OnUpload = link => link.EndsWith("/1.0")
+        _uploader.OnUpload = link => link.Contains("/1.0/")
             ? throw new IOException("The file is in use by another process.")
             : Task.CompletedTask;
 
@@ -556,17 +584,20 @@ public class ModImportServiceTests : IDisposable
     [Fact]
     public async Task The_same_file_registered_first_by_somebody_else_is_a_success()
     {
+        var version = Local("FS25_Plough", "1.0");
+        var hash = await HashOf(version);
+
         _server.BeforeRegister = identity =>
         {
             if (_server.VersionsOf(identity.ModId).Count == 0)
             {
-                _server.RegisterStoredFileElsewhere(identity);
+                _server.RegisterSameFileElsewhere(identity, hash);
             }
 
             return Task.CompletedTask;
         };
 
-        var result = await ImportAsync([Local("FS25_Plough", "1.0")]);
+        var result = await ImportAsync([version]);
 
         Assert.Equal(ModImportStatus.Registered, Assert.Single(result.Items).Status);
         Assert.Equal(Vs("1.0"), _server.VersionsOf(Mod("FS25_Plough")));

@@ -112,14 +112,17 @@ public class RestoreSavegameSnapshotV1Endpoint : IEndpoint
         var now = timeService.Now();
 
         // Claimed, so a deletion run cannot delete the blob while the source snapshot is deleted
-        // before this commits. A blob that has gone is not refused over: its address is already named
-        // by a registered snapshot, so anything that would fail here has failed for the source too.
+        // before this commits. A blob that has gone is refused over: the source may have been deleted,
+        // and its blob with it, since it was read.
         var context = await BlobLabelContext.ReadAsync(dbContext, savegame.RepoId, userId, cancellationToken);
         var label = new SavegameBlobLabel(
             context.RepoId, context.RepoName, context.Game, context.AddedBy, context.AddedByName, now,
             savegame.Id, savegame.Name.Value);
 
-        await savegameStorageService.ClaimSavegame(savegame.RepoId, savegame.Id, source.ContentHash, label, cancellationToken);
+        if (!await savegameStorageService.ClaimSavegame(savegame.RepoId, savegame.Id, source.ContentHash, label, cancellationToken))
+        {
+            return TypedResults.BadRequest(Problems.SavegameFileDoesNotExist(savegame.RepoId, savegame.Id, source.ContentHash));
+        }
 
         var snapshot = savegame.CreateSnapshot(
             source.ProfileRevision,

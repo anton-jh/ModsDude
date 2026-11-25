@@ -94,7 +94,7 @@ public sealed class SavegameCheckIn(
             binding = bindings.Update(game.Identity, savegameId, x => x with { PendingCheckIn = pending })
                 ?? throw new InvalidOperationException($"Savegame '{savegameId}' stopped being held in game '{game.Identity}' while it was being checked in.");
 
-            await transfer.UploadAsync(binding.RepoId, savegameId, packed, progress, ct);
+            var uploadId = await transfer.UploadAsync(binding.RepoId, savegameId, packed, progress, ct);
 
             progress?.Report(new SavegameProgress(SavegameStage.Recording, 0, 0));
 
@@ -107,6 +107,7 @@ public sealed class SavegameCheckIn(
                 ProfileRevision = playedRevision,
                 ContentHash = packed.ContentHash,
                 SizeBytes = packed.SizeBytes,
+                UploadId = uploadId,
                 Label = label,
                 Force = force,
                 KeepPlaying = keepPlaying,

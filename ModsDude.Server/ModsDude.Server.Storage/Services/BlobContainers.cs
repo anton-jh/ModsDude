@@ -1,20 +1,34 @@
 using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using Azure.Storage.Blobs.Specialized;
+using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
 using ModsDude.Server.Application.Dependencies;
 using ModsDude.Server.Application.Exceptions;
+using ModsDude.Server.Application.Services;
 using ModsDude.Server.Domain.Storage;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace ModsDude.Server.Storage.Services;
 
 internal class BlobContainers(
     BlobServiceClient blobServiceClient,
+    IUserDelegationKeyCache keyCache,
+    ITimeService timeService,
     ILogger<BlobContainers> logger)
     : IBlobContainers
 {
     private const int _claimAttempts = 3;
+
+    /// <summary>
+    /// How much of an upload one Put Block From URL copies. Storage copies inside the account, so a block
+    /// this size takes a moment, and a 2 GB mod is twenty of them.
+    /// </summary>
+    private const long _promotionBlockSize = 100L * 1024 * 1024;
+
+    private const int _promotionBlocksAtOnce = 4;
 
 
     public string StorageAccount => blobServiceClient.Uri.Host;
@@ -105,6 +119,77 @@ internal class BlobContainers(
             {
                 throw new BlobBusyException(container, blobName, exception);
             }
+        }
+    }
+
+    public async Task<BlobPromotion> PromoteAsync(
+        StorageContainer container, StoredBlob upload, string destination,
+        IReadOnlyDictionary<string, string> metadata, BlobLabel label, CancellationToken cancellationToken)
+    {
+        if (upload.Version is not string version)
+        {
+            return new BlobPromotion(BlobPromotionResult.UploadChanged, null);
+        }
+
+        var source = Client(container).GetBlobClient(upload.Name);
+        var target = Client(container).GetBlockBlobClient(destination);
+        var sourceLink = new Uri(await BlobSasLinks.CreateAsync(keyCache, source, BlobSasPermissions.Read, new DateTimeOffset(timeService.Now()), cancellationToken));
+
+        // Ids of their own for every copy, so two copies to one destination at once never commit each
+        // other's blocks. Every id has the same length, as storage requires.
+        var copyId = Guid.NewGuid();
+        var blockCount = (int)((upload.Length + _promotionBlockSize - 1) / _promotionBlockSize);
+        var blockIds = Enumerable.Range(0, blockCount)
+            .Select(x => Convert.ToBase64String(Encoding.ASCII.GetBytes($"{copyId:N}{x:D6}")))
+            .ToList();
+
+        try
+        {
+            await Parallel.ForEachAsync(
+                Enumerable.Range(0, blockCount),
+                new ParallelOptions { MaxDegreeOfParallelism = _promotionBlocksAtOnce, CancellationToken = cancellationToken },
+                async (index, token) =>
+                {
+                    var offset = index * _promotionBlockSize;
+
+                    await target.StageBlockFromUriAsync(sourceLink, blockIds[index], new StageBlockFromUriOptions
+                    {
+                        SourceRange = new HttpRange(offset, Math.Min(_promotionBlockSize, upload.Length - offset)),
+                        SourceConditions = new RequestConditions { IfMatch = new ETag(version) }
+                    }, token);
+                });
+        }
+        catch (RequestFailedException exception) when (exception.Status is 404 or 412 || exception.ErrorCode == "CannotVerifyCopySource")
+        {
+            logger.LogInformation(exception, "Upload {Name} in container {Container} changed or went before it was copied to {Destination}.", upload.Name, StorageContainerNames.Of(container), destination);
+            return new BlobPromotion(BlobPromotionResult.UploadChanged, null);
+        }
+
+        try
+        {
+            var labelled = label.ApplyTo(metadata);
+
+            try
+            {
+                return Promoted(await CommitAsync(target, blockIds, labelled, cancellationToken), labelled);
+            }
+            catch (RequestFailedException exception) when (exception.Status == 400)
+            {
+                // The label is for people; the copy is what matters.
+                logger.LogWarning(exception, "Storage refused the label for {Name} in container {Container}. Copying it without one.", destination, StorageContainerNames.Of(container));
+                return Promoted(await CommitAsync(target, blockIds, metadata, cancellationToken), metadata);
+            }
+        }
+        catch (RequestFailedException exception) when (exception.Status is 409 or 412)
+        {
+            return new BlobPromotion(BlobPromotionResult.DestinationExists, null);
+        }
+
+        BlobPromotion Promoted(BlobContentInfo written, IReadOnlyDictionary<string, string> writtenMetadata)
+        {
+            return new BlobPromotion(
+                BlobPromotionResult.Promoted,
+                new StoredBlob(destination, written.LastModified, upload.Length, written.ETag.ToString(), writtenMetadata));
         }
     }
 
@@ -210,6 +295,20 @@ internal class BlobContainers(
         }
     }
 
+
+    /// <summary>Only where nothing is at the destination yet, which is what makes a copy never replace a stored file.</summary>
+    private static async Task<BlobContentInfo> CommitAsync(
+        BlockBlobClient target,
+        IReadOnlyList<string> blockIds,
+        IReadOnlyDictionary<string, string> metadata,
+        CancellationToken cancellationToken)
+    {
+        return (await target.CommitBlockListAsync(blockIds, new CommitBlockListOptions
+        {
+            Metadata = new Dictionary<string, string>(metadata),
+            Conditions = new BlobRequestConditions { IfNoneMatch = ETag.All }
+        }, cancellationToken)).Value;
+    }
 
     private BlobContainerClient Client(StorageContainer container)
     {

@@ -6,7 +6,7 @@ namespace ModsDude.Server.Persistence.Tests;
 
 /// <summary>
 /// The three containers in memory, with versions that move on every write the way ETags do, so the
-/// conditional writes the code under test relies on behave as they do against storage.
+/// conditional writes and copies the code under test relies on behave as they do against storage.
 /// </summary>
 public class FakeBlobContainers : IBlobContainers
 {
@@ -33,6 +33,9 @@ public class FakeBlobContainers : IBlobContainers
 
     /// <summary>Runs before each delete, so a test can change the blob under it.</summary>
     public Action<StorageContainer, string>? BeforeDelete { get; set; }
+
+    /// <summary>Runs before each copy of an upload, so a test can change the upload or the destination under it.</summary>
+    public Action<StorageContainer, string>? BeforePromote { get; set; }
 
     /// <summary>Whether a marker write is refused as if somebody else had written it first.</summary>
     public Func<StorageContainer, bool> RefuseMarkerWrite { get; set; } = _ => false;
@@ -114,6 +117,25 @@ public class FakeBlobContainers : IBlobContainers
         };
 
         return Task.FromResult<StoredBlob?>(current);
+    }
+
+    public Task<BlobPromotion> PromoteAsync(
+        StorageContainer container, StoredBlob upload, string destination,
+        IReadOnlyDictionary<string, string> metadata, BlobLabel label, CancellationToken cancellationToken)
+    {
+        BeforePromote?.Invoke(container, destination);
+
+        if (Find(container, upload.Name) is not { } current || current.Version != upload.Version)
+        {
+            return Task.FromResult(new BlobPromotion(BlobPromotionResult.UploadChanged, null));
+        }
+
+        if (Find(container, destination) is not null)
+        {
+            return Task.FromResult(new BlobPromotion(BlobPromotionResult.DestinationExists, null));
+        }
+
+        return Task.FromResult(new BlobPromotion(BlobPromotionResult.Promoted, Put(container, destination, current.Length, metadata: label.ApplyTo(metadata))));
     }
 
     public Task<BlobDeleteResult> DeleteAsync(StorageContainer container, string blobName, string version, CancellationToken cancellationToken)

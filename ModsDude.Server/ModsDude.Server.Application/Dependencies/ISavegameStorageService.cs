@@ -1,6 +1,7 @@
 using ModsDude.Server.Domain.Repos;
 using ModsDude.Server.Domain.Savegames;
 using ModsDude.Server.Domain.Storage;
+using ModsDude.Server.Domain.Users;
 
 namespace ModsDude.Server.Application.Dependencies;
 
@@ -45,11 +46,11 @@ public interface ISavegameStorageService
     Task EnsureContainerExists(CancellationToken cancellationToken);
 
     /// <summary>
-    /// A link the client uploads the packed save over. The client names the hash before it uploads,
-    /// because the hash is the address - which means it has to have hashed the file already, and the
-    /// bytes it then sends can be checked against the name it asked for.
+    /// A link the client uploads the packed save over, to the upload's own blob. Checking in copies it to
+    /// the save's address. The same <paramref name="uploadId"/> names the same blob, so a renewed link
+    /// carries on where the expired one stopped.
     /// </summary>
-    Task<string> GetUploadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
+    Task<string> GetUploadLink(RepoId repoId, UserId userId, UploadId uploadId, CancellationToken cancellationToken);
 
     Task<string> GetDownloadLink(RepoId repoId, SavegameId savegameId, string contentHash, CancellationToken cancellationToken);
 

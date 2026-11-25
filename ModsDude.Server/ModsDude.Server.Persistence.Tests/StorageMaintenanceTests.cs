@@ -480,6 +480,25 @@ public class StorageMaintenanceTests(StorageDatabaseFixture fixture) : IClassFix
     }
 
     [Fact]
+    public async Task An_upload_is_deleted_once_untouched_for_the_minimum_age_and_kept_before()
+    {
+        await GivenBoundStorageAsync();
+        var (repoId, userId) = await StorageTestData.GivenARepoAsync(fixture.CreateDbContext);
+        var old = BlobNames.Upload(repoId, userId, new UploadId(Guid.NewGuid()));
+        var young = BlobNames.Upload(repoId, userId, new UploadId(Guid.NewGuid()));
+        _blobs.Put(StorageContainer.Savegames, old, lastModified: _now.AddDays(-2));
+        _blobs.Put(StorageContainer.Savegames, young, lastModified: _now.AddHours(-1));
+        await QueueAsync(StorageContainer.Savegames, old);
+        await QueueAsync(StorageContainer.Savegames, young);
+
+        var outcome = await RunAsync();
+
+        Assert.Empty(outcome.Refusals);
+        Assert.Equal([(StorageContainer.Savegames, old)], _blobs.Deleted);
+        Assert.Equal(young, Assert.Single(await CandidatesAsync()).BlobName);
+    }
+
+    [Fact]
     public async Task An_upload_whose_blob_never_came_is_dropped_after_the_minimum_age()
     {
         await GivenBoundStorageAsync();
