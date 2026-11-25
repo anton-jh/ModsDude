@@ -242,8 +242,8 @@ public sealed class SavegamePublishWizard
 
         var step = new QuestionStepViewModel(
             $"Activate '{profileName}'?",
-            $"{current} Keeping '{savegameName}' checked out needs '{profileName}' active, so it is activated before the save is published.",
-            $"Activate '{profileName}'");
+            $"{current} Keeping '{savegameName}' checked out needs '{profileName}' active.",
+            "Activate");
 
         _activateStep = (profileId, _game.ActiveProfile, step);
 
@@ -262,8 +262,8 @@ public sealed class SavegamePublishWizard
             savegameId,
             savegame,
             activates
-                ? $"Checked in so '{profileName}' can be activated."
-                : $"Checked in so '{publishedName}' can stay checked out. '{_game.Name}' holds one savegame that follows a mod list.");
+                ? $"Checked in first to activate '{profileName}'"
+                : $"Checked in first to keep '{publishedName}' checked out");
 
         _checkInStep = (savegameId, activates, step);
 

@@ -50,7 +50,7 @@ public static class ProfileActivation
     public static string Label(ProfileActivationKind kind, int? pinnedRevision = null)
         => (kind, pinnedRevision) switch
         {
-            (ProfileActivationKind.Apply, int revision) => $"Re-apply rev {revision}",
+            (ProfileActivationKind.Apply, int revision) => $"Re-apply revision {revision}",
             (ProfileActivationKind.Apply, _) => "Re-apply",
             _ => "Activate"
         };

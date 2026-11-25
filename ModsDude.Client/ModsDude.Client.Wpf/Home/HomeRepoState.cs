@@ -83,7 +83,7 @@ public sealed record HomeRepoState(
 
     public string PickerLabel => IsFollowing
         ? FollowedProfileName ?? "Archived profile"
-        : "Choose profile";
+        : "Select profile";
 
     public bool HasPin => IsFollowing && PinnedRevision is not null;
 

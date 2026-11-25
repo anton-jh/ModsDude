@@ -51,7 +51,7 @@ public partial class ManageProfileViewModel(
 
         OnHasChangesChanged();
 
-        toasts.Show($"Renamed the profile to {profile.Name}.");
+        toasts.Show($"Renamed to '{profile.Name}'");
     }
 
     /// <summary>

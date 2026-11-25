@@ -53,7 +53,7 @@ public sealed class AccountSwitcher(
 
             await modalService.Value.Show(ConfirmationModalViewModel.Refusal(
                 "Could not switch user",
-                "Some work did not stop. Try again once it has finished."));
+                "Running work did not stop. Try again when it has finished."));
 
             return false;
         }

@@ -213,7 +213,7 @@ public sealed class SavegameCheckIn(
                 "That savegame was already checked in",
                 $"Check-in {unanswered.RequestId} of savegame '{binding.SavegameId}' landed as snapshot {answer.Snapshot.Number} and handed the save back, but its answer was lost and the slot was played on afterwards.")
             {
-                Hint = "What you played since is still in the slot, as a save of your own."
+                Hint = "Your later progress is still in the slot, but it is no longer part of the savegame."
             };
         }
 
@@ -275,7 +275,7 @@ public sealed class SavegameCheckIn(
 
         return attribution.FindPlayedRevision(game.Identity, binding)
             ?? throw new UserFriendlyException(
-                $"'{game.Name}' has no record of which mod list it is on",
+                $"'{game.Name}' has no profile applied",
                 $"Neither the sync manifest for game '{game.Identity}' nor the checkout binding records a profile revision, and a savegame that follows a mod list has to name one. Apply the profile to this game and check in again.")
             {
                 Hint = "Apply the profile to this game and check in again."

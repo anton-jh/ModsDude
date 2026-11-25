@@ -10,13 +10,13 @@ namespace ModsDude.Client.Core.GameAdapters.Implementations.BeamNgV1;
 /// </summary>
 public class BeamNgLocalSettings : DynamicForm<BeamNgLocalSettings>
 {
-    [CanBeModified, Title("Game mods folder"), FolderPath]
+    [CanBeModified, Title("Game mod folder"), FolderPath]
     public string? GameModsFolder { get; set; }
 
-    [CanBeModified, Title("BeamMP server mods folder"), FolderPath]
+    [CanBeModified, Title("BeamMP server mod folder"), FolderPath]
     public string? ServerModsFolder { get; set; }
 
-    [CanBeModified, Title("BeamMP launcher cache"), FolderPath]
+    [CanBeModified, Title("BeamMP client mod folder"), FolderPath]
     public string? LauncherCacheFolder { get; set; }
 
 

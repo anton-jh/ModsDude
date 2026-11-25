@@ -76,7 +76,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         CanModify = repo.MembershipLevel >= RepoMembershipLevel.Member;
         ModifyRestriction = CanModify
             ? null
-            : "Guests cannot change a repo's mods. Ask an admin for a higher membership level.";
+            : "Guests cannot change mods";
 
         _rowActions = new ModRowActions(
             ReorderVersionsCommand, DeleteVersionCommand, DeleteModCommand, ModifyRestriction);
@@ -217,11 +217,11 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
         var confirmation = new ConfirmationModalViewModel(
             "Really?",
-            $"Delete version '{row.Version}' of '{row.Name}' from the repo?\n"
-                + "The file goes with it, and this cannot be undone.",
+            $"Delete version '{row.Version}' of '{row.Name}' and its file from the repo?\n"
+                + "This cannot be undone.",
             IconKind.Warning,
-            "Delete version",
-            "Keep");
+            "Delete",
+            "Cancel");
 
         await _modalService.Show(confirmation);
 
@@ -239,7 +239,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             await ShowDependentsAsync(
                 $"Version '{row.Version}' of '{row.Name}'",
                 ct => _modsClient.GetModVersionDependentsV1Async(_repo.Id, row.Id, row.Version, ct),
-                $"A profile depends on version '{row.Version}' of '{row.Name}'. Take it out of that profile first.");
+                $"A profile uses version '{row.Version}' of '{row.Name}'. Remove it from that profile first.");
 
             return;
         }
@@ -247,8 +247,8 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         {
             // A mod with no versions is not a state anything else in the system can represent, which
             // is why removing the last one is its own action rather than the same one again.
-            await ShowRefusal("That is the only version",
-                $"'{row.Name}' has no other version, so this would leave the mod with none. Delete the whole mod instead.");
+            await ShowRefusal("Only version",
+                $"'{row.Name}' has no other version. Delete the mod instead.");
 
             return;
         }
@@ -268,11 +268,11 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
         var confirmation = new ConfirmationModalViewModel(
             "Really?",
-            $"Delete '{row.Name}' and all {versionCount} of its versions from the repo?\n"
-                + "The files go with them, and this cannot be undone.",
+            $"Delete '{row.Name}' with all {versionCount} versions and their files from the repo?\n"
+                + "This cannot be undone.",
             IconKind.Warning,
-            "Delete mod",
-            "Keep");
+            "Delete",
+            "Cancel");
 
         await _modalService.Show(confirmation);
 
@@ -290,7 +290,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
             await ShowDependentsAsync(
                 $"'{row.Name}'",
                 ct => _modsClient.GetModDependentsV1Async(_repo.Id, row.Id, ct),
-                $"A profile depends on '{row.Name}'. Take it out of that profile first.");
+                $"A profile uses '{row.Name}'. Remove it from that profile first.");
 
             return;
         }
@@ -326,12 +326,12 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
 
         var confirmation = new ConfirmLossModalViewModel(
             $"Delete {Versions(picked.Count)} from the repo?",
-            "The files go with them, and this cannot be undone.",
+            "Their files are deleted too. This cannot be undone.",
             [.. steps
-                .Select(x => x.WholeMod ? $"{x.Row.Name} - every version" : $"{x.Row.Name} {x.Row.Version}")
+                .Select(x => x.WholeMod ? $"{x.Row.Name} · all versions" : $"{x.Row.Name} {x.Row.Version}")
                 .Order(StringComparer.CurrentCultureIgnoreCase)],
             DescribeDelete(picked),
-            "Keep");
+            "Cancel");
 
         await _modalService.Show(confirmation);
 
@@ -409,8 +409,8 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         }
         else if (refused.Count > 0)
         {
-            await ShowRefusal("Some were kept",
-                "A profile started using these before they were deleted:\n" + string.Join("\n", refused));
+            await ShowRefusal("Some were not deleted",
+                "Now in use:\n" + string.Join("\n", refused));
         }
     }
 
@@ -481,7 +481,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
     /// mean querying the whole dependency graph to tell somebody nothing was wrong.
     /// </para>
     /// <para>
-    /// <paramref name="fallback"/> is the old flat refusal, kept for the case where the follow-up
+    /// <paramref name="fallback"/> is the plain refusal, for the case where the follow-up
     /// read fails or comes back empty - a race with somebody else's edit. Being told less is better
     /// than being told nothing after a delete that visibly did not happen.
     /// </para>
@@ -635,7 +635,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         [
             rows.Count == 1 ? "1 version" : $"{rows.Count:N0} versions",
             mods == 1 ? "1 mod" : $"{mods:N0} mods",
-            $"{ByteSize.Describe(bytes)} in all"
+            $"{ByteSize.Describe(bytes)} total"
         ];
     }
 
@@ -647,7 +647,7 @@ public partial class RepoModsPageViewModel : PageViewModel, IDisposable
         item.Status = ModDisplayStatus.None;
         item.IsSelectable = CanModify;
         item.IsPickable = CanPick(item);
-        item.PickRestriction = CanModify && item.IsPickable is false ? "In use, so it cannot be deleted" : null;
+        item.PickRestriction = CanModify && item.IsPickable is false ? "In use. Cannot be deleted." : null;
         item.ShowStatistics = true;
         item.Actions = _rowActions;
 

@@ -17,8 +17,7 @@
 
             <navigation:PageTitle Grid.Row="0" Text="Mods" />
 
-            <!-- A guest can read the list and nothing else, so this is where the reason lives - the
-                 same sentence the refused row actions would have carried. -->
+            <!-- A guest can read the list and nothing else. The same text the refused row actions would carry. -->
             <TextBlock Grid.Row="1"
                        Margin="0 0 0 12"
                        TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
@@ -58,7 +57,7 @@
                      text through, so anything driven off SearchText stays a beat behind what has
                      actually been typed. -->
                 <TextBlock Grid.Column="0"
-                           Text="Search by name, id or author - Ctrl+Space for filters"
+                           Text="Search by name, ID or author · Ctrl+Space for filters"
                            Margin="12 0 0 0"
                            VerticalAlignment="Center"
                            IsHitTestVisible="False"
@@ -79,7 +78,7 @@
                               Margin="12 0 0 0"
                               Padding="10 5"
                               Content="Unused only"
-                              ToolTip="Registered here, and pinned by none of this repo's profiles."
+                              ToolTip="Not used by any revision of this repo's profiles"
                               IsChecked="{Binding UnusedOnly, Mode=TwoWay}" />
 
                 <TextBlock Grid.Column="2"
@@ -89,8 +88,7 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             </Grid>
 
-            <!-- Selecting every version shown that can be deleted. Only for somebody who may delete,
-                 and the one place that says why some rows have no box to tick. -->
+            <!-- Selects every version shown that can be deleted. Only for somebody who may delete. -->
             <StackPanel Grid.Row="4"
                         Margin="0 0 0 8"
                         Orientation="Horizontal"
@@ -98,10 +96,7 @@
                 <CheckBox Margin="13 0 10 0"
                           VerticalAlignment="Center"
                           IsChecked="{Binding Selection.AllShownSelected, Mode=TwoWay}"
-                          ToolTip="Select every version shown that can be deleted" />
-                <TextBlock VerticalAlignment="Center"
-                           Text="Versions in use cannot be selected."
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                          ToolTip="Select all" />
             </StackPanel>
 
             <Border Style="{StaticResource InsetWell}" Grid.Row="5">
@@ -116,15 +111,15 @@
                              ContextMenuService.IsEnabled="{Binding CanModify}">
                         <ListBox.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="Delete the selected versions" Command="{Binding DeleteSelectedCommand}" />
+                                <MenuItem Header="Delete selected" Command="{Binding DeleteSelectedCommand}" />
                                 <Separator />
-                                <MenuItem Header="Select everything shown" Command="{Binding SelectAllShownCommand}" />
-                                <MenuItem Header="Clear the selection" Command="{Binding ClearSelectionCommand}" />
+                                <MenuItem Header="Select all shown" Command="{Binding SelectAllShownCommand}" />
+                                <MenuItem Header="Clear selection" Command="{Binding ClearSelectionCommand}" />
                             </ContextMenu>
                         </ListBox.ContextMenu>
                     </ListBox>
 
-                    <TextBlock Text="Reading the repo…"
+                    <TextBlock Text="Loading mods…"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
@@ -145,15 +140,15 @@
                             </Style>
                         </StackPanel.Style>
 
-                        <TextBlock Text="This repo holds no mods yet."
+                        <TextBlock Text="No mods yet"
                                    TextAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Text="Add them to a profile's mod list, and they are registered when you save."
+                        <TextBlock Text="Mods added to a profile appear here"
                                    TextAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
 
-                    <TextBlock Text="No mods match the search and filter."
+                    <TextBlock Text="No matches"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                         <TextBlock.Style>
@@ -176,8 +171,8 @@
                 </Grid>
             </Border>
 
-            <!-- Only while something is picked. What it deletes is everything selected, including
-                 rows the search is hiding - so it says how many those are and offers to put them down. -->
+            <!-- Only while something is selected. It deletes everything selected, including what the
+                 search is hiding, so it says how many those are and offers to deselect them. -->
             <Border Grid.Row="6"
                     Style="{StaticResource SelectionBar}"
                     Visibility="{Binding Selection.HasSelection, Converter={StaticResource BoolToVisibilityConverter}}">

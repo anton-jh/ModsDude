@@ -8,7 +8,7 @@
 
 @if (Model.NeedsConfirmation)
 {
-    <p class="notice caution">Confirm your email first. Open the link we sent you.</p>
+    <p class="notice caution">Confirm your email first. Open the link in the email.</p>
     <p><a asp-page="/Accounts/CheckEmailPage" asp-route-email="@Model.Email" asp-route-returnUrl="@Model.ReturnUrl">Send the link again</a></p>
 }
 

@@ -64,8 +64,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
     /// repo sees.
     /// </summary>
     public string Summary =>
-        $"Where '{GameName}' is installed on this machine. These settings belong to this machine alone - " +
-        $"nobody else in '{RepoName}' sees them, and changing them changes nothing in the repo.";
+        $"Where '{GameName}' is installed on this machine. Not shared with '{RepoName}'.";
 
     public bool IsValid => LocalSettingsEditor.IsValid && FindFolderConflict() is null;
 
@@ -103,7 +102,7 @@ public partial class GameSettingsPageViewModel : PageViewModel, IDisposable
 
         LocalSettingsEditor.MarkSaved();
 
-        _toasts.Show($"Saved the settings for {GameName}.");
+        _toasts.Show($"Saved the settings for {GameName}");
 
         await BackCommand.ExecuteAsync(null);
     }

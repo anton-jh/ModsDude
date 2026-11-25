@@ -65,7 +65,7 @@ public class SavegameRowRulesTests
 
         Assert.True(offer.ActivatesFirst);
         Assert.Equal(4, offer.PinnedRevision);
-        Assert.Equal("'Old-school' rev 4", SavegameRowRules.DescribeActivation("Old-school", offer.PinnedRevision));
+        Assert.Equal("'Old-school' revision 4", SavegameRowRules.DescribeActivation("Old-school", offer.PinnedRevision));
     }
 
     [Fact]

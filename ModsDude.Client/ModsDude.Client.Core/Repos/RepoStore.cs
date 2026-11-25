@@ -199,7 +199,7 @@ public class RepoStore(
                 logger.LogWarning(refresh, "Could not read the repos again after a change to repo {Repo} was refused.", repo.Id);
             }
 
-            throw new UserFriendlyException("Somebody else changed this repo", inner: exception) { Hint = "Look at it again and make your change again." };
+            throw new UserFriendlyException("Somebody else changed this repo", inner: exception) { Hint = "Reload and try again." };
         }
     }
 

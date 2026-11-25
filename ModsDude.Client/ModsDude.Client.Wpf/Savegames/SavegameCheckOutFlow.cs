@@ -50,16 +50,15 @@ public sealed class SavegameCheckOutFlow(
         if (savegame.Head is null || snapshotNumber <= 0)
         {
             await modalService.Value.Show(ConfirmationModalViewModel.Refusal(
-                $"'{savegame.Name}' has no snapshot yet",
-                "Nothing has been checked in for this savegame, so there is nothing to write into a slot."));
+                $"'{savegame.Name}' has no snapshots yet",
+                "There is nothing to check out."));
 
             return;
         }
 
         if (repo.Games.FirstOrDefault() is not Game game)
         {
-            await modalService.Value.Show(SavegameRefusals.NotConnected(
-                repo, "A savegame has to be written into an installation of the game."));
+            await modalService.Value.Show(SavegameRefusals.NotConnected(repo));
 
             return;
         }
@@ -92,11 +91,11 @@ public sealed class SavegameCheckOutFlow(
         await operations.RunAsync(
             new SavegameOperation(
                 game,
-                mode is SavegameCheckOutMode.TakeCopy ? $"Copying '{name}' into '{game.Name}'" : $"Checking '{name}' out into '{game.Name}'",
+                mode is SavegameCheckOutMode.TakeCopy ? $"Copying '{name}' into '{game.Name}'" : $"Checking out '{name}' into '{game.Name}'",
                 mode is SavegameCheckOutMode.TakeCopy ? "copying a savegame" : "checking a savegame out",
                 mode is SavegameCheckOutMode.TakeCopy
-                    ? $"Copying '{name}' stopped. Nothing was written into a slot."
-                    : $"Checking '{name}' out stopped before anything was written into a slot. Where it already shows as yours, Check out again finishes it.",
+                    ? $"Copying '{name}' cancelled"
+                    : $"Check-out of '{name}' cancelled. If it shows as checked out to you, use Check out again to finish.",
                 [savegame.Id, .. plan.CheckIns.Select(x => x.SavegameId)],
                 AllFolders: true)
             {
@@ -251,7 +250,7 @@ public sealed class SavegameCheckOutFlow(
             // A check-in that failed has already said so.
             if (outcome.WasDeferred || outcome.Succeeded)
             {
-                toasts.Show($"{SavegameSlotWording.Capitalised(checkIn.Savegame.Quoted)} is still checked out, so '{savegame.Name}' was not checked out.", ToastSeverity.Warning);
+                toasts.Show($"'{savegame.Name}' was not checked out. {checkIn.Savegame.Subject} is still checked out.", ToastSeverity.Warning);
             }
 
             return false;
@@ -287,8 +286,7 @@ public sealed class SavegameCheckOutFlow(
             var displacedByCopy = await savegameCheckOut.TakeCopyAsync(
                 game, savegame, snapshotNumber, slot.Ref, cancellationToken, new SavegameStripProgress(task));
 
-            toasts.Show($"Snapshot {snapshotNumber} of '{name}' is in '{game.Name}'. Nobody was stopped from playing it, " +
-                        "and this machine holds no claim on it - the slot is an ordinary save of your own now.");
+            toasts.Show($"Copied snapshot {snapshotNumber} of '{name}' into '{game.Name}'");
 
             ReportDisplaced(displacedByCopy);
 
@@ -296,8 +294,8 @@ public sealed class SavegameCheckOutFlow(
         }
 
         task.Report(snapshotNumber != savegame.Head?.Number
-            ? $"Restoring snapshot {snapshotNumber} as the newest one, and taking the claim"
-            : "Taking the claim");
+            ? $"Restoring snapshot {snapshotNumber} and checking it out"
+            : "Checking out");
 
         var result = await savegameCheckOut.CheckOutAsync(
             game,
@@ -321,12 +319,11 @@ public sealed class SavegameCheckOutFlow(
 
         if (result.TakenFrom is null)
         {
-            toasts.Show($"'{name}' is checked out to you, in '{game.Name}'.");
+            toasts.Show($"Checked out '{name}' into '{game.Name}'");
         }
         else
         {
-            toasts.Show($"'{name}' is checked out to you, in '{game.Name}'. {result.TakenFrom.DisplayName} no longer has it, " +
-                        "and their ModsDude will tell them.");
+            toasts.Show($"Checked out '{name}' into '{game.Name}'. Took it from {result.TakenFrom.DisplayName}.");
         }
 
         await profileActivation.ActivateCheckedOutAsync(repo, game, result.Savegame, cancellationToken);
@@ -339,13 +336,13 @@ public sealed class SavegameCheckOutFlow(
         {
             case DisplacedSavegameDestination.QuarantineFolder:
                 toasts.Show(
-                    $"The save that was in that slot could not go to the Recycle Bin, so it was moved to {displaced.Path}.",
+                    $"The replaced slot could not go to the Recycle Bin. It is in rescued files: {displaced.Path}",
                     ToastSeverity.Warning);
                 break;
 
             case DisplacedSavegameDestination.BesideSlots:
                 toasts.Show(
-                    $"The save that was in that slot could not be moved to the Recycle Bin, so it is still on disk as {displaced.Path}.",
+                    $"The replaced slot could not go to the Recycle Bin. It is still on disk: {displaced.Path}",
                     ToastSeverity.Warning);
                 break;
         }

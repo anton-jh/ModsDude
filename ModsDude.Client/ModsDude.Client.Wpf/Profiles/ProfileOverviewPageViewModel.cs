@@ -114,7 +114,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     public ManageProfileViewModel? Manage { get; }
 
     [ObservableProperty]
-    private string _modSummary = "Counting mods...";
+    private string _modSummary = "Counting mods…";
 
     /// <summary>This profile's savegames, the one played most recently first.</summary>
     public ObservableCollection<ProfileSavegameRowViewModel> Savegames { get; }
@@ -125,7 +125,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSavegamesNote))]
-    private string? _savegamesNote = "Reading this profile's savegames...";
+    private string? _savegamesNote = "Loading savegames…";
 
     public bool HasSavegamesNote => SavegamesNote is not null;
 
@@ -133,9 +133,6 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(PublishCommand))]
     private bool _isWorking = true;
-
-    public string PublishToolTip =>
-        $"Takes a save already on this machine and makes a savegame of it in {_repo.Name}, with '{_profile.Name}' picked as the mod list it follows.";
 
 
     public void Dispose()
@@ -242,7 +239,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
         if (_savegamesRead is false)
         {
-            SavegamesNote = "This repo's saves could not be read just now.";
+            SavegamesNote = "Could not load savegames";
 
             return;
         }
@@ -261,7 +258,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         }
 
         SavegamesNote = Savegames.Count == 0
-            ? "No savegame has been published to this profile yet."
+            ? "No savegames yet"
             : null;
     }
 
@@ -269,7 +266,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     {
         if (await _navigation.GoToAsync(_repo.Id, new RepoDestination.Savegame(savegameId)) is false)
         {
-            SavegamesNote = "The repo's saves list could not be opened from here - pick it in the sidebar.";
+            SavegamesNote = "Could not open the savegame";
         }
     }
 
@@ -283,9 +280,9 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
     {
         var mods = statistics?.ModCount switch
         {
-            0 or null => "No mods pinned yet",
-            1 => "1 mod pinned",
-            var count => $"{count} mods pinned"
+            0 or null => "No mods yet",
+            1 => "1 mod",
+            var count => $"{count} mods"
         };
 
         var parts = new List<string> { mods };
@@ -300,7 +297,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
             parts.Add($"revision {statistics.Revision}");
         }
 
-        return string.Join(" · ", parts) + ".";
+        return string.Join(" · ", parts);
     }
 
 
@@ -310,7 +307,6 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
         {
             case nameof(Profile.Name):
                 OnPropertyChanged(nameof(ProfileName));
-                OnPropertyChanged(nameof(PublishToolTip));
                 break;
 
             // Counted again rather than relabelled: the count belongs to the revision it was read from.
@@ -327,7 +323,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
             exception =>
             {
                 _logger.LogWarning(exception, "Could not count the mods of profile {ProfileId} again.", _profile.Id);
-                ModSummary = "Mods could not be counted just now.";
+                ModSummary = "Could not count mods";
 
                 return Task.CompletedTask;
             });

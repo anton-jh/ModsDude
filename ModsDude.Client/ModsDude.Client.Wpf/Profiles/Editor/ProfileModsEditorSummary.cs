@@ -21,15 +21,15 @@ public sealed class ProfileModsEditorSummary
         HasIgnored = state.IgnoredCount > 0;
         IgnoredText = $"{state.IgnoredCount} ignored";
         IgnoredToggleTooltip = showIgnored
-            ? "Showing ignored mods, dimmed. Click to hide them again."
+            ? "Hide ignored mods"
             : state.IgnoredCount == 0
-                ? "Nothing is ignored here. Mods you ignore are hidden from this list."
-                : "Mods you have ignored in this profile are hidden. Click to show them.";
+                ? "No ignored mods"
+                : "Show ignored mods";
 
         PinnedCountText = Describe(shownPins, state.ResultCount);
         PinnedEmptyText = state.Pinned.Count == 0
-            ? "Nothing in this profile yet.\nAdd mods from the list on the left."
-            : state.PinnedShown.Count == 0 ? "Nothing in this profile matches the search and the filter." : null;
+            ? "No mods yet"
+            : state.PinnedShown.Count == 0 ? "No matches" : null;
 
         HasModListChanges = changes.IsEmpty is false;
         HasUnsavedChanges = draft.HasChanges;
@@ -37,13 +37,13 @@ public sealed class ProfileModsEditorSummary
         {
             changes.Added.Count > 0 ? $"{changes.Added.Count} added" : null,
             changes.Changed.Count > 0 ? $"{changes.Changed.Count} changed" : null,
-            changes.Removed.Count > 0 ? $"{changes.Removed.Count} taken out" : null
+            changes.Removed.Count > 0 ? $"{changes.Removed.Count} removed" : null
         }.OfType<string>());
 
         HasPending = state.PendingCount > 0;
         PendingText = state.DownloadCount > 0
-            ? $"{Mods(state.PendingCount)} will be imported when you save · {state.DownloadCount} downloaded first"
-            : $"{Mods(state.PendingCount)} will be imported when you save";
+            ? $"{Mods(state.PendingCount)} to import on save · {state.DownloadCount} to download"
+            : $"{Mods(state.PendingCount)} to import on save";
 
         UpdatesFilterCount = state.UpdatesFilterCount;
         UpdateCountText = updates.Count == 0
@@ -60,13 +60,13 @@ public sealed class ProfileModsEditorSummary
         UpdateRepoOnlyText = $"Update the {updates.FreeCount} already in the repo";
 
         HasSkippedUpdates = updates.Skipped.Count > 0;
-        SkippedText = $"{updates.Skipped.Count} newer for locked mods";
+        SkippedText = $"{updates.Skipped.Count} locked updates";
 
         HasDismissed = draft.Dismissed.Count > 0;
         DismissedText = $"{draft.Dismissed.Count} dismissed";
 
         HasUnsettled = state.UnsettledCount > 0;
-        UnsettledText = $"{Plural(state.UnsettledCount, "version")} could not be compared";
+        UnsettledText = $"{Plural(state.UnsettledCount, "version")} in unknown order";
 
         WillApply = hasApplyTarget && HasModListChanges;
         SaveActionText = ProfileApplyTarget.DescribeSaveAction(WillApply);

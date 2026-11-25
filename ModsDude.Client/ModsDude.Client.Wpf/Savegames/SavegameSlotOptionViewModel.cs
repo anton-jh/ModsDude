@@ -48,7 +48,7 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
         Number = slot.Number;
 
         Label = slot.IsOccupied
-            ? slot.DisplayName is { Length: > 0 } name ? name : "A save this game will not name"
+            ? slot.DisplayName is { Length: > 0 } name ? name : "Unnamed"
             : "Empty slot";
 
         Detail = BuildDetail();
@@ -124,8 +124,8 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
     /// is the binding-without-a-server-record case.
     /// </summary>
     public string BlockedAction => OccupyingSavegame is { Name: not null } occupying
-        ? $"Check {occupying.Quoted} in first"
-        : "Check that savegame in first";
+        ? $"Check in {occupying.Quoted} first"
+        : "Check in that savegame first";
 
 
     private string BuildDetail()
@@ -147,20 +147,20 @@ public sealed class SavegameSlotOptionViewModel : IGroupedSlot
         if (IsFreedByCheckIn)
         {
             return OccupyingSavegame is { Name: not null } checkedIn
-                ? $"{checkedIn.Quoted} is checked in first, which frees this slot"
-                : "The savegame here is checked in first, which frees this slot";
+                ? $"Checks in {checkedIn.Quoted} first"
+                : "Checks in the savegame here first";
         }
 
         return Availability switch
         {
-            SavegameSlotAvailability.Free => "Nothing here",
+            SavegameSlotAvailability.Free => "Empty",
             SavegameSlotAvailability.HeldClean => OccupyingSavegame is { Name: not null } clean
-                ? $"{clean.Quoted} is checked out here, exactly as it was downloaded"
-                : "A checked-out savegame is here, exactly as it was downloaded",
+                ? $"{clean.Quoted} · checked out, unchanged"
+                : "Checked out, unchanged",
             SavegameSlotAvailability.HeldWithUnpublishedPlay => OccupyingSavegame is { Name: not null } played
-                ? $"{played.Quoted} has been played here and not checked in - this exists nowhere else"
-                : "This has been played and not checked in - it exists nowhere else",
-            _ => "Not from this repo. ModsDude has no copy of it"
+                ? $"{played.Quoted} · progress not checked in"
+                : "Progress not checked in",
+            _ => "Not from this repo"
         };
     }
 }

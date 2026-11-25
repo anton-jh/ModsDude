@@ -253,8 +253,8 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
     /// </summary>
     public string NoChangesText => (Selected, ComparedWith) switch
     {
-        (not null, null) => $"Revision {Selected.Number} is the first one; there is nothing before it to compare with.",
-        (not null, not null) => $"Revisions {ComparedWith.Number} and {Selected.Number} pin exactly the same mods.",
+        (not null, null) => "Nothing to compare with",
+        (not null, not null) => "No changes",
         _ => ""
     };
 
@@ -295,12 +295,12 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
     public string SeveralText => CanPrune
         ? DeletableCount switch
         {
-            0 => "None of them can be deleted.",
-            1 => "1 of them can be deleted.",
-            var count when count == Selection.SelectedCount => $"All {count} can be deleted.",
-            var count => $"{count} of them can be deleted."
+            0 => "None can be deleted",
+            1 => "1 can be deleted",
+            var count when count == Selection.SelectedCount => $"All {count} can be deleted",
+            var count => $"{count} can be deleted"
         }
-        : "Pick a single revision to see what it pinned and what it changed.";
+        : "Select one revision to see its mods";
 
     /// <summary>
     /// Which of the picked revisions a delete would leave, and why - so the count on the button is
@@ -324,7 +324,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
             if (played > 0)
             {
                 parts.Add(picked.Count == 1
-                    ? "A savegame snapshot was played on it, so it is kept."
+                    ? "A savegame snapshot was played on it. It is kept."
                     : played == 1
                         ? "1 was played on a savegame snapshot and is kept."
                         : $"{played} were played on savegame snapshots and are kept.");
@@ -373,10 +373,10 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
         var confirmation = new ConfirmLossModalViewModel(
             marked.Count == 1 ? "Delete this revision?" : $"Delete {marked.Count} revisions?",
-            "The mod lists they recorded cannot be brought back. Anything only they pinned becomes deletable from the repo.",
+            "Their mod lists cannot be brought back. Mod versions only they use can then be deleted from the repo.",
             [.. rows.Select(x => x.Title)],
-            marked.Count == 1 ? "Delete it" : "Delete them",
-            "Keep them");
+            "Delete",
+            "Cancel");
 
         await _modalService.Show(confirmation);
 
@@ -491,8 +491,8 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
         var deleted = result.Deleted == 1 ? "1 revision deleted" : $"{result.Deleted} revisions deleted";
 
         return blocked == 0
-            ? $"{deleted}."
-            : $"{deleted}. {(blocked == 1 ? "1 was kept" : $"{blocked} were kept")} - see why below.";
+            ? deleted
+            : $"{deleted} · {(blocked == 1 ? "1 kept" : $"{blocked} kept")}";
     }
 
     protected override async Task InitAsync()
@@ -539,10 +539,10 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
         var confirmation = new ConfirmationModalViewModel(
             $"Restore revision {revision.Number}?",
-            "The profile goes back to what it pinned then, recorded as a new revision. Nothing is deleted - what it pins now stays in the history, so this can be undone the same way.",
+            "Saved as a new revision. The current mods stay in the history.",
             IconKind.Question,
-            "Restore it",
-            "Leave it");
+            "Restore",
+            "Cancel");
 
         await _modalService.Show(confirmation);
 
@@ -560,7 +560,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
             _restoreRequestIds.Forget();
 
-            _toasts.Show($"Restored revision {revision.Number} as revision {restored.Number}. Apply the profile to put it in your mod folder.");
+            _toasts.Show($"Restored revision {revision.Number} as revision {restored.Number}. Apply the profile to use it.");
 
             await ReloadAsync(select: restored.Number);
         }
@@ -601,9 +601,9 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
             var name = await NameModalViewModel.AskAsync(
                 _modalService,
                 "Name the new profile",
-                $"The new profile starts as a copy of revision {revision.Number}. Nothing about this profile changes.",
+                $"Starts as a copy of revision {revision.Number}.",
                 $"{_profile.Name} (revision {revision.Number})",
-                "Create it",
+                "Create",
                 async name =>
                 {
                     try
@@ -625,7 +625,7 @@ public partial class ProfileHistoryPageViewModel : PageViewModel, IDisposable
 
             if (name is not null)
             {
-                _toasts.Show($"Created '{name}' from revision {revision.Number}. It is in the sidebar.");
+                _toasts.Show($"Created '{name}'");
             }
         }
         finally

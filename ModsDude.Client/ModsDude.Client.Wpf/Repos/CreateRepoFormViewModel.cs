@@ -109,7 +109,7 @@ public partial class CreateRepoFormViewModel(
         }
         if (SelectedGameAdapter is null)
         {
-            errors.Add("Game adapter is required.");
+            errors.Add("Game is required.");
         }
         errors.AddRange(BaseSettingsEditor?.GetValidationErrors() ?? []);
 

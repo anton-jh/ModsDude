@@ -119,13 +119,12 @@ public sealed class SavegameProfileActivation(
         }
 
         var choice = new ConfirmationModalViewModel(
-            $"Open '{profile.Name}'s mod list?",
-            $"{plan.Unrecognised.Count} mods in the mod folder are not in this repo, and applying is what moves them to "
-                + "the Recycle Bin. The mod list is where they get imported instead - and until something is applied, "
-                + "the save you just took is on a mod list the folder is not on.",
+            $"Review mods for '{profile.Name}'?",
+            $"{plan.Unrecognised.Count} mods in the mod folder are not in this repo. Applying '{profile.Name}' moves them "
+                + "to the Recycle Bin. Review them to import them instead.",
             IconKind.Question,
-            "Review - opens the mod list with this folder scanned",
-            "Not now");
+            "Review",
+            "Cancel");
 
         await modalService.Value.Show(choice);
 

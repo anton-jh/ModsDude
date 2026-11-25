@@ -71,8 +71,8 @@ public static class ProfileModTouches
 
         return Classify(original, desired) switch
         {
-            ProfileModTouch.Added => $"Not in the saved profile. Saving pins {desired!.VersionId}.",
-            ProfileModTouch.TakenOut => $"In the saved profile at {original!.VersionId}. Saving takes it out.",
+            ProfileModTouch.Added => $"Not in the saved profile. Saving adds {desired!.VersionId}.",
+            ProfileModTouch.TakenOut => $"In the saved profile at {original!.VersionId}. Saving removes it.",
             ProfileModTouch.VersionChanged => $"Was {original!.VersionId} in the saved profile, now {desired!.VersionId}.",
             ProfileModTouch.LockChanged => $"{lockText} Not saved yet.",
             ProfileModTouch.VersionAndLockChanged

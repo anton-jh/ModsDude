@@ -187,8 +187,8 @@ public sealed class SavegameCheckOutWizard
             {
                 var checkIn = Name(holding);
                 var step = CheckInStep(checkIn, activates is not null
-                    ? $"Checked in so {list} can be activated."
-                    : $"Checked in so '{_savegame.Name}' can be checked out. '{_game.Name}' holds one savegame that follows a mod list.");
+                    ? $"Checked in first to activate {list}"
+                    : $"Checked in first to check out '{_savegame.Name}'");
 
                 yield return step;
 
@@ -219,7 +219,7 @@ public sealed class SavegameCheckOutWizard
             && checkIns.All(x => x.SavegameId != occupying))
         {
             var checkIn = Name(occupying);
-            var step = CheckInStep(checkIn, "Checked in so its slot is free.");
+            var step = CheckInStep(checkIn, "Checked in first to free its slot");
 
             yield return step;
 
@@ -242,11 +242,9 @@ public sealed class SavegameCheckOutWizard
         var name = holder.User.DisplayName;
 
         return _takeOverStep ??= new QuestionStepViewModel(
-            $"{name} has '{_savegame.Name}' checked out",
-            $"They have had it since {SavegameWording.Exactly(holder.TakenAt)}. Checking it out takes it from them, "
-                + "and their ModsDude will tell them.\n\n"
-                + "If they are playing it, you will each have a copy of the same save: whoever checks in second has "
-                + "to force it, and that overwrites the other's play.",
+            $"'{_savegame.Name}' is checked out to {name}",
+            $"Checked out since {SavegameWording.Exactly(holder.TakenAt)}. If {name} is playing it, "
+                + $"whoever checks in last overwrites the other's progress. {name} is told if you take it.",
             $"Take it from {name}");
     }
 
@@ -279,21 +277,20 @@ public sealed class SavegameCheckOutWizard
             return made.Step;
         }
 
-        var runsOn = $"'{_savegame.Name}' runs on {list}, and the mod folder in '{_game.Name}' is not on it.";
+        var runsOn = $"'{_savegame.Name}' uses {list}. The mod folder in '{_game.Name}' does not match it.";
 
         var step = _mode is SavegameCheckOutMode.TakeCopy
             ? new QuestionStepViewModel(
                 $"Activate {list} first?",
-                $"{runsOn} Activating it puts the mods the copy was saved with in place. Leaving it writes the copy "
-                    + "next to whatever mods the folder has now, which the game may not load it with.",
+                $"{runsOn} Without it, the game may not load the copy.",
                 [
-                    new WizardChoice("Activate it, then take the copy", () => _copyActivates = true) { IsDefault = true },
-                    new WizardChoice("Leave the mods as they are", () => _copyActivates = false) { IsAccent = false }
+                    new WizardChoice("Activate and take a copy", () => _copyActivates = true) { IsDefault = true },
+                    new WizardChoice("Take a copy only", () => _copyActivates = false) { IsAccent = false }
                 ])
             : new QuestionStepViewModel(
                 $"Activate {list}?",
-                $"{runsOn} It is activated before the save is checked out.",
-                $"Activate {list}");
+                runsOn,
+                "Activate");
 
         _activateStep = (pinned, step);
 
@@ -349,7 +346,7 @@ public sealed class SavegameCheckOutWizard
 
         if (_mode is SavegameCheckOutMode.TakeCopy)
         {
-            return ("take the copy", $"Write a copy of '{_savegame.Name}' into {into}");
+            return ("take the copy", $"Copy '{_savegame.Name}' into {into}");
         }
 
         return ("check out", _takingFrom is SavegameCheckoutDto holder

@@ -137,16 +137,16 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
 
     public string MembershipSummary => _repo.MembershipLevel switch
     {
-        RepoMembershipLevel.Admin => "You are an admin of this repo.",
-        RepoMembershipLevel.Member => "You are a member of this repo.",
-        _ => "You are a guest in this repo."
+        RepoMembershipLevel.Admin => "Your level: Admin",
+        RepoMembershipLevel.Member => "Your level: Member",
+        _ => "Your level: Guest"
     };
 
     public string ProfileSummary => _profileStore.Live(_repo.Id).Count switch
     {
-        0 => "No profiles yet.",
-        1 => "1 profile.",
-        var count => $"{count} profiles."
+        0 => "No profiles yet",
+        1 => "1 profile",
+        var count => $"{count} profiles"
     };
 
     /// <summary>
@@ -229,7 +229,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
                 GameError = _gameRepository.RefreshTargets(game, _repo.Adapter) switch
                 {
                     TargetRefresh.Busy => $"'{game.Name}' is busy.",
-                    TargetRefresh.HoldsSavegame => "Check in the savegame first.",
+                    TargetRefresh.HoldsSavegame => $"'{game.Name}' has a savegame checked out. Check it in first.",
                     _ => null
                 };
             }
@@ -274,7 +274,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         catch (UserFriendlyException exception)
         {
             _logger.LogInformation("Did not disconnect game {Game}: {Reason}", row.Game.Identity, exception.DeveloperMessage);
-            GameError = exception.UserMessage;
+            GameError = exception.Describe();
         }
     }
 
@@ -329,8 +329,8 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         MemberSummary = _fetchedMemberCount switch
         {
             null => null,
-            1 => "You are its only member.",
-            var count => $"{count} members."
+            1 => "1 member",
+            var count => $"{count} members"
         };
     }
 
@@ -445,7 +445,7 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
         [
             owner is null ? name : $"{name} in {owner.Name}",
             archived ? "archived" : null,
-            game.PinnedRevision is int pinned ? $"rev {pinned}" : null
+            game.PinnedRevision is int pinned ? $"revision {pinned}" : null
         ];
 
         return new(label, string.Join(" · ", parts.OfType<string>()));
@@ -496,8 +496,8 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
     }
 
     /// <summary>
-    /// What this game is holding, in one line, or null - nearly always - where it holds nothing with
-    /// a mod list.
+    /// The savegame checked out on this game, in one line, or null (nearly always) where none follows
+    /// a profile.
     /// </summary>
     /// <remarks>
     /// Asked of <see cref="SavegameHoldRules"/> rather than worked out here: the same questions decide
@@ -513,11 +513,11 @@ public partial class RepoOverviewPageViewModel : PageViewModel, IDisposable
             return null;
         }
 
-        var profile = _profileStore.Find(claiming.RepoId, profileId)?.Name ?? "a mod list";
+        var profile = _profileStore.Find(claiming.RepoId, profileId)?.Name is string name ? $"'{name}'" : "a profile";
 
         return SavegameHoldRules.RequiredRevision(held, profileId) is int pinned
-            ? $"Holding a savegame that runs on '{profile}' rev {pinned}. Check it in from Saves to move this game forward."
-            : $"Holding a savegame that follows '{profile}'.";
+            ? $"A savegame checked out here uses {profile} revision {pinned}. Check it in to update this game."
+            : $"A savegame checked out here uses {profile}";
     }
 
 

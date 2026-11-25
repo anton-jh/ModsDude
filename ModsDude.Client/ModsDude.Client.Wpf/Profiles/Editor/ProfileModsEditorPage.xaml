@@ -258,7 +258,7 @@
                              behaviors:SearchCompletion.Completer="{Binding SearchCompleter}"
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
                              VerticalAlignment="Center" />
-                    <TextBlock Text="Search by name, id or author - Ctrl+Space for filters"
+                    <TextBlock Text="Search by name, ID or author · Ctrl+Space for filters"
                                Tag="{Binding ElementName=SearchBox}"
                                Style="{StaticResource Placeholder}" />
                 </Grid>
@@ -268,7 +268,7 @@
                         Margin="0 0 0 12"
                         Padding="12 8"
                         Visibility="{Binding IsWaitingForSave, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Text="This profile is being saved. The editor opens for changes when the save is done." />
+                    <TextBlock Text="Saving this profile…" />
                 </Border>
 
                 <Border Style="{StaticResource InsetWell}"
@@ -280,7 +280,7 @@
                         <Button DockPanel.Dock="Right"
                                 Content="Load again"
                                 Command="{Binding LoadAgainCommand}" />
-                        <TextBlock VerticalAlignment="Center" Text="The mod list could not be loaded." />
+                        <TextBlock VerticalAlignment="Center" Text="Could not load the mod list" />
                     </DockPanel>
                 </Border>
 
@@ -296,13 +296,11 @@
                                           Margin="12 0 10 0"
                                           VerticalAlignment="Center"
                                           IsChecked="{Binding AvailableSelection.AllShownSelected, Mode=TwoWay}"
-                                          IsEnabled="{Binding CanEdit}"
-                                          ToolTip="Select everything this list is showing" />
+                                          IsEnabled="{Binding CanEdit}" />
 
                                 <TextBlock Grid.Column="1"
                                            Text="Not in this profile"
                                            VerticalAlignment="Center"
-                                           ToolTip="What the enabled sources offer that this profile does not hold."
                                            Style="{DynamicResource BodyStrongTextBlockStyle}" />
 
                                 <!-- Ignored mods: hidden until shown, dimmed then. Crossed out while hidden. -->
@@ -401,19 +399,19 @@
                                 <Button Style="{StaticResource SourceActionChip}"
                                         Margin="0 0 6 6"
                                         Content="+ folder"
-                                        ToolTip="Scanned for this session only, and never written to disk"
+                                        ToolTip="Temporary source"
                                         Command="{Binding Sources.AddFolderCommand}" />
 
                                 <Button Style="{StaticResource SourceActionChip}"
                                         Margin="0 0 6 6"
                                         Content="+ profile"
-                                        ToolTip="Read another profile's list as a source, to see what it holds and this one does not"
+                                        ToolTip="Add another profile as a source"
                                         Command="{Binding Sources.AddProfileCommand}" />
 
                                 <Button Style="{StaticResource SourceIconChip}"
                                         Margin="0 0 6 6"
                                         Content="&#xE72C;"
-                                        ToolTip="Rescan every folder and look up every remote source again"
+                                        ToolTip="Rescan all sources"
                                         Command="{Binding Sources.RescanAllCommand}" />
                             </WrapPanel>
 
@@ -424,11 +422,11 @@
                                                  IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=All}" />
                                     <RadioButton Style="{StaticResource FilterChip}"
                                                  Content="New to the repo"
-                                                 ToolTip="Not registered here yet. Saving imports these."
+                                                 ToolTip="Not in the repo yet. Imported on save."
                                                  IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=New}" />
                                     <RadioButton Style="{StaticResource FilterChip}"
-                                                 Content="Not settled"
-                                                 ToolTip="The order between this version and what the repo holds is not settled. Importing it will ask which comes first."
+                                                 Content="Unknown order"
+                                                 ToolTip="Importing asks which version comes first"
                                                  IsChecked="{Binding AvailableFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Unordered}" />
                                 </WrapPanel>
 
@@ -513,7 +511,7 @@
                                     </ListBox>
                                 </Border>
 
-                                <TextBlock Text="Reading the repo and scanning the sources…"
+                                <TextBlock Text="Loading…"
                                            Style="{StaticResource EmptyListText}"
                                            Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </Grid>
@@ -540,19 +538,17 @@
                                                 Margin="0 0 4 0"
                                                 HorizontalAlignment="Stretch"
                                                 Content="{Binding IgnoreSelectedText}"
-                                                ToolTip="Hide the picked mods from this list"
                                                 Command="{Binding IgnoreSelectedCommand}" />
                                         <Button Grid.Column="1"
                                                 Margin="4 0"
                                                 HorizontalAlignment="Stretch"
                                                 Content="{Binding UnignoreSelectedText}"
-                                                ToolTip="Stop ignoring the picked mods"
                                                 Command="{Binding UnignoreSelectedCommand}" />
                                         <Button Grid.Column="2"
                                                 Margin="4 0 0 0"
                                                 HorizontalAlignment="Stretch"
                                                 Content="{Binding DismissSelectedVersionsText}"
-                                                ToolTip="Never offer the version each picked row shows as an update"
+                                                ToolTip="Never offer these versions as updates"
                                                 Command="{Binding DismissSelectedVersionsCommand}" />
                                     </Grid>
 
@@ -578,25 +574,22 @@
                                         Margin="0 0 4 0"
                                         HorizontalAlignment="Stretch"
                                         Content="Add all shown"
-                                        ToolTip="Add every mod the list above is showing"
                                         Command="{Binding AddAllShownCommand}" />
                                 <Button Grid.Column="1"
                                         Margin="4 0"
                                         HorizontalAlignment="Stretch"
                                         Content="Copy from a profile…"
-                                        ToolTip="Take the mod list from another profile in this repo"
                                         Command="{Binding CopyFromProfileCommand}" />
                                 <Button Grid.Column="2"
                                         Margin="4 0 0 0"
                                         HorizontalAlignment="Stretch"
                                         Content="Paste a list…"
-                                        ToolTip="Paste mod names or ids and select everything that matches"
                                         Command="{Binding PasteListCommand}" />
                             </Grid>
                         </Grid>
                     </shared:Surface>
 
-                    <!-- The draft: every pin, and every saved pin it takes out. -->
+                    <!-- The profile with its unsaved changes, including what they remove. -->
                     <shared:Surface Grid.Column="2" Style="{StaticResource Card}" Padding="14">
                         <Grid RowDefinitions="auto auto auto * auto auto">
 
@@ -606,8 +599,7 @@
                                           Margin="12 0 10 0"
                                           VerticalAlignment="Center"
                                           IsChecked="{Binding PinnedSelection.AllShownSelected, Mode=TwoWay}"
-                                          IsEnabled="{Binding CanEdit}"
-                                          ToolTip="Select everything this list is showing" />
+                                          IsEnabled="{Binding CanEdit}" />
 
                                 <TextBlock Grid.Column="1"
                                            Text="In this profile"
@@ -620,7 +612,7 @@
                                         Style="{DynamicResource SubtleMenuButton}"
                                         Foreground="{DynamicResource SystemFillColorCautionBrush}"
                                         Content="{Binding Summary.ChangeSummary}"
-                                        ToolTip="Show only what this draft changes"
+                                        ToolTip="Show unsaved changes"
                                         Visibility="{Binding Summary.HasModListChanges, Converter={StaticResource BoolToVisibilityConverter}}"
                                         Command="{Binding ShowChangesCommand}" />
 
@@ -635,28 +627,28 @@
                                 <WrapPanel Grid.Column="0" Orientation="Horizontal">
                                     <RadioButton Style="{StaticResource FilterChip}"
                                                  Content="All"
-                                                 ToolTip="The draft, with what it takes out struck through"
+                                                 ToolTip="Removed mods are struck through"
                                                  IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=All}" />
                                     <RadioButton Style="{StaticResource FilterChip}"
                                                  Content="Result"
-                                                 ToolTip="Exactly what saving would leave in the profile"
+                                                 ToolTip="The profile after saving"
                                                  IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Result}" />
                                     <RadioButton Style="{StaticResource FilterChip}"
                                                  Content="Changes"
-                                                 ToolTip="Only what differs from the saved profile"
+                                                 ToolTip="Unsaved changes only"
                                                  IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Changes}" />
                                     <RadioButton Style="{StaticResource FilterChip}"
                                                  Content="Updates"
                                                  shared:FilterChip.Count="{Binding Summary.UpdatesFilterCount}"
-                                                 ToolTip="Unlocked mods with a newer version - in the repo, in a folder being read, or online"
+                                                 ToolTip="Unlocked mods with a newer version"
                                                  IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Updates}" />
                                     <RadioButton Style="{StaticResource FilterChip}"
                                                  Content="Locked"
-                                                 ToolTip="Mods held at their version, by you or by the game adapter"
+                                                 ToolTip="Locked in this profile or version-sensitive"
                                                  IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Locked}" />
                                     <RadioButton Style="{StaticResource FilterChip}"
                                                  Content="Not in the sources"
-                                                 ToolTip="Mods this profile pins that none of the enabled sources offers any version of"
+                                                 ToolTip="Not offered by any enabled source"
                                                  IsEnabled="{Binding Sources.HasEnabledSources}"
                                                  IsChecked="{Binding PinnedFilter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=NotInSources}" />
                                 </WrapPanel>
@@ -678,21 +670,21 @@
                                         <Button Padding="6 2"
                                                 Style="{DynamicResource SubtleMenuButton}"
                                                 Content="{Binding Summary.SkippedText}"
-                                                ToolTip="Locked mods with a newer version. Open the list to move any of them anyway."
+                                                ToolTip="Locked mods with a newer version"
                                                 Visibility="{Binding Summary.HasSkippedUpdates, Converter={StaticResource BoolToVisibilityConverter}}"
                                                 Command="{Binding ShowSkippedUpdatesCommand}" />
                                         <Button Padding="6 2"
                                                 Margin="8 0 0 0"
                                                 Style="{DynamicResource SubtleMenuButton}"
                                                 Content="{Binding Summary.DismissedText}"
-                                                ToolTip="Versions never offered as updates. Open the list to offer any of them again."
+                                                ToolTip="Never offered as updates"
                                                 Visibility="{Binding Summary.HasDismissed, Converter={StaticResource BoolToVisibilityConverter}}"
                                                 Command="{Binding ShowDismissedCommand}" />
                                         <Button Padding="6 2"
                                                 Margin="8 0 0 0"
                                                 Style="{DynamicResource SubtleMenuButton}"
                                                 Content="{Binding Summary.UnsettledText}"
-                                                ToolTip="Their order relative to what the repo holds is not settled. Importing one will ask which comes first."
+                                                ToolTip="Importing asks which version comes first"
                                                 Visibility="{Binding Summary.HasUnsettled, Converter={StaticResource BoolToVisibilityConverter}}"
                                                 Command="{Binding ShowUpdatesCommand}" />
                                     </StackPanel>
@@ -701,7 +693,7 @@
                                                         Header="{Binding Summary.ApplyUpdatesText}"
                                                         Command="{Binding ApplyAllUpdatesCommand}"
                                                         IsMenuAvailable="{Binding Summary.HasRepoOnlyUpdates}"
-                                                        CaretToolTip="Other ways to update">
+                                                        CaretToolTip="More options">
                                         <Button Width="300"
                                                 Style="{DynamicResource SubtleMenuButton}"
                                                 Command="{Binding ApplyRepoUpdatesCommand}">
@@ -728,7 +720,7 @@
 
                                         <ListBox.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="Take the selected mods out" Command="{Binding RemoveSelectedCommand}" />
+                                                <MenuItem Header="Remove the selected mods" Command="{Binding RemoveSelectedCommand}" />
                                                 <MenuItem Header="Revert the selected mods" Command="{Binding RevertSelectedCommand}" />
                                                 <Separator />
                                                 <MenuItem Header="Update the selected mods" Command="{Binding UpdateSelectedCommand}" />
@@ -774,7 +766,7 @@
                                                                 Command="{Binding DataContext.UpdateOneCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                                 CommandParameter="{Binding}" />
 
-                                                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VersionPicker}" ToolTip="Which version this profile pins" />
+                                                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource VersionPicker}" ToolTip="Version in this profile" />
 
                                                         <!-- Open while nothing holds the pin, closed while something does, in the
                                                              accent while the adapter does - which unticking cannot release. -->
@@ -807,7 +799,7 @@
                                                         <Button Margin="0 0 8 0"
                                                                 Style="{DynamicResource SubtleIconButton}"
                                                                 Content="&#xE738;"
-                                                                ToolTip="Take out of this profile"
+                                                                ToolTip="Remove from this profile"
                                                                 Visibility="{Binding IsTakenOut, Converter={StaticResource InverseBoolToVisibilityConverter}}"
                                                                 Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                                 CommandParameter="{Binding}" />
@@ -856,31 +848,27 @@
                                                 Margin="0 0 4 0"
                                                 HorizontalAlignment="Stretch"
                                                 Content="{Binding UpdateSelectedText}"
-                                                ToolTip="Move the picked mods to their newest version, leaving locked ones alone"
                                                 Command="{Binding UpdateSelectedCommand}" />
                                         <Button Grid.Column="1"
                                                 Margin="4 0"
                                                 MinWidth="72"
                                                 Content="{Binding DismissSelectedUpdatesText}"
-                                                ToolTip="Never offer the version each picked mod's update points at"
+                                                ToolTip="Never offer these updates again"
                                                 Command="{Binding DismissSelectedUpdatesCommand}" />
                                         <Button Grid.Column="2"
                                                 Margin="4 0"
                                                 MinWidth="72"
                                                 Content="Lock"
-                                                ToolTip="Hold the picked mods at their versions in this profile"
                                                 Command="{Binding LockSelectedCommand}" />
                                         <Button Grid.Column="3"
                                                 Margin="4 0"
                                                 MinWidth="72"
                                                 Content="Unlock"
-                                                ToolTip="Release this profile's own lock on the picked mods"
                                                 Command="{Binding UnlockSelectedCommand}" />
                                         <Button Grid.Column="4"
                                                 Margin="4 0 0 0"
                                                 MinWidth="72"
                                                 Content="{Binding RevertSelectedText}"
-                                                ToolTip="Put the picked mods back the way the saved profile has them"
                                                 Command="{Binding RevertSelectedCommand}" />
                                     </Grid>
 
@@ -905,14 +893,12 @@
                                 <Button Grid.Column="0"
                                         Margin="0 0 4 0"
                                         HorizontalAlignment="Stretch"
-                                        Content="Take out everything shown"
-                                        ToolTip="Take every mod the list above is showing out of this profile"
+                                        Content="Remove all shown"
                                         Command="{Binding RemoveAllShownCommand}" />
                                 <Button Grid.Column="1"
                                         Margin="4 0 0 0"
                                         HorizontalAlignment="Stretch"
-                                        Content="Revert everything shown"
-                                        ToolTip="Put every changed mod the list above is showing back the way the saved profile has it"
+                                        Content="Revert all shown"
                                         Command="{Binding RevertAllShownCommand}" />
                             </Grid>
                         </Grid>
@@ -933,7 +919,7 @@
                                     Command="{Binding SaveChangesCommand}"
                                     IsMenuAvailable="{Binding Summary.WillApply}"
                                     MenuPlacement="Top"
-                                    CaretToolTip="Other ways to save">
+                                    CaretToolTip="More options">
                     <Button Width="320"
                             Style="{DynamicResource SubtleMenuButton}"
                             Command="{Binding SaveOnlyCommand}">
@@ -949,7 +935,6 @@
     
                 <Button Grid.Column="1" Margin="4 0"
                         Content="Discard changes"
-                        ToolTip="Put everything back the way the saved profile has it. You can undo this."
                         Command="{Binding DiscardChangesCommand}" />
     
                 <StackPanel Grid.Column="2" Margin="4 0" Orientation="Horizontal">
@@ -974,10 +959,8 @@
                           Visibility="{Binding Summary.HasUnsavedChanges, Converter={StaticResource BoolToVisibilityConverter}}">
                         <TextBox x:Name="VersionDescriptionBox"
                                  MaxLength="100"
-                                 Text="{Binding VersionDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 ToolTip="What this save is, in the profile's history. Left empty, the history shows what changed instead."
-                                 ToolTipService.InitialShowDelay="200" />
-                        <TextBlock Text="Version description (optional)"
+                                 Text="{Binding VersionDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Revision label (optional)"
                                    Tag="{Binding ElementName=VersionDescriptionBox}"
                                    Style="{StaticResource Placeholder}" />
                     </Grid>

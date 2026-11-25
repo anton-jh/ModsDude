@@ -40,7 +40,7 @@ public partial class TrustCodeFormViewModel(
         catch (UserFriendlyException exception)
         {
             logger.LogInformation("Trust code not redeemed: {Reason}", exception.DeveloperMessage);
-            Error = exception.UserMessage;
+            Error = exception.Describe();
             return;
         }
 

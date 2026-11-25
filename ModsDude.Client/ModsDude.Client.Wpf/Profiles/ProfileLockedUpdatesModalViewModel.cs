@@ -28,7 +28,6 @@ public partial class ProfileLockedUpdatesModalViewModel : ModalViewModel
         }
     }
 
-
     public IReadOnlyList<ProfileLockedUpdateViewModel> Items { get; }
 
     public string Title => "Locked mods";
@@ -37,8 +36,7 @@ public partial class ProfileLockedUpdatesModalViewModel : ModalViewModel
         ? "One locked mod in this profile has a newer version."
         : $"{Items.Count} locked mods in this profile have newer versions.";
 
-    public string Warning => "Locking exists because changing these versions can break things that are "
-        + "expensive to undo. Pick the ones you mean to move.";
+    public string Warning => "Changing these versions can break savegames.";
 
     /// <summary>Empty until something is confirmed, so a dismissed modal moves nothing.</summary>
     public IReadOnlyList<ModKey> Result { get; private set; } = [];
@@ -47,13 +45,15 @@ public partial class ProfileLockedUpdatesModalViewModel : ModalViewModel
 
     public string ConfirmText => SelectedCount switch
     {
-        0 => "Update nothing",
+        0 => "Update",
         1 => "Update 1 mod",
         _ => $"Update {SelectedCount} mods"
     };
 
 
-    [RelayCommand]
+    private bool CanConfirm() => SelectedCount > 0;
+
+    [RelayCommand(CanExecute = nameof(CanConfirm))]
     private void Confirm()
     {
         Result = [.. Items.Where(x => x.IsSelected).Select(x => x.ModId)];
@@ -81,6 +81,7 @@ public partial class ProfileLockedUpdatesModalViewModel : ModalViewModel
 
         OnPropertyChanged(nameof(SelectedCount));
         OnPropertyChanged(nameof(ConfirmText));
+        ConfirmCommand.NotifyCanExecuteChanged();
     }
 }
 
@@ -113,12 +114,10 @@ public partial class ProfileLockedUpdateViewModel : ObservableObject
     private static string Describe(ProfileModLock @lock) => @lock.Source switch
     {
         ProfileModLockSource.Adapter =>
-            "Version-sensitive, as the game adapter read it from the mod file - a map, typically. Changing the "
-                + "version partway through a save can corrupt that save.",
+            "Version-sensitive. Changing it partway through a savegame can break that savegame.",
         ProfileModLockSource.Profile =>
-            "You locked this mod in this profile. Updating it here undoes that decision for this profile only.",
+            "Locked in this profile.",
         _ =>
-            "Version-sensitive, as the game adapter read it from the mod file, and locked in this profile as well. "
-                + "Changing the version partway through a save can corrupt that save.",
+            "Version-sensitive and locked in this profile. Changing it partway through a savegame can break that savegame.",
     };
 }

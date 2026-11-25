@@ -132,7 +132,7 @@
         </form>
         @if (mayRebind)
         {
-            <form method="post" asp-page-handler="Bind" data-confirm="Bind storage account @inspection!.StorageAccount to this database? Any other database that uses it stops deleting from it, and this one deletes what its own queue holds.">
+            <form method="post" asp-page-handler="Bind" data-confirm="Bind storage account @inspection!.StorageAccount to this database? Other databases using it stop deleting from it.">
                 <button type="submit" class="danger">Bind storage to this database</button>
             </form>
         }

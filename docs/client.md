@@ -45,8 +45,8 @@ The main window has an icon **rail**:
 - Settings
 - Account
 
-A repo has sections (Overview, Admin, Members, Mods, Saves, Archive) and a list of its profiles. Mods
-and Saves are left out when the adapter doesn't support them. Connect game and Configure game are
+A repo has sections (Overview, Admin, Members, Mods, Savegames, Archive) and a list of its profiles. Mods
+and Savegames are left out when the adapter doesn't support them. Connect game and Configure game are
 sub-pages of Overview. A profile has tabs: Overview, Mods (the editor, or a read-only list for guests)
 and History.
 
@@ -58,7 +58,7 @@ and History.
   (`MenuItemViewModel.Restrict`).
 - Home shows the user's repos, with friends' activity grouped by profile. Each repo row offers one next
   step: Connect game, Apply (nothing applied yet), Review (drifted; opens the mod editor like the
-  notice), "Update to rev N" (every drifted folder only behind its profile, `RevisionGap`) or Open
+  notice), "Update to revision N" (every drifted folder only behind its profile, `RevisionGap`) or Open
   profile.
 - Names sort naturally (`Mod 2` before `Mod 10`), but only names people read; machine data sorts
   ordinally.
@@ -96,7 +96,7 @@ lay their pane straight on the window.
   rectangles whose corners run parallel to the well's (`SegmentCornerRadius`). The chosen segment is
   lifted on a raised fill with a small shadow rather than tinted.
 - Chosen things wear the accent's tint: the open rail and sidebar entry, filter and source chips,
-  picked mod rows, the chosen row of a `ListRow` list (`SlotList`, the Saves page). Status badges are
+  picked mod rows, the chosen row of a `ListRow` list (`SlotList`, the Savegames page). Status badges are
   tints of their state's colour.
 - Mod lists light up the whole row on hover, the controls at its end included, and divide rows across
   their whole width. The hover and divider are drawn by the list's item container: `ModRow`

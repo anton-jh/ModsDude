@@ -197,7 +197,7 @@ public sealed class NoticeSeverityCountViewModel(NoticeSeverity severity, int co
     public string Label { get; } = $"{count} {severity switch
     {
         NoticeSeverity.Critical => "critical",
-        NoticeSeverity.Warning => "warning",
+        NoticeSeverity.Warning => count == 1 ? "warning" : "warnings",
         NoticeSeverity.Pending => "pending",
         _ => "info"
     }}";

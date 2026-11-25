@@ -63,7 +63,7 @@
                         Content="&#xE76C;"
                         FontSize="12"
                         Style="{StaticResource SubtleIconButton}"
-                        ToolTip="Collapse. A notice you have not seen opens it again."
+                        ToolTip="Collapse. New notices open it again."
                         Command="{Binding ToggleCollapsedCommand}" />
             </Grid>
 

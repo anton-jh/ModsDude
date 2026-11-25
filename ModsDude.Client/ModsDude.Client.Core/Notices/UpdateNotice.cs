@@ -26,7 +26,7 @@ public static class UpdateNotice
     {
         var headline = $"ModsDude {build} is ready to install";
 
-        const string body = "It has been downloaded. Restarting installs it and opens ModsDude again.";
+        const string body = "Restart to install it.";
 
         return new Notice(Key, string.Join("|~|", headline, body), NoticeSeverity.Info, headline)
         {

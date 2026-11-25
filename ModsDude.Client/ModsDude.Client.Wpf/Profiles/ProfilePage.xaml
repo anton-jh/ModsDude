@@ -57,7 +57,7 @@
                                 Command="{Binding DeactivateCommand}">
                             <StackPanel Orientation="Vertical">
                                 <TextBlock Text="Deactivate, keep the mods" FontWeight="SemiBold" />
-                                <TextBlock Text="Stop following this profile and leave the mod folder exactly as it is - for managing the mods yourself for a while."
+                                <TextBlock Text="Leaves the mod folder as it is"
                                            Margin="0 2 0 0"
                                            TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -68,7 +68,7 @@
                                 Command="{Binding DeactivateAndClearCommand}">
                             <StackPanel Orientation="Vertical">
                                 <TextBlock Text="Deactivate and clear the mods" FontWeight="SemiBold" />
-                                <TextBlock Text="Stop following this profile and take every mod out of the mod folder. You are shown what goes first."
+                                <TextBlock Text="Removes every mod from the mod folder"
                                            Margin="0 2 0 0"
                                            TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />

@@ -146,7 +146,7 @@ public partial class MenuItemViewModel
     /// rides along with it, because a name long enough to be trimmed takes its tag with it, and so does
     /// what the attention dot means.
     /// </summary>
-    public string ToolTip => UnavailableReason ?? (Attention is null ? $"{Title}{TagText}" : $"{Title}{TagText} - {Attention}");
+    public string ToolTip => UnavailableReason ?? (Attention is null ? $"{Title}{TagText}" : $"{Title}{TagText} · {Attention}");
 
     /// <summary>A page tab's tooltip: its title is never trimmed there, so only the reason or what the dot means.</summary>
     public string? TabToolTip => UnavailableReason ?? Attention;

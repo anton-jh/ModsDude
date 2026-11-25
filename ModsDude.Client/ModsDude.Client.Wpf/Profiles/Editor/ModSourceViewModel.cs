@@ -99,19 +99,19 @@ public partial class ModSourceViewModel : ObservableObject
         {
             var what = Source.Kind switch
             {
-                ModSourceKind.Repo => "Everything this repo has registered.",
-                ModSourceKind.Game => $"A mod folder this game reaches.\n{Path}",
-                ModSourceKind.Downloads => $"The system Downloads folder.\n{Path}",
-                ModSourceKind.Profile => $"What this profile pins. {Path}",
-                ModSourceKind.Remote => $"Newer versions {Name} has of mods here. Downloaded when you save.\n{Detail}",
-                _ => $"Added for this session only.\n{Path}"
+                ModSourceKind.Repo => "All mods in this repo",
+                ModSourceKind.Game => $"Mod folder of this game\n{Path}",
+                ModSourceKind.Downloads => $"Downloads folder\n{Path}",
+                ModSourceKind.Profile => "Another profile in this repo",
+                ModSourceKind.Remote => $"Updates from {Name}, downloaded on save\n{Detail}",
+                _ => $"Temporary source\n{Path}"
             };
 
             return HasFailed ? $"{what}\n\nCould not be read: {Error}" : what;
         }
     }
 
-    public string RemoveTooltip => "Unload: everything this source supplied leaves the lists";
+    public string RemoveTooltip => "Unload";
 
     [ObservableProperty]
     private bool _isEnabled;

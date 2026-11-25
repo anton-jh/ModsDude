@@ -40,9 +40,9 @@ public sealed class RemoteSourceLookup(IRemoteModSource source, IErrorReporter e
     public string Status => (IsLookingUp, HasAnswered, CurrentAsOf) switch
     {
         (true, _, _) => "Looking up…",
-        (_, false, _) => "Not looked up yet.",
-        (_, _, DateTimeOffset asOf) => $"As of {asOf.LocalDateTime:g}.",
-        _ => "May be missing most of what it has."
+        (_, false, _) => "Not looked up yet",
+        (_, _, DateTimeOffset asOf) => $"As of {asOf.LocalDateTime:g}",
+        _ => "Incomplete"
     };
 
 
@@ -113,7 +113,7 @@ public sealed class RemoteSourceLookup(IRemoteModSource source, IErrorReporter e
         catch (Exception exception)
         {
             _asked.ExceptWith(mods);
-            Error = "Could not be reached.";
+            Error = "Could not be reached";
 
             errorReporter.Record(exception, $"looking up mods on {source.DisplayName}");
         }

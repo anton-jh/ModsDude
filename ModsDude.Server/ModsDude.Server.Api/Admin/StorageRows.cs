@@ -176,7 +176,7 @@ public class StorageRows(ApplicationDbContext dbContext)
                 var versions = await dbContext.ModVersions.CountAsync(x => x.Images.Any(y => y.Hash == hash), cancellationToken);
                 var avatars = await dbContext.Users.CountAsync(x => x.AvatarHash == hash, cancellationToken);
 
-                return [$"{versions} mod versions", $"{avatars} pictures"];
+                return [$"{versions} mod versions", $"{avatars} avatars"];
 
             default:
                 return [];

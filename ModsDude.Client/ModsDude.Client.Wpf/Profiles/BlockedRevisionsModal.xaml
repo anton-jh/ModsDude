@@ -72,7 +72,7 @@
                         MinWidth="120"
                         HorizontalAlignment="Right"
                         Style="{DynamicResource AccentButtonStyle}"
-                        Content="Ok"
+                        Content="OK"
                         Command="{Binding CloseCommand}" />
             </Border>
         </Grid>

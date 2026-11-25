@@ -50,13 +50,13 @@ public static class RepoSections
         [
             new(RepoSection.Overview, "Overview", MenuIcons.Overview, null, null),
             new(RepoSection.Admin, "Admin", MenuIcons.Admin, null,
-                isNotAdmin ? "Only an admin can rename this repo, change its game settings or delete it." : null),
+                isNotAdmin ? "Admins only" : null),
             new(RepoSection.Members, "Members", MenuIcons.Members, null,
-                isGuest ? "Guests cannot see who else is in a repo, or invite anybody to it. Ask an admin for a higher membership level." : null),
+                isGuest ? "Guests cannot see members" : null),
             new(RepoSection.Mods, "Mods", MenuIcons.Mods,
-                repo.Adapter.CanSupportMods ? null : $"No mod support for {game}.", null),
-            new(RepoSection.Saves, "Saves", MenuIcons.Saves,
-                repo.Adapter.CanSupportSavegames ? null : $"No savegame support for {game}.", null),
+                repo.Adapter.CanSupportMods ? null : $"No mod support for {game}", null),
+            new(RepoSection.Saves, "Savegames", MenuIcons.Saves,
+                repo.Adapter.CanSupportSavegames ? null : $"No savegame support for {game}", null),
             new(RepoSection.Archive, "Archive", MenuIcons.Archive, null, null)
         ];
     }

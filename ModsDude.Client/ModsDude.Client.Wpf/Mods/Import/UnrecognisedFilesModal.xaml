@@ -55,19 +55,19 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="Nothing is deleted. Where should they go?"
+                <TextBlock Text="Move them to:"
                            Margin="0 16 0 8"
                            TextWrapping="Wrap" />
 
                 <RadioButton GroupName="Destination"
-                             Content="The Recycle Bin, where you can restore them"
+                             Content="Recycle Bin"
                              IsChecked="{Binding Destination, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=RecycleBin}" />
 
                 <RadioButton GroupName="Destination"
-                             Content="A folder I choose"
+                             Content="Folder"
                              IsChecked="{Binding Destination, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Folder}" />
 
-                <!-- Always there, so what the modal can do is visible; picking a folder turns its own
+                <!-- Always there, so what the modal can do is visible; selecting a folder turns its own
                      radio on, which is what stops a chosen folder being ignored. -->
                 <Grid Margin="28 4 0 0" ColumnDefinitions="* auto">
                     <TextBox Grid.Column="0"
@@ -76,7 +76,7 @@
 
                     <Button Grid.Column="1"
                             Margin="8 0 0 0"
-                            Content="Browse..."
+                            Content="Browse…"
                             Command="{Binding BrowseCommand}" />
                 </Grid>
 
@@ -92,7 +92,7 @@
                     <Button Grid.Column="0"
                             Margin="0 0 4 0"
                             Style="{DynamicResource AccentButtonStyle}"
-                            Content="Apply the profile"
+                            Content="Apply profile"
                             HorizontalAlignment="Stretch"
                             IsDefault="True"
                             Command="{Binding ConfirmCommand}" />

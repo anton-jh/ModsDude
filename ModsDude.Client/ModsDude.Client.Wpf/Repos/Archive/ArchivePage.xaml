@@ -58,15 +58,13 @@
                             Margin="8 0 0 0"
                             VerticalAlignment="Center"
                             Content="Restore"
-                            ToolTip="Brings it back into every member's sidebar, under the name it went away with."
                             Visibility="{Binding CanRestore, Converter={StaticResource BoolToVisibilityConverter}}"
                             Command="{Binding RestoreCommand}" />
 
                     <Button Grid.Column="2"
                             Margin="8 0 0 0"
                             VerticalAlignment="Center"
-                            Content="Delete for good"
-                            ToolTip="Permanent. This is the only place it can be done from."
+                            Content="Delete permanently"
                             Visibility="{Binding CanDelete, Converter={StaticResource BoolToVisibilityConverter}}"
                             Command="{Binding DeleteCommand}" />
                 </Grid>
@@ -90,7 +88,7 @@
                                TextAlignment="Center"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="You have no archived repos."
+                               Text="No archived repos"
                                Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </StackPanel>
             </ScrollViewer>

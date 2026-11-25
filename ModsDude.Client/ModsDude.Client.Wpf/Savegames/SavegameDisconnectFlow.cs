@@ -33,16 +33,14 @@ public sealed class SavegameDisconnectFlow(
         var (message, kept) = reason switch
         {
             SavegameDisconnectReason.FolderNotNamed folder => (
-                $"Your copy stays exactly where it is, in {Where(folder)}, and becomes an ordinary save of your own - ModsDude stops recognising it. "
-                    + $"The claim on {quoted} is not handed back, so nobody else can take it until you do. "
-                    + "Point the settings back at that folder instead if you want to check it in.",
-                "The save is still on this disk, and the claim is still yours."),
+                $"Your copy stays on disk, in {Where(folder)}. It stays checked out to you. "
+                    + "To check it in instead, add the folder back to the game settings.",
+                $"Stopped tracking {quoted}. It is still checked out to you."),
 
             SavegameDisconnectReason.RepoGone gone => (
-                "The save stays in its slot as an ordinary save of your own, and ModsDude stops recognising it. "
-                    + "It can't be checked in to its repo any more."
-                    + (gone.Played ? " The play since it was checked out stays only on this disk." : ""),
-                "The save is still on this disk."),
+                "Your copy stays in its slot. It can no longer be checked in."
+                    + (gone.Played ? " Its progress since check-out stays only on this disk." : ""),
+                $"Stopped tracking {quoted}"),
 
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null)
         };
@@ -51,8 +49,8 @@ public sealed class SavegameDisconnectFlow(
             $"Stop tracking {quoted}?",
             message,
             IconKind.Warning,
-            "Stop tracking it - nothing on disk changes",
-            "Keep tracking it");
+            "Stop tracking",
+            "Cancel");
 
         await modalService.Value.Show(modal);
 
@@ -61,12 +59,12 @@ public sealed class SavegameDisconnectFlow(
             return false;
         }
 
-        toasts.Show($"ModsDude has stopped tracking {quoted}. {kept}");
+        toasts.Show(kept);
 
         return true;
     }
 
 
     private static string Where(SavegameDisconnectReason.FolderNotNamed folder)
-        => folder.FolderName is string named ? $"the '{named}' folder" : "a folder this game's settings no longer name";
+        => folder.FolderName is string named ? $"the '{named}' folder" : "a folder no longer in the game settings";
 }

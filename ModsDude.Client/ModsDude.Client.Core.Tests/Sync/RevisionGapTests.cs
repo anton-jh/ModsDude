@@ -58,8 +58,8 @@ public class RevisionGapTests
     [Fact]
     public void Moving_forward_is_an_update_and_moving_back_is_a_re_apply()
     {
-        Assert.Equal("Update to rev 6", new RevisionGap(3, 6).ActionLabel);
-        Assert.Equal("Re-apply rev 4", new RevisionGap(6, 4).ActionLabel);
+        Assert.Equal("Update to revision 6", new RevisionGap(3, 6).ActionLabel);
+        Assert.Equal("Re-apply revision 4", new RevisionGap(6, 4).ActionLabel);
     }
 
 

@@ -490,7 +490,7 @@ public sealed class ModImportService(
                 if (chosen is null)
                 {
                     Refuse(version, ModImportStatus.SourceConflict,
-                        "Several sources hold different files for this mod and version, and nothing said which to import.");
+                        "Different sources have different files for this version. Select one to import.");
 
                     candidates[version.ModId].Remove(version.VersionId);
                     continue;
@@ -591,7 +591,7 @@ public sealed class ModImportService(
                 foreach (var version in candidates[item.ModId].Values)
                 {
                     Refuse(version, ModImportStatus.NeedsArbitration,
-                        "This mod's version order was not settled, so nothing was registered for it. It can be imported again later.",
+                        "The version order is unknown. Import it again later.",
                         exception);
                 }
             }
@@ -689,7 +689,7 @@ public sealed class ModImportService(
                     if (current.NeedsArbitration)
                     {
                         Refuse(versions, remaining, ModImportStatus.NeedsArbitration,
-                            "This mod's version order was not settled, so nothing was registered for it. It can be imported again later.");
+                            "The version order is unknown. Import it again later.");
 
                         return;
                     }
@@ -750,7 +750,7 @@ public sealed class ModImportService(
                     if (++attempts > request.MaxPlacementRetries)
                     {
                         Refuse(versions, remaining, ModImportStatus.Failed,
-                            "The version order kept changing underneath this import. Try again.");
+                            "The version order kept changing. Try again.");
                         break;
                     }
 
@@ -799,7 +799,7 @@ public sealed class ModImportService(
                     if (current.NeedsArbitration)
                     {
                         Refuse(versions, remaining, ModImportStatus.NeedsArbitration,
-                            "The version order changed into one that needs deciding by hand. Import this mod again.");
+                            "The version order changed and needs a decision. Import this mod again.");
                         break;
                     }
                 }
@@ -1033,7 +1033,7 @@ public sealed class ModImportService(
                     }
                     else
                     {
-                        Refuse(offered, ModImportStatus.Failed, "The version the download held could not be imported.");
+                        Refuse(offered, ModImportStatus.Failed, "The downloaded version could not be imported.");
                     }
                 }
             }
@@ -1049,7 +1049,7 @@ public sealed class ModImportService(
         private static string DescribeMismatch(ModDownloadMismatch mismatch) => mismatch.Held switch
         {
             null => "The download is not a mod archive.",
-            LocalMod held when held.Id != mismatch.Offered.ModId => "The download holds another mod.",
+            LocalMod held when held.Id != mismatch.Offered.ModId => "The download is another mod.",
             LocalMod held => $"The download is version {held.Version.Value}, not {mismatch.Offered.VersionId.Value}."
         };
 
@@ -1168,7 +1168,7 @@ public sealed class ModImportService(
                     return await AdoptStoredFileAsync(version, placement, exception.Result.ContentHash, cancellationToken);
 
                 default:
-                    Refuse(version, ModImportStatus.Failed, "The file of the deleted version with this id can't be replaced yet. Try again later.", exception);
+                    Refuse(version, ModImportStatus.Failed, "A deleted version with this number is still being removed. Try again later.", exception);
 
                     return VersionOutcome.Done;
             }
@@ -1216,8 +1216,8 @@ public sealed class ModImportService(
             if (ModContentHasher.Matches(ours, storedHash) is false)
             {
                 Refuse(version, ModImportStatus.ContentMismatch, storedHash is null
-                    ? "A file is already stored for this mod and version and nothing records what it contains, so nothing can be registered against it."
-                    : "A different file is already stored for this mod and version. Registering this one would describe bytes nobody could download.");
+                    ? "A file of unknown content is already stored for this version."
+                    : "A different file is already stored for this version.");
 
                 return VersionOutcome.Done;
             }
@@ -1276,7 +1276,7 @@ public sealed class ModImportService(
                 // The stored file records other bytes than these: somebody else's registration of the
                 // same version stored its file first.
                 Refuse(version, ModImportStatus.ContentMismatch,
-                    "A different file is already stored for this mod and version. Registering this one would describe bytes nobody could download.");
+                    "A different file is already stored for this version.");
 
                 return VersionOutcome.Done;
             }
@@ -1285,7 +1285,7 @@ public sealed class ModImportService(
                 // The same file registered already is answered as a success, so this is a different
                 // file or name registered under the version between the link and here.
                 Refuse(version, ModImportStatus.ContentMismatch,
-                    "A different file is already registered for this mod and version.", exception);
+                    "A different file is already in the repo for this version.", exception);
 
                 return VersionOutcome.Done;
             }
@@ -1410,7 +1410,7 @@ public sealed class ModImportService(
                 // decoration step would lose that fact. The loop checks the token again anyway.
                 logger.LogWarning(exception, "Imagery was not published for {Mod} {Version}.", version.ModId.Value, version.VersionId.Value);
 
-                return "Imagery was not published.";
+                return "Images were not uploaded.";
             }
         }
 

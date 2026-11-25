@@ -175,7 +175,7 @@ public class AccountSignUp(
         var lookup = await inviteCodes.FindTrustCodeAsync(input, cancellationToken);
         if (!lookup.IsFound)
         {
-            errors.Add(new(SignUpField.TrustCode, lookup.Problem.Detail ?? "No trust code has that code."));
+            errors.Add(new(SignUpField.TrustCode, lookup.Problem.Detail ?? "No such trust code."));
             return null;
         }
 
@@ -205,7 +205,7 @@ public class AccountSignUp(
             var lookup = await inviteCodes.FindInviteAsync(inputs[index], cancellationToken);
             if (!lookup.IsFound)
             {
-                errors.Add(new(SignUpField.InviteCode, lookup.Problem.Detail ?? "No invite has that code.", index));
+                errors.Add(new(SignUpField.InviteCode, lookup.Problem.Detail ?? "No such invite code.", index));
                 continue;
             }
 
@@ -213,7 +213,7 @@ public class AccountSignUp(
 
             if (found.Any(x => x.Repo.Id == repo.Id))
             {
-                errors.Add(new(SignUpField.InviteCode, "Another code above is already for this repo.", index));
+                errors.Add(new(SignUpField.InviteCode, "Another invite code above is for the same repo.", index));
                 continue;
             }
 

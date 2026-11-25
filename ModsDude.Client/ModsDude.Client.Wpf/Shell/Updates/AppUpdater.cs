@@ -121,12 +121,12 @@ public sealed class AppUpdater : IAppUpdater
 
     public string StatusText => _stage switch
     {
-        UpdateStage.NotInstalled => "Updates only apply to the installed copy of ModsDude.",
-        UpdateStage.Checking => "Checking for updates...",
-        UpdateStage.Downloading => "Downloading an update...",
+        UpdateStage.NotInstalled => "Updates need the installed copy of ModsDude.",
+        UpdateStage.Checking => "Checking for updates…",
+        UpdateStage.Downloading => "Downloading update…",
         UpdateStage.Ready => $"{ReadyBuild} is ready. Restart to install it.",
-        UpdateStage.Failed => "The last check for updates did not work. It is tried again later.",
-        _ => "ModsDude is up to date."
+        UpdateStage.Failed => "Could not check for updates. Retrying later.",
+        _ => "Up to date"
     };
 
     public bool CanCheck => IsInstalled && _stage is not (UpdateStage.Checking or UpdateStage.Downloading or UpdateStage.Ready);

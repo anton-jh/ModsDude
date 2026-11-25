@@ -38,11 +38,6 @@
             <StackPanel Grid.Row="2" Margin="24 8 24 0">
                 <TextBlock Text="{Binding CountText}"
                            Style="{DynamicResource BodyStrongTextBlockStyle}" />
-
-                <TextBlock Text="{Binding Hint}"
-                           Margin="0 4 0 0"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             </StackPanel>
 
             <Border Style="{StaticResource ModalFooter}"

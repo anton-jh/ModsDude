@@ -64,11 +64,11 @@ public sealed class SavegameCheckOutContextBuilder(
     {
         if (pinnedRevision is int pinned)
         {
-            return $"Compatibility mode: stays on rev {pinned} while checked out.";
+            return $"Compatibility mode · stays on revision {pinned}";
         }
 
         return profileStore.Find(repo.Id, savegame.ProfileId) is Profile profile
-            ? $"Will run on {profile.Name} rev {profile.HeadRevision}."
+            ? $"{profile.Name} revision {profile.HeadRevision}"
             : null;
     }
 
@@ -84,8 +84,8 @@ public sealed class SavegameCheckOutContextBuilder(
         if (suggested is null)
         {
             return options.Count == 0
-                ? "This game reports no savegame slots at all."
-                : "Every slot has something in it, so there is nothing to pre-select. Pick the one to write over - anything ModsDude has a copy of can be put back.";
+                ? "No slots found"
+                : "All slots are in use. Select one to replace.";
         }
 
         if (hint is not SavegameSlotRef remembered || remembered.Addresses(suggested.Value))
@@ -97,8 +97,8 @@ public sealed class SavegameCheckOutContextBuilder(
 
         // Gone covers the whole folder having gone as well as the slot.
         return taken is null
-            ? "The slot this save was last in is gone, so the first free one is picked instead."
-            : $"The slot this save was last in now holds '{taken.Label}', so the first free one is picked instead.";
+            ? "Its previous slot is gone"
+            : $"Its previous slot now holds '{taken.Label}'";
     }
 
     /// <summary>
@@ -139,7 +139,7 @@ public sealed class SavegameCheckOutContextBuilder(
         // Summed across every folder the game reaches.
         if (plans.Any(x => x.HasWork) is false)
         {
-            return new SavegameModsSummary(true, "Mods are already correct.", [], null);
+            return new SavegameModsSummary(true, "Up to date", [], null);
         }
 
         var parts = new List<string>();
@@ -154,7 +154,7 @@ public sealed class SavegameCheckOutContextBuilder(
         if (replaces > 0) parts.Add($"{replaces} to replace");
         if (uninstalls > 0) parts.Add($"{uninstalls} to uninstall");
         if (renames > 0) parts.Add($"{renames} to rename");
-        if (unlinks > 0) parts.Add($"{unlinks} to copy instead of link");
+        if (unlinks > 0) parts.Add($"{unlinks} to refresh");
 
         // A rename or an unlink leaves the bytes alone, so a locked mod going through one is not worth warning about.
         var locked = plans
@@ -166,10 +166,10 @@ public sealed class SavegameCheckOutContextBuilder(
 
         return new SavegameModsSummary(
             false,
-            string.Join(", ", parts) + $" · {plans.Sum(x => x.KeepCount)} already correct.",
+            string.Join(", ", parts) + $" · {plans.Sum(x => x.KeepCount)} up to date",
             locked,
             unrecognised > 0
-                ? $"{unrecognised} mods in the folder are not in the repo. You are asked about those separately, before anything moves."
+                ? $"{unrecognised} mods in the mod folder are not in the repo"
                 : null);
     }
 
@@ -188,7 +188,7 @@ public sealed class SavegameCheckOutContextBuilder(
         }
 
         return new SavegameRevisionNote(
-            $"Last played on rev {verdict.Comparison.From}; {SavegameWording.ProfileOf(savegame)} is now at rev {verdict.Comparison.To}.",
+            $"Last played on revision {verdict.Comparison.From} · {SavegameWording.ProfileOf(savegame)} is at revision {verdict.Comparison.To}",
             verdict.ShouldPrompt);
     }
 }

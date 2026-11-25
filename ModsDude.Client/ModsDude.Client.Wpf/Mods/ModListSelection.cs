@@ -135,8 +135,8 @@ public sealed partial class ModListSelection : ObservableObject, IListSelection
     /// is make sure the count on the button is never a surprise.
     /// </summary>
     public string HiddenText => HiddenCount == 1
-        ? "1 of them is not shown"
-        : $"{HiddenCount} of them are not shown";
+        ? "1 not shown"
+        : $"{HiddenCount} not shown";
 
     public string DeselectHiddenText => HiddenCount == 1 ? "Deselect 1 hidden" : $"Deselect {HiddenCount} hidden";
 

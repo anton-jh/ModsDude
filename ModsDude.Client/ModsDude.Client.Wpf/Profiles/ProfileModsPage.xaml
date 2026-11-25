@@ -18,7 +18,7 @@
                        Margin="0 0 0 12"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                       Text="What this profile pins, and what syncing it puts in your mod folder. Guests cannot change the list - ask an admin for a higher membership level to edit it." />
+                       Text="Guests cannot change mods" />
 
             <Border Style="{StaticResource InsetWell}" Grid.Row="1">
                 <Grid>
@@ -55,12 +55,12 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
 
-                    <TextBlock Text="Reading what this profile pins…"
+                    <TextBlock Text="Loading…"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                    <TextBlock Text="This profile pins no mods yet.&#x0a;Syncing it would empty the mod folder."
+                    <TextBlock Text="No mods&#x0a;Applying empties the mod folder"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                TextAlignment="Center"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}">

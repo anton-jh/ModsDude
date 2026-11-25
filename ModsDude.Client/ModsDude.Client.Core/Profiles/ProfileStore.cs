@@ -116,7 +116,7 @@ public sealed class ProfileStore(
         {
             await RefreshAfterRefusalAsync(profile.RepoId, "a rename", cancellationToken);
 
-            throw new UserFriendlyException("Somebody else changed this profile", inner: exception) { Hint = "Look at it again and rename it again." };
+            throw new UserFriendlyException("Somebody else changed this profile", inner: exception) { Hint = "Reload and try again." };
         }
     }
 
@@ -177,7 +177,7 @@ public sealed class ProfileStore(
         {
             await RefreshAfterRefusalAsync(profile.RepoId, "a revision restore", cancellationToken);
 
-            throw new UserFriendlyException("Somebody else saved this profile", inner: exception) { Hint = "Look at its history again and restore again." };
+            throw new UserFriendlyException("Somebody else saved this profile", inner: exception) { Hint = "Reload and try again." };
         }
     }
 

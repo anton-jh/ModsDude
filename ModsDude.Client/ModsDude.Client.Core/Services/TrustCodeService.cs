@@ -24,7 +24,7 @@ public class TrustCodeService(ITrustCodesClient trustCodesClient, ICurrentUserSt
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.TrustCodeRedemptionConflict)
         {
-            throw new UserFriendlyException("Try that again", ex.Result.Detail, ex);
+            throw new UserFriendlyException("The trust code changed", ex.Result.Detail, ex) { Hint = "Try again." };
         }
     }
 }

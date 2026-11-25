@@ -109,9 +109,8 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     /// </summary>
     public bool HasSourceConflict => Mod.HasSourceConflict;
 
-    public string SourceConflictTooltip => "Two sources hold files of different sizes for this mod and "
-        + "version. Only one can be registered, and importing will ask which:"
-        + string.Concat(Mod.FoundIn.Select(x => $"\n{x.Source.Name} - {x.FilePath} ({x.FileLength:N0} bytes)"));
+    public string SourceConflictTooltip => "Sources have different files for this version. Importing will ask which to use:"
+        + string.Concat(Mod.FoundIn.Select(x => $"\n{x.Source.Name} · {x.FilePath} · {x.FileLength:N0} B"));
 
     /// <summary>
     /// The order between this version and what the repo holds is not settled - a comparer abstention
@@ -153,7 +152,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     /// </summary>
     public string SecondaryChipText => HasSourceConflict ? "Conflict"
         : IsLikelyCopy ? "Copy?"
-        : IsBrokenDownload ? "Other file"
+        : IsBrokenDownload ? "Wrong file"
         : OrderNotSettled ? "New?"
         : string.Empty;
 
@@ -162,10 +161,9 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         : IsLikelyCopy
             ? $"The name looks like a copy of {Mod.LikelyCopyOf}."
         : IsBrokenDownload
-            ? "An earlier download of this version held something else. Saving will ask what to do."
+            ? "An earlier download of this version was a different file. Saving will ask what to do."
         : OrderNotSettled
-            ? "Nothing settled whether this version comes before or after what the repo already holds. "
-                + "Importing it will ask which."
+            ? "Order against the repo's versions is unknown. Importing will ask."
             : null;
 
     /// <summary>Stands in for the icon while it loads, and for mods that ship without one.</summary>
@@ -253,8 +251,8 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         ProfileModTouch.Added => "Added",
         ProfileModTouch.VersionChanged => "Version changed",
         ProfileModTouch.LockChanged => "Lock changed",
-        ProfileModTouch.VersionAndLockChanged => "Version & lock changed",
-        ProfileModTouch.TakenOut => "Taken out",
+        ProfileModTouch.VersionAndLockChanged => "Version and lock changed",
+        ProfileModTouch.TakenOut => "Removed",
         _ => string.Empty
     };
 
@@ -266,7 +264,7 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
     [ObservableProperty]
     private bool _outlineStatus;
 
-    /// <summary>In the saved profile, and taken out of the draft.</summary>
+    /// <summary>In the saved profile, and removed in the unsaved changes.</summary>
     [ObservableProperty]
     private bool _isStruckOut;
 
@@ -300,9 +298,9 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         };
 
     public string? UsageTooltip => Mod.Usage is ModUsage usage
-        ? $"Profiles whose newest revision uses this version: {usage.CurrentProfiles}.\n"
-            + $"Profiles with an older revision that uses it: {usage.PastProfiles}.\n"
-            + "A profile that has used it throughout is in both. A version any revision uses cannot be deleted."
+        ? $"Profiles using it now: {usage.CurrentProfiles}\n"
+            + $"Profiles with an older revision using it: {usage.PastProfiles}\n"
+            + "A version any revision uses cannot be deleted."
         : null;
 
     public bool HasUsage => ShowStatistics && UsageText is not null;
@@ -337,8 +335,8 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         ModDisplayStatus.New => "New",
         ModDisplayStatus.NewVersion => "New version",
         ModDisplayStatus.AlreadyInRepo => "In repo",
-        ModDisplayStatus.ImportsOnSave => "*Imports on save",
-        ModDisplayStatus.DownloadsOnSave => "*Downloads on save",
+        ModDisplayStatus.ImportsOnSave => "Imports on save",
+        ModDisplayStatus.DownloadsOnSave => "Downloads on save",
         _ => string.Empty
     };
 
@@ -421,27 +419,18 @@ public partial class ModListItemViewModel : ObservableObject, ILazyLoadable, ISe
         ModImportStatus.AlreadyRegistered => "In repo",
         ModImportStatus.SourceConflict => "Source conflict",
         ModImportStatus.ContentMismatch => "Different file stored",
-        ModImportStatus.NeedsArbitration => "Order not settled",
+        ModImportStatus.NeedsArbitration => "Order unknown",
         ModImportStatus.NoLocalFile => "No local file",
         ModImportStatus.DownloadFailed => "Download failed",
-        ModImportStatus.DownloadMismatch => "Different download",
+        ModImportStatus.DownloadMismatch => "Wrong file downloaded",
         ModImportStatus.Replaced => "Imported another version",
         ModImportStatus.LeftOut => "Left out",
         ModImportStatus.Failed => "Failed",
         _ => ImportPhase switch
         {
-            ModImportPhase.Queued => "Queued",
-            ModImportPhase.Checking => $"Checking {ImportProgress:P0}",
-            ModImportPhase.Downloading => ImportProgress > 0 ? $"Downloading {ImportProgress:P0}" : "Downloading",
-            ModImportPhase.Linking => "Preparing",
-            ModImportPhase.Uploading => $"Uploading {ImportProgress:P0}",
-            ModImportPhase.Registering => "Registering",
-            ModImportPhase.Storing => "Storing",
-            ModImportPhase.PublishingImagery => "Publishing images",
-            ModImportPhase.Completed => "Done",
-            ModImportPhase.Failed => "Failed",
-            ModImportPhase.Skipped => "Skipped",
-            _ => string.Empty
+            ModImportPhase phase when IsTransferring && ImportProgress > 0 => $"{ModImportPhaseLabels.Describe(phase)} {ImportProgress:P0}",
+            ModImportPhase phase => ModImportPhaseLabels.Describe(phase),
+            null => string.Empty
         }
     };
 

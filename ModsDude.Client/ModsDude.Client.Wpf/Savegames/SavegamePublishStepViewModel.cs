@@ -28,7 +28,7 @@ public sealed record SavegamePublishOption(
     int? DeclaredRevision,
     bool FolderIsOnIt)
 {
-    public static SavegamePublishOption NoModList { get; } = new(null, "No mod list", null, false);
+    public static SavegamePublishOption NoModList { get; } = new(null, "No profile", null, false);
 
 
     /// <summary>What the publish sends, with the pair kept together or absent together.</summary>
@@ -104,10 +104,10 @@ public partial class SavegamePublishStepViewModel : WizardStepViewModel
     /// <summary>Every profile in the repo, plus <see cref="SavegamePublishOption.NoModList"/> last.</summary>
     public ObservableCollection<SavegamePublishOption> Profiles { get; }
 
-    public override string Title => "Publish this save";
+    public override string Title => "Publish savegame";
 
     public string Message =>
-        $"{SavegameSlotWording.Capitalised(SavegameSlotWording.Named(SlotNumber, SlotLabel))} is uploaded to {RepoName} as a savegame of its own.";
+        $"Publishes {SavegameSlotWording.Named(SlotNumber, SlotLabel)} to {RepoName}.";
 
 
     [ObservableProperty]
@@ -146,8 +146,8 @@ public partial class SavegamePublishStepViewModel : WizardStepViewModel
     {
         null => null,
         { DeclaredRevision: int revision } profile =>
-            $"This first snapshot is recorded as played on {profile.Name} rev {revision}. Nothing checks that this savegame can actually run on it - nothing can.",
-        _ => "This save follows no mod list. It records no revision, no profile is ever applied on its behalf, and nothing reports it as drifted. It cannot be given one later."
+            $"Recorded as played on {profile.Name} revision {revision}",
+        _ => "No profile. This cannot be changed later."
     };
 
     public bool HasRevisionText => RevisionText is not null;
@@ -155,20 +155,19 @@ public partial class SavegamePublishStepViewModel : WizardStepViewModel
     /// <summary>The folder is on one list and this is being recorded against another.</summary>
     public string? MismatchNotice => SelectedProfile is { ProfileId: not null, FolderIsOnIt: false } profile
         ? FolderProfileName is { Length: > 0 } folder
-            ? $"This folder is on '{folder}'. Nothing checks that this savegame can run on {profile.Name}."
-            : $"This folder has never been synced to a mod list, so {profile.Name}'s latest revision is what gets recorded."
+            ? $"The mod folder is on '{folder}'"
+            : $"The mod folder has never been applied. The latest revision of {profile.Name} is recorded."
         : null;
 
     public bool HasMismatchNotice => MismatchNotice is not null;
 
-    /// <summary>The verb carries what happens to the copy on this machine, the same way check-in's does.</summary>
     public string ConfirmLabel => KeepPlaying
         ? "Publish and keep playing"
-        : "Publish - the local copy goes to the Recycle Bin";
+        : "Publish";
 
     public string Consequence => KeepPlaying
-        ? "The save stays exactly where it is and stays yours. Nobody else can take it until you check it in."
-        : "The slot is freed once the upload is verified, and the save is anybody's to take.";
+        ? "It stays checked out to you."
+        : "The local copy goes to the Recycle Bin after the upload.";
 
     /// <summary>
     /// The two things that have to be answered: the name everybody else will see, and which mod list

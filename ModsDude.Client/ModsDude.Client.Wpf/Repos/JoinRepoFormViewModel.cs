@@ -55,7 +55,7 @@ public partial class JoinRepoFormViewModel(
         catch (UserFriendlyException exception)
         {
             logger.LogInformation("Invite not redeemed: {Reason}", exception.DeveloperMessage);
-            Error = exception.UserMessage;
+            Error = exception.Describe();
             return;
         }
 

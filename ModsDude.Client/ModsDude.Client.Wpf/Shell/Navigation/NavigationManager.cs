@@ -148,7 +148,7 @@ public partial class NavigationManager(
 
     private async Task<bool> ConfirmNavigateAwayAsync()
     {
-        var modal = ConfirmationModalViewModel.ConfirmDiscardChanges("navigate away");
+        var modal = ConfirmationModalViewModel.ConfirmDiscardChanges();
 
         await modalService.Show(modal);
 

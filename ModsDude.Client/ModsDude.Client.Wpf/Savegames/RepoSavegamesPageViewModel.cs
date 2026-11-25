@@ -186,7 +186,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
     public bool HasStatistics => StatisticsText.Length > 0;
 
-    public string EmptyText => "No saves here yet. Publish one of the saves already on this machine, and it appears in this list for everybody.";
+    public string EmptyText => "No savegames yet";
 
     /// <summary>Snapshots and checkouts as one column, newest first.</summary>
     public ObservableCollection<SavegameTimelineEntryViewModel> Timeline { get; }
@@ -486,15 +486,14 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             var name = await NameModalViewModel.AskAsync(
                 _modalService,
                 $"Rename '{row.Name}'",
-                "What everybody else in this repo will see it called. Its snapshots, its history and "
-                    + "whoever is holding it are untouched, and so is the mod list it follows.",
+                "The name everybody in this repo sees.",
                 row.Name,
-                "Rename it",
+                "Rename",
                 name => SaveNameAsync(row, name));
 
             if (name is not null && name != previous)
             {
-                _toasts.Show($"'{previous}' is called '{name}' now.");
+                _toasts.Show($"Renamed to '{name}'");
             }
         }
         catch (OperationCanceledException)
@@ -541,7 +540,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
             // somebody else just did.
             _errorReporter.Record(exception, "renaming a savegame");
 
-            return $"Somebody else changed it. It is called '{row.Name}' now.";
+            return "Somebody else changed this savegame. Try again.";
         }
         finally
         {
@@ -610,11 +609,10 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         var confirmation = new ConfirmationModalViewModel(
             $"Delete snapshot {number}?",
-            $"This copy of '{row.Name}' goes for good. The others stay, and whoever is playing it now "
-                + "is unaffected - they hold the current snapshot, which this is not.",
+            $"Snapshot {number} of '{row.Name}' is deleted permanently.",
             IconKind.Warning,
-            "Delete it",
-            "Keep it");
+            "Delete",
+            "Cancel");
 
         await _modalService.Show(confirmation);
 
@@ -651,7 +649,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
 
         if (await _shellNavigation.GoToAsync(_repo.Id, new RepoDestination.ProfileHistory(profileId, null, CompareWith: null)) is false)
         {
-            _toasts.Show($"'{row.ProfileName}' could not be opened from here.", ToastSeverity.Warning);
+            _toasts.Show($"Could not open '{row.ProfileName}'", ToastSeverity.Warning);
         }
     }
 

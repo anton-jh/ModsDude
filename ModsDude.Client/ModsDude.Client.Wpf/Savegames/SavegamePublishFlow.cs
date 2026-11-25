@@ -37,9 +37,7 @@ public sealed class SavegamePublishFlow(
     {
         if (repo.Games.FirstOrDefault() is not Game game)
         {
-            await modalService.Value.Show(SavegameRefusals.NotConnected(
-                repo,
-                "Publishing takes a save that is already on this machine, so there has to be an installation of the game to take one from."));
+            await modalService.Value.Show(SavegameRefusals.NotConnected(repo));
 
             return;
         }
@@ -72,13 +70,11 @@ public sealed class SavegamePublishFlow(
                 game,
                 $"Publishing '{plan.Name}' to {repo.Name}",
                 "publishing a savegame",
-                $"Publishing '{plan.Name}' stopped. Your save is still in its slot.",
+                $"Publishing '{plan.Name}' cancelled",
                 plan.CheckInFirst is SavegamePublishCheckIn checkIn ? [checkIn.SavegameId] : [],
                 AllFolders: true)
             {
-                Detail = plan.KeepPlaying
-                    ? $"Packing and uploading '{plan.Slot.Label}'"
-                    : $"Packing and uploading '{plan.Slot.Label}', then handing it back"
+                Detail = $"Packing and uploading '{plan.Slot.Label}'"
             },
             (task, ct) => ExecuteAsync(game, repo, plan, published, task, ct));
     }
@@ -91,8 +87,8 @@ public sealed class SavegamePublishFlow(
         if (slots.Count == 0)
         {
             await modalService.Value.Show(ConfirmationModalViewModel.Refusal(
-                "There is nothing here to publish",
-                "Every slot is either empty or holds a savegame ModsDude already has a copy of. A checked-out save is checked in rather than published again, which is the button on its row in the repo's saves list."));
+                "Nothing to publish",
+                "Every slot is empty or already published."));
 
             return null;
         }
@@ -173,13 +169,13 @@ public sealed class SavegamePublishFlow(
 
         if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, slot, game.Name) is string notRecycled)
         {
-            toasts.Show($"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. {notRecycled}", ToastSeverity.Warning);
+            toasts.Show($"Published '{outcome.Savegame.Name}' to {repo.Name}. {notRecycled}", ToastSeverity.Warning);
         }
         else
         {
             toasts.Show(outcome.LocalCopy is SavegameLocalCopy.Kept
-                ? $"'{outcome.Savegame.Name}' is in {repo.Name}, and checked out to you."
-                : $"'{outcome.Savegame.Name}' is in {repo.Name} and is anybody's to take. The local copy went to the Recycle Bin.");
+                ? $"Published '{outcome.Savegame.Name}' to {repo.Name}. It is checked out to you."
+                : $"Published '{outcome.Savegame.Name}' to {repo.Name}. The local copy is in the Recycle Bin.");
         }
 
         published?.Invoke(outcome.Savegame.Id);
@@ -201,7 +197,7 @@ public sealed class SavegamePublishFlow(
             // A check-in that failed has already said so.
             if (outcome.WasDeferred || outcome.Succeeded)
             {
-                toasts.Show($"{SavegameSlotWording.Capitalised(checkIn.Savegame.Quoted)} is still checked out, so '{plan.Name}' was not published.", ToastSeverity.Warning);
+                toasts.Show($"'{plan.Name}' was not published. {checkIn.Savegame.Subject} is still checked out.", ToastSeverity.Warning);
             }
 
             return false;

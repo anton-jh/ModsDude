@@ -102,7 +102,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
 
         Name = user.DisplayName;
 
-        _toasts.Show($"You are now called {user.DisplayName}.");
+        _toasts.Show($"Renamed to '{user.DisplayName}'");
     }
 
     private bool CanChangePicture() => IsUpdatingPicture is false;
@@ -131,7 +131,7 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
                 // That is theirs to fix by picking another, so it is said plainly rather than
                 // reported as the app breaking.
                 _logger.LogInformation(exception, "Could not make a profile picture out of {Path}.", path);
-                _toasts.Show($"'{Path.GetFileName(path)}' could not be read as a picture. Try a PNG or JPEG.", ToastSeverity.Warning);
+                _toasts.Show($"Could not read '{Path.GetFileName(path)}' as a picture. Try a PNG or JPEG.", ToastSeverity.Warning);
                 return;
             }
 
@@ -187,17 +187,17 @@ public partial class AccountPageViewModel : PageViewModel, IDisposable
 
         if (trimmed.Length == 0)
         {
-            return "Your name cannot be empty.";
+            return "Name cannot be empty";
         }
 
         if (trimmed.Length > MaximumNameLength)
         {
-            return $"Your name cannot be longer than {MaximumNameLength} characters.";
+            return $"Name cannot be longer than {MaximumNameLength} characters";
         }
 
         if (trimmed.Any(char.IsControl))
         {
-            return "Your name cannot contain control characters.";
+            return "Name contains characters that are not allowed";
         }
 
         return null;

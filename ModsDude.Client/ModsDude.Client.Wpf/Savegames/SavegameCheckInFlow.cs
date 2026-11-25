@@ -75,13 +75,13 @@ public sealed class SavegameCheckInFlow(
         await operations.RunAsync(
             new SavegameOperation(
                 game,
-                $"Checking {savegame.Quoted} in",
+                $"Checking in {savegame.Quoted}",
                 "checking a savegame in",
-                $"Check-in of {savegame.Quoted} stopped. Nothing was recorded, and your copy is still in its slot.",
+                $"Check-in of {savegame.Quoted} cancelled",
                 [savegameId],
                 AllFolders: false)
             {
-                Detail = "Packing and uploading what is in the slot"
+                Detail = "Packing and uploading the slot"
             },
             async (task, ct) =>
             {
@@ -89,7 +89,7 @@ public sealed class SavegameCheckInFlow(
 
                 if (outcome.WasDeferred)
                 {
-                    toasts.Show($"Left as it is. Your copy of '{savegameName}' is still in its slot.");
+                    toasts.Show($"'{savegameName}' was not checked in");
 
                     return;
                 }
@@ -102,20 +102,19 @@ public sealed class SavegameCheckInFlow(
                 if (SavegameSlotWording.NotRecycled(outcome.LocalCopy, slot, game.Name) is string notRecycled)
                 {
                     toasts.Show(
-                        $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server, and the save is anybody's to take. {notRecycled}",
+                        $"Checked in '{savegameName}' as snapshot {outcome.Snapshot!.Number}. {notRecycled}",
                         ToastSeverity.Warning);
                 }
                 else if (outcome.TakenFrom is SavegameCheckoutDto takenFrom)
                 {
                     toasts.Show(
-                        $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server. The save is still in '{game.Name}' and yours again - " +
-                        $"{takenFrom.User.DisplayName} no longer has it, and their ModsDude will tell them.");
+                        $"Checked in '{savegameName}' as snapshot {outcome.Snapshot!.Number}. It is checked out to you now, not to {takenFrom.User.DisplayName}.");
                 }
                 else
                 {
                     toasts.Show(outcome.KeptPlaying
-                        ? $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server. The save is still in '{game.Name}' and still yours."
-                        : $"Snapshot {outcome.Snapshot!.Number} of '{savegameName}' is on the server, and the save is anybody's to take.");
+                        ? $"Checked in '{savegameName}' as snapshot {outcome.Snapshot!.Number}. It is still checked out to you."
+                        : $"Checked in '{savegameName}' as snapshot {outcome.Snapshot!.Number}");
                 }
 
                 await driftMonitor.CheckAsync();
@@ -157,16 +156,15 @@ public sealed class SavegameCheckInFlow(
         }
 
         var consequence = hasUnpublishedPlay
-            ? $"{SavegameSlotWording.Capitalised(slot)} has been played since it was downloaded, and none of that has been checked in. " +
-              "It goes to the Recycle Bin and no snapshot is minted, so the only copy of that play is one you restore by hand."
-            : $"{SavegameSlotWording.Capitalised(slot)} goes to the Recycle Bin and no snapshot is minted. The savegame goes back to being anybody's to take.";
+            ? $"{SavegameSlotWording.Capitalised(slot)} has progress that is not checked in. It goes to the Recycle Bin, and the progress is not saved anywhere else."
+            : $"{SavegameSlotWording.Capitalised(slot)} goes to the Recycle Bin. No snapshot is made.";
 
         var modal = new ConfirmationModalViewModel(
-            $"Give '{savegameName}' back without checking it in?",
+            $"Discard '{savegameName}'?",
             consequence,
             hasUnpublishedPlay ? IconKind.Warning : IconKind.Question,
-            "Discard it - the local copy goes to the Recycle Bin",
-            "Keep it checked out");
+            "Discard",
+            "Cancel");
 
         await modalService.Value.Show(modal);
 
@@ -178,21 +176,21 @@ public sealed class SavegameCheckInFlow(
         return await operations.RunAsync(
             new SavegameOperation(
                 game,
-                $"Giving '{savegameName}' back",
-                "giving a savegame back",
-                $"Giving '{savegameName}' back stopped. It is still checked out to you, and your copy is still in its slot.",
+                $"Discarding '{savegameName}'",
+                "discarding a savegame",
+                $"Discarding '{savegameName}' cancelled. It is still checked out to you.",
                 [savegameId],
                 AllFolders: false)
             {
-                Detail = "Releasing the claim, then recycling the local copy"
+                Detail = "Ending the check-out, then moving the local copy to the Recycle Bin"
             },
             async (_, ct) =>
             {
                 var localCopy = await savegameCheckIn.DiscardAsync(game, savegameId, ct);
 
                 toasts.Show(SavegameSlotWording.NotRecycled(localCopy, slot, game.Name) is string notRecycled
-                        ? $"'{savegameName}' was given back without a snapshot. {notRecycled}"
-                        : $"'{savegameName}' was given back without a snapshot. The local copy is in the Recycle Bin.",
+                        ? $"Discarded '{savegameName}'. {notRecycled}"
+                        : $"Discarded '{savegameName}'. The local copy is in the Recycle Bin.",
                     localCopy is SavegameLocalCopy.Recycled ? ToastSeverity.Info : ToastSeverity.Warning);
 
                 await driftMonitor.CheckAsync();
@@ -220,7 +218,7 @@ public sealed class SavegameCheckInFlow(
     {
         try
         {
-            task.Report($"Checking {savegame.Quoted} in");
+            task.Report($"Checking in {savegame.Quoted}");
             task.DeclareTransfers(TransferDirection.Upload);
 
             var result = await savegameCheckIn.CheckInAsync(
@@ -234,12 +232,11 @@ public sealed class SavegameCheckInFlow(
             var name = holder.User.DisplayName;
 
             var choice = new ConfirmationModalViewModel(
-                $"{name} has {savegame.Quoted} checked out",
-                $"They have had it since {SavegameWording.Exactly(holder.TakenAt)}. Keeping playing takes it from them, " +
-                "and their ModsDude will tell them. Leaving it with them checks nothing in and keeps your copy where it is.",
+                $"{savegame.Subject} is checked out to {name}",
+                $"Checked out since {SavegameWording.Exactly(holder.TakenAt)}. {name} is told if you take it.",
                 IconKind.Warning,
                 $"Take it from {name}",
-                "Leave it with them");
+                "Cancel");
 
             await modalService.Value.Show(choice);
 
@@ -253,13 +250,11 @@ public sealed class SavegameCheckInFlow(
         catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.SavegameSnapshotStale)
         {
             var choice = new ConfirmationModalViewModel(
-                $"Somebody else checked {savegame.Quoted} in",
-                "Your save was built on an older snapshot. Checking yours in anyway records it as the newest one, with " +
-                "theirs named beside it and still in the history - nothing is deleted either way. Leaving it alone keeps " +
-                "your copy exactly where it is, so you can look at theirs first and decide.",
+                $"Somebody else checked in {savegame.Quoted}",
+                "Your copy is based on an older snapshot. Checking in anyway makes yours the latest snapshot. Theirs stays in the history.",
                 IconKind.Warning,
-                "Check mine in anyway - theirs stays in the history",
-                "Leave mine alone for now");
+                "Check in anyway",
+                "Cancel");
 
             await modalService.Value.Show(choice);
 
@@ -294,8 +289,8 @@ public sealed class SavegameCheckInFlow(
         var profile = profileStore.Find(binding.RepoId, profileId);
 
         return profile is null
-            ? $"Played on revision {revision} of its mod list."
-            : $"Played on {profile.Name} rev {revision}.";
+            ? $"Played on revision {revision}"
+            : $"Played on {profile.Name} revision {revision}";
     }
 
     /// <summary>The number the player knows a held savegame's slot by, for a game that numbers them.</summary>

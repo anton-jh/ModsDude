@@ -35,7 +35,7 @@ public partial class SavegameSlotPickerStepViewModel : WizardStepViewModel
 
         _selectedSlot = Slots.FirstOrDefault();
 
-        Choices = [new WizardChoice("Publish this one") { IsDefault = true, EnabledWhen = () => SelectedSlot is not null }];
+        Choices = [new WizardChoice("Select") { IsDefault = true, EnabledWhen = () => SelectedSlot is not null }];
     }
 
 
@@ -43,11 +43,10 @@ public partial class SavegameSlotPickerStepViewModel : WizardStepViewModel
 
     public ObservableCollection<SavegameSlotOptionViewModel> Slots { get; }
 
-    public override string Title => "Publish a save";
+    public override string Title => "Publish a savegame";
 
     public string Message =>
-        $"A save that is already on this disk becomes a savegame of its own in {RepoName}. Only saves " +
-        "ModsDude has no copy of are listed - a checked-out one is checked in rather than published again.";
+        $"Select a slot to publish to {RepoName}. Slots already published are not listed.";
 
 
     [ObservableProperty]

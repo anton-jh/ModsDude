@@ -26,11 +26,7 @@ public partial class PasteModListModalViewModel : ModalViewModel
 {
     public string Title => "Paste a mod list";
 
-    public string Message => "One mod per line, or separated by commas. Names or ids both work, and bullets, "
-        + "numbering and quotes are ignored.";
-
-    public string Hint => "Matches are selected in the list on the left, ready for you to look over before you add them. "
-        + "Nothing is added by this dialog.";
+    public string Message => "One name or ID per line, or separated by commas.";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CountText))]
@@ -40,7 +36,7 @@ public partial class PasteModListModalViewModel : ModalViewModel
     /// <summary>Counted live, so the parser's reading of the text is visible before it is acted on.</summary>
     public string CountText => Terms.Count switch
     {
-        0 => "Nothing to look for yet",
+        0 => "0 names",
         1 => "1 name",
         var count => $"{count} names"
     };

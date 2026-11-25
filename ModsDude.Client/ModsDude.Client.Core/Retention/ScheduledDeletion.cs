@@ -43,24 +43,19 @@ public static class ScheduledDeletion
     public static string? Explain(DeletionReason? reason, RetainedKind kind) => (reason, kind) switch
     {
         (DeletionReason.OutsideWindow, RetainedKind.Snapshot) =>
-            "Older than this save's three newest snapshots, so it is deleted on this date.",
+            "Not one of this savegame's 3 newest snapshots.",
         (DeletionReason.WindingDown, RetainedKind.Snapshot) =>
-            "Nothing newer has been checked in, so this save's history is winding down to its current snapshot. "
-                + "Checking the save in again keeps it.",
+            "Nothing new has been checked in. Check the savegame in to keep it.",
 
         (DeletionReason.OutsideWindow, RetainedKind.Revision) =>
-            "Older than the profile's three newest revisions and no savegame was played on it, so it is deleted on this date. "
-                + "Playing a savegame on it keeps it.",
+            "Not one of the profile's 3 newest revisions, and no savegame was played on it. Play a savegame on it to keep it.",
         (DeletionReason.WindingDown, RetainedKind.Revision) =>
-            "No savegame has been played on this profile, so its history is winding down to the current revision. "
-                + "Playing a savegame on it, or saving a new revision, keeps it.",
+            "No savegame has been played on this profile. Play one on it, or save a new revision, to keep it.",
 
         (DeletionReason.OutsideWindow, RetainedKind.ModVersion) =>
-            "Older than this mod's two newest versions and no profile revision uses it, so it is deleted on this date. "
-                + "Adding it to a profile keeps it.",
+            "Not one of this mod's 2 newest versions, and no profile revision uses it. Add it to a profile to keep it.",
         (DeletionReason.WindingDown, RetainedKind.ModVersion) =>
-            "No profile uses any version of this mod, so it is winding down to its newest version. "
-                + "Adding either version to a profile keeps it.",
+            "No profile uses this mod. Add a version to a profile to keep it.",
 
         _ => null
     };

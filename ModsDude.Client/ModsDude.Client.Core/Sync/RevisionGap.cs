@@ -9,7 +9,7 @@ namespace ModsDude.Client.Core.Sync;
 public sealed record RevisionGap(int From, int To)
 {
     /// <summary>What the button that puts the game on <see cref="To"/> says.</summary>
-    public string ActionLabel => To > From ? $"Update to rev {To}" : $"Re-apply rev {To}";
+    public string ActionLabel => To > From ? $"Update to revision {To}" : $"Re-apply revision {To}";
 
     /// <summary>The gap of one folder, or null where it has drifted any other way.</summary>
     public static RevisionGap? Of(DriftReport report)

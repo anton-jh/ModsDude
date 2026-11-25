@@ -25,14 +25,14 @@ public partial class LikelyCopiesModalViewModel : ModalViewModel
         : $"{Files.Count} files look like copies";
 
     public string Message => Files.Count == 1
-        ? "Windows names a second download or a copy like this. It is probably not the mod's real name."
-        : "Windows names a second download or a copy like these. They are probably not the mods' real names.";
+        ? "This is probably not the mod's real name."
+        : "These are probably not the mods' real names.";
 
     public string LeaveOutText => Files.Count == 1 ? "Leave it out" : "Leave them out";
 
     public string ImportAnywayHint => Files.Count == 1
-        ? "Only if you know this is the mod's real name."
-        : "Only if you know these are the mods' real names.";
+        ? "Only if the name is real"
+        : "Only if the names are real";
 
     /// <summary>Whether to import them anyway. Read after the modal is done.</summary>
     public bool Result { get; private set; }

@@ -25,8 +25,7 @@ namespace ModsDude.Client.Wpf.Shell.Modals;
 /// <em>logged</em>, not when the modal is shown, so it matches the line it names.
 /// </para>
 /// <para>
-/// <b>One button.</b> There is nothing here to decide - the old error modal inherited two from the
-/// confirmation it borrowed, which implied a choice that was never on offer.
+/// <b>One button.</b> There is nothing here to decide, and two buttons would imply a choice.
 /// </para>
 /// </remarks>
 public partial class ErrorModalViewModel(
@@ -95,7 +94,7 @@ public partial class ErrorModalViewModel(
         {
             logger?.LogWarning(exception, "Could not put an error report on the clipboard.");
 
-            Footer = $"The clipboard would not open - select the text instead. Logged {LoggedAt.ToString(TimestampFormat)}";
+            Footer = $"Could not copy. Select the text instead. Logged {LoggedAt.ToString(TimestampFormat)}";
         }
     }
 
@@ -106,7 +105,7 @@ public partial class ErrorModalViewModel(
         {
             // The one thing this modal can do besides be dismissed, and it failed. Naming the
             // folder is still better than nothing.
-            Footer = $"Logged {LoggedAt.ToString(TimestampFormat)} - the log is in {LogFolder.Path}";
+            Footer = $"Logged {LoggedAt.ToString(TimestampFormat)}. Log folder: {LogFolder.Path}";
         }
     }
 

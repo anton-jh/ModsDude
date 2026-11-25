@@ -24,8 +24,8 @@ public partial class ModDownloadMismatchModalViewModel : ModalViewModel
     public IReadOnlyList<ModDownloadMismatchItemViewModel> Mods { get; }
 
     public string Title => Mods.Count == 1
-        ? "This download is not the version picked"
-        : $"{Mods.Count} downloads are not the versions picked";
+        ? "This download is not the selected version"
+        : $"{Mods.Count} downloads are not the selected versions";
 
     public string Message => "Use what was downloaded instead, or leave the mod as it was.";
 

@@ -69,7 +69,7 @@ public class SignUpPageModel(
         // A form without one would share the empty id with every other such form.
         if (RequestId == Guid.Empty)
         {
-            ModelState.AddModelError("", "Reload the page and try again.");
+            ModelState.AddModelError("", "This form is out of date. Reload the page and try again.");
         }
 
         if (!ModelState.IsValid)

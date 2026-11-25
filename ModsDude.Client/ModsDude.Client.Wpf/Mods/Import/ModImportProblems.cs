@@ -57,8 +57,8 @@ public static class ModImportProblems
         }
 
         var message = new StringBuilder(problems.Count == 1
-            ? "One mod did not make it in."
-            : $"{problems.Count} mods did not make it in.");
+            ? "1 mod was not imported."
+            : $"{problems.Count} mods were not imported.");
 
         if (consequence is not null)
         {
@@ -94,12 +94,12 @@ public static class ModImportProblems
     /// </summary>
     public static string DescribeRow(ModImportStatus? status) => status switch
     {
-        ModImportStatus.SourceConflict => "Not imported: two enabled sources hold different files for this one.",
-        ModImportStatus.ContentMismatch => "Not imported: the repo already stores a different file under this version.",
-        ModImportStatus.NeedsArbitration => "Not imported: this mod's version order was never settled.",
-        ModImportStatus.NoLocalFile => "Not imported: there is no local file to upload.",
+        ModImportStatus.SourceConflict => "Not imported: sources have different files.",
+        ModImportStatus.ContentMismatch => "Not imported: the repo has a different file for this version.",
+        ModImportStatus.NeedsArbitration => "Not imported: version order unknown.",
+        ModImportStatus.NoLocalFile => "Not imported: no local file.",
         ModImportStatus.DownloadFailed => "Not imported: the download failed.",
-        ModImportStatus.DownloadMismatch => "Not imported: the download held something else.",
+        ModImportStatus.DownloadMismatch => "Not imported: the wrong file was downloaded.",
         ModImportStatus.LeftOut => "Left out of the import.",
         ModImportStatus.Failed => "This mod could not be imported.",
         _ => "This mod was not imported."
@@ -112,12 +112,12 @@ public static class ModImportProblems
     /// </summary>
     private static string DescribeGroup(ModImportStatus status) => status switch
     {
-        ModImportStatus.SourceConflict => "Two sources disagree about these; disable one of them:",
-        ModImportStatus.ContentMismatch => "The repo already stores a different file for these:",
-        ModImportStatus.NeedsArbitration => "Their version order was never settled:",
-        ModImportStatus.NoLocalFile => "No local file to upload for these:",
-        ModImportStatus.DownloadFailed => "Downloading went wrong; worth another go:",
-        _ => "Uploading or registering went wrong; worth another go:"
+        ModImportStatus.SourceConflict => "Sources have different files. Disable one source:",
+        ModImportStatus.ContentMismatch => "The repo has a different file for these:",
+        ModImportStatus.NeedsArbitration => "Version order unknown:",
+        ModImportStatus.NoLocalFile => "No local file:",
+        ModImportStatus.DownloadFailed => "Download failed:",
+        _ => "Import failed:"
     };
 
     private static string NameThem(IEnumerable<ModImportItemResult> items, Func<ModVersionIdentity, string> nameOf)

@@ -277,18 +277,17 @@ public partial class SettingsPageViewModel
     public string AutostartNote => _autostart.State switch
     {
         AutostartState.NotAvailable => IsAutostartAvailable is false && AppIdentity.IsProduction is false
-            ? $"Not available in this build: only the installed copy starts with Windows, and this is {AppIdentity.DisplayName}."
-            : "Not available: there is no installed copy of ModsDude to start.",
+            ? $"Not available in {AppIdentity.DisplayName}"
+            : "Only available when ModsDude is installed",
         AutostartState.DisabledInWindows =>
-            "Windows has ModsDude switched off under Settings > Apps > Startup, so it is not starting. "
-            + "Tick this and save to switch it back on.",
-        _ => "It starts hidden in the tray, and opens when you click its icon."
+            "Turned off in the Windows startup settings. Tick this and save to turn it back on.",
+        _ => "Starts hidden in the tray"
     };
 
     public bool CanManage => HasUnsavedChanges is false && IsBusy is false;
 
     public string ManagementBlockedReason => HasUnsavedChanges
-        ? "Save your changes to verify or reclaim a store - these act on the folders as they are saved."
+        ? "Save changes to verify or reclaim a store"
         : string.Empty;
 
 
@@ -357,7 +356,7 @@ public partial class SettingsPageViewModel
             await Task.Run(() => _imageCache.Clear(previousImageCache), cancellationToken);
         }
 
-        _toasts.Show("Saved settings.");
+        _toasts.Show("Saved settings");
 
         // A limit that has just come down is the third way a store ends up over it, and the only one
         // with a person watching. Before the measure, so what the rows then report is the size after
@@ -393,19 +392,16 @@ public partial class SettingsPageViewModel
             return;
         }
 
-        var size = row.Usage is ContentStoreUsage usage && usage.TotalBytes > 0
-            ? $"about {ByteSize.Describe(usage.TotalBytes)} across {usage.Entries} files"
-            : "every file in it";
+        var reads = row.Usage is ContentStoreUsage usage && usage.TotalBytes > 0
+            ? $"Reads {ByteSize.Describe(usage.TotalBytes)} in {usage.Entries} files."
+            : "Reads every file in the store.";
 
         var confirmation = new ConfirmationModalViewModel(
-            $"Check the store on {row.VolumeRoot} for damage?",
-            $"Every mod file is read back and checked against what it is filed as - {size}, so this takes a "
-                + "while and works the disk. Progress shows at the top of the window, and you can stop it "
-                + "there; what it has already checked still counts."
-                + "\n\nAnything that fails is dropped and downloads again when a profile needs it.",
+            $"Verify the store on {row.VolumeRoot}?",
+            $"{reads} Damaged files are removed and download again when needed.",
             IconKind.Question,
-            "Check it",
-            "Not now");
+            "Verify",
+            "Cancel");
 
         await _modalService.Show(confirmation);
 
@@ -419,10 +415,10 @@ public partial class SettingsPageViewModel
         // The pass that most needs the strip: it reads every byte in the store, holding the store to
         // itself while it does. Its Stop is the strip's Cancel, so stopping a six-minute pass does not
         // depend on staying on the page that started it.
-        using var task = Announce($"Checking the store on {row.VolumeRoot}", cancellation.Cancel);
+        using var task = Announce($"Verifying the store on {row.VolumeRoot}", cancellation.Cancel);
 
-        // No staleness guard needed any more: the handle is this run's, and a report arriving after it
-        // is disposed is written to a task the strip no longer lists.
+        // The handle is this run's, and a report arriving after it is disposed is written to a task
+        // the strip no longer lists.
         var progress = new Progress<ContentStoreVerificationProgress>(x => task.Report(
             $"{x.Checked} of {x.Total} files, {ByteSize.Describe(x.BytesRead)} of {ByteSize.Describe(x.TotalBytes)}",
             x.Checked,
@@ -437,25 +433,20 @@ public partial class SettingsPageViewModel
         }
         catch (OperationCanceledException)
         {
-            // Not a failure. A partial pass checked real files and removed anything it found, so it
-            // is reported rather than swallowed - and the rest is one more press away.
-            await ReportAsync(
-                "Stopped",
-                "The check was stopped part way. Anything it found before that was already dealt with, "
-                    + "and running it again starts from the top.");
+            // Not a failure. A partial pass checked real files and removed anything it found.
+            _toasts.Show($"Stopped verifying the store on {row.VolumeRoot}", ToastSeverity.Warning);
         }
 
         await RefreshUsageAsync();
     }
 
     /// <summary>
-    /// What a finished pass found, and - the part that matters - where to go next.
+    /// What a finished pass found: a toast when nothing is left to do, a modal naming the mod folders
+    /// to re-apply when there is.
     /// </summary>
     /// <remarks>
     /// Dropping a bad blob repairs the store and <b>not</b> the mod folders hardlinked to it, which
-    /// are still holding the same wrong bytes under the same names. A report that said only "removed
-    /// 2 files" would read as done when it is half done, so the folders that need re-applying are
-    /// named.
+    /// are still holding the same wrong bytes under the same names.
     /// </remarks>
     private async Task ReportVerificationAsync(ContentStoreViewModel row, StoreVerificationReport? report)
     {
@@ -465,34 +456,41 @@ public partial class SettingsPageViewModel
         }
 
         var result = report.Result;
+        var kept = result.Corrupt.Count - result.Removed;
 
-        if (result.FoundProblems is false)
+        if (report.Affected.Count == 0)
         {
-            await ReportAsync(
-                "All good",
-                $"Read {result.Checked} files on {row.VolumeRoot} and every one of them is still what it is filed as."
-                    + (result.Unreadable > 0
-                        ? $"\n\n{result.Unreadable} could not be read - something has them open - and are worth another pass later."
-                        : string.Empty));
+            var sentences = new List<string>
+            {
+                result.FoundProblems
+                    ? $"Removed {Files(result.Removed, "damaged file")} from the store on {row.VolumeRoot}"
+                    : $"Verified {Files(result.Checked, "file")} on {row.VolumeRoot}"
+            };
+
+            if (kept > 0)
+            {
+                sentences.Add(kept == 1 ? "1 damaged file is in use and was not removed" : $"{kept} damaged files are in use and were not removed");
+            }
+
+            if (result.Unreadable > 0)
+            {
+                sentences.Add($"Could not read {Files(result.Unreadable, "file")}");
+            }
+
+            _toasts.Show(
+                sentences.Count == 1 ? sentences[0] : string.Join(". ", sentences) + ".",
+                result.FoundProblems || result.Unreadable > 0 ? ToastSeverity.Warning : ToastSeverity.Info);
 
             return;
         }
 
-        var kept = result.Corrupt.Count - result.Removed;
-
-        var affected = report.Affected.Count > 0
-            ? "\n\nThese mod folders are still running the bad files, and dropping the cached copy does not fix them - "
-                + "re-apply each one:\n"
-                + string.Join('\n', report.Affected.Select(x =>
-                    $"  • {x.ModFolder}{(x.ProfileName is string name ? $" ({name})" : "")} - {x.Mods} mod{(x.Mods == 1 ? "" : "s")}"))
-            : "\n\nNothing on this machine is running them, so dropping them is the whole repair.";
-
         await ReportAsync(
-            "Found damage",
-            $"{result.Corrupt.Count} of {result.Checked} files no longer match what they are filed as. "
-                + $"{result.Removed} were dropped and download again on demand."
-                + (kept > 0 ? $" {kept} could not be dropped because something has them open." : string.Empty)
-                + affected);
+            "Damaged files found",
+            $"{result.Corrupt.Count} of {result.Checked} files are damaged. Removed {result.Removed}."
+                + (kept > 0 ? $" {kept} are in use and were not removed." : string.Empty)
+                + "\n\nRe-apply these mod folders:\n"
+                + string.Join('\n', report.Affected.Select(x =>
+                    $"  • {x.ModFolder}{(x.ProfileName is string name ? $" · {name}" : "")} · {x.Mods} mod{(x.Mods == 1 ? "" : "s")}")));
     }
 
     /// <summary>
@@ -514,17 +512,14 @@ public partial class SettingsPageViewModel
 
         var amount = row.Usage is { ReclaimableBytes: > 0 } usage
             ? ByteSize.Describe(usage.ReclaimableBytes)
-            : "the space this store is using";
+            : "space";
 
         var confirmation = new ConfirmationModalViewModel(
             $"Reclaim {amount} from {row.VolumeRoot}?",
-            "Every mod file kept here that is not already installed in a mod folder is dropped. Nothing is "
-                + "lost - each one is registered in a repo and downloads again when a profile needs it - but "
-                + "the next sync to a disk this store serves will have to fetch what it needs."
-                + "\n\nWhat your installed profiles are running stays where it is, here and in the mod folder.",
+            "Mods that are not installed in a mod folder are removed from the store. They download again when needed.",
             IconKind.Question,
-            "Reclaim it",
-            "Leave it");
+            "Reclaim",
+            "Cancel");
 
         await _modalService.Show(confirmation);
 
@@ -545,7 +540,7 @@ public partial class SettingsPageViewModel
         catch (OperationCanceledException)
         {
             // Each file dropped before the stop was dropped whole, and every one of them downloads again.
-            _toasts.Show($"Stopped reclaiming space from the store on {row.VolumeRoot}.", ToastSeverity.Warning);
+            _toasts.Show($"Stopped reclaiming space from the store on {row.VolumeRoot}", ToastSeverity.Warning);
             await RefreshUsageAsync();
 
             return;
@@ -556,12 +551,11 @@ public partial class SettingsPageViewModel
             return;
         }
 
-        await ReportAsync(
-            "Reclaimed",
-            $"Dropped {result.EntriesDeleted} files and freed {ByteSize.Describe(result.BytesReclaimed)}."
-                + (result.Failed > 0
-                    ? $"\n\n{result.Failed} could not be removed because something else is holding them open. They go on the next tidy-up."
-                    : string.Empty));
+        var freed = $"Freed {ByteSize.Describe(result.BytesReclaimed)} from the store on {row.VolumeRoot}";
+
+        _toasts.Show(
+            result.Failed > 0 ? $"{freed}. {Files(result.Failed, "file")} in use {(result.Failed == 1 ? "was" : "were")} not removed." : freed,
+            result.Failed > 0 ? ToastSeverity.Warning : ToastSeverity.Info);
 
         await RefreshUsageAsync();
     }
@@ -583,11 +577,10 @@ public partial class SettingsPageViewModel
 
         var confirmation = new ConfirmationModalViewModel(
             "Move the rescued files to the Recycle Bin?",
-            $"These are files sync found in a mod folder that no repo has registered, kept in {store.QuarantinePath}. "
-                + "Nothing can fetch them back once the Recycle Bin is emptied.",
+            $"The files in {store.QuarantinePath} are not in any repo. They are gone once the Recycle Bin is emptied.",
             IconKind.Warning,
-            "Move them to the Recycle Bin",
-            "Keep them");
+            "Move to Recycle Bin",
+            "Cancel");
 
         await _modalService.Show(confirmation);
 
@@ -597,7 +590,7 @@ public partial class SettingsPageViewModel
         }
 
         using var cancellation = new CancellationTokenSource();
-        using var task = Announce($"Emptying the quarantine folder on {row.VolumeRoot}", cancellation.Cancel);
+        using var task = Announce($"Moving rescued files on {row.VolumeRoot} to the Recycle Bin", cancellation.Cancel);
 
         Ran<long?>? ran;
 
@@ -608,7 +601,7 @@ public partial class SettingsPageViewModel
         catch (OperationCanceledException)
         {
             // Only the wait for the store can be stopped: the move to the Recycle Bin is one step.
-            _toasts.Show($"Stopped emptying the quarantine folder on {row.VolumeRoot}.", ToastSeverity.Warning);
+            _toasts.Show($"Stopped moving rescued files on {row.VolumeRoot}", ToastSeverity.Warning);
 
             return;
         }
@@ -620,13 +613,13 @@ public partial class SettingsPageViewModel
 
         if (ran.Value is long recycled)
         {
-            await ReportAsync("Recycled", $"Moved {ByteSize.Describe(recycled)} to the Recycle Bin.");
+            _toasts.Show($"Moved {ByteSize.Describe(recycled)} of rescued files to the Recycle Bin");
         }
         else
         {
             await ReportAsync(
-                "Not moved",
-                $"The Recycle Bin would not take the files - {row.VolumeRoot} may not have one. They are still in {store.QuarantinePath}; remove them yourself if you no longer want them.");
+                "Could not move to the Recycle Bin",
+                $"The rescued files are still in {store.QuarantinePath}.");
         }
 
         await RefreshUsageAsync();
@@ -644,9 +637,7 @@ public partial class SettingsPageViewModel
             return;
         }
 
-        await ReportAsync(
-            "Emptied",
-            $"Freed {ByteSize.Describe(reclaimed.Value)}. Mod artwork is fetched again as lists are drawn.");
+        _toasts.Show($"Emptied the image cache and freed {ByteSize.Describe(reclaimed.Value)}");
 
         await RefreshUsageAsync();
     }
@@ -789,7 +780,7 @@ public partial class SettingsPageViewModel
     /// </summary>
     /// <remarks>
     /// A cancellation is let straight through: stopping a verification pass on purpose is not a
-    /// failure, and turning it into "that did not work" would call the user's own decision an error.
+    /// failure.
     /// </remarks>
     /// <returns>What the work answered, or null where it failed and the modal has said so.</returns>
     private async Task<Ran<T>?> RunAsync<T>(Func<Task<T>> work)
@@ -805,8 +796,8 @@ public partial class SettingsPageViewModel
             _logger.LogWarning(exception, "Store housekeeping failed.");
 
             await _modalService.Show(ConfirmationModalViewModel.Refusal(
-                "That did not work",
-                exception is UserFriendlyException friendly ? friendly.Describe() : "It stopped partway. Try again."));
+                "Could not finish",
+                exception is UserFriendlyException friendly ? friendly.Describe() : "Try again."));
 
             return null;
         }
@@ -826,9 +817,7 @@ public partial class SettingsPageViewModel
     /// <remarks>
     /// <para>
     /// <b>The strip is where all progress on this page goes</b>, rather than beside the buttons that
-    /// started it. Verifying used to draw its own line and its own Stop under the store's row, which
-    /// meant this page reported long work one way and the rest of the app another - and the row's
-    /// version vanished the moment somebody navigated away from a pass that runs for minutes.
+    /// started it, so it stays tracked when somebody navigates away.
     /// </para>
     /// <para>
     /// It also covers the wait. Each of these claims the store exclusively - they all delete - so an
@@ -851,7 +840,7 @@ public partial class SettingsPageViewModel
     /// </remarks>
     private static Action Waiting(IBackgroundTask task)
     {
-        return () => task.Report("Waiting for an apply to finish with this store");
+        return () => task.Report("Waiting for an apply to finish");
     }
 
     private Task ReportAsync(string title, string message)
@@ -1007,7 +996,7 @@ public partial class SettingsPageViewModel
             megabits < TransferRate.MinimumMegabits)
         {
             errors.Add(
-                $"The {direction} limit has to be a number of Mbit/s, at least {TransferRate.MinimumMegabits} - or empty for no limit.");
+                $"The {direction} limit must be at least {TransferRate.MinimumMegabits} Mbit/s, or empty for no limit.");
         }
     }
 
@@ -1074,7 +1063,7 @@ public partial class SettingsPageViewModel
         {
             await ReportAsync(
                 "Could not change start with Windows",
-                "Windows would not let ModsDude change its startup entry. Everything else was saved.");
+                "Other settings were saved.");
         }
 
         StartWithWindows = _autostart.State is AutostartState.On;
@@ -1096,4 +1085,6 @@ public partial class SettingsPageViewModel
             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
+
+    private static string Files(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
 }

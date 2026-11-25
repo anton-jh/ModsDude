@@ -122,11 +122,11 @@ public sealed class DriftToastPlanner
     {
         _reminded.Add(played.NoticeKey);
 
-        var save = played.SlotDisplayName is { Length: > 0 } name ? $"'{name}'" : "the savegame you have checked out";
+        var save = played.SlotDisplayName is { Length: > 0 } name ? $"'{name}'" : "your savegame";
 
         return new DriftToast(
             $"Check in {save}",
-            $"You played {save} in {played.GameName}. Until it is checked in, that play exists only on this machine.",
+            $"You played it in {played.GameName}. That progress is only on this machine until it is checked in.",
             played.NoticeKey);
     }
 
@@ -211,6 +211,6 @@ public sealed class DriftToastPlanner
 
         var cut = first.LastIndexOf(' ', MaxBodyLength - 1);
 
-        return $"{first[..(cut > 0 ? cut : MaxBodyLength - 1)].TrimEnd(',', ';', ' ')}...";
+        return $"{first[..(cut > 0 ? cut : MaxBodyLength - 1)].TrimEnd(',', ';', ' ')}…";
     }
 }

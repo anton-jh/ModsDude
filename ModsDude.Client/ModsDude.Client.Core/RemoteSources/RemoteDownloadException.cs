@@ -14,10 +14,10 @@ public sealed class RemoteDownloadException(string userMessage, string? develope
         $"The download is bigger than {Helpers.ByteSize.Describe(limit)}.");
 
     public static RemoteDownloadException NotAllowed(Uri uri) => new(
-        "The download points somewhere that is not allowed.",
+        "The download link is not allowed.",
         $"Refused to download from {uri.Scheme}://{uri.Host}.");
 
-    public static RemoteDownloadException TooManyRedirects() => new("The download kept redirecting.");
+    public static RemoteDownloadException TooManyRedirects() => new("The download link did not lead to a file.");
 
     public static RemoteDownloadException BadFileName(string fileName) => new(
         "The download has a file name that cannot be used.",

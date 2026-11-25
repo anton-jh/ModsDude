@@ -27,25 +27,21 @@ internal static class SavegameSlotWording
     public static string Capitalised(string text) => char.ToUpperInvariant(text[0]) + text[1..];
 
     /// <summary>
-    /// What a hand-back says where the claim went back but the slot would not go to the Recycle Bin.
-    /// Suggesting deletion is safe: nothing is handed back until the bytes are on the server.
+    /// What ending a check-out says where the check-out ended but the slot would not go to the Recycle Bin.
     /// </summary>
     public static string LeftBehind(string slot)
-        => $"Your copy could not be moved to the Recycle Bin, so it is still in {slot} - an ordinary save ModsDude " +
-           "no longer tracks. Delete it yourself, or keep it as a save of your own.";
+        => $"{Capitalised(slot)} could not go to the Recycle Bin. It stays on disk, no longer tracked.";
 
-    /// <summary>What a hand-back says where the slot was not recycled, or null where it was.</summary>
+    /// <summary>What ending a check-out says where the slot was not recycled, or null where it was.</summary>
     public static string? NotRecycled(SavegameLocalCopy localCopy, string slot, string gameName) => localCopy switch
     {
         SavegameLocalCopy.LeftBehind => LeftBehind(slot),
 
         SavegameLocalCopy.ChangedSinceUpload =>
-            $"{Capitalised(slot)} changed after it was uploaded - the game may have saved again - so it was left where it is " +
-            "rather than recycled. That change is not in the snapshot; the copy is now an ordinary save ModsDude no longer tracks.",
+            $"{Capitalised(slot)} changed after the upload and stays on disk, no longer tracked. The change is not in the snapshot.",
 
         SavegameLocalCopy.LeftGameRunning =>
-            $"'{gameName}' was running by then, so {slot} was left where it is - an ordinary save ModsDude no longer tracks. " +
-            "Delete it yourself, or keep it as a save of your own.",
+            $"'{gameName}' was running. {Capitalised(slot)} stays on disk, no longer tracked.",
 
         _ => null
     };

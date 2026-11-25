@@ -71,11 +71,10 @@ public partial class SavegameCheckInStepViewModel : WizardStepViewModel
 
     public bool CanKeepPlaying => MustHandBack is false;
 
-    public override string Title => $"Check {Savegame.Quoted} in";
+    public override string Title => $"Check in {Savegame.Quoted}";
 
     public string Message =>
-        $"Everything in {Slot} is uploaded as a new snapshot, and the others can take it from there. " +
-        "A save that changed nothing mints nothing.";
+        $"Uploads {Slot} as a new snapshot.";
 
     private string Slot => Savegame.Name is string name
         ? SavegameSlotWording.Named(SlotNumber, name)
@@ -95,12 +94,11 @@ public partial class SavegameCheckInStepViewModel : WizardStepViewModel
     /// <summary>Blank means no description, which is the ordinary answer.</summary>
     public string? TrimmedLabel => string.IsNullOrWhiteSpace(Label) ? null : Label.Trim();
 
-    /// <summary>The verb carries what happens to the copy on this machine, not just "OK".</summary>
     public string ConfirmLabel => KeepPlaying
         ? "Check in and keep playing"
-        : "Check in - the local copy goes to the Recycle Bin";
+        : "Check in";
 
     public string Consequence => KeepPlaying
-        ? "The save stays in its slot and stays yours. Nobody else can take it until you check in without this ticked."
-        : "The slot is freed once the upload is verified, and the save is anybody's to take.";
+        ? "It stays checked out to you."
+        : "The local copy goes to the Recycle Bin after the upload.";
 }

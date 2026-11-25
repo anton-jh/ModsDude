@@ -16,7 +16,7 @@ public class AdminMemberships(
     : IAdminMemberships
 {
     private const string _membersChanged = "The repo's members changed. Check them again.";
-    private const string _needsAdmin = "A repo needs an Admin. Promote someone else first.";
+    private const string _needsAdmin = "A repo needs an admin. Promote someone else first.";
 
 
     public async Task<string?> AddAsync(RepoId repoId, UserId userId, RepoMembershipLevel level, string operatorName, CancellationToken cancellationToken)

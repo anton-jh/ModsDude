@@ -24,7 +24,7 @@ public partial class ConfirmationModalViewModel(
     /// </summary>
     /// <remarks>
     /// <b>Decided from the two answers being the same word, not from a flag the callers set.</b>
-    /// <see cref="Refusal"/> and <see cref="Notice"/> are the two that reach here saying "Ok" twice,
+    /// <see cref="Refusal"/> and <see cref="Notice"/> are the two that reach here saying "OK" twice,
     /// and two identical buttons imply a choice that is not on offer - somebody reads them looking
     /// for the difference. Anything else that ends up with one word for both answers wants the same
     /// treatment for the same reason, which is why this is derived rather than declared.
@@ -75,22 +75,20 @@ public partial class ConfirmationModalViewModel(
     {
         return new ConfirmationModalViewModel(
             $"Archive this {what}?",
-            $"'{name}' leaves the list and gives up its name. Nothing else about it changes, and it can be "
-                + "brought back from the Archive at any time.",
+            $"'{name}' moves to the Archive and its name becomes free to reuse.",
             IconKind.Question,
-            "Archive it",
-            "Keep it here");
+            "Archive",
+            "Cancel");
     }
 
-    /// <param name="leaving">What the user is about to do, as a verb phrase: "navigate away", "quit".</param>
-    public static ConfirmationModalViewModel ConfirmDiscardChanges(string leaving)
+    public static ConfirmationModalViewModel ConfirmDiscardChanges()
     {
         return new ConfirmationModalViewModel(
             "Discard changes?",
-            $"Are you sure you want to {leaving}?\nThis will discard your current changes!",
+            "Your unsaved changes are lost.",
             IconKind.Warning,
-            "Discard changes",
-            "Stay");
+            "Discard",
+            "Cancel");
     }
 
     public static ConfirmationModalViewModel ConfirmDisconnectGame(string name)
@@ -100,7 +98,7 @@ public partial class ConfirmationModalViewModel(
             $"ModsDude forgets where '{name}' is installed and which profile it follows. Nothing on disk changes.",
             IconKind.Question,
             "Disconnect",
-            "Keep");
+            "Cancel");
     }
 
     /// <summary>
@@ -110,10 +108,10 @@ public partial class ConfirmationModalViewModel(
     {
         return new ConfirmationModalViewModel(
             "Really?",
-            $"Are you sure you want to delete '{name}'.\nThis action cannot be undone!",
+            $"'{name}' is deleted permanently.",
             IconKind.Warning,
             "Delete",
-            "Keep");
+            "Cancel");
     }
 
     /// <summary>
@@ -126,11 +124,11 @@ public partial class ConfirmationModalViewModel(
     {
         return new ConfirmationModalViewModel(
             "Really?",
-            $"Deleting '{name}' also deletes every mod registered in it, every profile with its whole "
-                + "history, and every savegame.\nThis action cannot be undone!",
+            $"'{name}' is deleted permanently, with every mod in it, every profile and its history, "
+                + "and every savegame.",
             IconKind.Warning,
-            "Delete it all",
-            "Keep");
+            "Delete",
+            "Cancel");
     }
 
     public static ConfirmationModalViewModel ValidationErrors(List<string> validationErrors)
@@ -139,7 +137,7 @@ public partial class ConfirmationModalViewModel(
 
         if (validationErrors.Count > 5)
         {
-            message = string.Join('\n', validationErrors[..4]) + "\n...";
+            message = string.Join('\n', validationErrors[..4]) + "\n…";
         }
         else
         {
@@ -150,8 +148,8 @@ public partial class ConfirmationModalViewModel(
             "Not so fast!",
             message,
             IconKind.Error,
-            "Ok",
-            "Sure");
+            "OK",
+            "OK");
     }
 
     /// <summary>
@@ -160,7 +158,7 @@ public partial class ConfirmationModalViewModel(
     /// </summary>
     public static ConfirmationModalViewModel Refusal(string title, string message)
     {
-        return new ConfirmationModalViewModel(title, message, IconKind.Warning, "Ok", "Ok");
+        return new ConfirmationModalViewModel(title, message, IconKind.Warning, "OK", "OK");
     }
 
     /// <summary>
@@ -170,6 +168,6 @@ public partial class ConfirmationModalViewModel(
     /// </summary>
     public static ConfirmationModalViewModel Notice(string title, string message)
     {
-        return new ConfirmationModalViewModel(title, message, IconKind.None, "Ok", "Ok");
+        return new ConfirmationModalViewModel(title, message, IconKind.None, "OK", "OK");
     }
 }

@@ -58,7 +58,7 @@ public class InviteService(
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.InvalidInviteLimits)
         {
-            throw new UserFriendlyException("Those limits do not work", ex.Result.Detail, ex);
+            throw new UserFriendlyException("Invalid invite limits", ex.Result.Detail, ex);
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.InviteCannotGrantAdmin)
         {
@@ -101,7 +101,7 @@ public class InviteService(
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.InviteRedemptionConflict)
         {
-            throw new UserFriendlyException("Try that again", ex.Result.Detail, ex);
+            throw new UserFriendlyException("The invite changed", ex.Result.Detail, ex) { Hint = "Try again." };
         }
     }
 }

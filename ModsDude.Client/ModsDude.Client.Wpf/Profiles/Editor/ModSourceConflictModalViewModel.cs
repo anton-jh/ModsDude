@@ -44,19 +44,15 @@ public partial class ModSourceConflictModalViewModel : ModalViewModel
         : $"Which copies of these {Mods.Count} mods?";
 
     public string Message =>
-        "These are different files claiming the same mod and the same version. Only one can be in the "
-        + "repo, so pick the one to keep. The newest is offered first.";
+        "Different files with the same mod and version. Select the one to keep. The newest is listed first.";
 
     /// <summary>
     /// Said before the choice rather than reported after it, because it is what the choice costs.
     /// </summary>
     public string RecycleWarning =>
-        "The copies you do not pick go to the Recycle Bin, once the mods have imported. Nothing is "
-        + "removed if the import does not get that far.";
+        "The other copies go to the Recycle Bin after the import.";
 
-    public string SkipMessage => Mods.Count == 1
-        ? "Skipping leaves this mod unimported and removes nothing. The rest of the import carries on."
-        : $"Skipping leaves these {Mods.Count} mods unimported and removes nothing. The rest of the import carries on.";
+    public string SkipMessage => "Skipped mods are not imported. The rest of the import continues.";
 
     /// <summary>
     /// Which file to import per version, or null where the user declined to say. A null answer skips

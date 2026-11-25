@@ -90,7 +90,7 @@ public class GameOverviewViewModel
         var kind = folder.Kind switch
         {
             GameFolderKind.Mods => "Mods",
-            GameFolderKind.Savegames => "Saves",
+            GameFolderKind.Savegames => "Savegames",
             _ => throw new ArgumentOutOfRangeException(nameof(folder), folder.Kind, null)
         };
 
@@ -109,13 +109,13 @@ public class GameOverviewViewModel
     private static string? Describe(DriftReport? report) => report?.Status switch
     {
         DriftStatus.Drifted => report.LockedDrift.Count > 0
-            ? "Includes locked mods. Hosting a savegame may damage it."
-            : "Differs from what was last applied here.",
+            ? "Does not match its profile, including locked mods. Hosting a savegame may damage it."
+            : "Does not match its profile",
         DriftStatus.NotApplied => report.AppliedProfileName is string applied
-            ? $"Still on '{applied}'. This profile has not been applied here yet."
-            : "Still on the profile it was last applied to, not this one.",
-        DriftStatus.NeverSynced => "This profile has not been applied here yet.",
-        DriftStatus.FolderRepointed => "The settings have been pointed somewhere else, and nothing has been applied there yet.",
+            ? $"Still on '{applied}'"
+            : "Still on a different profile",
+        DriftStatus.NeverSynced => "Not applied yet",
+        DriftStatus.FolderRepointed => "Folder changed. Not applied yet.",
         _ => null
     };
 }

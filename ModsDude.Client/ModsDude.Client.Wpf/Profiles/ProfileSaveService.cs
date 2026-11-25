@@ -251,7 +251,7 @@ public sealed class ProfileSaveService(
         {
             run.Completion = Task.FromResult(new ProfileSaveOutcome(
                 ProfileSaveStatus.Refused,
-                $"'{request.ProfileName}' is already being saved. Nothing was written."));
+                $"'{request.ProfileName}' is already being saved."));
 
             Report(run.Completion.Result);
 
@@ -305,7 +305,7 @@ public sealed class ProfileSaveService(
         {
             return Retire(run, new ProfileSaveOutcome(
                 ProfileSaveStatus.Stopped,
-                "Save stopped. Anything already registered stayed registered."));
+                "Save stopped. Mods imported so far stay in the repo."));
         }
         catch (Exception exception)
         {
@@ -325,7 +325,7 @@ public sealed class ProfileSaveService(
         }
 
         run.Strip?.Report(request.Pending.Count == 0
-            ? "Writing the revision"
+            ? "Saving the revision"
             : request.Pending.Any(x => x.Download is not null)
                 ? $"Downloading and importing {request.Pending.Count} mods"
                 : $"Importing {request.Pending.Count} mods");
@@ -349,7 +349,7 @@ public sealed class ProfileSaveService(
 
             return new ProfileSaveOutcome(
                 ProfileSaveStatus.Stopped,
-                "Save stopped. Anything already registered stayed registered.");
+                "Save stopped. Mods imported so far stay in the repo.");
         }
 
         var unfinished = request.Pending.Count(x => import.Settled.Contains(x.Identity) is false);
@@ -378,7 +378,7 @@ public sealed class ProfileSaveService(
                 : ignoredOnly;
         }
 
-        run.Strip?.Report("Writing the revision");
+        run.Strip?.Report("Saving the revision");
 
         var written = await WriteRevisionAsync(request, cancellationToken);
 
@@ -386,7 +386,7 @@ public sealed class ProfileSaveService(
         {
             return new ProfileSaveOutcome(
                 ProfileSaveStatus.Superseded,
-                "Loaded the newer list. Nothing of yours was saved.");
+                "Loaded the newer revision. Your changes were not saved.");
         }
 
         // Before the apply and the drift check below, which both compare a folder against the head the
@@ -484,13 +484,13 @@ public sealed class ProfileSaveService(
             // Expected rather than broken, so it is said with the save's outcome rather than as an error.
             errorReporter.Record(exception, $"saving the ignore list of '{request.ProfileName}'");
 
-            return "Somebody else changed the ignore list meanwhile, so yours was not saved.";
+            return "The ignore list was changed elsewhere. Yours was not saved. Reload and try again.";
         }
         catch (Exception exception)
         {
             await OnUiThreadAsync(() => errorReporter.ShowAsync(exception, $"saving the ignore list of '{request.ProfileName}'"));
 
-            return "The ignore list could not be saved, so it is as it was.";
+            return "Could not save the ignore list.";
         }
     }
 
@@ -643,9 +643,9 @@ public sealed class ProfileSaveService(
         {
             var confirmation = new ConfirmationModalViewModel(
                 "Somebody else saved this profile",
-                "Your list was built from an older revision. Saving anyway records yours as the newest one - theirs stays in the history and can be restored. Loading theirs discards what you have here.",
+                "Your changes are based on an older revision. Save anyway to make yours the newest; theirs stays in the history. Load theirs to discard your changes.",
                 IconKind.Warning,
-                "Save mine anyway",
+                "Save anyway",
                 "Load theirs");
 
             await modalService.Value.Show(confirmation);
@@ -757,7 +757,7 @@ public sealed class ProfileSaveService(
         }
         else if (replaced.Count > 1)
         {
-            parts.Add($"{replaced.Count} mods are at other versions than picked.");
+            parts.Add($"{replaced.Count} mods are at other versions than selected.");
         }
 
         if (leftOut is [var one])

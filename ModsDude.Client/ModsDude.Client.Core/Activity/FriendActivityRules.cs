@@ -142,7 +142,7 @@ public static class FriendActivityRules
         var activity = news.Activity;
         var game = environment.DescribeGame(activity.Game);
         var repo = environment.DescribeRepo(activity.RepoId) is string name ? $" in {name}" : "";
-        var revision = activity.PinnedRevision is int pinned ? $" rev {pinned}" : "";
+        var revision = activity.PinnedRevision is int pinned ? $" revision {pinned}" : "";
         var savegame = activity.Kind is GameActivityKind.SavegameCheckedOut
             ? $", {Quote(activity.SavegameName) ?? "a savegame"}"
             : "";
@@ -154,7 +154,7 @@ public static class FriendActivityRules
 
         return activity.Kind is GameActivityKind.SavegameCheckedOut
             ? $"{game}, on '{activity.ProfileName}'{revision}{repo}."
-            : $"{game}{repo}.{(revision.Length > 0 ? $" Held on{revision}." : "")}";
+            : $"{game}{repo}.{(revision.Length > 0 ? $" Uses{revision}." : "")}";
     }
 
     /// <summary>
@@ -162,7 +162,7 @@ public static class FriendActivityRules
     /// following an ordinary activation follows the profile, not whatever number head happened to be.
     /// </summary>
     public static string FollowLabel(GameActivityDto activity)
-        => activity.PinnedRevision is int pinned ? $"Use rev {pinned}" : "Use this profile";
+        => activity.PinnedRevision is int pinned ? $"Use revision {pinned}" : "Use this profile";
 
     /// <summary>Why there is no follow button, or null where there is one.</summary>
     public static string? FollowBlocked(GameActivityDto activity, FollowAvailability availability, IFriendActivityEnvironment environment)

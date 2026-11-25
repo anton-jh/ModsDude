@@ -146,7 +146,7 @@ public sealed class SavegamePublisher(
 
             case SavegameSlotAvailability.HeldClean or SavegameSlotAvailability.HeldWithUnpublishedPlay:
                 throw new UserFriendlyException(
-                    "That slot holds a checked-out savegame",
+                    "That slot has a checked-out savegame",
                     $"Slot '{slot}' of game '{game.Identity}' is bound to a savegame already, so it is checked in rather than published again.")
                 {
                     Hint = "Check that one in instead."

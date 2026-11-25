@@ -47,7 +47,7 @@
 
                     <Button Grid.Column="1"
                             Margin="4 0 0 0"
-                            Content="Never mind"
+                            Content="Cancel"
                             HorizontalAlignment="Stretch"
                             Command="{Binding CancelCommand}" />
                 </Grid>

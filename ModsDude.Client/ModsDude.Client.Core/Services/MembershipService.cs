@@ -43,7 +43,7 @@ public class MembershipService(
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.RepoChanged)
         {
-            throw new UserFriendlyException("The members changed", inner: ex) { Hint = "Check them and try again." };
+            throw new UserFriendlyException("The members changed", inner: ex) { Hint = "Reload and try again." };
         }
     }
 
@@ -63,7 +63,7 @@ public class MembershipService(
         }
         catch (ApiException<CustomProblemDetails> ex) when (ex.Result.Type == ProblemType.RepoChanged)
         {
-            throw new UserFriendlyException("The members changed", inner: ex) { Hint = "Check them and try again." };
+            throw new UserFriendlyException("The members changed", inner: ex) { Hint = "Reload and try again." };
         }
     }
 }

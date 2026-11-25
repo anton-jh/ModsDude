@@ -58,8 +58,7 @@ public partial class ModVersionReorderModalViewModel : ModalViewModel
 
     public string Title => "Version order";
 
-    public string Message => "Oldest first. This is the order updates are offered in, so a mod whose "
-        + "versions are the wrong way round will offer a downgrade as an update.";
+    public string Message => "Oldest first. Updates follow this order.";
 
     /// <summary>
     /// True once the repo's copy of the order has actually been changed, so that the page behind the
@@ -194,11 +193,11 @@ public partial class ModVersionReorderModalViewModel : ModalViewModel
 
     private static string DescribeDivergence(int applied, string what)
     {
-        var whatHappened = applied == 0
-            ? $"{what} while this dialog was open, so nothing was saved."
-            : $"{what} while this dialog was open. The first {applied} of your changes were saved before that happened.";
+        var saved = applied == 0
+            ? "Nothing was saved."
+            : $"Only {applied} of your changes were saved.";
 
-        return $"{whatHappened} Below is the order as it now stands - redo what you wanted and save again.";
+        return $"{what}. {saved} Redo your changes and save again.";
     }
 
     /// <summary>

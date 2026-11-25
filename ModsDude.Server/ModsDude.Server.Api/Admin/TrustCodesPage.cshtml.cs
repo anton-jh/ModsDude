@@ -112,7 +112,7 @@ public class TrustCodesPageModel(
             logger.LogInformation(exception, "Changing the expiry of trust code {TrustCodeId} lost to a concurrent write.", id);
             dbContext.ChangeTracker.Clear();
 
-            return ShowError("That trust code changed while its expiry was being changed. Check it again.");
+            return ShowError("That trust code changed. Check it again.");
         }
 
         logger.LogInformation(
@@ -149,7 +149,7 @@ public class TrustCodesPageModel(
             logger.LogInformation(exception, "Revoking trust code {TrustCodeId} lost to a concurrent write.", id);
             dbContext.ChangeTracker.Clear();
 
-            return ShowError("That trust code changed while it was being revoked. Check it again.");
+            return ShowError("That trust code changed. Check it again.");
         }
 
         logger.LogInformation("Admin {Operator} revoked trust code {TrustCodeId}.", User.OperatorName(), id);

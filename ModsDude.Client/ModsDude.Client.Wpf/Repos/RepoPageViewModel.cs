@@ -228,7 +228,7 @@ public partial class RepoPageViewModel
 
     public string CreateProfileToolTip => CanCreateProfiles
         ? "Create profile"
-        : "Guests cannot create profiles. Ask an admin for a higher membership level.";
+        : "Guests cannot create profiles";
 
 
     protected override void Init()
@@ -294,9 +294,9 @@ public partial class RepoPageViewModel
         await NameModalViewModel.AskAsync(
             _modalService,
             "Create profile",
-            "A new, empty mod list in this repo.",
+            "A new, empty profile.",
             "",
-            "Create it",
+            "Create",
             async name =>
             {
                 try

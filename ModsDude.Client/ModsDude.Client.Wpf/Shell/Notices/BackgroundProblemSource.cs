@@ -1,5 +1,4 @@
 using ModsDude.Client.Core.Notices;
-using ModsDude.Client.Wpf.Shell.Diagnostics;
 
 namespace ModsDude.Client.Wpf.Shell.Notices;
 
@@ -9,10 +8,7 @@ namespace ModsDude.Client.Wpf.Shell.Notices;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>A source of notices rather than a card.</b> It used to draw one aggregated box under the drift
-/// card, headlined "Some background work did not finish" whenever more than one kind was counted -
-/// which is a sentence that tells nobody anything. One notice per kind says what actually stopped
-/// working, and the column is what made room for that.
+/// <b>One notice per kind</b>, so each says what actually stopped working.
 /// </para>
 /// <para>
 /// <b>Still aggregated within a kind</b>, because the failures come in batches: one storage
@@ -96,26 +92,23 @@ public sealed class BackgroundProblemSource(TimeProvider timeProvider) : IBackgr
         {
             BackgroundProblem.ImageUpload => "Mod images could not be uploaded",
             BackgroundProblem.ImageDisplay => "Some images could not be shown",
-            _ => "Some rows could not finish loading"
+            _ => "Some details could not load"
         };
 
-        // Said in terms of the consequence, because "an upload failed" means nothing to somebody
-        // looking at a list of mods with initials where the pictures should be.
+        // Said in terms of what the user sees: initials where the pictures should be.
         var body = problem switch
         {
             BackgroundProblem.ImageUpload => count == 1
-                ? "One mod's images could not be uploaded, so it shows initials for everybody until a "
-                    + "client holding the file tries again."
-                : $"{count} mods' images could not be uploaded, so they show initials for everybody until "
-                    + "a client holding the files tries again.",
+                ? "1 mod shows initials until someone who has the mod file tries again."
+                : $"{count} mods show initials until someone who has the mod files tries again.",
 
             BackgroundProblem.ImageDisplay => count == 1
-                ? "1 image could not be shown and was replaced with initials."
-                : $"{count} images could not be shown and were replaced with initials.",
+                ? "1 image is shown as initials."
+                : $"{count} images are shown as initials.",
 
             _ => count == 1
-                ? "1 row could not finish loading."
-                : $"{count} rows could not finish loading."
+                ? "1 item is missing details."
+                : $"{count} items are missing details."
         };
 
         return new Notice(
@@ -127,7 +120,6 @@ public sealed class BackgroundProblemSource(TimeProvider timeProvider) : IBackgr
             headline)
         {
             Body = body,
-            Footnote = $"The log has the details. It is in {LogFolder.Path}.",
             Actions = [new(NoticeActionKind.OpenLog, "Open log folder")]
         };
     }

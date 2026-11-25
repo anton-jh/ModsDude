@@ -21,5 +21,5 @@ public sealed class GameRunningException : UserFriendlyException
 
     /// <summary>The game's processes are unknown, so whether it is running cannot be told.</summary>
     public static GameRunningException Unknown(string gameName)
-        => new(gameName, $"Can't tell whether {gameName} is running, so nothing was changed.");
+        => new(gameName, $"Could not tell whether {gameName} is running.");
 }

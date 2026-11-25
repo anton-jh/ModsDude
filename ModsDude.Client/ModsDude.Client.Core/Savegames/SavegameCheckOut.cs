@@ -149,7 +149,7 @@ public sealed class SavegameCheckOut(
         if (SavegameSlotStates.IsRefused(await slots.ClassifySlotAsync(game, slot, ct)))
         {
             throw new UserFriendlyException(
-                "That slot holds play nobody has checked in",
+                "That slot has progress that is not checked in",
                 $"Writing '{savegameName}' into slot '{slot}' would destroy a savegame that has been played since it was checked out and exists nowhere else. Check that one in first.")
             {
                 Hint = "Check that one in first."
@@ -173,7 +173,7 @@ public sealed class SavegameCheckOut(
         if (SavegameSlotStates.IsRefused(await slots.ClassifySlotAsync(game, own.Slot, ct)))
         {
             throw new UserFriendlyException(
-                $"Your copy of '{savegameName}' has play nobody has checked in",
+                $"Your copy of '{savegameName}' has progress that is not checked in",
                 $"Savegame '{savegameId}' is held in slot '{own.Slot}' and has been played there since it was checked out. Checking it out into slot '{slot}' would leave that play behind. Check it in first.")
             {
                 Hint = "Check it in first."
@@ -284,7 +284,7 @@ public sealed class SavegameCheckOut(
     private static UserFriendlyException Changed(SavegameDto savegame, string what, Exception inner)
         => new($"'{savegame.Name}' changed", what, inner)
         {
-            Hint = "Look at it again before checking it out."
+            Hint = "Reload and try again."
         };
 
 

@@ -255,18 +255,14 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
     /// Why the button cannot be pressed, where it cannot: unsaved edits, a held savegame, or an apply
     /// already running. Null - nearly always - where nothing is in the way.
     /// </summary>
-    /// <remarks>
-    /// Separate from <see cref="ActivationDescription"/> because the reason has to win over the
-    /// ordinary "what pressing this does" sentence: a greyed button with a promise under it explains
-    /// the wrong thing. It is only ever said in the button's tooltip - the header stays quiet.
-    /// </remarks>
+    /// <remarks>Only ever said in the button's tooltip; the header stays quiet.</remarks>
     private string? ActivationBlockReason
     {
         get
         {
             if (BlockedByUnsavedChanges)
             {
-                return "The mod list has unsaved changes. Use 'Save and apply' there instead - this would apply the last saved version behind them.";
+                return "Unsaved changes. Save them on the Mods page first.";
             }
 
             if (HoldRefusal is string refused)
@@ -274,9 +270,6 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
                 return refused;
             }
 
-            // Before the two ordinary sentences, because a greyed button with "this will start
-            // following the profile" under it explains the wrong thing. What is running is the answer
-            // to why nothing can be pressed.
             if (ConnectedGame is Game game && IsApplying is false && _applyService.IsBusy(_repo, game))
             {
                 return _applyService.Busy(_repo, game);
@@ -286,7 +279,7 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
         }
     }
 
-    public string ActivationDescription
+    public string? ActivationDescription
     {
         get
         {
@@ -295,19 +288,12 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
                 return reason;
             }
 
-            if (ConnectedGame is not Game game)
+            if (ConnectedGame is Game game && IsFollowed && game.PinnedRevision is int pinned)
             {
-                return "";
+                return $"On revision {pinned}. Activating moves it to the latest.";
             }
 
-            if (IsFollowed && game.PinnedRevision is int pinned)
-            {
-                return $"'{game.Name}' is held on revision {pinned} of this profile, following a friend. Activating moves it to the latest.";
-            }
-
-            return ActivationKind is ProfileActivationKind.Apply
-                ? $"'{game.Name}' already follows this profile. Applying it again makes the mod folder match."
-                : $"'{game.Name}' will start following this profile. Whatever its current profile put in the mod folder is taken back out.";
+            return null;
         }
     }
 
@@ -364,8 +350,8 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
     public bool HasDeactivation => IsFollowed;
 
     /// <summary>
-    /// What the two ways of deactivating do, or why neither can be used right now. One sentence for the
-    /// pair, in the tooltip of the caret: the two menu items say the difference between them themselves.
+    /// The caret's tooltip, or why neither way of deactivating can be used right now. The two menu items
+    /// say the difference between them themselves.
     /// </summary>
     public string DeactivationDescription
     {
@@ -381,7 +367,7 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
                 return _applyService.Busy(_repo, game);
             }
 
-            return "Stop ModsDude keeping the mod folder in step with this profile.";
+            return "Deactivate";
         }
     }
 
@@ -505,12 +491,12 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
         }
 
         DeactivationRefusal = _heldSavegames.FindProfileHold(game.Identity) is SavegameCheckoutBinding held
-            ? $"'{game.Name}' is holding a savegame that follows a mod list, so it cannot be taken off its profile. "
+            ? $"A savegame is checked out on '{game.Name}'. "
                 + SavegameRefusals.FreeHeld("that savegame", _goneRepos.IsGone(held.RepoId))
             : null;
 
         HoldRefusal = _heldSavegames.DecideApply(game.Identity, _profile.Id, revision: null) is { IsAllowed: false } refusal
-            ? $"'{game.Name}' is holding a savegame that follows another mod list, so it cannot be moved to this profile. "
+            ? $"A savegame is checked out on '{game.Name}'. "
                 + SavegameRefusals.FreeHeld("that savegame", _goneRepos.IsGone(refusal.RepoId))
             : null;
     }

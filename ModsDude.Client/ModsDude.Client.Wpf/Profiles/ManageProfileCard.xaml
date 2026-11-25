@@ -29,7 +29,7 @@
 
                 <Button Content="Archive profile" Margin="0 24 0 0"
                         HorizontalAlignment="Left"
-                        ToolTip="Takes it out of the sidebar and frees its name. Everything else stays, and it can be brought back from the Archive."
+                        ToolTip="Hidden from the sidebar. Can be restored from the Archive."
                         Command="{Binding ArchiveProfileCommand}" />
 
             </StackPanel>

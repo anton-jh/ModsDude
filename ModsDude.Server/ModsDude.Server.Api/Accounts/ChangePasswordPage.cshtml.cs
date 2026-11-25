@@ -76,7 +76,7 @@ public class ChangePasswordPageModel(
         await sessions.RevokeAllAsync(account.Id, cancellationToken);
         await signInManager.RefreshSignInAsync(account);
 
-        Notice = "Password changed. ModsDude asks you to sign in again on every device.";
+        Notice = "Password changed. Sign in to ModsDude again on every device.";
         return RedirectToPage("/Accounts/AccountHomePage");
     }
 }

@@ -236,7 +236,7 @@ public class SavegameCheckOutTests
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(
             () => harness.CheckOut.CheckOutAsync(harness.Game, other, _slot1, SavegameRevisionMode.Latest, CancellationToken.None));
 
-        Assert.Contains("nobody has checked in", exception.UserMessage);
+        Assert.Contains("not checked in", exception.UserMessage);
 
         // The destructive step is local and comes first, so nothing was claimed on anybody's behalf
         // and the slot still holds the evening.
@@ -304,7 +304,7 @@ public class SavegameCheckOutTests
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(
             () => harness.CheckOut.CheckOutAsync(harness.Game, other, _slot2, SavegameRevisionMode.Latest, CancellationToken.None));
 
-        Assert.Contains("already holding a savegame", exception.UserMessage);
+        Assert.Contains("already has a savegame checked out", exception.UserMessage);
 
         // The free slot is still free, and nothing was claimed.
         Assert.Equal(1, harness.Server.CheckoutsTaken);
@@ -479,7 +479,7 @@ public class SavegameCheckOutTests
         var exception = await Assert.ThrowsAsync<UserFriendlyException>(
             () => harness.CheckOut.CheckOutAsync(harness.Game, other, _client, SavegameRevisionMode.Latest, CancellationToken.None));
 
-        Assert.Contains("already holding a savegame", exception.UserMessage);
+        Assert.Contains("already has a savegame checked out", exception.UserMessage);
         Assert.Equal(1, harness.Server.CheckoutsTaken);
     }
 

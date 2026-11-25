@@ -170,7 +170,7 @@ own card:
 
 - headline "'Game' is behind 'Profile'", severity Pending;
 - rows Applied and Current (revision numbers);
-- primary button "Update to rev N", or "Re-apply rev N" when the needed revision is older than the
+- primary button "Update to revision N", or "Re-apply revision N" when the needed revision is older than the
   applied one (a savegame in compatibility mode);
 - Review opens the profile's history with the current revision selected and its changes compared
   with the applied revision. Offered to guests too, since the history is readable at Guest. A revision
@@ -191,7 +191,7 @@ Where a notice's Review goes is `NoticeSubject.Review`: `NoticeReview.ModList` (
 `NoticeReview.RevisionChanges` (a revision gap).
 
 Home's repo row follows the same split: a game whose drifted folders are all only behind offers
-"Update to rev N" as its one button; any other drift offers Review into the mod editor. The sync chip
+"Update to revision N" as its one button; any other drift offers Review into the mod editor. The sync chip
 says Drifted in both cases.
 
 ### Leases

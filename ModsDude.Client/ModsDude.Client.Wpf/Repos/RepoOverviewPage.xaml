@@ -60,8 +60,8 @@
                                            Text="No folders"
                                            Visibility="{Binding Game.HasNoFolders, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                                <!-- Neutral. Holding a savegame in compatibility mode is a state somebody chose and is
-                                     playing in, not a problem with the game. -->
+                                <!-- Neutral. A savegame checked out in compatibility mode is a state somebody chose,
+                                     not a problem with the game. -->
                                 <TextBlock Margin="0 4 0 0"
                                            TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -93,8 +93,7 @@
                                 <StackPanel Margin="0 0 8 0"
                                             Visibility="{Binding Game.HasActiveProfile, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
                                     <ToggleButton x:Name="DeactivateToggle"
-                                                  Content="Deactivate  ▾"
-                                                  ToolTip="Stop ModsDude keeping this game's mod folders in step with its profile." />
+                                                  Content="Deactivate  ▾" />
 
                                     <Popup IsOpen="{Binding IsChecked, ElementName=DeactivateToggle, Mode=TwoWay}"
                                            PlacementTarget="{Binding ElementName=DeactivateToggle}"
@@ -110,7 +109,7 @@
                                                         Click="CloseDeactivateMenu">
                                                     <StackPanel Orientation="Vertical">
                                                         <TextBlock Text="Deactivate, keep the mods" FontWeight="SemiBold" />
-                                                        <TextBlock Text="Stop following the profile and leave the mod folders exactly as they are."
+                                                        <TextBlock Text="Stops following the profile. Mod folders stay as they are."
                                                                    Margin="0 2 0 0"
                                                                    TextWrapping="Wrap"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -122,7 +121,7 @@
                                                         Click="CloseDeactivateMenu">
                                                     <StackPanel Orientation="Vertical">
                                                         <TextBlock Text="Deactivate and clear the mods" FontWeight="SemiBold" />
-                                                        <TextBlock Text="Stop following the profile and take every mod out of the mod folders. You are shown what goes first."
+                                                        <TextBlock Text="Stops following the profile. Removes every mod from the mod folders."
                                                                    Margin="0 2 0 0"
                                                                    TextWrapping="Wrap"
                                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -134,8 +133,8 @@
                                 </StackPanel>
 
                                 <!-- Mods updated from inside the game are the commonest way a folder
-                                     drifts, and a game launched for the first time is how one is
-                                     found. -->
+                                     stops matching its profile, and a game launched for the first
+                                     time is how one is found. -->
                                 <Button Margin="0 0 8 0"
                                         Content="Check again"
                                         Command="{Binding CheckAgainCommand}"
@@ -143,7 +142,6 @@
 
                                 <Button Margin="0 0 8 0"
                                         Content="Disconnect"
-                                        ToolTip="ModsDude stops managing this installation. Nothing on disk is changed or removed."
                                         Command="{Binding DisconnectCommand}"
                                         Visibility="{Binding CanManageGame, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>

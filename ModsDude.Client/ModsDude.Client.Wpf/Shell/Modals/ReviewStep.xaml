@@ -9,7 +9,7 @@
 
     <StackPanel>
 
-        <TextBlock Text="In this order"
+        <TextBlock Text="Steps"
                    Style="{DynamicResource CaptionTextBlockStyle}"
                    Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
 
