@@ -8,7 +8,8 @@ public partial class ConfirmationModalViewModel(
     string message,
     IconKind icon,
     string yesText = "Yes",
-    string noText = "No")
+    string noText = "No",
+    bool declineChangesNothing = true)
     : ModalViewModel
 {
     public string Title { get; } = title;
@@ -18,6 +19,9 @@ public partial class ConfirmationModalViewModel(
     public string NoText { get; } = noText;
 
     public bool Result { get; private set; }
+
+    /// <summary>False where the "no" answer is itself an action, so only its button gives it.</summary>
+    public override bool IsDismissable => declineChangesNothing;
 
     /// <summary>
     /// Whether this modal is telling rather than asking, and so has one button instead of two.

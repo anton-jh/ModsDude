@@ -62,6 +62,8 @@ public partial class BlockedRevisionsModalViewModel : ModalViewModel
     private void Close() => Done = true;
 
 
+    public override bool IsDismissable => true;
+
     /// <summary>Nothing to decide here, so both keys close it.</summary>
     public override bool TryCancel() => Press(CloseCommand);
 

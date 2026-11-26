@@ -16,25 +16,38 @@
 
         <Grid RowDefinitions="auto * auto">
 
-            <StackPanel Grid.Row="0" Margin="24 24 24 16">
-                <TextBlock Text="{Binding Name}"
-                           TextWrapping="Wrap"
-                           Style="{StaticResource TitleTextBlockStyle}" />
+            <Grid Grid.Row="0" Margin="24 24 56 16" ColumnDefinitions="* auto">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="{Binding Name}"
+                               TextWrapping="Wrap"
+                               Style="{StaticResource TitleTextBlockStyle}" />
 
-                <StackPanel Orientation="Horizontal" Margin="0 6 0 0">
-                    <TextBlock Text="{Binding Version, StringFormat='Version {0}'}"
-                               Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}" />
-                    <TextBlock Text="•" Margin="8 0" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                    <TextBlock Text="{Binding Id}"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                    <StackPanel Orientation="Horizontal"
-                                Visibility="{Binding HasAuthor, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal" Margin="0 6 0 0">
+                        <TextBlock Text="{Binding Version, StringFormat='Version {0}'}"
+                                   Foreground="{DynamicResource AccentTextFillColorSecondaryBrush}" />
                         <TextBlock Text="•" Margin="8 0" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                        <TextBlock Text="{Binding Author}"
+                        <TextBlock Text="{Binding Id}"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <StackPanel Orientation="Horizontal"
+                                    Visibility="{Binding HasAuthor, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TextBlock Text="•" Margin="8 0" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <TextBlock Text="{Binding Author}"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
-            </StackPanel>
+
+                <!-- Level with the corner close button the modal layer draws. -->
+                <Button Grid.Column="1"
+                        Margin="12 -16 0 0"
+                        VerticalAlignment="Top"
+                        Style="{StaticResource SubtleIconButton}"
+                        Content="&#xE721;"
+                        FontSize="14"
+                        ToolTip="Find (Ctrl+F)"
+                        AutomationProperties.Name="Find"
+                        Command="{Binding OpenFindCommand}" />
+            </Grid>
 
             <Grid Grid.Row="1" Margin="24 0 24 0" ColumnDefinitions="400 *">
 
@@ -100,14 +113,81 @@
                     </ListBox>
                 </Grid>
 
-                <ScrollViewer Grid.Column="1"
-                              Margin="24 0 0 0"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-                    <TextBlock Text="{Binding Description}"
-                               TextWrapping="Wrap"
-                               Margin="0 0 12 0" />
-                </ScrollViewer>
+                <Grid Grid.Column="1" Margin="24 0 0 0" RowDefinitions="auto *">
+
+                    <Grid Grid.Row="0"
+                          Margin="0 0 0 12"
+                          ColumnDefinitions="* auto auto auto auto"
+                          Visibility="{Binding IsFindOpen, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                        <TextBox x:Name="FindBox"
+                                 Grid.Column="0"
+                                 AutomationProperties.Name="Find in description"
+                                 behaviors:FocusRequest.Count="{Binding FindFocusRequests}"
+                                 Text="{Binding FindQuery, UpdateSourceTrigger=PropertyChanged}"
+                                 VerticalAlignment="Center">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Enter" Modifiers="Shift" Command="{Binding FindPreviousCommand}" />
+                            </TextBox.InputBindings>
+                        </TextBox>
+
+                        <TextBlock Grid.Column="0"
+                                   Text="Find in description"
+                                   Margin="12 0 0 0"
+                                   VerticalAlignment="Center"
+                                   IsHitTestVisible="False"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=FindBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <TextBlock Grid.Column="1"
+                                   Margin="12 0 4 0"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding MatchSummary}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                        <Button Grid.Column="2"
+                                Style="{StaticResource SubtleIconButton}"
+                                Content="&#xE70E;"
+                                FontSize="12"
+                                ToolTip="Previous (Shift+Enter)"
+                                AutomationProperties.Name="Previous match"
+                                Command="{Binding FindPreviousCommand}" />
+
+                        <Button Grid.Column="3"
+                                Style="{StaticResource SubtleIconButton}"
+                                Content="&#xE70D;"
+                                FontSize="12"
+                                ToolTip="Next (Enter)"
+                                AutomationProperties.Name="Next match"
+                                Command="{Binding FindNextCommand}" />
+
+                        <Button Grid.Column="4"
+                                Style="{StaticResource SubtleIconButton}"
+                                Content="&#xE711;"
+                                FontSize="12"
+                                ToolTip="Close find (Esc)"
+                                AutomationProperties.Name="Close find"
+                                Command="{Binding CloseFindCommand}" />
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock behaviors:HighlightedText.Segments="{Binding DescriptionSegments}"
+                                   TextWrapping="Wrap"
+                                   Margin="0 0 12 0" />
+                    </ScrollViewer>
+                </Grid>
             </Grid>
 
             <Border Style="{StaticResource ModalFooter}"

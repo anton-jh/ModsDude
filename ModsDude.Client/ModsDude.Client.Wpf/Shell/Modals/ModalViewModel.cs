@@ -29,10 +29,7 @@ public partial class ModalViewModel : ObservableObject
     /// <see cref="TryAccept"/>, where that matters most.
     /// </para>
     /// <para>
-    /// These are asked by the shell, once, rather than by seventeen copies of a <c>KeyBinding</c> on
-    /// seventeen <c>UserControl</c>s - which is what was there, and which fired only when focus
-    /// happened to be inside the modal. Nine of them never took focus at all, so their Escape did
-    /// nothing whatsoever. See <c>MainWindow.OnPreviewKeyDown</c>.
+    /// These are asked by the shell, once, wherever focus is. See <c>MainWindow.OnPreviewKeyDown</c>.
     /// </para>
     /// </remarks>
     /// <returns>Whether the key was used, which is what stops it reaching the page behind.</returns>
@@ -48,6 +45,20 @@ public partial class ModalViewModel : ObservableObject
     /// </remarks>
     /// <inheritdoc cref="TryCancel" path="/returns"/>
     public virtual bool TryAccept() => false;
+
+    /// <summary>
+    /// Whether the corner close button and a click outside close this modal, both through
+    /// <see cref="TryCancel"/>. Only for a modal whose cancel loses nothing and decides nothing.
+    /// </summary>
+    public virtual bool IsDismissable => false;
+
+    /// <summary>What Ctrl+F does here, if anything.</summary>
+    public virtual void Find()
+    {
+    }
+
+    /// <inheritdoc cref="TryCancel" path="/returns"/>
+    public bool TryDismiss() => IsDismissable && TryCancel();
 
 
     /// <summary>

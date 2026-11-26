@@ -152,6 +152,14 @@ The column shows up to six cards, with the rest behind "N more":
 **Modals** stack. Escape declines, even for a destructive confirmation. Enter presses the dialog's own
 command.
 
+- A modal whose decline loses nothing and decides nothing is dismissable: a × in its top-right corner and
+  a click on the scrim around it do what Escape does. The shell draws the ×, and the modal's header
+  keeps room for it.
+- Not dismissable: modals where declining is itself a choice (skip, stop, leave out, load theirs) and
+  modals holding typed input or unsaved edits.
+- Ctrl+F goes to the modal, never to the page behind. The mod details modal uses it to find in the
+  description.
+
 **The progress strip** shows one task at a time, paged, without jumping to new tasks on its own. When the
 Cancel button on screen starts belonging to another task, it ignores clicks for a second, so a
 double-click doesn't cancel the wrong task. Rows may also show their own progress.

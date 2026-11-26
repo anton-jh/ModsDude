@@ -58,6 +58,8 @@ public partial class ProfileDismissedVersionsModalViewModel : ModalViewModel
     }
 
 
+    public override bool IsDismissable => true;
+
     public override bool TryCancel() => Press(CancelCommand);
 
     public override bool TryAccept() => Press(ConfirmCommand);

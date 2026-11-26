@@ -14,7 +14,7 @@
 
         <Grid RowDefinitions="auto * auto">
 
-            <StackPanel Grid.Row="0" Margin="24 24 24 12">
+            <StackPanel Grid.Row="0" Margin="24 24 56 12">
                 <TextBlock Text="{Binding Title}"
                            TextWrapping="Wrap"
                            Style="{StaticResource TitleTextBlockStyle}" />

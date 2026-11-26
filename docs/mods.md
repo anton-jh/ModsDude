@@ -132,6 +132,12 @@ repos.
 Measured on a real FS25 folder of 540 mods, store art was about 1% of the archive bytes, and the
 renditions came to a median of 2.7 KB per thumbnail and 21 KB per full image.
 
+### Mod details
+
+The mod details modal shows a version's metadata, images and full description. Find in the description
+(Ctrl+F or the magnifier) highlights every match and steps through them with Enter and Shift+Enter,
+case-insensitive.
+
 ### Locking
 
 Some mods break savegames when their version changes, such as maps in Farming Simulator. A mod can be

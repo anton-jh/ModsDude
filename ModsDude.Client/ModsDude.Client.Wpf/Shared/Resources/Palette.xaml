@@ -111,6 +111,10 @@
     <SolidColorBrush x:Key="CaptionCloseBrush" Color="#C42B1C" />
     <SolidColorBrush x:Key="CaptionClosePressedBrush" Color="#C83C31" />
 
+    <!-- Find in text: every match tinted in the accent, the current one filled with it. -->
+    <SolidColorBrush x:Key="FindMatchBrush" Color="#59FF8A3D" />
+    <SolidColorBrush x:Key="FindCurrentMatchBrush" Color="{StaticResource AccentColor}" />
+
     <!-- What dims the app under the modal layer. -->
     <SolidColorBrush x:Key="ScrimBrush" Color="#990A0B0D" />
 

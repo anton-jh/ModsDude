@@ -67,6 +67,8 @@ public partial class ProfileLockedUpdatesModalViewModel : ModalViewModel
     }
 
 
+    public override bool IsDismissable => true;
+
     public override bool TryCancel() => Press(CancelCommand);
 
     public override bool TryAccept() => Press(ConfirmCommand);

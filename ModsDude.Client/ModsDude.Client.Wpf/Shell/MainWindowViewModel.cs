@@ -96,6 +96,10 @@ public partial class MainWindowViewModel
 
     public bool IsModalVisible => Modal is not null;
 
+    /// <summary>The modal's corner close button and a click on the scrim around it.</summary>
+    [RelayCommand]
+    private void DismissModal() => Modal?.TryDismiss();
+
     /// <summary>The window's close button. Leaving goes through the one exit every way out uses.</summary>
     [RelayCommand]
     private Task Quit() => _lifetime.QuitAsync();
