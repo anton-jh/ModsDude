@@ -19,8 +19,14 @@ public partial class ModalViewModel : ObservableObject
     /// </summary>
     /// <remarks>
     /// <para>
+    /// <b>Only for an answer with no side effect</b>: closing changes nothing, and the caller goes on
+    /// as if the modal had never been asked. Where the answer is itself a decision the caller acts on
+    /// (skip these mods, leave them out, load theirs), Escape does nothing and only its button gives it.
+    /// The corner close button and a click outside go through here too.
+    /// </para>
+    /// <para>
     /// <b>Each modal answers for itself, because only it knows which of its buttons means "no".</b>
-    /// Skip, Cancel, Close and Dismiss are all that answer in different modals, and a shell reaching
+    /// Cancel, Close and Dismiss are all that answer in different modals, and a shell reaching
     /// in to press whichever button is on the right would eventually press a destructive one.
     /// </para>
     /// <para>

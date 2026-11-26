@@ -53,8 +53,7 @@ public partial class LikelyCopiesModalViewModel : ModalViewModel
     }
 
 
-    public override bool TryCancel() => Press(LeaveOutCommand);
-
+    // Escape stays with the base, doing nothing: the import goes on without these mods on Leave out.
     public override bool TryAccept() => Press(LeaveOutCommand);
 
 
