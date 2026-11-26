@@ -262,13 +262,33 @@
 
         </Grid>
 
-        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+        <!-- A press and release both on the scrim dismiss the modal; see MainWindow.OnScrimMouseUp. -->
+        <Grid x:Name="ModalScrim"
+              Grid.Column="0" Grid.ColumnSpan="2"
               Background="{DynamicResource ScrimBrush}"
-              Visibility="{Binding IsModalVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+              Visibility="{Binding IsModalVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+              MouseLeftButtonDown="OnScrimMouseDown"
+              MouseLeftButtonUp="OnScrimMouseUp">
 
-            <ContentControl Content="{Binding Modal}"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center" />
+            <Grid HorizontalAlignment="Center"
+                  VerticalAlignment="Center">
+
+                <ContentControl Content="{Binding Modal}" />
+
+                <!-- Over the modal's top-right corner. A dismissable modal keeps its header 56 clear
+                     on the right for it. -->
+
+                <Button Style="{StaticResource SubtleIconButton}"
+                        Content="&#xE711;"
+                        FontSize="12"
+                        Margin="0 8 8 0"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        ToolTip="Close"
+                        AutomationProperties.Name="Close"
+                        Command="{Binding DismissModalCommand}"
+                        Visibility="{Binding Modal.IsDismissable, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}" />
+            </Grid>
 
         </Grid>
 

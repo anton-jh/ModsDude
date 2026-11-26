@@ -30,9 +30,12 @@ public sealed record ModListDateWording(string Verb, string Missing, string Full
 /// Ties fall back to the name, then the mod id, always ascending. A missing date sorts as the newest there is, and a
 /// missing attribute sorts last in both directions.
 /// </summary>
-public sealed record ModListSort(ModListSortKind Kind = ModListSortKind.Name, string? Attribute = null, bool Ascending = true)
+public sealed record ModListSort(ModListSortKind Kind = ModListSortKind.Name, ModAttributeDefinition? Attribute = null, bool Ascending = true)
 {
-    public static ModListSort Default(ModListSortKind kind, string? attribute = null)
+    /// <summary>How many values a row's caption names before counting the rest.</summary>
+    public const int CaptionValueLimit = 2;
+
+    public static ModListSort Default(ModListSortKind kind, ModAttributeDefinition? attribute = null)
         => new(kind, kind is ModListSortKind.Attribute ? attribute : null, kind is not ModListSortKind.Date);
 
     public ModListSort Reversed() => this with { Ascending = Ascending is false };
@@ -60,7 +63,7 @@ public sealed record ModListSort(ModListSortKind Kind = ModListSortKind.Name, st
     public string? Caption(ModListSortKey key, DateTimeOffset now, ModListDateWording wording) => Kind switch
     {
         ModListSortKind.Date => key.Date is DateTimeOffset date ? $"{wording.Verb} {Day(date, now)}" : wording.Missing,
-        ModListSortKind.Attribute when Attribute is not null => ModAttributeOrder.Caption(key.Attributes, Attribute),
+        ModListSortKind.Attribute when Attribute is not null => AttributeCaption(ModAttributeOrder.Values(key.Attributes, Attribute)),
         _ => null
     };
 
@@ -69,8 +72,7 @@ public sealed record ModListSort(ModListSortKind Kind = ModListSortKind.Name, st
         ModListSortKind.Date => key.Date is DateTimeOffset date
             ? $"{wording.FullVerb} {date.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)}."
             : wording.FullMissing,
-        ModListSortKind.Attribute when Attribute is not null
-            => $"{Attribute}: {ModAttributeOrder.Caption(key.Attributes, Attribute)}",
+        ModListSortKind.Attribute when Attribute is not null => AttributeDescription(Attribute, ModAttributeOrder.Values(key.Attributes, Attribute)),
         _ => null
     };
 
@@ -84,6 +86,21 @@ public sealed record ModListSort(ModListSortKind Kind = ModListSortKind.Name, st
 
 
     private int Directed(int order) => Ascending ? order : -order;
+
+    private static string? AttributeCaption(IReadOnlyList<string> values)
+    {
+        if (values.Count == 0)
+        {
+            return null;
+        }
+
+        var shown = string.Join(", ", values.Take(CaptionValueLimit));
+
+        return values.Count > CaptionValueLimit ? $"{shown} +{values.Count - CaptionValueLimit}" : shown;
+    }
+
+    private static string? AttributeDescription(ModAttributeDefinition attribute, IReadOnlyList<string> values)
+        => values.Count == 0 ? null : string.Join('\n', [attribute.Key, .. values]);
 
     private static int CompareDates(DateTimeOffset? left, DateTimeOffset? right) => (left, right) switch
     {

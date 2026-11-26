@@ -63,9 +63,7 @@ public partial class ModVersionArbitrationModalViewModel : ModalViewModel
     }
 
 
-    /// <summary>Escape skips, which is this modal's own way of declining to answer.</summary>
-    public override bool TryCancel() => Press(SkipCommand);
-
+    // Escape stays with the base, doing nothing: the import goes on without these mods on Skip.
     public override bool TryAccept() => Press(ConfirmCommand);
 }
 

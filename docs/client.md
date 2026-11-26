@@ -149,8 +149,17 @@ The column shows up to six cards, with the rest behind "N more":
 - Background failures that would otherwise be swallowed are counted, one notice per kind. Dismissing
   them gives a 10-minute cooldown, shared by all of them.
 
-**Modals** stack. Escape declines, even for a destructive confirmation. Enter presses the dialog's own
-command.
+**Modals** stack. Enter presses the dialog's own command.
+
+- Escape declines only where declining has no side effect: the modal closes and nothing else happens,
+  even for a destructive confirmation.
+- Where declining is itself a decision the caller acts on, Escape does nothing and only that button gives
+  the answer: Skip, Stop and Leave out during import, and Load theirs on a stale profile save.
+- A modal whose Escape changes nothing and loses no typed input or unsaved edits is dismissable: a × in
+  its top-right corner and a click on the scrim around it do what Escape does. The shell draws the ×,
+  and the modal's header keeps room for it.
+- Ctrl+F goes to the modal, never to the page behind. The mod details modal uses it to find in the
+  description.
 
 **The progress strip** shows one task at a time, paged, without jumping to new tasks on its own. When the
 Cancel button on screen starts belonging to another task, it ignores clicks for a second, so a

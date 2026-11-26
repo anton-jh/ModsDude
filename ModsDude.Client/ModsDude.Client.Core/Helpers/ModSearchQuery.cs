@@ -17,9 +17,10 @@ namespace ModsDude.Client.Core.Helpers;
 /// </para>
 /// <para>
 /// <b>Comparisons.</b> <c>key&gt;5</c>, <c>key&lt;5</c>, <c>key&gt;=5</c> and <c>key&lt;=5</c> keep a
-/// mod carrying a value that compares that way, in <see cref="ModAttributeOrder"/>: as numbers where
-/// the value typed is one - and then only against values that are - and otherwise in natural order,
-/// so <c>brand&lt;d</c> is every brand before D. There is no colon form; <c>key:&gt;5</c> is a
+/// mod carrying a value that compares that way, in <see cref="ModAttributeOrder"/>: in the adapter's
+/// order for a ranked key, so <c>kind&gt;script</c> is every kind ranked after script; otherwise as
+/// numbers where the value typed is one - and then only against values that are - and otherwise in
+/// natural order, so <c>brand&lt;d</c> is every brand before D. There is no colon form; <c>key:&gt;5</c> is a
 /// substring filter for "&gt;5". <c>key&gt;</c> with nothing after it is <c>key:</c>, so a comparison
 /// being typed does not empty the list on its way.
 /// </para>
@@ -186,7 +187,7 @@ public sealed class ModSearchQuery
 
         var value = Unquote(text);
 
-        return new AttributeFilter(definition.Key, value.Length == 0 ? null : value, negated, op);
+        return new AttributeFilter(definition, value.Length == 0 ? null : value, negated, op);
     }
 
     /// <summary>
@@ -238,13 +239,15 @@ public sealed class ModSearchQuery
         public int End => Start + Raw.Length;
     }
 
-    /// <param name="Key">The declared key, never an alias.</param>
+    /// <param name="Attribute">The declared key, never an alias.</param>
     /// <param name="Value">
     /// What the value must contain or compare with, or null for "has this key at all" whatever the operator.
     /// </param>
     /// <param name="Negated">Whether a mod matching it is the one thrown out.</param>
-    public sealed record AttributeFilter(string Key, string? Value, bool Negated, AttributeOperator Operator = AttributeOperator.Contains)
+    public sealed record AttributeFilter(ModAttributeDefinition Attribute, string? Value, bool Negated, AttributeOperator Operator = AttributeOperator.Contains)
     {
+        public string Key => Attribute.Key;
+
         public bool Matches(IReadOnlyList<ModAttribute> attributes)
         {
             var found = false;
@@ -280,7 +283,7 @@ public sealed class ModSearchQuery
                 return false;
             }
 
-            var order = ModAttributeOrder.CompareValues(value, Value!);
+            var order = ModAttributeOrder.CompareValues(Attribute, value, Value!);
 
             return Operator switch
             {

@@ -161,7 +161,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         _summary = Summarize();
 
         SearchCompleter = new ModSearchCompleter(_catalog.Attributes);
-        SortAttributes = [.. _catalog.Attributes.Select(x => x.Key)];
+        SortAttributes = _catalog.Attributes;
 
         AvailableSorting.Changed += Refresh;
         PinnedSorting.Changed += Refresh;
@@ -207,7 +207,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         new(ModListSortKind.Name, "Date added", "Unsaved changes count as newest");
 
     /// <summary>The attribute keys either list can be sorted by, in the adapter's order.</summary>
-    public IReadOnlyList<string> SortAttributes { get; }
+    public IReadOnlyList<ModAttributeDefinition> SortAttributes { get; }
 
     public ModSearchCompleter SearchCompleter { get; }
 

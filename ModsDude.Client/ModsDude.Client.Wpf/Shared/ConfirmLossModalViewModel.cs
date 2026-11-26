@@ -45,6 +45,8 @@ public partial class ConfirmLossModalViewModel(
     [RelayCommand]
     private void Cancel() => Answer(ConfirmLossChoice.Cancel);
 
+    public override bool IsDismissable => true;
+
     /// <summary>Escape keeps everything. Enter does nothing: losing things takes a click.</summary>
     public override bool TryCancel() => Press(CancelCommand);
 

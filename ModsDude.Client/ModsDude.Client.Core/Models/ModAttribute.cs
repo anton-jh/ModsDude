@@ -37,10 +37,33 @@ public record ModAttribute(string Key, string? Value);
 /// are whatever the mods say, like a brand. Not a whitelist: a mod declaring a value the list does
 /// not know still reports it, and a search box offers it from the catalog the same as any other.
 /// </param>
-public record ModAttributeDefinition(string Key, IReadOnlyList<string> Aliases, IReadOnlyList<string> Values)
+/// <param name="Ranked">
+/// Whether <paramref name="Values"/> is listed in the order values sort in, rather than in no
+/// particular order. See <see cref="Helpers.ModAttributeOrder"/>.
+/// </param>
+public record ModAttributeDefinition(string Key, IReadOnlyList<string> Aliases, IReadOnlyList<string> Values, bool Ranked = false)
 {
     /// <summary>Whether <paramref name="name"/> is this key or one of its aliases, ignoring case.</summary>
     public bool IsNamed(string name)
         => string.Equals(Key, name, StringComparison.OrdinalIgnoreCase)
         || Aliases.Contains(name, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Where <paramref name="value"/> sits in a ranked key's <see cref="Values"/>, ignoring case, or null.</summary>
+    public int? RankOf(string value)
+    {
+        if (Ranked is false)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < Values.Count; i++)
+        {
+            if (string.Equals(Values[i], value, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return null;
+    }
 }

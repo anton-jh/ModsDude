@@ -29,7 +29,7 @@
                                TextWrapping="Wrap"
                                VerticalAlignment="Center"
                                Style="{StaticResource TitleTextBlockStyle}"
-                               Margin="0 32 0 24" />
+                               Margin="0 32 32 24" />
                 </Grid>
 
                 <!-- Selectable, like the hint below it. Somebody about to report a failure should

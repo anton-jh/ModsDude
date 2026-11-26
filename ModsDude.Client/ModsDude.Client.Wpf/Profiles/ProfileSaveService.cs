@@ -646,7 +646,8 @@ public sealed class ProfileSaveService(
                 "Your changes are based on an older revision. Save anyway to make yours the newest; theirs stays in the history. Load theirs to discard your changes.",
                 IconKind.Warning,
                 "Save anyway",
-                "Load theirs");
+                "Load theirs",
+                declineChangesNothing: false);
 
             await modalService.Value.Show(confirmation);
 

@@ -41,7 +41,12 @@ internal static class FarmingSimulatorModAttributes
     /// <summary>What the store items say when they have no brand. Not a brand, so never reported.</summary>
     private const string _noBrand = "none";
 
-    private static readonly string[] _kinds = [Vehicle, Placeable, HandTool, Script, Map];
+    /// <summary>
+    /// Ranked by what a mod carrying several is first and foremost. Vehicle and placeable mods
+    /// register their own code as specializations, so <c>extraSourceFiles</c> marks a gameplay
+    /// script that may ship some store items of its own, and a map carries everything.
+    /// </summary>
+    private static readonly string[] _kinds = [Map, Script, Vehicle, Placeable, HandTool];
 
     /// <summary>A store item's root element, and the kind it makes the mod.</summary>
     private static readonly Dictionary<string, string> _storeItemKinds = new(StringComparer.OrdinalIgnoreCase)
@@ -142,9 +147,9 @@ internal static class FarmingSimulatorModAttributes
     private static IReadOnlyList<ModAttributeDefinition> Declare(string[] categories, string[] groups) =>
     [
         new(CategoryKey, ["cat"], categories),
-        new(CategoryGroupKey, ["catGroup"], groups),
+        new(CategoryGroupKey, ["catGroup"], groups, Ranked: true),
         new(BrandKey, [], []),
-        new(KindKey, [], _kinds),
+        new(KindKey, [], _kinds, Ranked: true),
         new(MultiplayerKey, ["mp"], ["yes", "no"])
     ];
 

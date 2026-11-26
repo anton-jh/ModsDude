@@ -30,7 +30,7 @@
                                TextWrapping="Wrap"
                                VerticalAlignment="Center"
                                Style="{StaticResource TitleTextBlockStyle}"
-                               Margin="0 32 0 24" />
+                               Margin="0 32 32 24" />
                 </Grid>
 
                 <!-- Wrapped: a modal is fixed width and some of what lands here is a sentence

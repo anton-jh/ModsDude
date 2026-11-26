@@ -113,6 +113,8 @@ public partial class ErrorModalViewModel(
     private void Dismiss() => Done = true;
 
 
+    public override bool IsDismissable => true;
+
     /// <summary>
     /// Both keys dismiss. There is nothing to decide - the failure has already happened, and the
     /// only thing this modal does is say so.

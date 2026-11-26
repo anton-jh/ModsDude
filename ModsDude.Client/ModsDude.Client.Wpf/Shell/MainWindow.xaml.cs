@@ -283,15 +283,13 @@ public partial class MainWindow : Window
 
 
     /// <summary>
-    /// Escape and Enter for whatever modal is up, asked of the modal itself.
+    /// Escape, Enter and Ctrl+F for whatever modal is up, asked of the modal itself.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Here rather than on each modal.</b> Every modal used to carry its own <c>KeyBinding</c>
-    /// pair, and an <c>InputBinding</c> only fires when focus is inside the element carrying it -
-    /// so the nine modals that never called <c>Focus()</c> had an Escape that did nothing at all,
-    /// and which of the seventeen worked was decided by a line of constructor code nothing connected
-    /// to the binding. The shell always has the focus this needs, and it has exactly one modal.
+    /// <b>Here rather than on each modal.</b> An <c>InputBinding</c> on a modal only fires when focus
+    /// is inside it, and focus is often still on the page behind. The shell always has the focus
+    /// this needs, and it has exactly one modal.
     /// </para>
     /// <para>
     /// <b>What the keys mean is still the modal's to say</b> - see
@@ -301,15 +299,56 @@ public partial class MainWindow : Window
     /// </remarks>
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (DataContext is not MainWindowViewModel shell
+            || shell.Modal is not ModalViewModel modal)
+        {
+            return;
+        }
+
+        // Taken whether or not the modal finds anything, so the page behind doesn't focus its own search.
+        if (e.Key is Key.F && Keyboard.Modifiers is ModifierKeys.Control)
+        {
+            modal.Find();
+            e.Handled = true;
+
+            return;
+        }
+
+        // Enter with a modifier is the focused control's, such as Shift+Enter for the previous match.
         if (e.Key is not (Key.Escape or Key.Enter)
-            || DataContext is not MainWindowViewModel shell
-            || shell.Modal is not ModalViewModel modal
+            || (e.Key is Key.Enter && Keyboard.Modifiers is not ModifierKeys.None)
             || BelongsToFocus(e.Key))
         {
             return;
         }
 
         e.Handled = e.Key is Key.Escape ? modal.TryCancel() : modal.TryAccept();
+    }
+
+
+    private bool _scrimPressed;
+
+    private void OnScrimMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _scrimPressed = ReferenceEquals(e.OriginalSource, ModalScrim);
+    }
+
+    /// <summary>
+    /// Dismisses the modal only when the press started on the scrim too, so letting go of a text
+    /// selection dragged out of the modal doesn't close it.
+    /// </summary>
+    private void OnScrimMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        var pressedHere = _scrimPressed;
+        _scrimPressed = false;
+
+        if (pressedHere
+            && ReferenceEquals(e.OriginalSource, ModalScrim)
+            && DataContext is MainWindowViewModel shell)
+        {
+            shell.DismissModalCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     /// <summary>

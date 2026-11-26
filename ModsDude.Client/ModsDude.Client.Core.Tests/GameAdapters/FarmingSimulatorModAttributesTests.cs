@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.GameAdapters.Implementations.FarmingSimulatorV1;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using System.IO.Compression;
 using System.Text;
@@ -115,6 +116,36 @@ public class FarmingSimulatorModAttributesTests : IDisposable
 
         Assert.Equal(["script"], Values(mods["fs25_script"], "kind"));
         Assert.Equal(["map"], Values(mods["fs25_map"], "kind"));
+    }
+
+    [Fact]
+    public async Task A_script_shipping_store_items_sorts_as_a_script()
+    {
+        WriteMod("FS25_PrecisionFarming",
+            storeItems:
+            [
+                ("vehicles/sampler.xml", Vehicle("misc", "LIZARD")),
+                ("placeables/station.xml", Placeable("placeableMisc", "LIZARD"))
+            ],
+            descBody: "<extraSourceFiles><sourceFile filename=\"main.lua\"/></extraSourceFiles>");
+
+        var mod = await ScanOne();
+        var kind = new FarmingSimulatorBaseModAdapter(FarmingSimulatorGameVersion.Fs25).Attributes.Single(x => x.Key == "kind");
+
+        Assert.Equal(["script", "vehicle", "placeable"], Values(mod, "kind"));
+        Assert.Equal("script", ModAttributeOrder.SortValue(mod.Attributes, kind));
+    }
+
+    [Fact]
+    public void Kinds_and_category_groups_are_ranked_and_categories_are_not()
+    {
+        var attributes = new FarmingSimulatorBaseModAdapter(FarmingSimulatorGameVersion.Fs25).Attributes.ToDictionary(x => x.Key);
+
+        Assert.Equal(["map", "script", "vehicle", "placeable", "handtool"], attributes["kind"].Values);
+        Assert.True(attributes["kind"].Ranked);
+        Assert.True(attributes["categoryGroup"].Ranked);
+        Assert.Equal("drivables", attributes["categoryGroup"].Values[0]);
+        Assert.False(attributes["category"].Ranked);
     }
 
     [Fact]

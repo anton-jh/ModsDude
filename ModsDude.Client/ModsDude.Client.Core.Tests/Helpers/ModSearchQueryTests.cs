@@ -11,7 +11,8 @@ public class ModSearchQueryTests
         new("brand", [], []),
         new("kind", [], ["vehicle", "script"]),
         new("multiplayer", ["mp"], ["yes", "no"]),
-        new("seats", [], [])
+        new("seats", [], []),
+        new("rank", [], ["map", "script", "vehicle", "placeable"], Ranked: true)
     ];
 
     private static readonly IReadOnlyList<ModAttribute> _tractor =
@@ -127,7 +128,19 @@ public class ModSearchQueryTests
     {
         var filter = Assert.Single(ModSearchQuery.Parse("-cat>=silos", _declared).Filters);
 
-        Assert.Equal(new ModSearchQuery.AttributeFilter("category", "silos", true, ModSearchQuery.AttributeOperator.GreaterOrEqual), filter);
+        Assert.Equal(new ModSearchQuery.AttributeFilter(_declared[0], "silos", true, ModSearchQuery.AttributeOperator.GreaterOrEqual), filter);
+    }
+
+    [Theory]
+    [InlineData("rank>script", false, true)]
+    [InlineData("rank>=script", true, true)]
+    [InlineData("rank<vehicle", true, false)]
+    [InlineData("rank<placeable", true, true)]
+    [InlineData("rank>zzz", false, false)]
+    public void A_comparison_on_a_ranked_key_follows_its_listed_order(string search, bool matchesScript, bool matchesVehicle)
+    {
+        Assert.Equal(matchesScript, Matches(search, [new("rank", "script")]));
+        Assert.Equal(matchesVehicle, Matches(search, [new("rank", "vehicle")]));
     }
 
     /// <summary>A comparison half typed keeps the list as it would be for <c>key:</c>, not empty.</summary>

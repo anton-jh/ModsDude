@@ -132,6 +132,12 @@ repos.
 Measured on a real FS25 folder of 540 mods, store art was about 1% of the archive bytes, and the
 renditions came to a median of 2.7 KB per thumbnail and 21 KB per full image.
 
+### Mod details
+
+The mod details modal shows a version's metadata, images and full description. Find in the description
+(Ctrl+F or the magnifier) highlights every match and steps through them with Enter and Shift+Enter,
+case-insensitive.
+
 ### Locking
 
 Some mods break savegames when their version changes, such as maps in Farming Simulator. A mod can be
@@ -161,6 +167,9 @@ downloads, plus ignore list changes.
 - Status chips show imports on save, downloads on save, likely copies and same-version conflicts. Filter
   chips include an updates count.
 - It also offers paste a list, copy from another profile, revert, sort, and ignore or dismiss.
+- Sorting by an attribute orders a mod by its first value for that key, in the attribute's order (see
+  [Adapters](adapters.md#other-adapter-knowledge)). Mods without the key go last either way. Each row
+  shows its first two values and a count of the rest; the tooltip lists them all.
 - **Save** saves and then applies the profile to every game on this machine that follows it. **Save
   only** skips applying.
 

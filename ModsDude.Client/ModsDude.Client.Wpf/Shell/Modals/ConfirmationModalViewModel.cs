@@ -8,7 +8,8 @@ public partial class ConfirmationModalViewModel(
     string message,
     IconKind icon,
     string yesText = "Yes",
-    string noText = "No")
+    string noText = "No",
+    bool declineChangesNothing = true)
     : ModalViewModel
 {
     public string Title { get; } = title;
@@ -18,6 +19,8 @@ public partial class ConfirmationModalViewModel(
     public string NoText { get; } = noText;
 
     public bool Result { get; private set; }
+
+    public override bool IsDismissable => declineChangesNothing;
 
     /// <summary>
     /// Whether this modal is telling rather than asking, and so has one button instead of two.
@@ -47,12 +50,17 @@ public partial class ConfirmationModalViewModel(
     }
 
     /// <summary>
-    /// Escape declines, which is the safe answer in every one of these - including the two
-    /// destructive ones, where "no" is what somebody hitting Escape means and is the answer that
-    /// changes nothing.
+    /// Escape declines where declining changes nothing, including the destructive confirmations.
+    /// Where "no" is itself an action, such as loading somebody else's save over your changes,
+    /// only its button gives it.
     /// </summary>
     public override bool TryCancel()
     {
+        if (declineChangesNothing is false)
+        {
+            return false;
+        }
+
         SetNo();
 
         return true;

@@ -67,6 +67,8 @@ public partial class PickProfileSourceModalViewModel : ModalViewModel
     }
 
 
+    public override bool IsDismissable => true;
+
     public override bool TryCancel() => Press(CancelCommand);
 
     /// <summary>Enter takes the picked profile, and is refused where nothing is picked, as the button is.</summary>

@@ -7,6 +7,8 @@ public class ModListSortTests
 {
     private static readonly DateTimeOffset _now = new(2026, 9, 21, 12, 0, 0, TimeSpan.Zero);
     private static readonly ModListDateWording _added = ModListDateWording.AddedToProfile;
+    private static readonly ModAttributeDefinition _brand = new("brand", [], []);
+    private static readonly ModAttributeDefinition _category = new("category", [], []);
 
 
     [Fact]
@@ -65,7 +67,7 @@ public class ModListSortTests
     public void Names_and_attributes_open_ascending_and_dates_open_newest_first()
     {
         Assert.True(ModListSort.Default(ModListSortKind.Name).Ascending);
-        Assert.True(ModListSort.Default(ModListSortKind.Attribute, "brand").Ascending);
+        Assert.True(ModListSort.Default(ModListSortKind.Attribute, _brand).Ascending);
         Assert.False(ModListSort.Default(ModListSortKind.Date).Ascending);
     }
 
@@ -80,19 +82,32 @@ public class ModListSortTests
             Tagged("a fendt", ("brand", "fendt"))
         };
 
-        Assert.Equal(["claas", "a fendt", "b fendt", "untagged"], Sorted(new ModListSort(ModListSortKind.Attribute, "brand"), keys));
-        Assert.Equal(["a fendt", "b fendt", "claas", "untagged"], Sorted(new ModListSort(ModListSortKind.Attribute, "brand", false), keys));
+        Assert.Equal(["claas", "a fendt", "b fendt", "untagged"], Sorted(new ModListSort(ModListSortKind.Attribute, _brand), keys));
+        Assert.Equal(["a fendt", "b fendt", "claas", "untagged"], Sorted(new ModListSort(ModListSortKind.Attribute, _brand, false), keys));
     }
 
     [Fact]
     public void The_attribute_sort_captions_the_values()
     {
         var key = Tagged("pack", ("category", "trailers"), ("category", "tractorsM"));
-        var sort = new ModListSort(ModListSortKind.Attribute, "category");
+        var sort = new ModListSort(ModListSortKind.Attribute, _category);
 
         Assert.Equal("tractorsM, trailers", sort.Caption(key, _now, _added));
-        Assert.Equal("category: tractorsM, trailers", sort.Describe(key, _added));
-        Assert.Null((sort with { Attribute = "brand" }).Caption(key, _now, _added));
+        Assert.Equal("category\ntractorsM\ntrailers", sort.Describe(key, _added));
+        Assert.Null((sort with { Attribute = _brand }).Caption(key, _now, _added));
+        Assert.Null((sort with { Attribute = _brand }).Describe(key, _added));
+    }
+
+    [Fact]
+    public void The_attribute_caption_names_two_values_and_counts_the_rest_while_the_tooltip_lists_all()
+    {
+        var single = Tagged("single", ("category", "silos"));
+        var many = Tagged("many", ("category", "trees"), ("category", "barrels"), ("category", "silos"), ("category", "animalpens"));
+        var sort = new ModListSort(ModListSortKind.Attribute, _category);
+
+        Assert.Equal("silos", sort.Caption(single, _now, _added));
+        Assert.Equal("animalpens, barrels +2", sort.Caption(many, _now, _added));
+        Assert.Equal("category\nanimalpens\nbarrels\nsilos\ntrees", sort.Describe(many, _added));
     }
 
     [Fact]

@@ -51,8 +51,7 @@ public partial class ModDownloadMismatchModalViewModel : ModalViewModel
     }
 
 
-    public override bool TryCancel() => Press(StopCommand);
-
+    // Escape stays with the base, doing nothing: the import goes on without these mods on Stop.
     public override bool TryAccept() => Press(ConfirmCommand);
 }
 
