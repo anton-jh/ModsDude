@@ -7,6 +7,7 @@
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:ed="clr-namespace:ModsDude.Client.Core.Profiles.Editor;assembly=ModsDude.Client.Core"
+      xmlns:models="clr-namespace:ModsDude.Client.Core.Models;assembly=ModsDude.Client.Core"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       Title="ProfileModsEditorPage"
@@ -205,7 +206,18 @@
                                      IsChecked="{Binding Kind, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Date}" />
                         <ComboBox Style="{StaticResource SortAttributeBox}"
                                   ItemsSource="{Binding DataContext.SortAttributes, RelativeSource={RelativeSource AncestorType=Page}}"
-                                  SelectedItem="{Binding Attribute, Mode=TwoWay}" />
+                                  SelectedItem="{Binding Attribute, Mode=TwoWay}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:ModAttributeDefinition}">
+                                    <TextBlock Text="{Binding Key}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                            <ComboBox.ItemContainerStyle>
+                                <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding Key}" />
+                                </Style>
+                            </ComboBox.ItemContainerStyle>
+                        </ComboBox>
                     </StackPanel>
                 </Border>
                 <Button Style="{DynamicResource SubtleIconButton}"

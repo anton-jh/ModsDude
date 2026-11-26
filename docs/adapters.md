@@ -130,7 +130,9 @@ order is built and stored is described under [Mods](mods.md#version-order).
 - **`GetSlots`**: lists every slot, occupied or not. A slot it can't read comes back occupied and
   unnamed, never left out.
 - **Attributes**: tags like map or category, for search and grouping. An adapter reports only the
-  attribute keys it declares.
+  attribute keys it declares. A key can be declared ranked: its listed values then sort and compare in
+  the order listed, ahead of any value not listed. Otherwise numbers sort first, as numbers, then text
+  in natural order.
 
 ### The Farming Simulator adapter
 
@@ -139,6 +141,11 @@ order is built and stored is described under [Mods](mods.md#version-order).
   and connecting is refused if it doesn't exist. Mods live in its `mods` folder, unless the game's own
   `gameSettings.xml` points them elsewhere.
 - The adapter reads `modDesc.xml` from each archive, and locks mods that declare maps.
+- Attributes: `category`, `categoryGroup`, `brand`, `kind` and `multiplayer`. `kind` comes from each
+  store item's root element, from `extraSourceFiles` (`script`) and from `maps` (`map`), so a mod can
+  have several. It is ranked map, script, vehicle, placeable, handtool: vehicle and placeable mods
+  register their code as specializations, so `extraSourceFiles` marks a mod that is a script first.
+  `categoryGroup` is ranked in shop order.
 - Hardlinks are on: the game's own updater renames over files instead of rewriting them in place.
 - `ModHubModSource` offers newer ModHub versions through the server's crawler.
 

@@ -161,6 +161,9 @@ downloads, plus ignore list changes.
 - Status chips show imports on save, downloads on save, likely copies and same-version conflicts. Filter
   chips include an updates count.
 - It also offers paste a list, copy from another profile, revert, sort, and ignore or dismiss.
+- Sorting by an attribute orders a mod by its first value for that key, in the attribute's order (see
+  [Adapters](adapters.md#other-adapter-knowledge)). Mods without the key go last either way. Each row
+  shows its first two values and a count of the rest; the tooltip lists them all.
 - **Save** saves and then applies the profile to every game on this machine that follows it. **Save
   only** skips applying.
 

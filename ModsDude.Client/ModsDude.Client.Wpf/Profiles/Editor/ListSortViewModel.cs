@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Profiles;
 
 namespace ModsDude.Client.Wpf.Profiles.Editor;
@@ -34,7 +35,7 @@ public sealed partial class ListSortViewModel(ModListSortKind initial, string da
         }
     }
 
-    public string? Attribute
+    public ModAttributeDefinition? Attribute
     {
         get => _sort.Kind is ModListSortKind.Attribute ? _sort.Attribute : null;
         set
