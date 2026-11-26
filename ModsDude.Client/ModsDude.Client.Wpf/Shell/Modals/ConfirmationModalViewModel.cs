@@ -20,7 +20,6 @@ public partial class ConfirmationModalViewModel(
 
     public bool Result { get; private set; }
 
-    /// <summary>False where the "no" answer is itself an action, so only its button gives it.</summary>
     public override bool IsDismissable => declineChangesNothing;
 
     /// <summary>
@@ -51,12 +50,17 @@ public partial class ConfirmationModalViewModel(
     }
 
     /// <summary>
-    /// Escape declines, which is the safe answer in every one of these - including the two
-    /// destructive ones, where "no" is what somebody hitting Escape means and is the answer that
-    /// changes nothing.
+    /// Escape declines where declining changes nothing, including the destructive confirmations.
+    /// Where "no" is itself an action, such as loading somebody else's save over your changes,
+    /// only its button gives it.
     /// </summary>
     public override bool TryCancel()
     {
+        if (declineChangesNothing is false)
+        {
+            return false;
+        }
+
         SetNo();
 
         return true;

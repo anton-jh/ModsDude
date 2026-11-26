@@ -157,6 +157,8 @@ command.
   keeps room for it.
 - Not dismissable: modals where declining is itself a choice (skip, stop, leave out, load theirs) and
   modals holding typed input or unsaved edits.
+- Escape does nothing where declining would throw away the user's work, such as "Load theirs" on a stale
+  profile save. Only that button gives the answer.
 - Ctrl+F goes to the modal, never to the page behind. The mod details modal uses it to find in the
   description.
 
