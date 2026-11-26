@@ -10,6 +10,7 @@ using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.RemoteSources;
 using ModsDude.Client.Core.Repos;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Mods;
@@ -119,6 +120,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         IResourceLeases leases,
         IToastService toasts,
         IRemoteDownloadNotes downloadNotes,
+        ISavegameSlots savegameSlots,
         TimeProvider time)
     {
         _repo = repo;
@@ -148,9 +150,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         _otherProfiles = new OtherProfilesReader(profileStore, pinsClient, repo.Id, profile.Id);
 
         Sources = new EditorSourcesViewModel(
+            repo,
             _catalog,
             repo.Adapter.GetBaseCapabilityAdapterFactory<IRemoteModSourcesAdapter>()?.Invoke().Sources ?? [],
-            _otherProfiles, filePickerService, modalService, errorReporter,
+            _otherProfiles, savegameSlots, filePickerService, modalService, errorReporter,
             () => _history.Current, CommitAsync, RecomposeAsync, _cancellation.Token);
 
         Sources.RemoteChanged += ShowRemote;
@@ -315,6 +318,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     {
         IncludeRegistered = Sources.IncludeRegistered,
         ProfileSources = Sources.EnabledProfiles,
+        SavegameSources = Sources.EnabledSavegames,
         AvailableChoices = _availableChoices,
         SavedDates = _savedDates,
         Search = _searchQuery,

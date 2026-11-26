@@ -242,6 +242,20 @@ public interface ILocalSavegameAdapter : IBaseSavegameAdapter
     /// agree on what a save is called.
     /// </remarks>
     IReadOnlyList<GameFileEdit> RenameSavegame(SavegameRenameContext context) => [];
+
+    /// <summary>Whether <see cref="ReadSavegameModsAsync"/> can say which mods a save was played with.</summary>
+    bool ListsSavegameMods => false;
+
+    /// <summary>
+    /// The mods an occupied slot lists as played with, sorted by mod id, each once.
+    /// </summary>
+    /// <remarks>
+    /// Throws where the slot's list cannot be read, so a save is never shown as listing no mods
+    /// because a running game held the file. An entry the adapter cannot carry as a mod id is left out.
+    /// </remarks>
+    Task<IReadOnlyList<SavegameModReference>> ReadSavegameModsAsync(
+        SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken)
+        => throw new NotSupportedException("This game's savegames do not list their mods.");
 }
 
 public sealed record SavegameRenameContext(SavegameTarget Target, SavegameSlotId Slot, string Name);

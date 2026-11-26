@@ -382,6 +382,12 @@
                                                     </ContextMenu>
                                                 </ToggleButton.ContextMenu>
                                                 <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE8FD;"
+                                                               FontFamily="{DynamicResource SymbolThemeFontFamily}"
+                                                               FontSize="12"
+                                                               Margin="0 0 6 0"
+                                                               VerticalAlignment="Center"
+                                                               Visibility="{Binding IsList, Converter={StaticResource BoolToVisibilityConverter}}" />
                                                     <TextBlock Text="{Binding Name}"
                                                                MaxWidth="160"
                                                                TextTrimming="CharacterEllipsis"
@@ -419,6 +425,13 @@
                                         Content="+ profile"
                                         ToolTip="Add another profile as a source"
                                         Command="{Binding Sources.AddProfileCommand}" />
+
+                                <Button Style="{StaticResource SourceActionChip}"
+                                        Margin="0 0 6 6"
+                                        Content="+ savegame"
+                                        ToolTip="Add a savegame on this machine as a source"
+                                        Visibility="{Binding Sources.CanAddSavegame, Converter={StaticResource BoolToVisibilityConverter}}"
+                                        Command="{Binding Sources.AddSavegameCommand}" />
 
                                 <Button Style="{StaticResource SourceIconChip}"
                                         Margin="0 0 6 6"

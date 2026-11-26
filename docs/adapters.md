@@ -36,7 +36,7 @@ Capabilities hang off the base and local stages through `Get…CapabilityAdapter
 | Capability | Base interface | Local interface |
 | --- | --- | --- |
 | Mods | `IBaseModAdapter`: attributes, savegame compatibility policy, reading a mod file, likely-copy names | `ILocalModAdapter`: mod targets, installed mods, layout |
-| Savegames | `IBaseSavegameAdapter` | `ILocalSavegameAdapter`: savegame targets, slots, what belongs in a packed save, rename edits |
+| Savegames | `IBaseSavegameAdapter` | `ILocalSavegameAdapter`: savegame targets, slots, what belongs in a packed save, rename edits, the mods a save lists |
 | Remote mod sources | `IRemoteModSourcesAdapter` | |
 
 Every capability is optional. The general code and UI adapt to what an adapter offers, never to which
@@ -148,6 +148,8 @@ order is built and stored is described under [Mods](mods.md#version-order).
   `categoryGroup` is ranked in shop order.
 - Hardlinks are on: the game's own updater renames over files instead of rewriting them in place.
 - `ModHubModSource` offers newer ModHub versions through the server's crawler.
+- A save's mods are the `mod` entries in `careerSavegame.xml`, with their recorded version. Paid DLCs
+  (`pdlc_`) are left out, since they install with the game rather than into a mod folder.
 
 ### The BeamNG adapter
 

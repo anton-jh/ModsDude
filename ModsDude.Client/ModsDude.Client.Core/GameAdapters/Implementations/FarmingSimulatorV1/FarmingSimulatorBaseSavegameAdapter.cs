@@ -149,6 +149,56 @@ public class FarmingSimulatorLocalSavegameAdapter(
         }, cancellationToken);
     }
 
+    public bool ListsSavegameMods => true;
+
+    public Task<IReadOnlyList<SavegameModReference>> ReadSavegameModsAsync(
+        SavegameTarget target, SavegameSlotId slot, CancellationToken cancellationToken)
+        => Task.Run(() => ReadMods(GetSlotPath(target, slot), Log, cancellationToken), cancellationToken);
+
+    /// <summary>
+    /// The career file's <c>mod</c> entries: every mod the game had active when it last saved. Paid
+    /// DLCs are listed the same way and left out, since they install with the game rather than into
+    /// a mod folder.
+    /// </summary>
+    internal static IReadOnlyList<SavegameModReference> ReadMods(string slotPath, ILogger log, CancellationToken cancellationToken)
+    {
+        const string dlcPrefix = "pdlc_";
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var careerFile = Path.Combine(slotPath, _careerSavegameFile);
+        var career = SafeXml.Load(careerFile).Element("careerSavegame")
+            ?? throw new InvalidDataException($"{careerFile} is not a career savegame.");
+
+        var mods = new SortedDictionary<string, SavegameModReference>(StringComparer.Ordinal);
+
+        foreach (var entry in career.Elements("mod"))
+        {
+            var name = entry.Attribute("modName")?.Value;
+
+            if (name is not null && name.StartsWith(dlcPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (ModKey.IsValid(name) is false)
+            {
+                log.LogWarning("Left out mod {Name} listed in {File}: it cannot be carried as a mod id.", name, careerFile);
+
+                continue;
+            }
+
+            var modId = ModKey.From(name!);
+            var version = entry.Attribute("version")?.Value;
+
+            mods.TryAdd(modId.Value, new SavegameModReference(
+                modId,
+                ModVersionKey.IsValid(version) ? ModVersionKey.From(version!) : null));
+        }
+
+        return [.. mods.Values];
+    }
+
     public bool BelongsInPackedSave(string relativePath)
     {
         return !_excludedFileNames.Contains(Path.GetFileName(relativePath), StringComparer.OrdinalIgnoreCase);
