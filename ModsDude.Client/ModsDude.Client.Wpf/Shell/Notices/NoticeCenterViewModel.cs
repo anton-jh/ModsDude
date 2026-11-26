@@ -229,6 +229,9 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
     /// </summary>
     public event EventHandler<IReadOnlyList<Notice>>? Refreshed;
 
+    /// <summary>Rebuilds now rather than when the next change arrives. On the UI thread.</summary>
+    public void RefreshNow() => Refresh();
+
     /// <summary>The notices as of the last rebuild, so a toast can be followed to the one it named.</summary>
     private IReadOnlyList<Notice> _live = [];
 

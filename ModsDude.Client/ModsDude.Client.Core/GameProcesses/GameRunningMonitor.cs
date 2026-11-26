@@ -19,6 +19,7 @@ public sealed class GameRunningMonitor(
 {
     private readonly Lock _lock = new();
     private IReadOnlyList<GameIdentity> _running = [];
+    private HashSet<GameIdentity>? _connected;
 
 
     public event EventHandler? Changed;
@@ -40,20 +41,29 @@ public sealed class GameRunningMonitor(
 
     public bool IsRunning(GameIdentity game) => Running.Contains(game);
 
-    public void Poll()
+    public IReadOnlyList<GameIdentity> Poll()
     {
-        var running = games.GetDriftCandidates()
+        var connected = games.GetDriftCandidates()
             .Select(x => x.Identity)
+            .ToHashSet();
+
+        var running = connected
             .Where(game => processNames.Get(game) is { Count: > 0 } names && processes.IsAnyRunning(names))
             .OrderBy(x => x.ToString(), StringComparer.Ordinal)
             .ToList();
 
         bool changed;
+        IReadOnlyList<GameIdentity> started;
 
         lock (_lock)
         {
+            started = _connected is { } before
+                ? [.. running.Where(x => before.Contains(x) && _running.Contains(x) is false)]
+                : [];
+
             changed = running.SequenceEqual(_running) is false;
             _running = running;
+            _connected = connected;
         }
 
         HasPolled = true;
@@ -62,5 +72,7 @@ public sealed class GameRunningMonitor(
         {
             Changed?.Invoke(this, EventArgs.Empty);
         }
+
+        return started;
     }
 }

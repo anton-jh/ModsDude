@@ -296,4 +296,88 @@ public class DriftToastPlannerTests
 
         Assert.NotNull(planner.Observe([SaveNotice()], true, false));
     }
+
+
+    private static Notice About(string key, NoticeSeverity severity, string headline = "Headline", string discriminator = "fs25")
+        => Make(key, severity, headline) with { Subject = new NoticeSubject(Keys.Game(discriminator), "Farming Simulator 25") };
+
+    private static DriftToast? RemindOnStart(DriftToastPlanner planner, IReadOnlyList<Notice> live, bool reposLoaded = true)
+        => planner.RemindOnStart(Keys.Game(), live, reposLoaded);
+
+
+    [Fact]
+    public void A_game_starting_with_nothing_wrong_is_not_reminded_about()
+    {
+        Assert.Null(RemindOnStart(new DriftToastPlanner(), []));
+    }
+
+    [Fact]
+    public void A_game_starting_is_reminded_only_about_its_own_notices()
+    {
+        var toast = RemindOnStart(
+            new DriftToastPlanner(),
+            [About("a", NoticeSeverity.Warning, "Mine"), About("b", NoticeSeverity.Critical, "Theirs", discriminator: "fs22"), Make("c", NoticeSeverity.Critical, "Nobody's")]);
+
+        Assert.Equal("Mine", toast!.Title);
+        Assert.Equal("a", toast.NoticeKey);
+    }
+
+    [Theory]
+    [InlineData(NoticeSeverity.Pending)]
+    [InlineData(NoticeSeverity.Info)]
+    public void A_game_starting_is_not_reminded_about_pending_or_absorbed_notices(NoticeSeverity severity)
+    {
+        Assert.Null(RemindOnStart(new DriftToastPlanner(), [About("a", severity)]));
+    }
+
+    /// <summary>Starting the game is when drift costs something, so having heard it before is no reason to stay quiet.</summary>
+    [Fact]
+    public void A_game_starting_is_reminded_about_what_was_already_announced()
+    {
+        var planner = new DriftToastPlanner();
+        var live = new[] { About("a", NoticeSeverity.Warning) };
+
+        Assert.NotNull(Observe(planner, live));
+
+        Assert.NotNull(RemindOnStart(planner, live));
+        Assert.NotNull(RemindOnStart(planner, live));
+    }
+
+    [Fact]
+    public void A_game_starting_is_not_reminded_about_what_is_held_back()
+    {
+        var toast = new DriftToastPlanner().RemindOnStart(Keys.Game(), [About("a", NoticeSeverity.Critical)], true, holdBack: _ => true);
+
+        Assert.Null(toast);
+    }
+
+    [Fact]
+    public void A_game_starting_is_not_reminded_about_an_unread_repo_list()
+    {
+        Assert.Null(RemindOnStart(new DriftToastPlanner(), [About("unreachable/g", NoticeSeverity.Warning)], reposLoaded: false));
+    }
+
+    [Fact]
+    public void Several_notices_on_start_are_listed_under_the_game()
+    {
+        var toast = RemindOnStart(
+            new DriftToastPlanner(),
+            [About("a", NoticeSeverity.Warning, "Behind"), About("b", NoticeSeverity.Critical, "Locked")]);
+
+        Assert.Equal("2 things need attention in 'Farming Simulator 25'", toast!.Title);
+        Assert.Equal("Locked\nBehind", toast.Body);
+        Assert.Null(toast.NoticeKey);
+    }
+
+    /// <summary>The check run as the game starts can be the first to find a notice, and the reminder has said it.</summary>
+    [Fact]
+    public void A_notice_the_start_reminder_named_is_not_announced_again()
+    {
+        var planner = new DriftToastPlanner();
+        var live = new[] { About("a", NoticeSeverity.Warning) };
+
+        RemindOnStart(planner, live);
+
+        Assert.Null(Observe(planner, live));
+    }
 }

@@ -205,7 +205,7 @@ public class PresenceReporterTests
 
         public bool IsRunning(GameIdentity game) => GameRunning && game == _game;
 
-        public void Poll() { }
+        public IReadOnlyList<GameIdentity> Poll() => [];
     }
 
     private sealed class FakeActivityClient : IActivityClient

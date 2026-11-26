@@ -17,5 +17,9 @@ public interface IGameRunningMonitor
     IReadOnlyList<GameIdentity> Running { get; }
 
     /// <summary>Looks at the process list for every connected game.</summary>
-    void Poll();
+    /// <returns>
+    /// The games that started since the last look, in identity order. None on the first look, and none
+    /// for a game that was not connected at the last one: neither is a start anybody saw happen.
+    /// </returns>
+    IReadOnlyList<GameIdentity> Poll();
 }

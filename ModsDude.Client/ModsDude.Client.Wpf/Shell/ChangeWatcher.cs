@@ -7,7 +7,8 @@ using System.Windows.Threading;
 namespace ModsDude.Client.Wpf.Shell;
 
 /// <summary>
-/// Runs <see cref="ChangePoll"/> every minute, and once as soon as the repo list first arrives.
+/// Runs <see cref="ChangePoll"/> every minute, once as soon as the repo list first arrives, and
+/// whenever somebody needs it current - see <see cref="PollNowAsync"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,6 +19,10 @@ namespace ModsDude.Client.Wpf.Shell;
 /// </para>
 /// <para>
 /// <b>Failures are logged and nothing else.</b> Nobody asked for this read, and the next one asks again.
+/// </para>
+/// <para>
+/// <b>One read at a time</b>, whoever asked: two reads refreshing the same stores at once could each
+/// leave behind the other's older answer.
 /// </para>
 /// </remarks>
 public sealed class ChangeWatcher(
@@ -33,6 +38,7 @@ public sealed class ChangeWatcher(
     private static readonly TimeSpan _untilLoaded = TimeSpan.FromSeconds(1);
 
     private readonly CancellationTokenSource _stopping = new();
+    private readonly SemaphoreSlim _polling = new(1, 1);
     private DispatcherTimer? _timer;
 
 
@@ -45,6 +51,13 @@ public sealed class ChangeWatcher(
 
         _timer.Tick += OnTick;
         _timer.Start();
+    }
+
+    public async Task PollNowAsync(CancellationToken cancellationToken)
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(_stopping.Token, session.Stopping, cancellationToken);
+
+        await PollAsync(stop.Token);
     }
 
     public void Dispose()
@@ -72,7 +85,7 @@ public sealed class ChangeWatcher(
 
         try
         {
-            await poll.PollAsync(stop.Token);
+            await PollAsync(stop.Token);
         }
         catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
         {
@@ -88,5 +101,19 @@ public sealed class ChangeWatcher(
         }
 
         timer.Start();
+    }
+
+    private async Task PollAsync(CancellationToken cancellationToken)
+    {
+        await _polling.WaitAsync(cancellationToken);
+
+        try
+        {
+            await poll.PollAsync(cancellationToken);
+        }
+        finally
+        {
+            _polling.Release();
+        }
     }
 }

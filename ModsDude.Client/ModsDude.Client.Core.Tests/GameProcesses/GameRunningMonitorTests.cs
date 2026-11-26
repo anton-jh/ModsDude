@@ -72,6 +72,70 @@ public class GameRunningMonitorTests
     }
 
 
+    [Fact]
+    public void A_game_that_was_already_running_at_the_first_look_has_not_started()
+    {
+        var harness = new Harness();
+        harness.Alive.Add("FarmingSimulator2025Game");
+
+        Assert.Empty(harness.Monitor.Poll());
+        Assert.Empty(harness.Monitor.Poll());
+    }
+
+    [Fact]
+    public void A_game_that_starts_between_looks_is_reported_once()
+    {
+        var harness = new Harness();
+        harness.Monitor.Poll();
+
+        harness.Alive.Add("FarmingSimulator2025Game");
+
+        Assert.Equal([_fs25], harness.Monitor.Poll());
+        Assert.Empty(harness.Monitor.Poll());
+    }
+
+    [Fact]
+    public void A_game_that_stops_and_starts_again_is_reported_again()
+    {
+        var harness = new Harness();
+        harness.Monitor.Poll();
+        harness.Alive.Add("FarmingSimulator2025Game");
+        harness.Monitor.Poll();
+        harness.Alive.Clear();
+        harness.Monitor.Poll();
+
+        harness.Alive.Add("FarmingSimulator2025Game");
+
+        Assert.Equal([_fs25], harness.Monitor.Poll());
+    }
+
+    [Fact]
+    public void Games_starting_in_one_look_come_in_identity_order()
+    {
+        var harness = new Harness();
+        harness.Monitor.Poll();
+
+        harness.Alive.Add("FarmingSimulator2025Game");
+        harness.Alive.Add("BeamNG.drive.x64");
+
+        Assert.Equal([_beam, _fs25], harness.Monitor.Poll());
+    }
+
+    /// <summary>Connecting a game that is already running is not watching it start.</summary>
+    [Fact]
+    public void A_game_connected_while_it_runs_has_not_started()
+    {
+        var harness = new Harness();
+        harness.Connected.Remove(_fs25);
+        harness.Monitor.Poll();
+
+        harness.Alive.Add("FarmingSimulator2025Game");
+        harness.Connected.Add(_fs25);
+
+        Assert.Empty(harness.Monitor.Poll());
+        Assert.True(harness.Monitor.IsRunning(_fs25));
+    }
+
     private sealed class Harness : IDriftCandidateSource, IGameProcessNames, IGameProcesses
     {
         public Harness()
@@ -90,8 +154,10 @@ public class GameRunningMonitorTests
             [_beam] = ["BeamNG.drive.x64"]
         };
 
+        public HashSet<GameIdentity> Connected { get; } = [_fs25, _beam];
+
         public IReadOnlyList<DriftCandidate> GetDriftCandidates()
-            => [new DriftCandidate(_fs25, "FS25", [], null), new DriftCandidate(_beam, "BeamNG.drive", [], null)];
+            => [.. Connected.OrderBy(x => x.ToString(), StringComparer.Ordinal).Select(x => new DriftCandidate(x, x.ToString(), [], null))];
 
         public IReadOnlyList<string> Get(GameIdentity game) => Names[game];
 

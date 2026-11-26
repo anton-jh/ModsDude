@@ -156,8 +156,13 @@ The check is cheap:
 when a folder watcher fires. Watcher failures are logged and trigger a check. Checks don't overlap.
 
 Drift is shown as a notice and, when the window isn't in front, as a Windows toast for critical and
-warning drift, held back while a game is being played (see [Client](client.md#feedback-channels)). Nothing ever reverts drift automatically. The
+warning drift, held back while a game is being played, and again when a game starts with drift (see
+[Client](client.md#running-in-the-background)). Nothing ever reverts drift automatically. The
 notice offers to apply.
+
+Every folder notice is a warning: a folder that no longer matches its profile, is behind it, is still on
+the last applied profile, was repointed with nothing applied, or has never been applied. Each means the
+game would be played on mods that may not be its profile's.
 
 A drifted folder's notice lists what it differs by as label/value rows (`DriftFacts`), leaving out
 empty rows: Missing, Wrong version, Added, Revision (applied → current), Game files edited. The
@@ -168,7 +173,7 @@ A folder whose only difference is the profile's revision (`IsProfileMoveOnly`) i
 `RevisionGap` (applied → needed revision; across a game's folders, the oldest applied one). It gets its
 own card:
 
-- headline "'Game' is behind 'Profile'", severity Pending;
+- headline "'Game' is behind 'Profile'", severity Warning;
 - rows Applied and Current (revision numbers);
 - primary button "Update to revision N", or "Re-apply revision N" when the needed revision is older than the
   applied one (a savegame in compatibility mode);

@@ -53,6 +53,11 @@ public sealed record DriftToast(string Title, string Body, string? NoticeKey);
 /// evening it describes. It is neither announced nor counted as seen while that game runs; the
 /// reminder when the game closes - see <see cref="Remind"/> - says it instead.
 /// </para>
+/// <para>
+/// <b>A game starting is said again.</b> It is the moment drift costs something, so
+/// <see cref="RemindOnStart"/> names everything eligible about that game whether or not it has been
+/// announced before.
+/// </para>
 /// </remarks>
 public sealed class DriftToastPlanner
 {
@@ -107,7 +112,7 @@ public sealed class DriftToastPlanner
             return null;
         }
 
-        return Describe(eligible);
+        return Describe(eligible, gameName: null);
     }
 
     /// <summary>
@@ -128,6 +133,37 @@ public sealed class DriftToastPlanner
             $"Check in {save}",
             $"You played it in {played.GameName}. That progress is only on this machine until it is checked in.",
             played.NoticeKey);
+    }
+
+    /// <summary>
+    /// The reminder for a game that has just started, naming what is wrong with it. Null where nothing is.
+    /// </summary>
+    /// <remarks>
+    /// Its notices count as announced from here on, so the digest does not say the same thing again
+    /// where the check that found them is also what put them up.
+    /// </remarks>
+    /// <param name="live">Every notice currently in the column, after dismissals.</param>
+    /// <param name="holdBack">As for <see cref="Observe"/>.</param>
+    public DriftToast? RemindOnStart(
+        GameIdentity game,
+        IReadOnlyList<Notice> live,
+        bool reposLoaded,
+        Func<Notice, bool>? holdBack = null)
+    {
+        var about = live
+            .Where(x => x.Subject?.Game == game)
+            .Where(x => IsEligible(x, reposLoaded))
+            .Where(x => holdBack?.Invoke(x) is not true)
+            .ToList();
+
+        if (about.Count == 0)
+        {
+            return null;
+        }
+
+        _reminded.UnionWith(about.Select(x => x.Key));
+
+        return Describe(about, about[0].Subject!.GameName);
     }
 
     /// <summary>
@@ -170,7 +206,8 @@ public sealed class DriftToastPlanner
         return reposLoaded || notice.Key.StartsWith(UnreachablePrefix, StringComparison.Ordinal) is false;
     }
 
-    private static DriftToast Describe(IReadOnlyList<Notice> notices)
+    /// <param name="gameName">The game every notice is about, where they share one.</param>
+    private static DriftToast Describe(IReadOnlyList<Notice> notices, string? gameName)
     {
         // Worst first, so the one line a truncated toast keeps is the one that matters.
         var ordered = notices.OrderBy(x => x.Severity).ToList();
@@ -193,7 +230,11 @@ public sealed class DriftToastPlanner
             lines.Add($"and {ordered.Count - MaxListed} more");
         }
 
-        return new DriftToast($"{ordered.Count} things need attention", string.Join('\n', lines), null);
+        var title = gameName is null
+            ? $"{ordered.Count} things need attention"
+            : $"{ordered.Count} things need attention in '{gameName}'";
+
+        return new DriftToast(title, string.Join('\n', lines), null);
     }
 
     /// <summary>The first sentence, or as much of the text as fits, ending on a word.</summary>

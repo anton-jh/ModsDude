@@ -171,48 +171,38 @@ public static class NoticeBuilder
             ? new NoticeReview.RevisionChanges(gap)
             : new NoticeReview.ModList(DriftReviewFilter.For(report));
 
-        (string Headline, string? Body, IReadOnlyList<NoticeFact> Facts, NoticeSeverity Severity) shown = report.Status switch
+        (string Headline, IReadOnlyList<NoticeFact> Facts) shown = report.Status switch
         {
             DriftStatus.Drifted when gap is not null => (
                 $"'{game.Name}' is behind {profile}{inFolder}",
-                null,
-                [new NoticeFact("Applied", $"Revision {gap.From}"), new NoticeFact("Current", $"Revision {gap.To}")],
-                NoticeSeverity.Pending),
+                [new NoticeFact("Applied", $"Revision {gap.From}"), new NoticeFact("Current", $"Revision {gap.To}")]),
 
             DriftStatus.Drifted => (
                 $"'{game.Name}' no longer matches {profile}{inFolder}",
-                null,
-                DriftFacts.For(report),
-                NoticeSeverity.Warning),
+                DriftFacts.For(report)),
 
             DriftStatus.NotApplied => (
                 report.AppliedProfileName is string applied
                     ? $"'{game.Name}' is still on '{applied}'{inFolder}"
                     : $"'{game.Name}' is still on its last applied profile{inFolder}",
-                null,
-                [],
-                NoticeSeverity.Pending),
+                []),
 
             DriftStatus.FolderRepointed => (
                 $"'{game.Name}' has a new mod folder with nothing applied",
-                null,
-                entry.Target is GameModFolder target ? [new NoticeFact("Folder", target.ModFolder)] : [],
-                NoticeSeverity.Pending),
+                entry.Target is GameModFolder target ? [new NoticeFact("Folder", target.ModFolder)] : []),
 
             // Not naming the profile: the name would come from the manifest, and this status is that
             // there is none.
             _ => (
                 $"Nothing has been applied to '{game.Name}'{inFolder}",
-                null,
-                [],
-                NoticeSeverity.Pending)
+                [])
         };
 
         var canReview = CanReview(entry, repo, review);
 
         // Review leads wherever the folder holds something to look at: what it holds now is usually
         // what the user meant to end up with, and re-applying before looking throws it away. The
-        // pending statuses and a folder that is only behind have nothing on disk to look at, so
+        // not-applied statuses and a folder that is only behind have nothing on disk to look at, so
         // re-applying leads there.
         var reviewLeads = canReview && report.Status is DriftStatus.Drifted && gap is null;
 
@@ -220,9 +210,10 @@ public static class NoticeBuilder
 
         return Make(
             $"drift/{game.Identity}/{entry.Target?.Target.Key.Value ?? "-"}",
-            shown.Severity,
+            // Every one of these means the game would be played on mods that may not be its profile's.
+            NoticeSeverity.Warning,
             shown.Headline,
-            shown.Body,
+            body: null,
             footnote: report.Added.Count + report.Changed.Count > 0 && canReview
                 ? "Versions now on disk can be imported from the mod list."
                 : null,

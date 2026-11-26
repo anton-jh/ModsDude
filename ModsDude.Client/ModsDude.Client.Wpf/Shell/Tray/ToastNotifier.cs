@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Activity;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Notices;
 using ModsDude.Client.Core.Persistence;
@@ -17,9 +18,9 @@ namespace ModsDude.Client.Wpf.Shell.Tray;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Four sources, one rule.</b> Drift notices, check-in reminders, the in-app toasts a finished
-/// action puts up and friend activity are all drawn to a window that, in the tray or behind the game,
-/// nobody may be looking at. Each becomes a Windows toast exactly when the window is not the thing in
+/// <b>Five sources, one rule.</b> Drift notices, reminders when a game starts with drift, check-in
+/// reminders, the in-app toasts a finished action puts up and friend activity are all drawn to a
+/// window that, in the tray or behind the game, nobody may be looking at. Each becomes a Windows toast exactly when the window is not the thing in
 /// front of the user - hidden, minimised, or simply not the active window - and its kind is switched
 /// on in <see cref="NotificationSettings"/>, so somebody working in the app is not told twice.
 /// </para>
@@ -50,12 +51,19 @@ public sealed class ToastNotifier(
 {
     private const string _driftGroup = "drift";
     private const string _reminderGroup = "reminder";
+    private const string _gameStartGroup = "gamestart";
     private const string _appGroup = "app";
     private const string _friendsGroup = "friends";
     private const string _noticeArgument = "notice";
     private const string _openArgument = "action";
 
     private readonly DriftToastPlanner _planner = new();
+
+    /// <summary>Games whose start reminder is being prepared, which the digest says nothing about meanwhile.</summary>
+    private readonly HashSet<GameIdentity> _starting = [];
+
+    /// <summary>Games to remind about at the rebuild <see cref="RemindOnStart"/> asks for.</summary>
+    private IReadOnlyList<GameIdentity> _remindNow = [];
 
 
     public void Start()
@@ -77,6 +85,27 @@ public sealed class ToastNotifier(
     }
 
 
+    public void BeginStart(IReadOnlyList<GameIdentity> games) => _starting.UnionWith(games);
+
+    public void RemindOnStart(IReadOnlyList<GameIdentity> games)
+    {
+        EndStart(games);
+
+        _remindNow = games;
+
+        try
+        {
+            notices.RefreshNow();
+        }
+        finally
+        {
+            _remindNow = [];
+        }
+    }
+
+    public void EndStart(IReadOnlyList<GameIdentity> games) => _starting.ExceptWith(games);
+
+
     private bool Allows(Func<NotificationSettings, bool> kind) => settings.Read(x => kind(x.Notifications));
 
     private bool WindowInFront => window.IsVisible
@@ -90,11 +119,19 @@ public sealed class ToastNotifier(
         // has been true for a week as if it had just happened.
         var drifted = monitor.Drifted;
 
+        bool IsPlayInProgress(Notice notice) => DriftToastPlanner.IsPlayInProgress(notice, drifted, sessions.IsRunning);
+
+        // First, so a notice the start reminder names is not news to the digest below.
+        foreach (var game in _remindNow)
+        {
+            ShowStartReminder(game, live, IsPlayInProgress);
+        }
+
         var toast = _planner.Observe(
             live,
             environment.ReposLoaded,
             WindowInFront || Allows(x => x.Drift) is false,
-            holdBack: x => DriftToastPlanner.IsPlayInProgress(x, drifted, sessions.IsRunning));
+            holdBack: x => IsPlayInProgress(x) || x.Subject is { } subject && _starting.Contains(subject.Game));
 
         if (toast is null)
         {
@@ -107,6 +144,38 @@ public sealed class ToastNotifier(
             _driftGroup,
             // One digest that each new one replaces: the newer toast lists everything the older did.
             Tag: "digest",
+            toast.NoticeKey is string key
+                ? new Dictionary<string, string> { [_noticeArgument] = key }
+                : new Dictionary<string, string> { [_openArgument] = "open" }));
+    }
+
+    /// <summary>
+    /// A game has started: one toast naming everything wrong with it, taking the place of the last one
+    /// about the same game, and clicking it opens the notice it names or the window.
+    /// </summary>
+    /// <remarks>
+    /// Not asked at all when switched off: the planner counts what it reminds about as announced, and
+    /// the digest is then the one to say what is new.
+    /// </remarks>
+    private void ShowStartReminder(GameIdentity game, IReadOnlyList<Notice> live, Func<Notice, bool> isPlayInProgress)
+    {
+        if (Allows(x => x.DriftOnGameStart) is false)
+        {
+            return;
+        }
+
+        var toast = _planner.RemindOnStart(game, live, environment.ReposLoaded, isPlayInProgress);
+
+        if (toast is null || WindowInFront)
+        {
+            return;
+        }
+
+        system.Show(new SystemToast(
+            toast.Title,
+            toast.Body,
+            _gameStartGroup,
+            Tag: game.ToString().GetHashCode().ToString("x"),
             toast.NoticeKey is string key
                 ? new Dictionary<string, string> { [_noticeArgument] = key }
                 : new Dictionary<string, string> { [_openArgument] = "open" }));
