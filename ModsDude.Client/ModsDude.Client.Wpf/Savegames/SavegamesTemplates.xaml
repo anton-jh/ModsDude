@@ -25,6 +25,9 @@
     <DataTemplate DataType="{x:Type savegames:SavegameCompatibilityStepViewModel}">
         <savegames:SavegameCompatibilityStep />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type savegames:SavegameModCheckStepViewModel}">
+        <savegames:SavegameModCheckStep />
+    </DataTemplate>
 
     <!-- One chip, three tones. Which of them a fact deserves is decided in the view model, so
          that "this can damage a save" is never a colour somebody picked in a template. -->

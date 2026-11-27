@@ -1,11 +1,14 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Wpf.Profiles.Editor;
 using ModsDude.Client.Wpf.Shell.Modals;
 using System.Runtime.CompilerServices;
 
@@ -26,6 +29,24 @@ public sealed record SavegamePublishPlan(
 
 /// <param name="Label">What the check-in step was answered with as the snapshot's description.</param>
 public sealed record SavegamePublishCheckIn(Guid SavegameId, HeldSavegameName Savegame, string? Label);
+
+
+/// <summary>How a publish wizard was answered.</summary>
+public abstract record SavegamePublishOutcome
+{
+    private SavegamePublishOutcome()
+    {
+    }
+
+
+    public sealed record Publish(SavegamePublishPlan Plan) : SavegamePublishOutcome;
+
+    /// <summary>Publishes nothing: opens the profile's editor looking at the savegame.</summary>
+    public sealed record ReviewInEditor(Guid ProfileId, SavegameSlotRef Slot) : SavegamePublishOutcome;
+
+    /// <summary>Publishes nothing: makes a profile of the savegame's mods.</summary>
+    public sealed record CreateProfile(SavegameSlotOptionViewModel Slot) : SavegamePublishOutcome;
+}
 
 
 /// <summary>
@@ -54,32 +75,43 @@ public sealed class SavegamePublishWizard
     private readonly ISyncManifestStore _manifestStore;
     private readonly ISavegameCheckInFlow _checkInFlow;
     private readonly IHeldSavegameNames _heldSavegameNames;
+    private readonly IProfileModPinsClient _pinsClient;
+    private readonly IModStore _modStore;
+    private readonly ILogger _logger;
+
+    /// <summary>Whether this member may edit profiles, and so be sent to one or make one.</summary>
+    private readonly bool _canEditProfiles;
 
     private readonly SavegameSlotPickerStepViewModel _slotStep;
 
     private (SavegameSlotRef Slot, SavegamePublishStepViewModel Step)? _publishStep;
     private (Guid ProfileId, ActiveProfile? Active, QuestionStepViewModel Step)? _activateStep;
     private (Guid SavegameId, bool Activates, SavegameCheckInStepViewModel Step)? _checkInStep;
+    private (SavegameSlotRef Slot, SavegamePublishTarget Target, SavegameModCheckStepViewModel? Step)? _checkStep;
     private ReviewStepViewModel? _reviewStep;
     private string? _reviewKey;
 
     private IReadOnlyDictionary<Guid, HeldSavegameName>? _heldNames;
 
     /// <summary>The plan a path enumerated to its end leaves behind.</summary>
-    private SavegamePublishPlan? _reachedEnd;
+    private SavegamePublishOutcome? _reachedEnd;
 
 
     public SavegamePublishWizard(
         Repo repo,
         Game game,
         Guid? preselectProfileId,
+        SavegameSlotRef? preselectSlot,
         IReadOnlyList<SavegameSlotOptionViewModel> slots,
         ISavegameSlots savegameSlots,
         IHeldSavegames heldSavegames,
         IProfileStore profileStore,
         ISyncManifestStore manifestStore,
         ISavegameCheckInFlow checkInFlow,
-        IHeldSavegameNames heldSavegameNames)
+        IHeldSavegameNames heldSavegameNames,
+        IProfileModPinsClient pinsClient,
+        IModStore modStore,
+        ILogger logger)
     {
         _repo = repo;
         _game = game;
@@ -90,15 +122,19 @@ public sealed class SavegamePublishWizard
         _manifestStore = manifestStore;
         _checkInFlow = checkInFlow;
         _heldSavegameNames = heldSavegameNames;
+        _pinsClient = pinsClient;
+        _modStore = modStore;
+        _logger = logger;
+        _canEditProfiles = repo.MembershipLevel >= RepoMembershipLevel.Member;
 
-        _slotStep = new SavegameSlotPickerStepViewModel(repo.Name, slots);
+        _slotStep = new SavegameSlotPickerStepViewModel(repo.Name, slots, preselectSlot);
     }
 
 
     public WizardStepViewModel First => _slotStep;
 
     /// <summary>What the wizard was answered with, once its last step has been.</summary>
-    public SavegamePublishPlan? Plan { get; private set; }
+    public SavegamePublishOutcome? Outcome { get; private set; }
 
 
     public async Task<WizardStepViewModel?> NextAsync(WizardStepViewModel answered, CancellationToken cancellationToken)
@@ -107,7 +143,7 @@ public sealed class SavegamePublishWizard
 
         var next = await WizardPath.StepAfterAsync(PathAsync(cancellationToken), answered);
 
-        Plan = next is null ? _reachedEnd : null;
+        Outcome = next is null ? _reachedEnd : null;
 
         return next;
     }
@@ -131,6 +167,26 @@ public sealed class SavegamePublishWizard
 
         var profile = publish.SelectedProfile
             ?? throw new InvalidOperationException("The publish step was answered without a profile.");
+
+        if (profile.CreatesProfile)
+        {
+            _reachedEnd = new SavegamePublishOutcome.CreateProfile(slot);
+
+            yield break;
+        }
+
+        if (profile.ToTarget() is SavegamePublishTarget target
+            && await CheckStepAsync(slot, profile.Name, target, cancellationToken) is SavegameModCheckStepViewModel check)
+        {
+            yield return check;
+
+            if (check.ReviewChosen)
+            {
+                _reachedEnd = new SavegamePublishOutcome.ReviewInEditor(target.ProfileId, slot.Ref);
+
+                yield break;
+            }
+        }
 
         var keep = publish.KeepPlaying
             ? _heldSavegames.DecideKeepPublished(_game, _repo.Id, profile.ProfileId)
@@ -169,8 +225,8 @@ public sealed class SavegamePublishWizard
             yield return ReviewStep(publish.TrimmedName, actions);
         }
 
-        _reachedEnd = new SavegamePublishPlan(
-            slot, publish.TrimmedName, publish.TrimmedLabel, profile, publish.KeepPlaying, checkIn, keep.ActivatesFirst);
+        _reachedEnd = new SavegamePublishOutcome.Publish(new SavegamePublishPlan(
+            slot, publish.TrimmedName, publish.TrimmedLabel, profile, publish.KeepPlaying, checkIn, keep.ActivatesFirst));
     }
 
     private async Task<SavegamePublishStepViewModel> PublishStepAsync(SavegameSlotOptionViewModel slot, CancellationToken cancellationToken)
@@ -225,7 +281,86 @@ public sealed class SavegamePublishWizard
 
         options.Add(SavegamePublishOption.NoModList);
 
+        if (_canEditProfiles && _savegameSlots.ListsMods(_game))
+        {
+            options.Add(SavegamePublishOption.NewFromSavegame);
+        }
+
         return options;
+    }
+
+    /// <summary>
+    /// How the savegame's mods differ from the revision it would be published on, where the game's
+    /// savegames list their mods and anything differs. Null otherwise.
+    /// </summary>
+    private async Task<SavegameModCheckStepViewModel?> CheckStepAsync(
+        SavegameSlotOptionViewModel slot,
+        string profileName,
+        SavegamePublishTarget target,
+        CancellationToken cancellationToken)
+    {
+        if (_savegameSlots.ListsMods(_game) is false)
+        {
+            return null;
+        }
+
+        if (_checkStep is { } made && made.Slot == slot.Ref && made.Target == target)
+        {
+            return made.Step;
+        }
+
+        var step = await BuildCheckStepAsync(slot, profileName, target, cancellationToken);
+
+        _checkStep = (slot.Ref, target, step);
+
+        return step;
+    }
+
+    private async Task<SavegameModCheckStepViewModel?> BuildCheckStepAsync(
+        SavegameSlotOptionViewModel slot,
+        string profileName,
+        SavegamePublishTarget target,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<SavegameModReference> listed;
+
+        try
+        {
+            listed = await _savegameSlots.ReadModsAsync(_game, slot.Ref, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Only information: a save whose list cannot be read is still published, as it was before
+            // there was a list to compare.
+            _logger.LogWarning(exception, "Could not read the mods of slot {Slot}; it is published without comparing them to the profile.", slot.Ref);
+
+            return null;
+        }
+
+        var pins = OtherProfilesReader.ToPins(
+            await _pinsClient.GetProfileModPinsV1Async(_repo.Id, target.ProfileId, target.Revision, cancellationToken));
+        var registered = await _modStore.GetAsync(_repo.Id, cancellationToken);
+
+        var comparison = SavegameModComparison.Compare(
+            listed,
+            pins,
+            registered.Where(x => x.Locked).Select(x => ModKey.From(x.ModId)).ToHashSet());
+
+        if (comparison.IsEmpty)
+        {
+            return null;
+        }
+
+        var names = registered
+            .GroupBy(x => ModKey.From(x.ModId))
+            .ToDictionary(x => x.Key, x => x.MaxBy(version => version.SequenceNumber)!.DisplayName);
+
+        return new SavegameModCheckStepViewModel(
+            profileName,
+            target.Revision,
+            comparison,
+            x => names.GetValueOrDefault(x) ?? x.Value,
+            _canEditProfiles);
     }
 
     private QuestionStepViewModel ActivateStep(Guid profileId, string profileName, string savegameName)

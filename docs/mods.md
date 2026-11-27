@@ -58,6 +58,11 @@ Turning a savegame chip on turns every other source off and loads its mod folder
 list is then what the save lists and the profile doesn't pin, and **Not in the sources** is what the
 profile pins and the save doesn't list. Savegame chips aren't remembered after the editor closes.
 
+The editor can also open focused on a save (`EditorFocus.Savegame`), from the publish wizard. It does the
+same, and once the profile is read it adds every found mod to the draft as one undoable step. With exactly
+one savegame chip on, the toast saying the profile was saved offers **Publish savegame**, with the profile
+and the slot preselected.
+
 A source folder is never a sync target. The only files removed from sources are rejected copies the user
 chose against in a conflict (outside game folders, to the Recycle Bin once the revision is written) and
 downloaded remote files once imported.

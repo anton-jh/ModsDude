@@ -12,11 +12,13 @@ public interface ISavegamePublishFlow
     /// <param name="preselectProfileId">
     /// The profile the publish step opens on. Null opens it on the profile this game follows.
     /// </param>
+    /// <param name="preselectSlot">The slot the slot step opens on, where it can be published. Null opens it on the first.</param>
     /// <param name="published">Called with the new savegame's id, so the caller can select it.</param>
     /// <param name="cancellationToken">Ends the questions, and nothing after them.</param>
     Task PublishAsync(
         Repo repo,
         Guid? preselectProfileId,
+        SavegameSlotRef? preselectSlot,
         Action<Guid>? published,
         CancellationToken cancellationToken);
 }

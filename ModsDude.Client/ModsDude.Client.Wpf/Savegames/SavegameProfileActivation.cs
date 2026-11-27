@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Wpf.Profiles.Editor;
 using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -130,7 +131,7 @@ public sealed class SavegameProfileActivation(
 
         if (choice.Result)
         {
-            await shellNavigation.GoToAsync(repo.Id, new RepoDestination.ProfileMods(profile.Id, PinnedModFilter.NotInSources));
+            await shellNavigation.GoToAsync(repo.Id, new RepoDestination.ProfileMods(profile.Id, new EditorFocus.DriftReview(PinnedModFilter.NotInSources)));
         }
     }
 }

@@ -140,6 +140,17 @@ the publisher keeps playing a save tied to a profile, the wizard works out a kee
 
 The new save's details come from the adapter.
 
+Where the adapter lists savegame mods:
+
+- **Mods differ**: after a profile is picked, `SavegameModComparison` compares the save's mods with the
+  revision it would be published on, by mod ID. The step only shows when something differs, as counts:
+  not in profile, not in savegame, other version. Locked mods that differ are named as a warning. Members
+  can choose **Review in the editor**, which publishes nothing and opens that profile's editor focused on
+  the save (see [Mods](mods.md#savegame-sources)).
+- **New profile from this savegame**: offered to members in the profile list. It publishes nothing: it asks
+  for a name, creates an empty profile, and opens its editor focused on the save. The save is published
+  from the toast once that profile is saved.
+
 ### Savegame drift
 
 `SavegameDrift` adds savegame cards to the notice column:

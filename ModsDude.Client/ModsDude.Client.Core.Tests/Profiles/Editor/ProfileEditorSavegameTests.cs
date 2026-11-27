@@ -185,7 +185,8 @@ public class ProfileEditorSavegameTests
     private static SavegameModSource Save(params (string Mod, string? Version)[] mods)
         => new(
             new ModSource(ModSourceId.ForSavegame(Game(), Slot("savegame1")), "My farm", "", ModSourceKind.Savegame),
-            ModsFolder.Id,
+            Game(),
+            Slot("savegame1"),
             [.. mods.Select(x => new SavegameModReference(Mod(x.Mod), x.Version is null ? null : V(x.Version)))]);
 
     /// <summary>The save is the only source on: the repo and the mod folder chips are off, so the folder is on standby.</summary>

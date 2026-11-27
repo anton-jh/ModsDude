@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 
 namespace ModsDude.Client.Core.Profiles.Editor;
@@ -15,11 +16,11 @@ public sealed class SavegameModSource
     private readonly HashSet<ModKey> _listed;
 
 
-    /// <param name="modFolder">The mod folder the save is played against.</param>
-    public SavegameModSource(ModSource source, ModSourceId modFolder, IReadOnlyList<SavegameModReference> mods)
+    public SavegameModSource(ModSource source, GameIdentity game, SavegameSlotRef slot, IReadOnlyList<SavegameModReference> mods)
     {
         Source = source;
-        ModFolder = modFolder;
+        Game = game;
+        Slot = slot;
         Mods = [.. mods.OrderBy(x => x.ModId.Value, StringComparer.Ordinal)];
 
         _listed = [.. mods.Select(x => x.ModId)];
@@ -27,7 +28,11 @@ public sealed class SavegameModSource
 
 
     public ModSource Source { get; }
-    public ModSourceId ModFolder { get; }
+    public GameIdentity Game { get; }
+    public SavegameSlotRef Slot { get; }
+
+    /// <summary>The mod folder the save is played against: its game's mod target under the same key as its savegame target.</summary>
+    public ModSourceId ModFolder => ModSourceId.ForTarget(new ModTargetRef(Game, Slot.Target));
 
     /// <summary>Sorted by mod id.</summary>
     public IReadOnlyList<SavegameModReference> Mods { get; }

@@ -427,7 +427,7 @@ public partial class RepoSavegamesPageViewModel : PageViewModel, ISavegameRowAct
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanPublish))]
     private Task PublishSave()
-        => _publishFlow.PublishAsync(_repo, preselectProfileId: null, Select, _lifetime);
+        => _publishFlow.PublishAsync(_repo, preselectProfileId: null, preselectSlot: null, Select, _lifetime);
 
     // Member, like checking in and archiving: it writes to the repo, and everybody in it sees the
     // result. Not while savegame work runs in this game, which a publish would have to wait for.

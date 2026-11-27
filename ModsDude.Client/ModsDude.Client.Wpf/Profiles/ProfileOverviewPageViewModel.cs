@@ -161,7 +161,7 @@ public partial class ProfileOverviewPageViewModel : PageViewModel, IDisposable
 
         try
         {
-            await _publishFlow.PublishAsync(_repo, _profile.Id, published: null, _lifetime);
+            await _publishFlow.PublishAsync(_repo, _profile.Id, preselectSlot: null, published: null, _lifetime);
         }
         finally
         {

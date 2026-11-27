@@ -112,6 +112,9 @@ public sealed record ProfileSaveRequest(
     ModCatalog Catalog,
     bool Apply)
 {
+    /// <summary>What the toast saying the profile was saved offers next.</summary>
+    public IReadOnlyList<ToastAction> SavedActions { get; init; } = [];
+
     /// <summary>Whether the ignore list differs from what the server holds, and so has to be written.</summary>
     public bool IgnoredChanged
         => IgnoredDesired.ToHashSet().SetEquals(IgnoredOriginal) is false
@@ -249,11 +252,13 @@ public sealed class ProfileSaveService(
 
         if (lease is null)
         {
-            run.Completion = Task.FromResult(new ProfileSaveOutcome(
+            var refused = new ProfileSaveOutcome(
                 ProfileSaveStatus.Refused,
-                $"'{request.ProfileName}' is already being saved."));
+                $"'{request.ProfileName}' is already being saved.");
 
-            Report(run.Completion.Result);
+            run.Completion = Task.FromResult(refused);
+
+            Report(refused, savedActions: []);
 
             return run;
         }
@@ -716,7 +721,7 @@ public sealed class ProfileSaveService(
             _runs.Remove(run.Request.ProfileId);
         }
 
-        Report(outcome);
+        Report(outcome, run.Request.SavedActions);
 
         return outcome;
     }
@@ -729,13 +734,13 @@ public sealed class ProfileSaveService(
     /// what is said here is the short version of what was left undone: the draft is still open and
     /// saving again is the way on.
     /// </remarks>
-    private void Report(ProfileSaveOutcome outcome)
+    private void Report(ProfileSaveOutcome outcome, IReadOnlyList<ToastAction> savedActions)
     {
         var severity = outcome.Status is ProfileSaveStatus.Saved or ProfileSaveStatus.Stopped
             ? ToastSeverity.Info
             : ToastSeverity.Warning;
 
-        toasts.Show(outcome.Message, severity);
+        toasts.Show(outcome.Message, severity, outcome.Status is ProfileSaveStatus.Saved ? [.. savedActions] : []);
 
         if (outcome.ApplyMessage is string applied)
         {

@@ -1,11 +1,18 @@
+using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.GameProcesses;
+using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Mods;
+using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Transfers;
+using ModsDude.Client.Wpf.Profiles.Editor;
+using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.BackgroundTasks;
 using ModsDude.Client.Wpf.Shell.Modals;
+using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Toasts;
 
 namespace ModsDude.Client.Wpf.Savegames;
@@ -25,6 +32,10 @@ public sealed class SavegamePublishFlow(
     IHeldSavegameNames heldSavegameNames,
     IGameRunningGuard runningGuard,
     ISavegameOperations operations,
+    IProfileModPinsClient pinsClient,
+    IModStore modStore,
+    IShellNavigationService shellNavigation,
+    ILogger<SavegamePublishWizard> wizardLogger,
     Lazy<IModalService> modalService,
     IErrorReporter errorReporter,
     IToastService toasts) : ISavegamePublishFlow
@@ -32,6 +43,7 @@ public sealed class SavegamePublishFlow(
     public async Task PublishAsync(
         Repo repo,
         Guid? preselectProfileId,
+        SavegameSlotRef? preselectSlot,
         Action<Guid>? published,
         CancellationToken cancellationToken)
     {
@@ -42,11 +54,11 @@ public sealed class SavegamePublishFlow(
             return;
         }
 
-        SavegamePublishPlan? plan;
+        SavegamePublishOutcome? outcome;
 
         try
         {
-            plan = await AskAsync(repo, game, preselectProfileId, cancellationToken);
+            outcome = await AskAsync(repo, game, preselectProfileId, preselectSlot, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -60,12 +72,24 @@ public sealed class SavegamePublishFlow(
             return;
         }
 
-        if (plan is null)
+        switch (outcome)
         {
-            return;
-        }
+            case SavegamePublishOutcome.Publish publish:
+                await RunAsync(repo, game, publish.Plan, published);
+                break;
 
-        await operations.RunAsync(
+            case SavegamePublishOutcome.ReviewInEditor review:
+                await shellNavigation.GoToAsync(repo.Id, new RepoDestination.ProfileMods(review.ProfileId, new EditorFocus.Savegame(game.Identity, review.Slot)));
+                break;
+
+            case SavegamePublishOutcome.CreateProfile create:
+                await CreateProfileAsync(repo, game, create.Slot, cancellationToken);
+                break;
+        }
+    }
+
+    private Task RunAsync(Repo repo, Game game, SavegamePublishPlan plan, Action<Guid>? published)
+        => operations.RunAsync(
             new SavegameOperation(
                 game,
                 $"Publishing '{plan.Name}' to {repo.Name}",
@@ -77,10 +101,59 @@ public sealed class SavegamePublishFlow(
                 Detail = $"Packing and uploading '{plan.Slot.Label}'"
             },
             (task, ct) => ExecuteAsync(game, repo, plan, published, task, ct));
+
+    /// <summary>
+    /// Asks for a name, makes an empty profile of it, and opens its editor with the savegame's mods
+    /// added. The savegame is published from there, once the profile is saved.
+    /// </summary>
+    private async Task CreateProfileAsync(Repo repo, Game game, SavegameSlotOptionViewModel slot, CancellationToken cancellationToken)
+    {
+        // One per name asked for in this modal, so a retry after a lost answer finds the profile it made.
+        var requestIds = new RequestIdKeeper<string>();
+        Profile? created = null;
+
+        try
+        {
+            await NameModalViewModel.AskAsync(
+                modalService.Value,
+                "Create profile",
+                $"From the mods of '{slot.Label}'.",
+                slot.Label,
+                "Create",
+                async name =>
+                {
+                    try
+                    {
+                        created = await profileStore.CreateAsync(repo.Id, requestIds.For(name), name, copyFrom: null, cancellationToken);
+
+                        return null;
+                    }
+                    catch (ApiException<CustomProblemDetails> exception) when (exception.Result.Type is ProblemType.NameTaken)
+                    {
+                        return "That name is taken.";
+                    }
+                });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            await errorReporter.ShowAsync(exception, "creating a profile from a savegame");
+
+            return;
+        }
+
+        if (created is not null)
+        {
+            await shellNavigation.GoToAsync(repo.Id, new RepoDestination.ProfileMods(created.Id, new EditorFocus.Savegame(game.Identity, slot.Ref)));
+        }
     }
 
     /// <summary>The questions, as one wizard. Null where there is nothing to publish or the user backed out.</summary>
-    private async Task<SavegamePublishPlan?> AskAsync(Repo repo, Game game, Guid? preselectProfileId, CancellationToken cancellationToken)
+    private async Task<SavegamePublishOutcome?> AskAsync(
+        Repo repo, Game game, Guid? preselectProfileId, SavegameSlotRef? preselectSlot, CancellationToken cancellationToken)
     {
         var slots = await ReadPublishableSlotsAsync(game, cancellationToken);
 
@@ -94,11 +167,12 @@ public sealed class SavegamePublishFlow(
         }
 
         var wizard = new SavegamePublishWizard(
-            repo, game, preselectProfileId, slots, savegameSlots, heldSavegames, profileStore, manifestStore, checkInFlow, heldSavegameNames);
+            repo, game, preselectProfileId, preselectSlot, slots, savegameSlots, heldSavegames, profileStore, manifestStore,
+            checkInFlow, heldSavegameNames, pinsClient, modStore, wizardLogger);
 
         var modal = new WizardModalViewModel(wizard.First, wizard.NextAsync, cancellationToken);
 
-        return await modal.ShowAsync(modalService.Value) ? wizard.Plan : null;
+        return await modal.ShowAsync(modalService.Value) ? wizard.Outcome : null;
     }
 
     /// <summary>

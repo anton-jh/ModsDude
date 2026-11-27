@@ -6,7 +6,6 @@ using ModsDude.Client.Core.Builds;
 using ModsDude.Client.Core.Connectivity;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Notices;
-using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
@@ -14,6 +13,7 @@ using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Updates;
 using ModsDude.Client.Wpf.Friends;
+using ModsDude.Client.Wpf.Profiles.Editor;
 using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Savegames;
 using ModsDude.Client.Wpf.Shell.Diagnostics;
@@ -455,7 +455,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
         RepoDestination destination = review switch
         {
-            NoticeReview.ModList list => new RepoDestination.ProfileMods(profileId, list.Filter),
+            NoticeReview.ModList list => new RepoDestination.ProfileMods(profileId, new EditorFocus.DriftReview(list.Filter)),
             NoticeReview.RevisionChanges changes => new RepoDestination.ProfileHistory(profileId, changes.Gap.To, CompareWith: changes.Gap.From),
             _ => throw new ArgumentOutOfRangeException(nameof(notice), review, null)
         };

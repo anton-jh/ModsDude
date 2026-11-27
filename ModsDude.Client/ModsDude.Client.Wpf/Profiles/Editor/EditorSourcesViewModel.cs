@@ -382,20 +382,10 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
 
             await _modalService.Show(modal);
 
-            if (modal.Result is not SavegameSourceOption picked)
+            if (modal.Result is SavegameSourceOption picked)
             {
-                return;
+                await ShowLoadedAsync(FocusOnSavegame(await ReadSavegameAsync(picked)), $"Loaded {picked.Label}");
             }
-
-            var savegame = new SavegameModSource(
-                new ModSource(ModSourceId.ForSavegame(picked.Game.Identity, picked.Slot.Ref), picked.Label, picked.ToolTip, ModSourceKind.Savegame),
-                ModSourceId.ForTarget(new ModTargetRef(picked.Game.Identity, picked.Slot.Ref.Target)),
-                await ReadSavegameModsAsync(picked));
-
-            _savegames.RemoveAll(x => x.Source.Id == savegame.Source.Id);
-            _savegames.Add(savegame);
-
-            await FocusOnSavegameAsync(savegame);
         }
         catch (OperationCanceledException)
         {
@@ -404,6 +394,47 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
         {
             await _errorReporter.ShowAsync(exception, "reading a savegame's mod list as a source");
         }
+    }
+
+    /// <summary>Reads the savegame in <paramref name="slot"/> as a source, for an editor opened to look at that save.</summary>
+    /// <returns>The source, or null where it could not be read, which has been reported.</returns>
+    public async Task<SavegameModSource?> ReadSavegameAsync(GameIdentity game, SavegameSlotRef slot)
+    {
+        try
+        {
+            var found = _repo.Games.FirstOrDefault(x => x.Identity == game)
+                ?? throw new UserFriendlyException("That game is not set up on this machine");
+
+            var occupied = (await _savegameSlots.GetSlotsAsync(found, _cancellation))
+                .FirstOrDefault(x => x.IsOccupied && x.Ref.Addresses(slot))
+                ?? throw new UserFriendlyException("That savegame is no longer there");
+
+            return await ReadSavegameAsync(new SavegameSourceOption(found, occupied, nameGame: false));
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "reading a savegame's mod list as a source");
+
+            return null;
+        }
+    }
+
+    private async Task<SavegameModSource> ReadSavegameAsync(SavegameSourceOption picked)
+    {
+        var savegame = new SavegameModSource(
+            new ModSource(ModSourceId.ForSavegame(picked.Game.Identity, picked.Slot.Ref), picked.Label, picked.ToolTip, ModSourceKind.Savegame),
+            picked.Game.Identity,
+            picked.Slot.Ref,
+            await ReadSavegameModsAsync(picked));
+
+        _savegames.RemoveAll(x => x.Source.Id == savegame.Source.Id);
+        _savegames.Add(savegame);
+
+        return savegame;
     }
 
     private async Task<IReadOnlyList<SavegameModReference>> ReadSavegameModsAsync(SavegameSourceOption picked)
@@ -420,9 +451,9 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
 
     /// <summary>
     /// Makes a savegame the only source enabled, with its mod folder loaded on standby so the files it
-    /// is found in stay known.
+    /// is found in stay known. Answers with what should then be loaded.
     /// </summary>
-    private Task FocusOnSavegameAsync(SavegameModSource savegame)
+    public ImmutableHashSet<ModSourceId> FocusOnSavegame(SavegameModSource savegame)
     {
         var id = savegame.Source.Id;
         var folder = savegame.ModFolder;
@@ -451,10 +482,13 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
             loaded = loaded.Add(folder);
         }
 
-        return loaded.SetEquals(Loaded)
-            ? _recompose()
-            : _commit(_current() with { Loaded = loaded }, $"Loaded {savegame.Source.Name}");
+        return loaded;
     }
+
+    private Task ShowLoadedAsync(ImmutableHashSet<ModSourceId> loaded, string description)
+        => loaded.SetEquals(Loaded)
+            ? _recompose()
+            : _commit(_current() with { Loaded = loaded }, description);
 
     /// <summary>
     /// Takes away everything a source supplied, including pins whose file only it holds. Undoable, so it
@@ -526,7 +560,7 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
         }
         else if (enabled && _savegames.FirstOrDefault(x => x.Source.Id == id) is SavegameModSource savegame)
         {
-            _ = FocusOnSavegameAsync(savegame);
+            _ = ShowLoadedAsync(FocusOnSavegame(savegame), $"Loaded {savegame.Source.Name}");
         }
         else if (chip.IsRemote)
         {
