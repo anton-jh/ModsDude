@@ -1315,7 +1315,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
             return;
         }
 
-        PinnedFilter = PinnedModFilter.NotInSources;
+        PinnedFilter = focus.Filter;
         _savegameToAdd = savegame.Source.Id;
 
         await ShowLoadedAsync(Sources.FocusOnSavegame(savegame), $"Loaded {savegame.Source.Name}");

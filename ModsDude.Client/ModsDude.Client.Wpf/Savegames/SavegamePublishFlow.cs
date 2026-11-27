@@ -5,6 +5,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Mods;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
+using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Transfers;
@@ -79,7 +80,7 @@ public sealed class SavegamePublishFlow(
                 break;
 
             case SavegamePublishOutcome.ReviewInEditor review:
-                await shellNavigation.GoToAsync(repo.Id, new RepoDestination.ProfileMods(review.ProfileId, new EditorFocus.Savegame(game.Identity, review.Slot)));
+                await shellNavigation.GoToAsync(repo.Id, new RepoDestination.ProfileMods(review.ProfileId, new EditorFocus.Savegame(game.Identity, review.Slot, PinnedModFilter.NotInSources)));
                 break;
 
             case SavegamePublishOutcome.CreateProfile create:
@@ -147,7 +148,7 @@ public sealed class SavegamePublishFlow(
 
         if (created is not null)
         {
-            await shellNavigation.GoToAsync(repo.Id, new RepoDestination.ProfileMods(created.Id, new EditorFocus.Savegame(game.Identity, slot.Ref)));
+            await shellNavigation.GoToAsync(repo.Id, new RepoDestination.ProfileMods(created.Id, new EditorFocus.Savegame(game.Identity, slot.Ref, PinnedModFilter.All)));
         }
     }
 
