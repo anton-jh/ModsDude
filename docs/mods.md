@@ -30,11 +30,38 @@ keeps current. The local half comes from **sources**:
 | Remote | The adapter's remote sources, such as ModHub | Always loaded, on by default |
 | Ad-hoc folders | Folders the user adds for the session | On request |
 | Profiles | Another profile's pins, added as offered versions with their locks | Composed by the editor, no scan |
+| Savegames | The mods a savegame on this machine lists as played with, found in other sources | Composed by the editor, on request |
 | Repo | The repo's registered versions | On by default, no scan |
 
 Scans are cached as one task per source and composed on demand. They start 150 ms after a source is
 switched on, so flicking through the chips doesn't scan everything. Arriving from a drift notice switches
 on every one of the game's mod folders and nothing else (see [Sync](sync.md#drift)).
+
+Profile and savegame chips are lists: they hold no files and carry a list icon. A left row offered by one
+names the list and then where the selected version's file is, such as `My farm → Mods` or
+`Other profile → This repo`.
+
+### Savegame sources
+
+`+ savegame` reads an occupied slot of one of the repo's games through the adapter
+(`ILocalSavegameAdapter.ReadSavegameModsAsync`), and only shows where an adapter lists savegame mods. A
+list that can't be read shows the error modal and adds no chip. `SavegameModSource` then matches each
+listed mod against every version the catalog knows, whatever its chip's state:
+
+- Versions offered: every one the repo holds, a remote source offers, or the save's own mod folder has.
+- Picked by default: the version the save recorded, else the one in its mod folder, else the newest.
+  A version the user picks in the row wins.
+- Not found: listed mods with no such version. The chip counts found/listed and its tooltip names them,
+  with where each found mod's default version comes from.
+
+Turning a savegame chip on turns every other source off and loads its mod folder on standby. The left
+list is then what the save lists and the profile doesn't pin, and **Not in the sources** is what the
+profile pins and the save doesn't list. Savegame chips aren't remembered after the editor closes.
+
+The editor can also open focused on a save (`EditorFocus.Savegame`), from the publish wizard. It does the
+same, and once the profile is read it adds every found mod to the draft as one undoable step. With exactly
+one savegame chip on, the toast saying the profile was saved offers **Publish savegame**, with the profile
+and the slot preselected.
 
 A source folder is never a sync target. The only files removed from sources are rejected copies the user
 chose against in a conflict (outside game folders, to the Recycle Bin once the revision is written) and

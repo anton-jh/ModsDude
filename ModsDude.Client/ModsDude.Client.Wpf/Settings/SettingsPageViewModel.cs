@@ -139,6 +139,7 @@ public partial class SettingsPageViewModel
         _uploadLimit = DescribeLimit(settings.Transfers.UploadBytesPerSecond);
         _closeToTray = settings.Background.CloseToTray;
         _notifyDrift = settings.Notifications.Drift;
+        _notifyDriftOnGameStart = settings.Notifications.DriftOnGameStart;
         _notifyCheckInReminders = settings.Notifications.CheckInReminders;
         _notifyFinishedActions = settings.Notifications.FinishedActions;
         _notifyFriendActivity = settings.Notifications.FriendActivity;
@@ -210,6 +211,9 @@ public partial class SettingsPageViewModel
 
     [ObservableProperty]
     private bool _notifyDrift;
+
+    [ObservableProperty]
+    private bool _notifyDriftOnGameStart;
 
     [ObservableProperty]
     private bool _notifyCheckInReminders;
@@ -339,6 +343,7 @@ public partial class SettingsPageViewModel
 
             settings.Background.CloseToTray = CloseToTray;
             settings.Notifications.Drift = NotifyDrift;
+            settings.Notifications.DriftOnGameStart = NotifyDriftOnGameStart;
             settings.Notifications.CheckInReminders = NotifyCheckInReminders;
             settings.Notifications.FinishedActions = NotifyFinishedActions;
             settings.Notifications.FriendActivity = NotifyFriendActivity;
@@ -930,6 +935,7 @@ public partial class SettingsPageViewModel
             || UploadLimit.Trim() != DescribeLimit(_saved.Transfers.UploadBytesPerSecond)
             || CloseToTray != _saved.Background.CloseToTray
             || NotifyDrift != _saved.Notifications.Drift
+            || NotifyDriftOnGameStart != _saved.Notifications.DriftOnGameStart
             || NotifyCheckInReminders != _saved.Notifications.CheckInReminders
             || NotifyFinishedActions != _saved.Notifications.FinishedActions
             || NotifyFriendActivity != _saved.Notifications.FriendActivity
@@ -1022,6 +1028,8 @@ public partial class SettingsPageViewModel
     partial void OnCloseToTrayChanged(bool value) => OnSettingEdited();
 
     partial void OnNotifyDriftChanged(bool value) => OnSettingEdited();
+
+    partial void OnNotifyDriftOnGameStartChanged(bool value) => OnSettingEdited();
 
     partial void OnNotifyCheckInRemindersChanged(bool value) => OnSettingEdited();
 

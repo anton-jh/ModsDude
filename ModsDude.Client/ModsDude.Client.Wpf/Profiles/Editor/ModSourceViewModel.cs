@@ -34,13 +34,15 @@ public partial class ModSourceViewModel : ObservableObject
 
 
     /// <param name="canUnload">Whether the chip carries a ✕ that unloads what the source supplied.</param>
-    /// <param name="detail">A remote source's state, for the tooltip.</param>
+    /// <param name="detail">A remote source's state, or what a savegame lists, for the tooltip.</param>
+    /// <param name="foundCount">How many of a savegame's listed mods were found, where some were not.</param>
     public ModSourceViewModel(
         ModSourceStatus status,
         Action<ModSourceViewModel, bool> onEnabledChanged,
         bool hasCount = true,
         bool canUnload = false,
-        string? detail = null)
+        string? detail = null,
+        int? foundCount = null)
     {
         _onEnabledChanged = onEnabledChanged;
 
@@ -48,6 +50,7 @@ public partial class ModSourceViewModel : ObservableObject
         Detail = detail;
         Error = status.Error;
         ModCount = status.ModCount;
+        FoundCount = foundCount;
         HasCount = hasCount;
         CanRemove = canUnload;
 
@@ -75,10 +78,14 @@ public partial class ModSourceViewModel : ObservableObject
     /// <summary>Whether this chip is a remote source, whose versions a save downloads.</summary>
     public bool IsRemote => Source.Kind is ModSourceKind.Remote;
 
+    /// <summary>Whether this chip is a list of mods whose files come from other sources: a profile or a savegame.</summary>
+    public bool IsList => Source.Kind is ModSourceKind.Profile or ModSourceKind.Savegame;
+
     public string? Detail { get; }
 
     public string? Error { get; }
     public int ModCount { get; }
+    public int? FoundCount { get; }
     public bool HasCount { get; }
 
     public bool HasFailed => Error is not null;
@@ -87,7 +94,13 @@ public partial class ModSourceViewModel : ObservableObject
     /// The number on the chip, and nothing else - the units are what the chip's own name is for, and
     /// at four chips wide there is no room to spell them twice.
     /// </summary>
-    public string ChipCountText => HasFailed ? "!" : HasCount ? ModCount.ToString("N0") : string.Empty;
+    public string ChipCountText => HasFailed
+        ? "!"
+        : HasCount is false
+            ? string.Empty
+            : FoundCount is int found && found != ModCount
+                ? $"{found:N0}/{ModCount:N0}"
+                : ModCount.ToString("N0");
 
     /// <summary>
     /// The whole of what the chip cannot fit: what kind of thing it is, where it is, and why it is
@@ -103,6 +116,7 @@ public partial class ModSourceViewModel : ObservableObject
                 ModSourceKind.Game => $"Mod folder of this game\n{Path}",
                 ModSourceKind.Downloads => $"Downloads folder\n{Path}",
                 ModSourceKind.Profile => "Another profile in this repo",
+                ModSourceKind.Savegame => $"Savegame on this machine\n{Path}\n\n{Detail}",
                 ModSourceKind.Remote => $"Updates from {Name}, downloaded on save\n{Detail}",
                 _ => $"Temporary source\n{Path}"
             };

@@ -11,6 +11,7 @@ using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Friends;
+using ModsDude.Client.Wpf.Profiles.Editor;
 using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Repos;
 using ModsDude.Client.Wpf.Savegames;
@@ -200,7 +201,9 @@ public sealed class HomeRepoListViewModel : ObservableObject, IDisposable
                 await _navigation.GoToAsync(state.RepoId, new RepoDestination.ConnectGame());
                 break;
             case HomeRepoAction.Review when state.FollowedProfileId is Guid profileId:
-                await _navigation.GoToAsync(state.RepoId, new RepoDestination.ProfileMods(profileId, state.ReviewFilter));
+                await _navigation.GoToAsync(state.RepoId, new RepoDestination.ProfileMods(
+                    profileId,
+                    state.ReviewFilter is PinnedModFilter filter ? new EditorFocus.DriftReview(filter) : null));
                 break;
             case HomeRepoAction.Apply or HomeRepoAction.Update when state.FollowedProfileId is Guid profileId:
                 await ApplyAsync(state.RepoId, profileId, state.FollowedProfileName);

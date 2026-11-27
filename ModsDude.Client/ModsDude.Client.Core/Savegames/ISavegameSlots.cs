@@ -37,6 +37,12 @@ public interface ISavegameSlots
     /// <summary>The number the player knows a slot by, or null for a game that does not number them.</summary>
     int? DescribeSlotNumber(Game game, SavegameSlotRef slot);
 
+    /// <summary>Whether this game's savegames say which mods they were played with.</summary>
+    bool ListsMods(Game game);
+
+    /// <summary>The mods a slot lists as played with. Throws where they cannot be read.</summary>
+    Task<IReadOnlyList<SavegameModReference>> ReadModsAsync(Game game, SavegameSlotRef slot, CancellationToken ct);
+
     /// <summary>
     /// What the adapter says about the save in a slot, in the shape the server stores it. Empty where the
     /// slot cannot be described; a failure here never fails the publish or check-in reading it.

@@ -77,6 +77,15 @@ public sealed class SavegameSlots(
     public int? DescribeSlotNumber(Game game, SavegameSlotRef slot)
         => adapters.TryGet(game) is ILocalSavegameAdapter adapter ? adapter.GetSlotNumber(slot.Slot) : null;
 
+    public bool ListsMods(Game game) => adapters.TryGet(game)?.ListsSavegameMods ?? false;
+
+    public Task<IReadOnlyList<SavegameModReference>> ReadModsAsync(Game game, SavegameSlotRef slot, CancellationToken ct)
+    {
+        var adapter = adapters.Require(game);
+
+        return adapter.ReadSavegameModsAsync(adapter.RequireTarget(game, slot), slot.Slot, ct);
+    }
+
     public async Task<List<SavegameDetailDto>> ReadDetailsAsync(
         ILocalSavegameAdapter adapter, SavegameTarget target, SavegameSlotId slot, CancellationToken ct)
     {

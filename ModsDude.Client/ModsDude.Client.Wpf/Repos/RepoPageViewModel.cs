@@ -334,7 +334,7 @@ public partial class RepoPageViewModel
                 return await TrySelectProfileAsync(profile.ProfileId) is not null;
             case RepoDestination.ProfileMods mods:
                 return await TrySelectProfileAsync(mods.ProfileId) is ProfilePageViewModel modsPage
-                    && modsPage.TrySelectMods(mods.Review);
+                    && modsPage.TrySelectMods(mods.Focus);
             case RepoDestination.ProfileHistory history:
                 return await TrySelectProfileAsync(history.ProfileId) is ProfilePageViewModel historyPage
                     && historyPage.TrySelectHistory(new HistoryArrival(history.Revision, history.CompareWith));

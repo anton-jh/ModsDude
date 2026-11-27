@@ -10,7 +10,10 @@ namespace ModsDude.Client.Core.Models;
 /// match a profile, which means uninstalling from it, and nothing will ever delete, move or
 /// quarantine a file in Downloads or a folder the user pointed at.
 /// </summary>
-public record ModSource(ModSourceId Id, string Name, string Path, ModSourceKind Kind);
+public record ModSource(ModSourceId Id, string Name, string Path, ModSourceKind Kind)
+{
+    public static ModSource ThisRepo { get; } = new(ModSourceId.Repo, "This repo", "All mods in this repo", ModSourceKind.Repo);
+}
 
 public enum ModSourceKind
 {
@@ -68,6 +71,14 @@ public enum ModSourceKind
     /// a save imports them.
     /// </summary>
     Remote,
+
+    /// <summary>
+    /// A savegame on this machine, as the list of mods it was played with. Holds no files: each
+    /// listed mod is found in the save's own mod folder, the repo or a remote source, whether or not
+    /// their chips are on. Composed by the profile editor, added by picking a save and gone when the
+    /// page is.
+    /// </summary>
+    Savegame,
 }
 
 /// <summary>
@@ -124,6 +135,8 @@ public readonly record struct ModSourceId
 
     /// <summary>One of the repo adapter's remote sources, keyed as the adapter keys it.</summary>
     public static ModSourceId ForRemote(string key) => new($"remote:{key}");
+
+    public static ModSourceId ForSavegame(GameIdentity game, SavegameSlotRef slot) => new($"savegame:{game}:{slot}");
 
     public static ModSourceId Parse(string s) => string.IsNullOrWhiteSpace(s)
         ? throw new FormatException("A mod source id cannot be empty.")

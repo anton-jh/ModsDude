@@ -172,11 +172,20 @@ icon exists; a hidden window with no icon would be unreachable. In the tray:
 
 - `DriftBackstop` keeps drift checks going.
 - `PlaySessionWatch` notices a game exiting.
+- `PlaySessionWatcher` notices a game starting (`GameRunningMonitor.Poll`, every 10 seconds; a game
+  already running when the app starts, or connected while it runs, is not a start).
 
-Windows toasts are sent per kind, each switchable in Settings: drift, check-in reminders, finished
-actions, friend activity. Critical and warning notices become one digest toast, replaced whenever a new
-one appears, and only while the window isn't in front. Clicking a toast never applies anything; it opens
-the app.
+Windows toasts are sent per kind, each switchable in Settings: drift, drift on game start, check-in
+reminders, finished actions, friend activity. All of them show only while the window isn't in front.
+
+- Drift: critical and warning notices become one digest toast, replaced whenever a new one appears.
+  Each notice is announced once per run.
+- Drift on game start: the server's changes are read (`ChangeWatcher.PollNowAsync`) and a full drift
+  check runs, then one toast names every critical and warning notice about that game, announced before
+  or not. The digest says nothing about that game meanwhile, and doesn't repeat what the reminder
+  named. Unchecked-in play in the running game is left to the check-in reminder.
+
+Clicking a toast never applies anything; it opens the app, on the notice where the toast names one.
 
 ### Offline state and reconnecting
 

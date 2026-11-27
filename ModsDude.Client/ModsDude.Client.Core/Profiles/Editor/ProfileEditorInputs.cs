@@ -12,6 +12,9 @@ public sealed record ProfileEditorInputs(ProfileDraft Draft, ProfileEditorCatalo
     /// <summary>The enabled profile sources.</summary>
     public IReadOnlyList<ProfileModSource> ProfileSources { get; init; } = [];
 
+    /// <summary>The enabled savegame sources.</summary>
+    public IReadOnlyList<SavegameModSource> SavegameSources { get; init; } = [];
+
     /// <summary>The version each left row's selector was set to, where it was.</summary>
     public IReadOnlyDictionary<ModKey, ModVersionKey> AvailableChoices { get; init; } = new Dictionary<ModKey, ModVersionKey>();
 
@@ -36,6 +39,7 @@ public readonly record struct SavedPinDate(ModVersionKey Version, DateTimeOffset
 public sealed class ProfileModSource
 {
     private readonly HashSet<ModVersionIdentity> _locked;
+    private readonly HashSet<ModKey> _mods;
 
 
     public ProfileModSource(Guid profileId, ModSource source, IReadOnlyList<ProfileModPin> pins)
@@ -45,6 +49,7 @@ public sealed class ProfileModSource
         Pins = pins;
 
         _locked = [.. pins.Where(x => x.Lock.ByProfile).Select(x => new ModVersionIdentity(x.ModId, x.VersionId))];
+        _mods = [.. pins.Select(x => x.ModId)];
     }
 
 
@@ -53,6 +58,8 @@ public sealed class ProfileModSource
     public IReadOnlyList<ProfileModPin> Pins { get; }
 
     public bool Locks(ModVersionIdentity identity) => _locked.Contains(identity);
+
+    public bool Holds(ModKey modId) => _mods.Contains(modId);
 }
 
 
@@ -83,6 +90,6 @@ public enum PinnedModFilter
 
     Locked,
 
-    /// <summary>Pinned, and no enabled source offers any version of it.</summary>
+    /// <summary>Pinned, and no enabled source offers or lists any version of it.</summary>
     NotInSources
 }

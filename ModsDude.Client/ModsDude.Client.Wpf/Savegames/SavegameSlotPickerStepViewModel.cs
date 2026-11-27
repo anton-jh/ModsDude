@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using ModsDude.Client.Core.Models;
 using ModsDude.Client.Wpf.Shell.Modals;
 using System.Collections.ObjectModel;
 
@@ -23,7 +24,8 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// </remarks>
 public partial class SavegameSlotPickerStepViewModel : WizardStepViewModel
 {
-    public SavegameSlotPickerStepViewModel(string repoName, IReadOnlyList<SavegameSlotOptionViewModel> slots)
+    /// <param name="preselect">The slot to open on, where it is listed. Otherwise the first.</param>
+    public SavegameSlotPickerStepViewModel(string repoName, IReadOnlyList<SavegameSlotOptionViewModel> slots, SavegameSlotRef? preselect = null)
     {
         RepoName = repoName;
         Slots = [.. slots];
@@ -33,7 +35,8 @@ public partial class SavegameSlotPickerStepViewModel : WizardStepViewModel
         // lists make, so the three cannot decide differently about the same slots.
         SlotGrouping.Apply(Slots, slots.Any(x => x.TargetName is not null));
 
-        _selectedSlot = Slots.FirstOrDefault();
+        _selectedSlot = Slots.FirstOrDefault(x => preselect is SavegameSlotRef wanted && x.Ref.Addresses(wanted))
+            ?? Slots.FirstOrDefault();
 
         Choices = [new WizardChoice("Select") { IsDefault = true, EnabledWhen = () => SelectedSlot is not null }];
     }

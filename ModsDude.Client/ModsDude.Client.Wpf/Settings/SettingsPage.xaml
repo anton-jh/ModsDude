@@ -237,6 +237,10 @@
                                               IsChecked="{Binding NotifyDrift, Mode=TwoWay}" />
 
                                     <CheckBox Margin="0 12 0 0"
+                                              Content="Mod folders and savegames that need attention, when a game starts"
+                                              IsChecked="{Binding NotifyDriftOnGameStart, Mode=TwoWay}" />
+
+                                    <CheckBox Margin="0 12 0 0"
                                               Content="Reminders to check in savegames"
                                               IsChecked="{Binding NotifyCheckInReminders, Mode=TwoWay}" />
 

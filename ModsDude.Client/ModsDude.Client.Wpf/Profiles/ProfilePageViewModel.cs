@@ -56,12 +56,12 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
     private readonly MenuItemViewModel _modsMenuItem;
     private readonly MenuItemViewModel _historyMenuItem;
 
-    /// <summary>Set by a drift deep link, consumed by the next page the Mods entry builds.</summary>
-    private PinnedModFilter? _reviewOnce;
+    /// <summary>Set by a deep link into the Mods entry, consumed by the next page it builds.</summary>
+    private EditorFocus? _focusOnce;
 
     /// <summary>
     /// Where a deep link into the history asked to arrive. Same one-shot shape as
-    /// <see cref="_reviewOnce"/>, and for the same reason: it describes an arrival, not a
+    /// <see cref="_focusOnce"/>, and for the same reason: it describes an arrival, not a
     /// standing preference.
     /// </summary>
     private HistoryArrival? _historyArrivalOnce;
@@ -119,10 +119,10 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
                 return profileModsPageViewModelFactory.Create(repo, profile);
             }
 
-            var review = _reviewOnce;
-            _reviewOnce = null;
+            var focus = _focusOnce;
+            _focusOnce = null;
 
-            return profileModsEditorPageViewModelFactory.Create(repo, profile, review);
+            return profileModsEditorPageViewModelFactory.Create(repo, profile, focus);
         }).WithIcon(MenuIcons.Mods);
 
         // Open to a guest, like the read-only mod list and for the same reason: somebody who syncs
@@ -502,27 +502,26 @@ public partial class ProfilePageViewModel : PageViewModel, INavigationHost, IDis
     }
 
 
-    /// <summary>Selects the Mods sub-page, for a deep link from the drift notice.</summary>
-    /// <param name="review">
-    /// Opens the editor reviewing the game's mod folders with this filter. Sources are off by default
-    /// because opening a page must not read a disk, but arriving from a drift notice <em>is</em> the
-    /// user asking about those folders.
+    /// <summary>Selects the Mods sub-page, for a deep link from a drift notice or a savegame.</summary>
+    /// <param name="focus">
+    /// What the editor opens looking at. Sources are off by default because opening a page must not
+    /// read a disk, but arriving from such a link <em>is</em> the user asking about those files.
     /// </param>
-    public bool TrySelectMods(PinnedModFilter? review = null)
+    public bool TrySelectMods(EditorFocus? focus = null)
     {
         // Read and cleared by the menu item's factory, so it applies to the page this call opens and
         // not to the next one somebody reaches through the tabs.
-        _reviewOnce = review;
+        _focusOnce = focus;
 
         if (ReferenceEquals(NavManager.Current, _modsMenuItem) is false)
         {
             NavManager.Selected = _modsMenuItem;
         }
-        else if (review is PinnedModFilter filter)
+        else if (focus is not null)
         {
             // Already open, so selecting it again constructs nothing and the factory never runs.
-            (NavManager.CurrentPage as ProfileModsEditorPageViewModel)?.Review(filter);
-            _reviewOnce = null;
+            (NavManager.CurrentPage as ProfileModsEditorPageViewModel)?.Focus(focus);
+            _focusOnce = null;
         }
 
         return ReferenceEquals(NavManager.Current, _modsMenuItem);

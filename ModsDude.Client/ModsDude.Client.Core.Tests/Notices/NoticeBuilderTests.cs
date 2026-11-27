@@ -48,8 +48,21 @@ public class NoticeBuilderTests
 
         var notice = Assert.Single(notices);
 
-        Assert.Equal(NoticeSeverity.Pending, notice.Severity);
         Assert.Equal(NoticeActionKind.Reapply, notice.Actions.Single(x => x.IsPrimary).Kind);
+    }
+
+    /// <summary>
+    /// Each of these is a game that would be played on mods that may not be its profile's.
+    /// </summary>
+    [Theory]
+    [InlineData(DriftStatus.NotApplied)]
+    [InlineData(DriftStatus.FolderRepointed)]
+    [InlineData(DriftStatus.NeverSynced)]
+    public void A_folder_not_on_its_profile_is_a_warning(DriftStatus status)
+    {
+        var notice = Assert.Single(Build(Entry(DriftReport.For(status))));
+
+        Assert.Equal(NoticeSeverity.Warning, notice.Severity);
     }
 
     /// <summary>
@@ -176,7 +189,7 @@ public class NoticeBuilderTests
     {
         var notice = Assert.Single(Build(Behind(applied: 3, current: 6)));
 
-        Assert.Equal(NoticeSeverity.Pending, notice.Severity);
+        Assert.Equal(NoticeSeverity.Warning, notice.Severity);
         Assert.Equal("'Farming Simulator 25' is behind 'Season 4' in the 'mods' folder", notice.Headline);
         Assert.Equal([new NoticeFact("Applied", "Revision 3"), new NoticeFact("Current", "Revision 6")], notice.Facts);
         Assert.Null(notice.Body);

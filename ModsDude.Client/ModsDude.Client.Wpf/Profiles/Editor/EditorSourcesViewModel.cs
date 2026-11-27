@@ -6,6 +6,7 @@ using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.RemoteSources;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -17,7 +18,7 @@ namespace ModsDude.Client.Wpf.Profiles.Editor;
 
 /// <summary>
 /// Where the profile mod editor's versions come from: the repo, the game's folders, the game's remote
-/// sources, Downloads, folders added for the session, and other profiles - as a row of chips.
+/// sources, Downloads, folders added for the session, other profiles and savegames - as a row of chips.
 /// </summary>
 /// <remarks>
 /// Which sources are loaded is part of the editor's undo history, so it is read from the page and
@@ -26,8 +27,10 @@ namespace ModsDude.Client.Wpf.Profiles.Editor;
 /// </remarks>
 public sealed partial class EditorSourcesViewModel : ObservableObject
 {
+    private readonly Repo _repo;
     private readonly ModCatalog _catalog;
     private readonly OtherProfilesReader _otherProfiles;
+    private readonly ISavegameSlots _savegameSlots;
     private readonly IFilePickerService _filePickerService;
     private readonly IModalService _modalService;
     private readonly IErrorReporter _errorReporter;
@@ -37,16 +40,19 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
     private readonly CancellationToken _cancellation;
 
     private readonly HashSet<ModSourceId> _standby = [];
-    private readonly Dictionary<ModSourceId, ProfileModSource> _profiles = [];
+    private readonly List<ProfileModSource> _profiles = [];
+    private readonly List<SavegameModSource> _savegames = [];
     private readonly IReadOnlyList<RemoteSourceLookup> _remote;
 
     private ProfileEditorCatalog? _view;
 
 
     public EditorSourcesViewModel(
+        Repo repo,
         ModCatalog catalog,
         IReadOnlyList<IRemoteModSource> remoteSources,
         OtherProfilesReader otherProfiles,
+        ISavegameSlots savegameSlots,
         IFilePickerService filePickerService,
         IModalService modalService,
         IErrorReporter errorReporter,
@@ -55,8 +61,10 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
         Func<Task> recompose,
         CancellationToken cancellation)
     {
+        _repo = repo;
         _catalog = catalog;
         _otherProfiles = otherProfiles;
+        _savegameSlots = savegameSlots;
         _filePickerService = filePickerService;
         _modalService = modalService;
         _errorReporter = errorReporter;
@@ -92,7 +100,12 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
 
     private bool HasEnabledFolders => _catalog.GetSources().Any(x => IsEnabled(x.Id));
 
-    public IReadOnlyList<ProfileModSource> EnabledProfiles => [.. _profiles.Values.Where(x => IsEnabled(x.Source.Id))];
+    public IReadOnlyList<ProfileModSource> EnabledProfiles => [.. _profiles.Where(x => IsEnabled(x.Source.Id))];
+
+    public IReadOnlyList<SavegameModSource> EnabledSavegames => [.. _savegames.Where(x => IsEnabled(x.Source.Id))];
+
+    /// <summary>Whether any of this repo's games on this machine has savegames that list their mods.</summary>
+    public bool CanAddSavegame => _repo.Games.Any(_savegameSlots.ListsMods);
 
     /// <summary>What every remote source has answered, in the adapter's order.</summary>
     public IReadOnlyList<RemoteSourceAnswers> RemoteAnswers()
@@ -117,7 +130,11 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
             _catalog.SetState(source.Id, StateOf(source.Id));
         }
 
-        HasEnabledSources = IncludeRegistered || HasEnabledRemote || HasEnabledFolders || _profiles.Keys.Any(IsEnabled);
+        HasEnabledSources = IncludeRegistered
+            || HasEnabledRemote
+            || HasEnabledFolders
+            || _profiles.Any(x => IsEnabled(x.Source.Id))
+            || _savegames.Any(x => IsEnabled(x.Source.Id));
     }
 
     /// <summary>Asks every remote source about whichever of <paramref name="mods"/> it has not been asked about.</summary>
@@ -137,7 +154,7 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
 
         Chips.Add(new ModSourceViewModel(
             new ModSourceStatus(
-                new ModSource(ModSourceId.Repo, "This repo", "All mods in this repo", ModSourceKind.Repo),
+                ModSource.ThisRepo,
                 IncludeRegistered,
                 view.Visible.Count(x => x.IsOnServer),
                 null),
@@ -165,13 +182,50 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
 
         AddFolderChips(folders.Where(x => x.Kind is not ModSourceKind.Game), scanned);
 
-        foreach (var profile in _profiles.Values.Where(x => Loaded.Contains(x.Source.Id)))
+        foreach (var profile in _profiles.Where(x => Loaded.Contains(x.Source.Id)))
         {
             Chips.Add(new ModSourceViewModel(
                 new ModSourceStatus(profile.Source, IsEnabled(profile.Source.Id), profile.Pins.Count, null),
                 OnChipToggled,
                 canUnload: true));
         }
+
+        foreach (var savegame in _savegames.Where(x => Loaded.Contains(x.Source.Id)))
+        {
+            var summary = savegame.Summarize(view);
+
+            Chips.Add(new ModSourceViewModel(
+                new ModSourceStatus(savegame.Source, IsEnabled(savegame.Source.Id), summary.Listed, null),
+                OnChipToggled,
+                canUnload: true,
+                detail: Describe(summary),
+                foundCount: summary.Listed - summary.NotFound.Count));
+        }
+
+        OnPropertyChanged(nameof(CanAddSavegame));
+    }
+
+    /// <summary>The savegame chip's tooltip: what it lists, where each found mod comes from, and what was not found.</summary>
+    private static string Describe(SavegameSourceSummary summary)
+    {
+        const int namesShown = 20;
+
+        var lines = new List<string> { $"Listed: {summary.Listed:N0}" };
+
+        lines.AddRange(summary.ByLocation.Select(x => $"{x.Location}: {x.Count:N0}"));
+
+        if (summary.NotFound.Count > 0)
+        {
+            lines.Add($"Not found: {summary.NotFound.Count:N0}");
+            lines.AddRange(summary.NotFound.Take(namesShown).Select(x => $"  {x.Value}"));
+
+            if (summary.NotFound.Count > namesShown)
+            {
+                lines.Add($"  and {summary.NotFound.Count - namesShown:N0} more");
+            }
+        }
+
+        return string.Join("\n", lines);
     }
 
     private void AddFolderChips(IEnumerable<ModSource> sources, IReadOnlyDictionary<ModSourceId, ModSourceStatus> scanned)
@@ -283,10 +337,11 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
 
             var id = ModSourceId.ForProfile(picked.Id);
 
-            _profiles[id] = new ProfileModSource(
+            _profiles.RemoveAll(x => x.Source.Id == id);
+            _profiles.Add(new ProfileModSource(
                 picked.Id,
                 new ModSource(id, picked.Name, "Another profile in this repo.", ModSourceKind.Profile),
-                await _otherProfiles.ReadPinsAsync(picked.Id, _cancellation));
+                await _otherProfiles.ReadPinsAsync(picked.Id, _cancellation)));
 
             await LoadAsync(id, picked.Name);
         }
@@ -298,6 +353,142 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
             await _errorReporter.ShowAsync(exception, "reading another profile's mod list as a source");
         }
     }
+
+    /// <summary>
+    /// Reads a savegame on this machine as a source, and makes it the only one enabled: the left list
+    /// is then what the save lists and the profile does not pin, and <em>Not in the sources</em> is what
+    /// the profile pins and the save does not list.
+    /// </summary>
+    [RelayCommand]
+    private async Task AddSavegame()
+    {
+        try
+        {
+            var games = _repo.Games.Where(_savegameSlots.ListsMods).ToList();
+            var options = new List<SavegameSourceOption>();
+
+            foreach (var game in games)
+            {
+                foreach (var slot in await _savegameSlots.GetSlotsAsync(game, _cancellation))
+                {
+                    if (slot.IsOccupied && Loaded.Contains(ModSourceId.ForSavegame(game.Identity, slot.Ref)) is false)
+                    {
+                        options.Add(new SavegameSourceOption(game, slot, games.Count > 1));
+                    }
+                }
+            }
+
+            var modal = new PickSavegameSourceModalViewModel(options);
+
+            await _modalService.Show(modal);
+
+            if (modal.Result is SavegameSourceOption picked)
+            {
+                await ShowLoadedAsync(FocusOnSavegame(await ReadSavegameAsync(picked)), $"Loaded {picked.Label}");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "reading a savegame's mod list as a source");
+        }
+    }
+
+    /// <summary>Reads the savegame in <paramref name="slot"/> as a source, for an editor opened to look at that save.</summary>
+    /// <returns>The source, or null where it could not be read, which has been reported.</returns>
+    public async Task<SavegameModSource?> ReadSavegameAsync(GameIdentity game, SavegameSlotRef slot)
+    {
+        try
+        {
+            var found = _repo.Games.FirstOrDefault(x => x.Identity == game)
+                ?? throw new UserFriendlyException("That game is not set up on this machine");
+
+            var occupied = (await _savegameSlots.GetSlotsAsync(found, _cancellation))
+                .FirstOrDefault(x => x.IsOccupied && x.Ref.Addresses(slot))
+                ?? throw new UserFriendlyException("That savegame is no longer there");
+
+            return await ReadSavegameAsync(new SavegameSourceOption(found, occupied, nameGame: false));
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception exception)
+        {
+            await _errorReporter.ShowAsync(exception, "reading a savegame's mod list as a source");
+
+            return null;
+        }
+    }
+
+    private async Task<SavegameModSource> ReadSavegameAsync(SavegameSourceOption picked)
+    {
+        var savegame = new SavegameModSource(
+            new ModSource(ModSourceId.ForSavegame(picked.Game.Identity, picked.Slot.Ref), picked.Label, picked.ToolTip, ModSourceKind.Savegame),
+            picked.Game.Identity,
+            picked.Slot.Ref,
+            await ReadSavegameModsAsync(picked));
+
+        _savegames.RemoveAll(x => x.Source.Id == savegame.Source.Id);
+        _savegames.Add(savegame);
+
+        return savegame;
+    }
+
+    private async Task<IReadOnlyList<SavegameModReference>> ReadSavegameModsAsync(SavegameSourceOption picked)
+    {
+        try
+        {
+            return await _savegameSlots.ReadModsAsync(picked.Game, picked.Slot.Ref, _cancellation);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            throw new UserFriendlyException($"Could not read the mods of {picked.Label}", inner: exception);
+        }
+    }
+
+    /// <summary>
+    /// Makes a savegame the only source enabled, with its mod folder loaded on standby so the files it
+    /// is found in stay known. Answers with what should then be loaded.
+    /// </summary>
+    public ImmutableHashSet<ModSourceId> FocusOnSavegame(SavegameModSource savegame)
+    {
+        var id = savegame.Source.Id;
+        var folder = savegame.ModFolder;
+
+        foreach (var other in Loaded.Remove(id))
+        {
+            _standby.Add(other);
+        }
+
+        foreach (var lookup in _remote)
+        {
+            _standby.Add(lookup.Id);
+        }
+
+        IncludeRegistered = false;
+
+        _standby.Remove(id);
+
+        var loaded = Loaded.Add(id);
+
+        if (loaded.Contains(folder) is false && _catalog.GetSources().Any(x => x.Id == folder))
+        {
+            _standby.Add(folder);
+            _catalog.Rescan(folder);
+
+            loaded = loaded.Add(folder);
+        }
+
+        return loaded;
+    }
+
+    private Task ShowLoadedAsync(ImmutableHashSet<ModSourceId> loaded, string description)
+        => loaded.SetEquals(Loaded)
+            ? _recompose()
+            : _commit(_current() with { Loaded = loaded }, description);
 
     /// <summary>
     /// Takes away everything a source supplied, including pins whose file only it holds. Undoable, so it
@@ -366,6 +557,10 @@ public sealed partial class EditorSourcesViewModel : ObservableObject
         {
             IncludeRegistered = enabled;
             _ = _recompose();
+        }
+        else if (enabled && _savegames.FirstOrDefault(x => x.Source.Id == id) is SavegameModSource savegame)
+        {
+            _ = ShowLoadedAsync(FocusOnSavegame(savegame), $"Loaded {savegame.Source.Name}");
         }
         else if (chip.IsRemote)
         {

@@ -1,10 +1,13 @@
 using Microsoft.Extensions.Logging;
 using ModsDude.Client.Core.Activity;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.GameProcesses;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sessions;
 using ModsDude.Client.Core.Sync;
+using ModsDude.Client.Wpf.Shell;
+using ModsDude.Client.Wpf.Shell.Tray;
 using System.Windows.Threading;
 
 namespace ModsDude.Client.Wpf.Games;
@@ -12,7 +15,8 @@ namespace ModsDude.Client.Wpf.Games;
 /// <summary>
 /// Looks at which games are running every few seconds, then lets everything that depends on it act:
 /// <see cref="PlaySessionWatch"/> asks for a drift check when a game closes with a checked-out
-/// savegame played in it - so the notice is current by the time somebody clicks the reminder - and
+/// savegame played in it - so the notice is current by the time somebody clicks the reminder - a game
+/// that starts gets everything about it read again and a reminder of what is wrong with it, and
 /// <see cref="PresenceReporter"/> tells friends what is being played.
 /// </summary>
 /// <remarks>
@@ -29,6 +33,8 @@ public sealed class PlaySessionWatcher(
     IPlaySessionWatch watch,
     IPresenceReporter presence,
     IDriftMonitor monitor,
+    IChangeWatcher changes,
+    IToastNotifier toasts,
     IRepoStore repoStore,
     ISessionWork session,
     ILogger<PlaySessionWatcher> logger)
@@ -78,13 +84,19 @@ public sealed class PlaySessionWatcher(
 
         try
         {
-            runningGames.Poll();
+            var started = runningGames.Poll();
 
             // The watch raises its reminder before this returns, so the drift check below cannot put
             // the same notice up as news first.
             if ((await watch.PollAsync(stop.Token)).Count > 0)
             {
                 await monitor.CheckAsync(DriftCheckReason.Explicit);
+            }
+
+            // After the watch, which measures play from the moment it first sees the game running.
+            if (started.Count > 0)
+            {
+                await RemindOnStartAsync(started, stop.Token);
             }
 
             await presence.ReportAsync(stop.Token);
@@ -103,5 +115,35 @@ public sealed class PlaySessionWatcher(
         }
 
         timer.Start();
+    }
+
+    /// <summary>
+    /// Reads what changed on the server and checks every folder and held savegame, so the reminder
+    /// speaks from what is true as the game starts rather than from the last scheduled look.
+    /// </summary>
+    private async Task RemindOnStartAsync(IReadOnlyList<GameIdentity> started, CancellationToken ct)
+    {
+        toasts.BeginStart(started);
+
+        try
+        {
+            try
+            {
+                await changes.PollNowAsync(ct);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // The check below still reads every folder; what the server said last stands for the rest.
+                logger.LogInformation(exception, "Could not read the server's changes as {Games} started.", string.Join(", ", started));
+            }
+
+            await monitor.CheckAsync(DriftCheckReason.Explicit);
+
+            toasts.RemindOnStart(started);
+        }
+        finally
+        {
+            toasts.EndStart(started);
+        }
     }
 }

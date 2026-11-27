@@ -10,7 +10,8 @@ namespace ModsDude.Client.Core.Profiles.Editor;
 /// <para>
 /// <b>The left list</b> is every mod an enabled source offers that the profile neither pins nor
 /// held when it was read. Each row offers the versions the sources offer, and points at the one its
-/// selector was set to, or else the newest one not dismissed, or else the newest.
+/// selector was set to, or else the one a savegame source prefers, or else the newest one not
+/// dismissed, or else the newest.
 /// </para>
 /// <para>
 /// <b>The right list</b> is the draft: every pin, plus every saved pin the draft has taken out.
@@ -53,9 +54,10 @@ public sealed record ProfileEditorState
 
     public static ProfileEditorState Compute(ProfileEditorInputs inputs)
     {
-        var offered = OfferedVersions(inputs);
+        var savegameMatches = inputs.SavegameSources.Select(x => x.Match(inputs.Catalog)).ToList();
+        var offered = OfferedVersions(inputs, savegameMatches);
 
-        var available = AvailableRows(inputs, offered);
+        var available = AvailableRows(inputs, offered, Preferred(savegameMatches));
         var (pinned, updates) = PinnedRows(inputs, offered);
 
         var availableShown = available
@@ -83,10 +85,12 @@ public sealed record ProfileEditorState
 
 
     /// <summary>
-    /// What the enabled sources offer, by mod: what they hold, what the enabled remote sources offer, and
-    /// what the enabled profiles pin.
+    /// What the enabled sources offer, by mod: what they hold, what the enabled remote sources offer,
+    /// what the enabled profiles pin, and the versions found of what the enabled savegames list.
     /// </summary>
-    private static SortedDictionary<ModKey, HashSet<ModVersionKey>> OfferedVersions(ProfileEditorInputs inputs)
+    private static SortedDictionary<ModKey, HashSet<ModVersionKey>> OfferedVersions(
+        ProfileEditorInputs inputs,
+        IReadOnlyList<SavegameModMatches> savegameMatches)
     {
         var offered = new SortedDictionary<ModKey, HashSet<ModVersionKey>>(_byModId);
 
@@ -113,12 +117,37 @@ public sealed record ProfileEditorState
             Offer(pin.ModId, pin.VersionId);
         }
 
+        foreach (var match in savegameMatches.SelectMany(x => x.Found))
+        {
+            foreach (var version in match.Versions)
+            {
+                Offer(match.ModId, version);
+            }
+        }
+
         return offered;
+    }
+
+    /// <summary>The version each savegame source prefers, by mod. The first source to prefer one wins.</summary>
+    private static Dictionary<ModKey, ModVersionKey> Preferred(IReadOnlyList<SavegameModMatches> savegameMatches)
+    {
+        var preferred = new Dictionary<ModKey, ModVersionKey>();
+
+        foreach (var match in savegameMatches.SelectMany(x => x.Found))
+        {
+            if (match.Preferred is ModVersionKey version)
+            {
+                preferred.TryAdd(match.ModId, version);
+            }
+        }
+
+        return preferred;
     }
 
     private static List<AvailableModRow> AvailableRows(
         ProfileEditorInputs inputs,
-        SortedDictionary<ModKey, HashSet<ModVersionKey>> offered)
+        SortedDictionary<ModKey, HashSet<ModVersionKey>> offered,
+        IReadOnlyDictionary<ModKey, ModVersionKey> preferred)
     {
         var catalog = inputs.Catalog;
         var draft = inputs.Draft;
@@ -135,10 +164,10 @@ public sealed record ProfileEditorState
             var set = catalog.Index.GetValueOrDefault(modId);
             var ordered = Ordered(catalog, modId, x => versionIds.Contains(x.VersionId), versionIds);
 
-            var selected = inputs.AvailableChoices.TryGetValue(modId, out var choice)
-                    && ordered.FirstOrDefault(x => x.VersionId == choice) is CatalogModVersion chosen
-                ? chosen
-                : ordered.LastOrDefault(x => draft.Dismissed.Contains(x.Identity) is false) ?? ordered[^1];
+            var selected = Pick(inputs.AvailableChoices, modId, ordered)
+                ?? Pick(preferred, modId, ordered)
+                ?? ordered.LastOrDefault(x => draft.Dismissed.Contains(x.Identity) is false)
+                ?? ordered[^1];
 
             var status = selected.IsOnServer
                 ? AvailableModStatus.InRepo
@@ -156,7 +185,7 @@ public sealed record ProfileEditorState
                 set?.CouldNotCompareToNewest(selected.VersionId) ?? false,
                 draft.Ignored.Contains(modId),
                 inputs.ProfileSources.Any(x => x.Locks(selected.Identity)),
-                DescribeSources(selected, nameSources),
+                DescribeSources(selected, nameSources, ListedBy(inputs, modId)),
                 inputs.AvailableSort.Caption(key, inputs.Now, ModListDateWording.ImportedToRepo),
                 inputs.AvailableSort.Describe(key, ModListDateWording.ImportedToRepo)));
         }
@@ -224,7 +253,7 @@ public sealed record ProfileEditorState
                 ProfileModTouches.Describe(saved, pin),
                 pin is null ? null : updatesByMod.GetValueOrDefault(modId),
                 unsettled,
-                offered.ContainsKey(modId) is false,
+                offered.ContainsKey(modId) is false && inputs.SavegameSources.Any(x => x.Lists(modId)) is false,
                 added,
                 inputs.PinnedSort.Caption(key, inputs.Now, ModListDateWording.AddedToProfile),
                 inputs.PinnedSort.Describe(key, ModListDateWording.AddedToProfile)));
@@ -260,21 +289,47 @@ public sealed record ProfileEditorState
         return ordered;
     }
 
+    private static CatalogModVersion? Pick(
+        IReadOnlyDictionary<ModKey, ModVersionKey> choices,
+        ModKey modId,
+        List<CatalogModVersion> ordered)
+        => choices.TryGetValue(modId, out var choice) ? ordered.FirstOrDefault(x => x.VersionId == choice) : null;
+
+    /// <summary>The enabled profile and savegame sources that list the mod, by name, in the order they were added.</summary>
+    private static List<string> ListedBy(ProfileEditorInputs inputs, ModKey modId)
+        => [.. inputs.ProfileSources.Where(x => x.Holds(modId)).Select(x => x.Source.Name),
+            .. inputs.SavegameSources.Where(x => x.Lists(modId)).Select(x => x.Source.Name)];
+
     /// <summary>
-    /// The folders a version was found in, where more than one is enabled, or the remote source that
-    /// offers it.
+    /// Where a mod listed by a profile or savegame source has its file, after the sources listing it.
+    /// Otherwise the folders a version was found in, where more than one source is enabled, or the
+    /// remote source that offers it.
     /// </summary>
-    private static string? DescribeSources(CatalogModVersion version, bool nameFolders)
+    private static string? DescribeSources(CatalogModVersion version, bool nameFolders, IReadOnlyList<string> listedBy)
     {
+        if (listedBy.Count > 0)
+        {
+            return $"{string.Join(", ", listedBy)} → {Location(version)}";
+        }
+
         if (version.Download is RemoteOffer offer)
         {
             return offer.SourceName;
         }
 
-        return nameFolders && version.FoundIn.Count > 0
-            ? string.Join(", ", version.FoundIn.Select(x => x.Source.Name).Distinct())
-            : null;
+        return nameFolders && version.FoundIn.Count > 0 ? Folders(version) : null;
     }
+
+    /// <summary>Where a version's file comes from: the remote source offering it, the folders holding it, or the repo.</summary>
+    internal static string Location(CatalogModVersion version) => version switch
+    {
+        { Download: RemoteOffer offer } => offer.SourceName,
+        { FoundIn.Count: > 0 } => Folders(version),
+        _ => ModSource.ThisRepo.Name
+    };
+
+    private static string Folders(CatalogModVersion version)
+        => string.Join(", ", version.FoundIn.Select(x => x.Source.Name).Distinct());
 
     private static List<ProfileModVersionOption> Options(ModVersionSet? set, List<CatalogModVersion> ordered, ProfileDraft draft)
         => [.. Enumerable.Reverse(ordered).Select(x => new ProfileModVersionOption(

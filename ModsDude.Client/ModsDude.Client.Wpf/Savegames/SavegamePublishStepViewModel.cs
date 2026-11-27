@@ -30,6 +30,11 @@ public sealed record SavegamePublishOption(
 {
     public static SavegamePublishOption NoModList { get; } = new(null, "No profile", null, false);
 
+    /// <summary>Publishes nothing yet: makes a profile of the savegame's mods, to publish with once it is saved.</summary>
+    public static SavegamePublishOption NewFromSavegame { get; } = new(null, "New profile from this savegame", null, false) { CreatesProfile = true };
+
+    public bool CreatesProfile { get; private init; }
+
 
     /// <summary>What the publish sends, with the pair kept together or absent together.</summary>
     public SavegamePublishTarget? ToTarget()
@@ -121,6 +126,9 @@ public partial class SavegamePublishStepViewModel : WizardStepViewModel
     [NotifyPropertyChangedFor(nameof(HasRevisionText))]
     [NotifyPropertyChangedFor(nameof(MismatchNotice))]
     [NotifyPropertyChangedFor(nameof(HasMismatchNotice))]
+    [NotifyPropertyChangedFor(nameof(Publishes))]
+    [NotifyPropertyChangedFor(nameof(ConfirmLabel))]
+    [NotifyPropertyChangedFor(nameof(Consequence))]
     private SavegamePublishOption? _selectedProfile;
 
     /// <summary>Unticked by default, as on check-in.</summary>
@@ -142,9 +150,13 @@ public partial class SavegamePublishStepViewModel : WizardStepViewModel
     /// so nothing knows which mods were in the folder while this savegame was played, and no arrangement of
     /// this step recovers it. Every snapshot after this one is observed.
     /// </remarks>
+    /// <summary>Whether confirming publishes, rather than making a profile first.</summary>
+    public bool Publishes => SelectedProfile is not { CreatesProfile: true };
+
     public string? RevisionText => SelectedProfile switch
     {
         null => null,
+        { CreatesProfile: true } => "Opens the new profile with this savegame's mods added. Publish once it is saved.",
         { DeclaredRevision: int revision } profile =>
             $"Recorded as played on {profile.Name} revision {revision}",
         _ => "No profile. This cannot be changed later."
@@ -161,17 +173,21 @@ public partial class SavegamePublishStepViewModel : WizardStepViewModel
 
     public bool HasMismatchNotice => MismatchNotice is not null;
 
-    public string ConfirmLabel => KeepPlaying
-        ? "Publish and keep playing"
-        : "Publish";
+    public string ConfirmLabel => Publishes is false
+        ? "Create profile"
+        : KeepPlaying
+            ? "Publish and keep playing"
+            : "Publish";
 
-    public string Consequence => KeepPlaying
-        ? "It stays checked out to you."
-        : "The local copy goes to the Recycle Bin after the upload.";
+    public string Consequence => Publishes is false
+        ? "Nothing is published yet."
+        : KeepPlaying
+            ? "It stays checked out to you."
+            : "The local copy goes to the Recycle Bin after the upload.";
 
     /// <summary>
     /// The two things that have to be answered: the name everybody else will see, and which mod list
-    /// this savegame follows for the rest of its life.
+    /// this savegame follows for the rest of its life. Only the second, where it makes a profile first.
     /// </summary>
-    public bool IsValid => string.IsNullOrWhiteSpace(Name) is false && SelectedProfile is not null;
+    public bool IsValid => SelectedProfile is not null && (Publishes is false || string.IsNullOrWhiteSpace(Name) is false);
 }

@@ -10,9 +10,11 @@ using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.RemoteSources;
 using ModsDude.Client.Core.Repos;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Wpf.Mods;
+using ModsDude.Client.Wpf.Savegames;
 using ModsDude.Client.Wpf.Shared.Behaviors;
 using ModsDude.Client.Wpf.Shared;
 using ModsDude.Client.Wpf.Shell.Modals;
@@ -20,6 +22,7 @@ using ModsDude.Client.Wpf.Shell.Navigation;
 using ModsDude.Client.Wpf.Shell.Notices;
 using ModsDude.Client.Wpf.Shell.Sidebar;
 using ModsDude.Client.Wpf.Shell.Toasts;
+using System.Collections.Immutable;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
@@ -68,6 +71,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     private readonly IToastService _toasts;
     private readonly TimeProvider _time;
     private readonly IRemoteDownloadNotes _downloadNotes;
+    private readonly ISavegamePublishFlow _publishFlow;
     private readonly ActiveProfile _activeProfile;
     private readonly CancellationTokenSource _cancellation = new();
     private readonly List<Game> _watchedGames = [];
@@ -77,6 +81,9 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     private readonly RequestIdKeeper<SaveAttempt> _saveRequestIds = new();
     private readonly OtherProfilesReader _otherProfiles;
     private readonly Dictionary<ModKey, ModVersionKey> _availableChoices = [];
+
+    /// <summary>The savegame source whose mods are still to be added, for a page opened to look at a savegame.</summary>
+    private ModSourceId? _savegameToAdd;
 
     private readonly Dictionary<ModKey, AvailableModRowViewModel> _availableRows = [];
     private readonly Dictionary<ModKey, PinnedModRowViewModel> _pinnedRows = [];
@@ -119,6 +126,8 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         IResourceLeases leases,
         IToastService toasts,
         IRemoteDownloadNotes downloadNotes,
+        ISavegameSlots savegameSlots,
+        ISavegamePublishFlow publishFlow,
         TimeProvider time)
     {
         _repo = repo;
@@ -140,6 +149,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         _toasts = toasts;
         _time = time;
         _downloadNotes = downloadNotes;
+        _publishFlow = publishFlow;
         _activeProfile = new ActiveProfile(repo.Id, profile.Id);
 
         _catalog = catalogFactory.Create(repo);
@@ -148,9 +158,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
         _otherProfiles = new OtherProfilesReader(profileStore, pinsClient, repo.Id, profile.Id);
 
         Sources = new EditorSourcesViewModel(
+            repo,
             _catalog,
             repo.Adapter.GetBaseCapabilityAdapterFactory<IRemoteModSourcesAdapter>()?.Invoke().Sources ?? [],
-            _otherProfiles, filePickerService, modalService, errorReporter,
+            _otherProfiles, savegameSlots, filePickerService, modalService, errorReporter,
             () => _history.Current, CommitAsync, RecomposeAsync, _cancellation.Token);
 
         Sources.RemoteChanged += ShowRemote;
@@ -315,6 +326,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     {
         IncludeRegistered = Sources.IncludeRegistered,
         ProfileSources = Sources.EnabledProfiles,
+        SavegameSources = Sources.EnabledSavegames,
         AvailableChoices = _availableChoices,
         SavedDates = _savedDates,
         Search = _searchQuery,
@@ -416,6 +428,7 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
                 SearchCompleter.SetCatalogValues(snapshot.Known.SelectMany(x => x.Attributes));
 
                 ShowRemote();
+                AddSavegameMods();
 
                 Sources.LookUpRemote([.. catalogView.Index.Keys]);
             });
@@ -948,7 +961,10 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
             [.. pending.Select(x => x.Version)],
             pending.ToDictionary(x => x.Version.Identity, x => x.Version.Name),
             _catalog,
-            apply && draft.HasPinChanges);
+            apply && draft.HasPinChanges)
+        {
+            SavedActions = PublishOffer()
+        };
 
         RetireActivationOffer();
 
@@ -1274,26 +1290,80 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     #region Sources
 
     /// <summary>
-    /// Makes the game's mod folders the only sources and shows <paramref name="filter"/>, for a page
-    /// opened to review drift. Called before the page loads, and again if it is already open.
+    /// Opens the page looking at what <paramref name="focus"/> asks about. Called before the page loads,
+    /// and again if it is already open.
     /// </summary>
-    public void Review(PinnedModFilter filter)
+    public void Focus(EditorFocus focus)
     {
-        var loaded = Sources.FocusOnTargets();
+        switch (focus)
+        {
+            case EditorFocus.DriftReview review:
+                PinnedFilter = review.Filter;
+                _ = ShowLoadedAsync(Sources.FocusOnTargets(), "Loaded the game's mod folders");
+                break;
 
-        PinnedFilter = filter;
+            case EditorFocus.Savegame savegame:
+                _ = FocusOnSavegameAsync(savegame);
+                break;
+        }
+    }
 
-        if (IsLoading && _history.CanUndo is false)
+    private async Task FocusOnSavegameAsync(EditorFocus.Savegame focus)
+    {
+        if (await Sources.ReadSavegameAsync(focus.Game, focus.Slot) is not SavegameModSource savegame)
+        {
+            return;
+        }
+
+        PinnedFilter = PinnedModFilter.NotInSources;
+        _savegameToAdd = savegame.Source.Id;
+
+        await ShowLoadedAsync(Sources.FocusOnSavegame(savegame), $"Loaded {savegame.Source.Name}");
+
+        AddSavegameMods();
+    }
+
+    /// <summary>
+    /// Records what is loaded and reads the catalog again. Before the profile is read it only records
+    /// it: reading the profile starts a new draft and then reads the catalog with it, so nothing is
+    /// scanned for a page nobody has seen load.
+    /// </summary>
+    private Task ShowLoadedAsync(ImmutableHashSet<ModSourceId> loaded, string description)
+    {
+        if (Phase is EditorPhase.Loading or EditorPhase.WaitingForSave)
         {
             _history.Reset(Current with { Loaded = loaded });
+
+            return Task.CompletedTask;
         }
-        else if (loaded.SetEquals(Current.Loaded))
+
+        return loaded.SetEquals(Current.Loaded)
+            ? RecomposeAsync()
+            : CommitAsync(Current with { Loaded = loaded }, description);
+    }
+
+    /// <summary>
+    /// Adds every mod found of the savegame the page was opened to look at, as one step, once the page
+    /// can be edited and that savegame's source is read. Done once.
+    /// </summary>
+    private void AddSavegameMods()
+    {
+        if (CanEdit is false
+            || _savegameToAdd is not ModSourceId id
+            || Sources.EnabledSavegames.FirstOrDefault(x => x.Source.Id == id) is not SavegameModSource savegame)
         {
-            _ = RecomposeAsync();
+            return;
         }
-        else
+
+        _savegameToAdd = null;
+
+        var rows = _state.Available.Where(x => savegame.Lists(x.ModId)).ToList();
+
+        if (rows.Count > 0)
         {
-            _ = CommitAsync(Current with { Loaded = loaded }, "Loaded the game's mod folders");
+            Commit(
+                Draft.Pin(rows.Select(x => new ProfileModPin(x.ModId, x.Version.VersionId, new ProfileModLock(false, x.LockedBySource)))),
+                $"Added the mods of {savegame.Source.Name}");
         }
     }
 
@@ -1527,6 +1597,19 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     private static string Counted(string verb, int count) => count > 0 ? $"{verb} {count}" : verb;
 
 
+    /// <summary>
+    /// Publishing the savegame the page is looking at, for the toast saying the profile was saved: the
+    /// one enabled savegame source, if there is exactly one.
+    /// </summary>
+    /// <remarks>
+    /// Not tied to this page's lifetime: the page is usually gone by the time somebody clicks it.
+    /// </remarks>
+    private IReadOnlyList<ToastAction> PublishOffer()
+        => Sources.EnabledSavegames is [SavegameModSource savegame]
+            ? [new ToastAction("Publish savegame", () => _ = _publishFlow.PublishAsync(
+                _repo, _profile.Id, savegame.Slot, published: null, CancellationToken.None))]
+            : [];
+
     /// <summary>A save is the same request while the draft has no edits since and the label is the same.</summary>
     private sealed record SaveAttempt(ProfileDraft Draft, string? Label)
     {
@@ -1540,17 +1623,17 @@ public partial class ProfileModsEditorPageViewModel : PageViewModel, IRetainable
     public class Factory(IServiceProvider serviceProvider, IRetainedPages retainedPages)
     {
         /// <summary>The page kept for this profile where there is one, and a new one otherwise.</summary>
-        /// <param name="review">Opens the page reviewing the game's mod folders. Null opens it with the default sources on.</param>
-        public ProfileModsEditorPageViewModel Create(Repo repo, Profile profile, PinnedModFilter? review = null)
+        /// <param name="focus">What the page opens looking at. Null opens it with the default sources on.</param>
+        public ProfileModsEditorPageViewModel Create(Repo repo, Profile profile, EditorFocus? focus = null)
         {
             var page = retainedPages.Take<ProfileModsEditorPageViewModel>(new ProfileModsEditorKey(repo.Id, profile.Id))
                 ?? ActivatorUtilities.CreateInstance<ProfileModsEditorPageViewModel>(serviceProvider, repo, profile);
 
             // Here rather than through the constructor: a nullable value does not survive
             // ActivatorUtilities' positional matching.
-            if (review is PinnedModFilter filter)
+            if (focus is not null)
             {
-                page.Review(filter);
+                page.Focus(focus);
             }
 
             return page;

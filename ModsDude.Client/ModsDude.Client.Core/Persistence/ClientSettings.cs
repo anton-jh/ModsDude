@@ -134,6 +134,9 @@ public class NotificationSettings
     /// <summary>Mod folders and savegames that need attention.</summary>
     public bool Drift { get; set; } = true;
 
+    /// <summary>A game started while something about it needs attention.</summary>
+    public bool DriftOnGameStart { get; set; } = true;
+
     /// <summary>A game closed with a checked-out savegame played in it.</summary>
     public bool CheckInReminders { get; set; } = true;
 
