@@ -56,6 +56,9 @@ public enum NoticeActionKind
     /// <summary>Stop tracking a savegame whose repo is gone, leaving the slot as it is.</summary>
     StopTracking,
 
+    /// <summary>Open the game's own page, where it can be checked again and disconnected without any repo.</summary>
+    OpenGame,
+
     /// <summary>Open the log folder. The only thing the quiet notices have to offer.</summary>
     OpenLog,
 

@@ -252,7 +252,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             return false;
         }
 
-        var target = notice.Actions.FirstOrDefault(x => x.Kind is NoticeActionKind.Review or NoticeActionKind.OpenSavegame);
+        var target = notice.Actions.FirstOrDefault(x => x.Kind is NoticeActionKind.Review or NoticeActionKind.OpenSavegame or NoticeActionKind.OpenGame);
 
         if (target is null)
         {
@@ -419,6 +419,14 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
 
                 break;
 
+            case NoticeActionKind.OpenGame:
+                if (notice.Subject is NoticeSubject subject)
+                {
+                    _navigation.GoToGame(subject.Game);
+                }
+
+                break;
+
             case NoticeActionKind.Reapply:
                 await ReapplyAsync(notice, card);
 
@@ -508,9 +516,7 @@ public partial class NoticeCenterViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var played = _monitor.Drifted
-            .SelectMany(x => x.Report.SavegameDrift)
-            .Any(x => x.SavegameId == savegameId && x.Kind is SavegameDriftKind.UncheckedInPlay);
+        var played = HeldSavegameDrift.HasUncheckedInPlay(_monitor.Drifted, savegameId);
 
         await _disconnectFlow.DisconnectAsync(game, savegameId, subject.SavegameName, new SavegameDisconnectReason.RepoGone(played));
     }

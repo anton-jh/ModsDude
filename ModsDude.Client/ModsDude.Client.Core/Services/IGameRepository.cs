@@ -77,10 +77,12 @@ public interface IGameRepository : IModFolders, IDriftCandidateSource
     /// <see cref="Create(IBaseGameAdapter, DynamicForm)"/>, so an adapter release that renames
     /// either catches up the next time anything is saved rather than needing the game reconnected.
     /// </remarks>
-    /// <exception cref="UserFriendlyException">
-    /// A folder is claimed, something is working in the game's folders, or it holds a savegame.
-    /// </exception>
-    void Update(Game game, IBaseGameAdapter baseAdapter, DynamicForm localSettings);
+    /// <returns>
+    /// <see cref="TargetRefresh.Updated"/>, or why the settings were left as they are: something is
+    /// working in the game's folders, or it holds a savegame.
+    /// </returns>
+    /// <exception cref="UserFriendlyException">A folder is claimed.</exception>
+    TargetRefresh Update(Game game, IBaseGameAdapter baseAdapter, DynamicForm localSettings);
 
     /// <summary>
     /// Writes down the folders the adapter says this game reaches now, where they are not the ones
@@ -134,14 +136,14 @@ public interface IGameRepository : IModFolders, IDriftCandidateSource
     void StopTracking(Guid profileId);
 
     /// <summary>
-    /// Disconnects the game: forgets its settings and which profile it follows. Nothing on disk is
-    /// touched.
+    /// Disconnects the game: forgets its settings, which profile it follows and the check-out records
+    /// of the savegames in <paramref name="letGo"/>. Nothing on disk is touched.
     /// </summary>
-    /// <exception cref="UserFriendlyException">
-    /// The game holds a savegame, whose check-out record would be lost with it, or something is
-    /// working on its folders right now.
-    /// </exception>
-    void Delete(Game game);
+    /// <param name="letGo">
+    /// The savegames the user agreed to stop tracking. Any other savegame held here refuses the
+    /// disconnect, since its check-out record would be lost with the game.
+    /// </param>
+    DisconnectOutcome Delete(Game game, IReadOnlySet<Guid> letGo);
 
     /// <summary>
     /// The first folder these settings could not claim, or null where every one of them is free.
@@ -158,7 +160,23 @@ public interface IGameRepository : IModFolders, IDriftCandidateSource
 }
 
 
-/// <summary>What <see cref="IGameRepository.RefreshTargets"/> did with a game's folders.</summary>
+/// <summary>What <see cref="IGameRepository.Delete"/> did.</summary>
+public enum DisconnectOutcome
+{
+    Removed,
+
+    /// <summary>Nothing to do: the game was already disconnected.</summary>
+    AlreadyGone,
+
+    /// <summary>Something is working in the game's folders, so it was left connected.</summary>
+    Busy,
+
+    /// <summary>The game holds a savegame nobody agreed to let go, so it was left connected.</summary>
+    HoldsSavegame
+}
+
+
+/// <summary>What <see cref="IGameRepository.RefreshTargets"/> and <see cref="IGameRepository.Update"/> did with a game's folders.</summary>
 public enum TargetRefresh
 {
     Unchanged,

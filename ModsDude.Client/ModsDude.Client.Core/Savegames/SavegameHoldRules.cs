@@ -218,4 +218,28 @@ public static class SavegameHoldRules
 
         return null;
     }
+
+    /// <summary>
+    /// The savegame that stops this game being disconnected, or null where nothing does.
+    /// </summary>
+    /// <remarks>
+    /// Any savegame, with or without a profile: disconnecting forgets the game's record, and the
+    /// check-out record of every save it holds goes with it. Only the saves the user agreed to let go
+    /// may leave that way - the set they confirmed, never one worked out again afterwards, so a save
+    /// checked out in between still stops it.
+    /// </remarks>
+    public static SavegameCheckoutBinding? FindDisconnectBlocker(
+        IReadOnlyList<SavegameCheckoutBinding> held,
+        IReadOnlySet<Guid> letGo)
+    {
+        foreach (var binding in held)
+        {
+            if (letGo.Contains(binding.SavegameId) is false)
+            {
+                return binding;
+            }
+        }
+
+        return null;
+    }
 }

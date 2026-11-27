@@ -99,12 +99,15 @@ public partial class ConfirmationModalViewModel(
             "Cancel");
     }
 
-    public static ConfirmationModalViewModel ConfirmDisconnectGame(string name)
+    /// <param name="stopsTracking">
+    /// What happens to the savegames let go with the game, one sentence each. Empty where it holds none.
+    /// </param>
+    public static ConfirmationModalViewModel ConfirmDisconnectGame(string name, IReadOnlyList<string> stopsTracking)
     {
         return new ConfirmationModalViewModel(
             $"Disconnect {name}?",
-            $"ModsDude forgets where '{name}' is installed and which profile it follows. Nothing on disk changes.",
-            IconKind.Question,
+            string.Join(" ", [$"ModsDude forgets where '{name}' is installed and which profile it follows. Nothing on disk changes.", .. stopsTracking]),
+            stopsTracking.Count > 0 ? IconKind.Warning : IconKind.Question,
             "Disconnect",
             "Cancel");
     }

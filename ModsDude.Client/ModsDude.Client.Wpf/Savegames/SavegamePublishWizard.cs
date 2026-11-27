@@ -71,6 +71,7 @@ public sealed class SavegamePublishWizard
     private readonly Guid? _preselectProfileId;
     private readonly ISavegameSlots _savegameSlots;
     private readonly IHeldSavegames _heldSavegames;
+    private readonly IGoneRepos _goneRepos;
     private readonly IProfileStore _profileStore;
     private readonly ISyncManifestStore _manifestStore;
     private readonly ISavegameCheckInFlow _checkInFlow;
@@ -105,6 +106,7 @@ public sealed class SavegamePublishWizard
         IReadOnlyList<SavegameSlotOptionViewModel> slots,
         ISavegameSlots savegameSlots,
         IHeldSavegames heldSavegames,
+        IGoneRepos goneRepos,
         IProfileStore profileStore,
         ISyncManifestStore manifestStore,
         ISavegameCheckInFlow checkInFlow,
@@ -118,6 +120,7 @@ public sealed class SavegamePublishWizard
         _preselectProfileId = preselectProfileId;
         _savegameSlots = savegameSlots;
         _heldSavegames = heldSavegames;
+        _goneRepos = goneRepos;
         _profileStore = profileStore;
         _manifestStore = manifestStore;
         _checkInFlow = checkInFlow;
@@ -251,6 +254,7 @@ public sealed class SavegamePublishWizard
             options,
             options.FirstOrDefault(x => x.ProfileId == preselected && x.ProfileId is not null),
             options.FirstOrDefault(x => x.ProfileId is not null && x.ProfileId == manifest?.ProfileId)?.Name,
+            _heldSavegames.FindProfileHold(_game.Identity) is SavegameCheckoutBinding held && _goneRepos.IsGone(held.RepoId),
             _savegameSlots.DescribeSlotNumber(_game, slot.Ref));
 
         _publishStep = (slot.Ref, step);

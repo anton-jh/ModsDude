@@ -59,7 +59,9 @@ list is then what the save lists and the profile doesn't pin, and **Not in the s
 profile pins and the save doesn't list. Savegame chips aren't remembered after the editor closes.
 
 The editor can also open focused on a save (`EditorFocus.Savegame`), from the publish wizard. It does the
-same, and once the profile is read it adds every found mod to the draft as one undoable step. With exactly
+same, and once the profile is read it adds every found mod to the draft as one undoable step. The pinned
+list opens on **Not in the sources** when reviewing an existing profile, and on **All** for a profile just
+created from the save. With exactly
 one savegame chip on, the toast saying the profile was saved offers **Publish savegame**, with the profile
 and the slot preselected.
 

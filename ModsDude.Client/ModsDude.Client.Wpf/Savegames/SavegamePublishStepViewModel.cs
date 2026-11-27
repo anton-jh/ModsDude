@@ -76,6 +76,10 @@ public partial class SavegamePublishStepViewModel : WizardStepViewModel
     /// Which mod list the folder is actually on, for the sentence that says so where the chosen
     /// profile is a different one. Null where it is on none.
     /// </param>
+    /// <param name="folderHeldFromGoneRepo">
+    /// Whether a savegame from a repo you are not in has the game's mod folder. It can never be
+    /// checked in, so keeping a savegame that follows a profile waits until it is stopped tracking.
+    /// </param>
     public SavegamePublishStepViewModel(
         string slotLabel,
         string repoName,
@@ -83,8 +87,10 @@ public partial class SavegamePublishStepViewModel : WizardStepViewModel
         IReadOnlyList<SavegamePublishOption> profiles,
         SavegamePublishOption? preselected,
         string? folderProfileName,
+        bool folderHeldFromGoneRepo,
         int? slotNumber = null)
     {
+        _folderHeldFromGoneRepo = folderHeldFromGoneRepo;
         SlotLabel = slotLabel;
         SlotNumber = slotNumber;
         RepoName = repoName;
@@ -103,7 +109,9 @@ public partial class SavegamePublishStepViewModel : WizardStepViewModel
     public int? SlotNumber { get; }
     public string RepoName { get; }
 
-    /// <inheritdoc cref="SavegamePublishStepViewModel(string, string, string, IReadOnlyList{SavegamePublishOption}, SavegamePublishOption?, string?, int?)"/>
+    private readonly bool _folderHeldFromGoneRepo;
+
+    /// <inheritdoc cref="SavegamePublishStepViewModel(string, string, string, IReadOnlyList{SavegamePublishOption}, SavegamePublishOption?, string?, bool, int?)"/>
     public string? FolderProfileName { get; }
 
     /// <summary>Every profile in the repo, plus <see cref="SavegamePublishOption.NoModList"/> last.</summary>
@@ -129,12 +137,16 @@ public partial class SavegamePublishStepViewModel : WizardStepViewModel
     [NotifyPropertyChangedFor(nameof(Publishes))]
     [NotifyPropertyChangedFor(nameof(ConfirmLabel))]
     [NotifyPropertyChangedFor(nameof(Consequence))]
+    [NotifyPropertyChangedFor(nameof(KeepRefusal))]
+    [NotifyPropertyChangedFor(nameof(HasKeepRefusal))]
     private SavegamePublishOption? _selectedProfile;
 
     /// <summary>Unticked by default, as on check-in.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Consequence))]
     [NotifyPropertyChangedFor(nameof(ConfirmLabel))]
+    [NotifyPropertyChangedFor(nameof(KeepRefusal))]
+    [NotifyPropertyChangedFor(nameof(HasKeepRefusal))]
     private bool _keepPlaying;
 
     public string TrimmedName => Name.Trim();
@@ -189,5 +201,14 @@ public partial class SavegamePublishStepViewModel : WizardStepViewModel
     /// The two things that have to be answered: the name everybody else will see, and which mod list
     /// this savegame follows for the rest of its life. Only the second, where it makes a profile first.
     /// </summary>
-    public bool IsValid => SelectedProfile is not null && (Publishes is false || string.IsNullOrWhiteSpace(Name) is false);
+    public bool IsValid => SelectedProfile is not null
+        && (Publishes is false || string.IsNullOrWhiteSpace(Name) is false)
+        && HasKeepRefusal is false;
+
+    /// <summary>Why it cannot stay checked out, or null where it can.</summary>
+    public string? KeepRefusal => KeepPlaying && Publishes && SelectedProfile is { ProfileId: not null } && _folderHeldFromGoneRepo
+        ? "The savegame checked out here is from a repo you are not in. Stop tracking it first."
+        : null;
+
+    public bool HasKeepRefusal => KeepRefusal is not null;
 }

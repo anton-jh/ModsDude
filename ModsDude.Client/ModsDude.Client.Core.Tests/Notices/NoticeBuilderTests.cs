@@ -339,7 +339,7 @@ public class NoticeBuilderTests
     }
 
     [Fact]
-    public void A_save_whose_repo_is_gone_offers_stop_tracking_and_nothing_else()
+    public void A_save_whose_repo_is_gone_offers_stop_tracking_and_its_game()
     {
         var notice = Assert.Single(Build(Entry(
             DriftReport.For(DriftStatus.DanglingProfile) with
@@ -355,9 +355,18 @@ public class NoticeBuilderTests
         Assert.Equal("It has progress that is not checked in.", notice.Body);
         Assert.Equal(NoticeBuilder.SavegameKey(_savegameId), notice.Key);
 
-        var action = Assert.Single(notice.Actions);
-        Assert.Equal(NoticeActionKind.StopTracking, action.Kind);
-        Assert.True(action.IsPrimary);
+        Assert.Collection(
+            notice.Actions,
+            action =>
+            {
+                Assert.Equal(NoticeActionKind.StopTracking, action.Kind);
+                Assert.True(action.IsPrimary);
+            },
+            action =>
+            {
+                Assert.Equal(NoticeActionKind.OpenGame, action.Kind);
+                Assert.False(action.IsPrimary);
+            });
 
         Assert.Equal(_savegameId, notice.Subject?.SavegameId);
         Assert.Equal(_repoId, notice.Subject?.RepoId);
@@ -377,7 +386,7 @@ public class NoticeBuilderTests
         Assert.Null(notice.Body);
     }
 
-    /// <summary>Stopping tracking needs no repo, so a game this account cannot reach still gets the way out.</summary>
+    /// <summary>Neither stopping tracking nor the game's page needs a repo, so a game this account cannot reach still gets both ways out.</summary>
     [Fact]
     public void A_save_whose_repo_is_gone_gets_its_card_when_no_repo_serves_the_game()
     {
@@ -388,7 +397,7 @@ public class NoticeBuilderTests
             }),
             environment: new FakeEnvironment { Repo = null }));
 
-        Assert.Equal(NoticeActionKind.StopTracking, Assert.Single(notice.Actions).Kind);
+        Assert.Equal([NoticeActionKind.StopTracking, NoticeActionKind.OpenGame], notice.Actions.Select(x => x.Kind));
         Assert.Null(notice.GroupLabel);
     }
 
@@ -520,11 +529,11 @@ public class NoticeBuilderTests
     }
 
     /// <summary>
-    /// Everything the column can offer goes through the repo, so a game whose repo this account
-    /// cannot see gets one card that says exactly that and offers nothing.
+    /// Everything else the column can offer goes through the repo, so a game whose repo this account
+    /// cannot see gets one card that says exactly that and leads to the game's page, which needs none.
     /// </summary>
     [Fact]
-    public void A_game_whose_repo_is_gone_says_so_and_offers_nothing()
+    public void A_game_whose_repo_is_gone_says_so_and_offers_its_page()
     {
         var notices = Build(
             Drifted(changed: ["fs25_a.zip"]),
@@ -533,7 +542,10 @@ public class NoticeBuilderTests
         var notice = Assert.Single(notices);
 
         Assert.Equal("'Farming Simulator 25' belongs to a repo you are not in", notice.Headline);
-        Assert.Empty(notice.Actions);
+
+        var action = Assert.Single(notice.Actions);
+        Assert.Equal(NoticeActionKind.OpenGame, action.Kind);
+        Assert.True(action.IsPrimary);
 
         // It reports a state rather than an event: waving it away would not make it less true, and
         // nothing else in the app mentions it.
@@ -556,6 +568,7 @@ public class NoticeBuilderTests
 
         Assert.Equal("'Farming Simulator 25' does not match its profile", notice.Headline);
         Assert.Equal("Checking which repo it belongs to…", notice.Body);
+        Assert.Empty(notice.Actions);
     }
 
     /// <summary>

@@ -34,10 +34,6 @@ of a typed problem.
 
 ## Unfinished
 
-**A game whose repo is gone has no way out.** The profile shows as `DanglingProfile`, and savegames of a
-gone repo have their own card. But the unreachable notice offers no action, and a game can only be
-disconnected from inside a repo.
-
 **The repo page always shows profiles.** Its profile list and Create button show even when the adapter
 has no mod support, where profiles mean nothing.
 

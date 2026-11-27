@@ -1,3 +1,5 @@
+using ModsDude.Client.Core.GameAdapters;
+
 namespace ModsDude.Client.Wpf.Shell.Navigation;
 
 public interface IShellNavigationService
@@ -13,6 +15,9 @@ public interface IShellNavigationService
     Task<bool> GoToAsync(Guid repoId, RepoDestination destination);
 
     void GoToJoinOrCreate();
+
+    /// <summary>Opens a game's own page under Home. It needs no repo, so it opens for any game.</summary>
+    void GoToGame(GameIdentity game);
 
     /// <summary>Builds the page on screen again, unless it holds unsaved changes. On the UI thread.</summary>
     void ReloadOpenPage();
