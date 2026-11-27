@@ -119,7 +119,7 @@ public class SavegameRowRulesTests
     {
         var offer = SavegameRowRules.Describe(
             _savegameId, profileId: null, headRevision: null, pinnedRevision: null,
-            held: [Hold(_otherSavegameId, _otherProfileId)], appliedProfileId: null, appliedRevision: null);
+            held: [Hold(_otherSavegameId, _otherProfileId)], goneHolds: new HashSet<Guid>(), appliedProfileId: null, appliedRevision: null);
 
         Assert.Null(offer.ChecksInFirst);
         Assert.False(offer.ActivatesFirst);
@@ -140,6 +140,31 @@ public class SavegameRowRulesTests
     public void A_profile_that_cannot_be_seen_still_checks_in_what_holds_the_folder()
     {
         Assert.Equal(_otherSavegameId, Describe(null, null, _otherProfileId, 9, held: [Hold(_otherSavegameId, _otherProfileId)]).ChecksInFirst);
+    }
+
+    /// <summary>
+    /// A savegame from a repo you are not in can never be checked in, so it is not offered as a step:
+    /// the check-out waits until it is stopped tracking.
+    /// </summary>
+    [Fact]
+    public void A_folder_claimed_by_a_savegame_from_a_gone_repo_waits_for_it_to_be_stopped_tracking()
+    {
+        var offer = Describe(1004, null, null, null, held: [Hold(_otherSavegameId, _otherProfileId)], goneHolds: new HashSet<Guid> { _otherSavegameId });
+
+        Assert.Equal(_otherSavegameId, offer.StopsTrackingFirst);
+        Assert.Null(offer.ChecksInFirst);
+        Assert.False(offer.CanCheckOut);
+    }
+
+    /// <summary>Only the one claiming the folder matters: a gone one without a profile is not in the way.</summary>
+    [Fact]
+    public void A_savegame_from_a_gone_repo_that_claims_no_folder_stops_nothing()
+    {
+        var gone = Hold(_otherSavegameId, _otherProfileId) with { ProfileId = null };
+        var offer = Describe(1004, null, _profileId, 1004, held: [gone], goneHolds: new HashSet<Guid> { _otherSavegameId });
+
+        Assert.Null(offer.StopsTrackingFirst);
+        Assert.True(offer.CanCheckOut);
     }
 
     /// <summary>
@@ -166,13 +191,15 @@ public class SavegameRowRulesTests
         int? pinned,
         Guid? appliedProfileId,
         int? appliedRevision,
-        IReadOnlyList<SavegameCheckoutBinding>? held = null)
+        IReadOnlyList<SavegameCheckoutBinding>? held = null,
+        IReadOnlySet<Guid>? goneHolds = null)
         => SavegameRowRules.Describe(
             _savegameId,
             _profileId,
             head,
             pinned,
             held ?? [],
+            goneHolds ?? new HashSet<Guid>(),
             appliedProfileId,
             appliedRevision);
 

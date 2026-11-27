@@ -7,6 +7,7 @@ using ModsDude.Client.Core.ModsDudeServer.Generated;
 using ModsDude.Client.Core.Profiles;
 using ModsDude.Client.Core.Profiles.Editor;
 using ModsDude.Client.Core.Savegames;
+using ModsDude.Client.Core.Services;
 using ModsDude.Client.Core.Sync;
 using ModsDude.Client.Core.Transfers;
 using ModsDude.Client.Wpf.Profiles.Editor;
@@ -26,6 +27,7 @@ public sealed class SavegamePublishFlow(
     ISavegameSlots savegameSlots,
     ISavegamePublisher savegamePublisher,
     IHeldSavegames heldSavegames,
+    IGoneRepos goneRepos,
     IProfileStore profileStore,
     ISyncManifestStore manifestStore,
     ISavegameCheckInFlow checkInFlow,
@@ -168,7 +170,7 @@ public sealed class SavegamePublishFlow(
         }
 
         var wizard = new SavegamePublishWizard(
-            repo, game, preselectProfileId, preselectSlot, slots, savegameSlots, heldSavegames, profileStore, manifestStore,
+            repo, game, preselectProfileId, preselectSlot, slots, savegameSlots, heldSavegames, goneRepos, profileStore, manifestStore,
             checkInFlow, heldSavegameNames, pinsClient, modStore, wizardLogger);
 
         var modal = new WizardModalViewModel(wizard.First, wizard.NextAsync, cancellationToken);

@@ -31,9 +31,9 @@
                     </StackPanel>
                 </shared:Surface>
 
-                <!-- Every repo, with the profiles friends are on in it. -->
-                <shared:Surface Style="{StaticResource Card}" Visibility="{Binding HasRepos, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <GroupBox Header="Repos" Padding="0 16 0 0">
+                <!-- Every game, with its repos and the profiles friends are on in them. -->
+                <shared:Surface Style="{StaticResource Card}" Visibility="{Binding HasGames, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <GroupBox Header="Games" Padding="0 16 0 0">
                         <StackPanel Orientation="Vertical">
                             <TextBlock Margin="0 0 0 12"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"

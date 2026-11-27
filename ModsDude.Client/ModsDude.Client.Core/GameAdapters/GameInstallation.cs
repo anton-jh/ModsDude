@@ -51,6 +51,15 @@ public sealed record GameInstallation(IReadOnlyList<GameFolder> Folders, string?
         }
     }
 
+    /// <summary>
+    /// What the game's own record says, for a game no adapter can be asked about: no repo this account
+    /// is in is about it, and the adapter's settings come from a repo.
+    /// </summary>
+    public static GameInstallation Recorded(Game game)
+    {
+        return new([.. RecordedModFolders(game)], null);
+    }
+
 
     private static IEnumerable<GameFolder> ModFolders(Game game, ILocalGameAdapter adapter)
     {

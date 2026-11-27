@@ -43,8 +43,17 @@
                 <Border Style="{StaticResource GameGroupPanel}">
                     <StackPanel Orientation="Vertical">
 
+                        <!-- The heading is the way into the game's own page, which only a connected game has. -->
                         <StackPanel Orientation="Horizontal" Margin="16 0 16 12">
-                            <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}" Text="{Binding State.Name}" />
+                            <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}"
+                                       Visibility="{Binding State.IsConnected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Hyperlink Style="{StaticResource TextLink}" Command="{Binding OpenCommand}">
+                                    <Run Text="{Binding State.Name, Mode=OneWay}" />
+                                </Hyperlink>
+                            </TextBlock>
+                            <TextBlock Style="{DynamicResource SubtitleTextBlockStyle}"
+                                       Text="{Binding State.Name}"
+                                       Visibility="{Binding State.IsConnected, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
                             <Border Margin="8 0 0 0"
                                     Style="{StaticResource SuccessStatusChip}"
                                     Visibility="{Binding State.IsRunning, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -57,7 +66,13 @@
                             </Border>
                         </StackPanel>
 
-                        <Grid Margin="16 0 16 6">
+                        <TextBlock Margin="16 0 16 12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="No repo you are in"
+                                   Visibility="{Binding State.HasRepos, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+
+                        <Grid Margin="16 0 16 6"
+                              Visibility="{Binding State.HasRepos, Converter={StaticResource BoolToVisibilityConverter}}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="2*" />
                                 <ColumnDefinition Width="3*" />

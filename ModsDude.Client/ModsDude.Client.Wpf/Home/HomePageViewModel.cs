@@ -6,7 +6,10 @@ using System.Collections.Specialized;
 
 namespace ModsDude.Client.Wpf.Home;
 
-/// <summary>Where the app opens: every repo, with the profiles friends are on in it and the button that joins them.</summary>
+/// <summary>
+/// Where the app opens: every game on this machine and every repo, with the profiles friends are on
+/// in it and the button that joins them.
+/// </summary>
 public sealed partial class HomePageViewModel : PageViewModel, IDisposable
 {
     private readonly IRepoStore _repos;
@@ -26,6 +29,7 @@ public sealed partial class HomePageViewModel : PageViewModel, IDisposable
         RepoList = repoListFactory.Create(Friends);
 
         _repos.Repos.CollectionChanged += OnReposChanged;
+        RepoList.Groups.CollectionChanged += OnGroupsChanged;
     }
 
 
@@ -38,10 +42,14 @@ public sealed partial class HomePageViewModel : PageViewModel, IDisposable
 
     public bool HasNoRepos => HasRepos is false;
 
+    /// <summary>Whether there is a game to list: one a repo is about, or one connected here.</summary>
+    public bool HasGames => RepoList.Groups.Count > 0;
+
 
     public void Dispose()
     {
         _repos.Repos.CollectionChanged -= OnReposChanged;
+        RepoList.Groups.CollectionChanged -= OnGroupsChanged;
 
         RepoList.Dispose();
         Friends.Dispose();
@@ -63,5 +71,10 @@ public sealed partial class HomePageViewModel : PageViewModel, IDisposable
     {
         OnPropertyChanged(nameof(HasRepos));
         OnPropertyChanged(nameof(HasNoRepos));
+    }
+
+    private void OnGroupsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(HasGames));
     }
 }

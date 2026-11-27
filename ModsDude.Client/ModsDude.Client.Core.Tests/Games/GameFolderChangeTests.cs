@@ -1,5 +1,4 @@
 using ModsDude.Client.Core.Concurrency;
-using ModsDude.Client.Core.Exceptions;
 using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Persistence;
@@ -33,8 +32,7 @@ public sealed class GameFolderChangeTests : IDisposable
     [Fact]
     public void Settings_change_while_nothing_works_in_the_folders()
     {
-        _games.Update(_game, _adapter, Settings("moved", "saves"));
-
+        Assert.Equal(TargetRefresh.Updated, _games.Update(_game, _adapter, Settings("moved", "saves")));
         Assert.Equal(Folder("moved"), Assert.Single(_game.Targets).ModFolder);
     }
 
@@ -43,7 +41,7 @@ public sealed class GameFolderChangeTests : IDisposable
     {
         using var apply = _leases.TryAcquireExclusive(_game.TargetRefs.Select(ResourceKeys.Target), "Applying");
 
-        Assert.Throws<UserFriendlyException>(() => _games.Update(_game, _adapter, Settings("moved", "saves")));
+        Assert.Equal(TargetRefresh.Busy, _games.Update(_game, _adapter, Settings("moved", "saves")));
         Assert.Equal(Folder("mods"), Assert.Single(_game.Targets).ModFolder);
     }
 
@@ -52,7 +50,7 @@ public sealed class GameFolderChangeTests : IDisposable
     {
         using var checkIn = _leases.TryAcquireExclusive(ResourceKeys.SavegameFolder(_game.Identity, FakeMultiTargetSettings.Solo), "Checking in");
 
-        Assert.Throws<UserFriendlyException>(() => _games.Update(_game, _adapter, Settings("mods", "moved")));
+        Assert.Equal(TargetRefresh.Busy, _games.Update(_game, _adapter, Settings("mods", "moved")));
         Assert.Equal(Settings("mods", "saves").SoloSavegameFolder, ((FakeMultiTargetSettings)_game.GetLocalSettings(_adapter)).SoloSavegameFolder);
     }
 
@@ -61,7 +59,7 @@ public sealed class GameFolderChangeTests : IDisposable
     {
         Hold();
 
-        Assert.Throws<UserFriendlyException>(() => _games.Update(_game, _adapter, Settings("moved", "saves")));
+        Assert.Equal(TargetRefresh.HoldsSavegame, _games.Update(_game, _adapter, Settings("moved", "saves")));
         Assert.Equal(Folder("mods"), Assert.Single(_game.Targets).ModFolder);
     }
 

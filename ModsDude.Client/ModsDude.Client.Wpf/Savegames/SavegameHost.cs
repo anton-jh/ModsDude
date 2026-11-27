@@ -11,9 +11,11 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// The savegames held in a folder the settings no longer name - see
 /// <see cref="ISavegameHolds.GetUnreachableHolds"/>.
 /// </param>
+/// <param name="GoneHolds">The savegames held here whose repo is gone, so they can never be checked in.</param>
 public sealed record SavegameHost(
     Game Game,
     IReadOnlyList<SavegameCheckoutBinding> Held,
     IReadOnlySet<Guid> UnreachableHolds,
+    IReadOnlySet<Guid> GoneHolds,
     Guid? AppliedProfileId,
     int? AppliedRevision);

@@ -521,7 +521,8 @@ public partial class App : Application
         services.AddSingleton<ProfileModsPageViewModel.Factory>();
         services.AddSingleton<ProfileHistoryPageViewModel.Factory>();
         services.AddSingleton<ConnectGamePageViewModel.Factory>();
-        services.AddSingleton<GameSettingsPageViewModel.Factory>();
+        services.AddSingleton<GamePageViewModel.Factory>();
+        services.AddSingleton<GameStatusViewModel.Factory>();
         services.AddSingleton<RepoModsPageViewModel.Factory>();
         services.AddSingleton<RepoSavegamesPageViewModel.Factory>();
         services.AddSingleton<RepoArchivePageViewModel.Factory>();
@@ -574,6 +575,7 @@ public partial class App : Application
         services.AddSingleton<ISavegameCheckInFlow, SavegameCheckInFlow>();
         services.AddSingleton<IRepoDeparture, RepoDeparture>();
         services.AddSingleton<ISavegameDisconnectFlow, SavegameDisconnectFlow>();
+        services.AddSingleton<IGameDisconnectFlow, GameDisconnectFlow>();
         services.AddSingleton<ISavegameProfileActivation, SavegameProfileActivation>();
         services.AddSingleton<ISavegameCheckOutContextBuilder, SavegameCheckOutContextBuilder>();
         services.AddSingleton<ISavegameCheckOutFlow, SavegameCheckOutFlow>();

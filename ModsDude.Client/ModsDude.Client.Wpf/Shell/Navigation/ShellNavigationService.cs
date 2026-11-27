@@ -1,3 +1,4 @@
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Wpf.Repos;
 
 namespace ModsDude.Client.Wpf.Shell.Navigation;
@@ -45,4 +46,6 @@ public sealed class ShellNavigationService : IShellNavigationService
     }
 
     public void GoToJoinOrCreate() => _shell?.SelectJoinOrCreate();
+
+    public void GoToGame(GameIdentity game) => _shell?.SelectGame(game);
 }

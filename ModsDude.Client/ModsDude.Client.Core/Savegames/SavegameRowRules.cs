@@ -11,6 +11,7 @@ namespace ModsDude.Client.Core.Savegames;
 /// <param name="ChecksInFirst">
 /// The savegame with a profile already claiming this game's mod folder, which is checked in first.
 /// Null where none is, and always for a savegame that follows no mod list, which claims no folder.
+/// Null too where that savegame is from a repo you are not in - see <paramref name="StopsTrackingFirst"/>.
 /// </param>
 /// <param name="ActivatesFirst">
 /// Whether the mod folder is not on the revision this savegame runs on, so its profile is activated
@@ -21,10 +22,19 @@ namespace ModsDude.Client.Core.Savegames;
 /// it. Null on latest, where the activation names the profile alone - it follows whatever the
 /// profile says now, and a number there would be one the user has no reason to have heard of.
 /// </param>
+/// <param name="StopsTrackingFirst">
+/// The savegame claiming the mod folder where it is from a repo you are not in. It can never be
+/// checked in, so a check-out waits until it is stopped tracking rather than offering a check-in.
+/// </param>
 public sealed record SavegameRowOffer(
     Guid? ChecksInFirst,
     bool ActivatesFirst,
-    int? PinnedRevision);
+    int? PinnedRevision,
+    Guid? StopsTrackingFirst = null)
+{
+    /// <summary>Whether a check-out can go ahead, with whatever steps it asks about first.</summary>
+    public bool CanCheckOut => StopsTrackingFirst is null;
+}
 
 
 /// <summary>
@@ -56,6 +66,7 @@ public static class SavegameRowRules
     /// Null on latest.
     /// </param>
     /// <param name="held">What the game is already holding.</param>
+    /// <param name="goneHolds">The savegames in <paramref name="held"/> whose repo is gone.</param>
     /// <param name="appliedProfileId">
     /// Which profile the mod folder was last made to match, from the sync manifest, and
     /// <paramref name="appliedRevision"/> which revision of it. The manifest is the only thing that
@@ -71,14 +82,22 @@ public static class SavegameRowRules
         int? headRevision,
         int? pinnedRevision,
         IReadOnlyList<SavegameCheckoutBinding> held,
+        IReadOnlySet<Guid> goneHolds,
         Guid? appliedProfileId,
         int? appliedRevision)
     {
         // The limit is one savegame claiming a mod folder, so it holds even where the folder is
         // already exactly right.
-        var checksInFirst = profileId is null
+        var claiming = profileId is null
             ? null
             : SavegameHoldRules.FindConflictingHold(held, savegameId)?.SavegameId;
+
+        if (claiming is Guid stuck && goneHolds.Contains(stuck))
+        {
+            return new SavegameRowOffer(null, false, null, stuck);
+        }
+
+        var checksInFirst = claiming;
 
         // Once that hold is gone, activating this savegame's own profile is always allowed, so
         // SavegameHoldRules.DecideApply is not asked: the only hold it could still find is this

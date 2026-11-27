@@ -399,8 +399,9 @@ public static class NoticeBuilder
 
     /// <summary>
     /// A held savegame whose repo is no longer one of this account's. It can never be checked in, and
-    /// while it is held it keeps the game off every other mod list, so the one way out is offered
-    /// here: stop tracking it, leaving the slot as it is.
+    /// while it is held it keeps the game off every other mod list, so the way out is offered here:
+    /// stop tracking it, leaving the slot as it is. The game's page is one click away too, where the
+    /// game can be disconnected along with it.
     /// </summary>
     private static Notice GoneSavegame(IReadOnlyList<SavegameDrift> kinds, DriftCandidate game)
     {
@@ -416,7 +417,11 @@ public static class NoticeBuilder
                 ? "It has progress that is not checked in."
                 : null,
             footnote: null,
-            actions: [new(NoticeActionKind.StopTracking, "Stop tracking") { IsPrimary = true }],
+            actions:
+            [
+                new(NoticeActionKind.StopTracking, "Stop tracking") { IsPrimary = true },
+                new(NoticeActionKind.OpenGame, "Open game")
+            ],
             subject: new NoticeSubject(game.Identity, game.Name)
             {
                 RepoId = first.RepoId,
@@ -473,9 +478,9 @@ public static class NoticeBuilder
     /// which have their own card.
     /// </para>
     /// <para>
-    /// <b>Not dismissible, and it offers nothing.</b> It reports a state rather than an event, so
-    /// waving it away would not make it less true; and it cannot offer the way out, because
-    /// disconnecting a game is reached through a repo about it.
+    /// <b>Not dismissible.</b> It reports a state rather than an event, so waving it away would not
+    /// make it less true. The way out is the game's own page, which needs no repo; it is offered once
+    /// the repo list is in, since before then the card is not yet saying anything.
     /// </para>
     /// </remarks>
     private static Notice Unreachable(string gameName, GameIdentity game, bool reposLoaded)
@@ -490,7 +495,7 @@ public static class NoticeBuilder
                 ? null
                 : "Checking which repo it belongs to…",
             footnote: null,
-            actions: [],
+            actions: reposLoaded ? [new(NoticeActionKind.OpenGame, "Open game") { IsPrimary = true }] : [],
             subject: new NoticeSubject(game, gameName),
             canDismiss: false);
     }

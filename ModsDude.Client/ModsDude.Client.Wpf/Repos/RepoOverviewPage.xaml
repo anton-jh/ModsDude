@@ -6,6 +6,7 @@
       xmlns:friends="clr-namespace:ModsDude.Client.Wpf.Friends"
       xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
       xmlns:repos="clr-namespace:ModsDude.Client.Wpf.Repos"
+      xmlns:games="clr-namespace:ModsDude.Client.Wpf.Games"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
@@ -34,46 +35,51 @@
                     </GroupBox>
                 </shared:Surface>
 
-                <!-- The one place the game this machine has connected for the repo is shown and
-                     managed. -->
+                <!-- The game this machine has connected for the repo, in summary. Its heading leads to
+                     the game's own page, where it is configured and disconnected. -->
                 <shared:Surface Style="{StaticResource Card}" Margin="0 16 0 0">
                     <GroupBox Header="This machine" Padding="0 16 0 16">
                         <StackPanel Orientation="Vertical">
 
                             <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Visibility="{Binding HasNoGame, Converter={StaticResource BoolToVisibilityConverter}}"
+                                       Visibility="{Binding Game.IsConnected, Converter={StaticResource InverseBoolToVisibilityConverter}}"
                                        Text="{Binding NotConnectedStatus}" />
 
                             <StackPanel Orientation="Vertical"
-                                        Visibility="{Binding HasGame, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <TextBlock FontWeight="SemiBold" Text="{Binding Game.Name}" />
+                                        Visibility="{Binding Game.IsConnected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock FontWeight="SemiBold">
+                                        <Hyperlink Style="{StaticResource TextLink}" Command="{Binding OpenGameCommand}">
+                                            <Run Text="{Binding Game.Game.Name, Mode=OneWay}" />
+                                        </Hyperlink>
+                                    </TextBlock>
+                                    <Border Margin="8 0 0 0"
+                                            Style="{StaticResource SuccessStatusChip}"
+                                            Visibility="{Binding Game.IsRunning, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="Running" />
+                                    </Border>
+                                </StackPanel>
 
                                 <TextBlock Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                           Text="{Binding Game.Problem}"
-                                           Visibility="{Binding Game.HasProblem, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                           Text="{Binding Game.Game.Problem}"
+                                           Visibility="{Binding Game.Game.HasProblem, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}" />
 
                                 <ItemsControl Margin="0 4 0 0"
                                               Grid.IsSharedSizeScope="True"
-                                              ItemsSource="{Binding Game.Details}" />
+                                              ItemsSource="{Binding Game.Game.Details}" />
 
                                 <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                            Text="No folders"
-                                           Visibility="{Binding Game.HasNoFolders, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                           Visibility="{Binding Game.Game.HasNoFolders, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}" />
 
                                 <!-- Neutral. A savegame checked out in compatibility mode is a state somebody chose,
                                      not a problem with the game. -->
                                 <TextBlock Margin="0 4 0 0"
                                            TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Text="{Binding Game.HoldingSummary}"
-                                           Visibility="{Binding Game.HasHoldingSummary, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                           Text="{Binding Game.Game.HoldingSummary}"
+                                           Visibility="{Binding Game.Game.HasHoldingSummary, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}" />
                             </StackPanel>
-
-                            <TextBlock Margin="0 8 0 0"
-                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                       TextWrapping="Wrap"
-                                       Text="{Binding GameError}"
-                                       Visibility="{Binding HasGameError, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                             <StackPanel Margin="0 12 0 0" Orientation="Horizontal" HorizontalAlignment="Left">
                                 <Button Margin="0 0 8 0"
@@ -82,68 +88,18 @@
                                         Command="{Binding ConnectGameCommand}"
                                         Visibility="{Binding CanConnectGame, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                                <Button Margin="0 0 8 0"
-                                        Content="Configure"
-                                        Command="{Binding ConfigureGameCommand}"
-                                        Visibility="{Binding CanManageGame, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                                <!-- For managing the mods by hand for a while without ModsDude objecting.
-                                     Here as well as on the profile page because a game set to another
+                                <!-- Here as well as on the profile page because a game set to another
                                      repo's profile has no page of that profile in this repo. -->
-                                <StackPanel Margin="0 0 8 0"
-                                            Visibility="{Binding Game.HasActiveProfile, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
-                                    <ToggleButton x:Name="DeactivateToggle"
-                                                  Content="Deactivate  ▾" />
+                                <games:DeactivateGameMenu Margin="0 0 8 0"
+                                                          DataContext="{Binding Game}"
+                                                          Visibility="{Binding CanDeactivate, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                                    <Popup IsOpen="{Binding IsChecked, ElementName=DeactivateToggle, Mode=TwoWay}"
-                                           PlacementTarget="{Binding ElementName=DeactivateToggle}"
-                                           Placement="Bottom"
-                                           VerticalOffset="4"
-                                           StaysOpen="False"
-                                           AllowsTransparency="True">
-                                        <Border Style="{StaticResource PopupSurface}">
-                                            <StackPanel Orientation="Vertical">
-                                                <Button Width="340"
-                                                        Style="{DynamicResource SubtleMenuButton}"
-                                                        Command="{Binding DeactivateCommand}"
-                                                        Click="CloseDeactivateMenu">
-                                                    <StackPanel Orientation="Vertical">
-                                                        <TextBlock Text="Deactivate, keep the mods" FontWeight="SemiBold" />
-                                                        <TextBlock Text="Stops following the profile. Mod folders stay as they are."
-                                                                   Margin="0 2 0 0"
-                                                                   TextWrapping="Wrap"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                    </StackPanel>
-                                                </Button>
-                                                <Button Width="340"
-                                                        Style="{DynamicResource SubtleMenuButton}"
-                                                        Command="{Binding DeactivateAndClearCommand}"
-                                                        Click="CloseDeactivateMenu">
-                                                    <StackPanel Orientation="Vertical">
-                                                        <TextBlock Text="Deactivate and clear the mods" FontWeight="SemiBold" />
-                                                        <TextBlock Text="Stops following the profile. Removes every mod from the mod folders."
-                                                                   Margin="0 2 0 0"
-                                                                   TextWrapping="Wrap"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                    </StackPanel>
-                                                </Button>
-                                            </StackPanel>
-                                        </Border>
-                                    </Popup>
-                                </StackPanel>
-
-                                <!-- Mods updated from inside the game are the commonest way a folder
-                                     stops matching its profile, and a game launched for the first
-                                     time is how one is found. -->
+                                <!-- A game launched for the first time is how one that connects by
+                                     itself is found. -->
                                 <Button Margin="0 0 8 0"
                                         Content="Check again"
-                                        Command="{Binding CheckAgainCommand}"
-                                        Visibility="{Binding CanCheckAgain, Converter={StaticResource BoolToVisibilityConverter}}" />
-
-                                <Button Margin="0 0 8 0"
-                                        Content="Disconnect"
-                                        Command="{Binding DisconnectCommand}"
-                                        Visibility="{Binding CanManageGame, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        Command="{Binding LookAgainCommand}"
+                                        Visibility="{Binding CanLookAgain, Converter={StaticResource BoolToVisibilityConverter}}" />
                             </StackPanel>
 
                         </StackPanel>

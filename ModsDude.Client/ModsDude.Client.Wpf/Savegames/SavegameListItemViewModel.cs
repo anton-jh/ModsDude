@@ -155,7 +155,7 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// Whether taking the claim is on offer here and now: Member, with the game connected here.
     /// <see cref="CheckOutBlockedReason"/> is the half that says why not.
     /// </summary>
-    public bool CanCheckOut => IsMember && _offer is not null;
+    public bool CanCheckOut => IsMember && _offer is { CanCheckOut: true };
 
     /// <summary>
     /// Whether staying on the revision the save was last played on is a choice to offer: only where the
@@ -267,7 +267,12 @@ public partial class SavegameListItemViewModel : ObservableObject
     /// </summary>
     public string CheckOutLabel => IsHeldByMe ? "Check out again" : "Check out";
 
-    public string? CheckOutBlockedReason => _offer is null ? _notConnected : null;
+    public string? CheckOutBlockedReason => _offer switch
+    {
+        null => _notConnected,
+        { StopsTrackingFirst: not null } => "The savegame checked out here is from a repo you are not in. Stop tracking it first.",
+        _ => null
+    };
 
     /// <summary>
     /// What the row says under its buttons: what is running on it, or why Check out is greyed out.

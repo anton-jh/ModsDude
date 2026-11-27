@@ -46,20 +46,45 @@ The main window has an icon **rail**:
 - Account
 
 A repo has sections (Overview, Admin, Members, Mods, Savegames, Archive) and a list of its profiles. Mods
-and Savegames are left out when the adapter doesn't support them. Connect game and Configure game are
+and Savegames are left out when the adapter doesn't support them. Connect game and the game page are
 sub-pages of Overview. A profile has tabs: Overview, Mods (the editor, or a read-only list for guests)
 and History.
 
 - `NavigationManager` builds pages lazily when they are selected. Sub-pages use `Parent` and `GoBack`.
 - A form page with unsaved changes takes a navigation lock (`INavigationLockService`). Leaving it asks
-  whether to discard the changes. Settings, repo Admin, Members, Connect game, game settings, Manage
-  profile and Create repo work this way.
+  whether to discard the changes. Settings, repo Admin, Members, Connect game, the game page's folders,
+  Manage profile and Create repo work this way.
 - Entries the user's level doesn't allow are **disabled with a tooltip, not hidden**
   (`MenuItemViewModel.Restrict`).
-- Home shows the user's repos, with friends' activity grouped by profile. Each repo row offers one next
-  step: Connect game, Apply (nothing applied yet), Review (drifted; opens the mod editor like the
-  notice), "Update to revision N" (every drifted folder only behind its profile, `RevisionGap`) or Open
-  profile.
+- Home lists every game: the games the user's repos are about, plus any game connected on this machine
+  that no repo of theirs is about ("No repo you are in"). Each game's repos sit under it, with friends'
+  activity grouped by profile. Each repo row offers one next step: Connect game, Apply (nothing applied
+  yet), Review (drifted; opens the mod editor like the notice), "Update to revision N" (every drifted
+  folder only behind its profile, `RevisionGap`) or Open profile.
+
+### Game page
+
+Each connected game has its own page (`GamePageViewModel`). It is the one place a game is configured,
+checked again and disconnected. It needs no repo, so it opens for a game whose repos are all gone.
+
+- Reached from the game's heading on Home, the heading of a repo Overview's "This machine" card, and
+  the notices about a game you can only reach through a repo you are not in ("Open game"). From Home
+  and notices it opens under Home; from a repo it opens under that repo's Overview.
+- **This machine**: running, the profile it follows and in which repo, every folder with its drift, and
+  the savegame holding the mod folder. Actions: Deactivate, Check again, Disconnect.
+- **Folders**: the local settings form, saved in place. Only for a game with local settings and a repo
+  this account is in for it, since the adapter that reads the form comes from a repo.
+- **Checked-out savegames**: every save the game holds, with its repo. A save from a repo you are in
+  offers Open (its row in that repo). One from a repo you are not in offers Stop tracking.
+- **Repos**: the repos this account is in for the game, or "None you are in".
+- The repo Overview's card shows the same summary (`GameStatusViewModel`) with Connect game and
+  Deactivate, and Check again only for a game that connects by itself and was not found.
+- **Disconnect** (`GameDisconnectFlow`) forgets the game's settings and profile; nothing on disk changes.
+  Saves from repos you are in refuse it ("Check it in first."). Saves from repos you are not in are
+  named in the confirmation and let go with the game: their slots stay as they are and are no longer
+  tracked, so a later write into one asks first and recycles it like any unrecognised save.
+  `GameRepository.Delete` takes the set the user confirmed, so a save checked out in between still
+  refuses it.
 - Names sort naturally (`Mod 2` before `Mod 10`), but only names people read; machine data sorts
   ordinally.
 

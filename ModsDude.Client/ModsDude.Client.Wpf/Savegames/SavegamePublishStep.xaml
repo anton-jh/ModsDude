@@ -71,6 +71,12 @@
                    TextWrapping="Wrap"
                    Style="{DynamicResource CaptionTextBlockStyle}"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+        <TextBlock Text="{Binding KeepRefusal}"
+                   Margin="0 8 0 0"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                   Visibility="{Binding HasKeepRefusal, Converter={StaticResource BoolToVisibilityConverter}}" />
     </StackPanel>
 
 </UserControl>

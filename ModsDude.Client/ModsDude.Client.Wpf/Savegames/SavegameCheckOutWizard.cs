@@ -163,7 +163,7 @@ public sealed class SavegameCheckOutWizard
         // The same rule the row drew its button from, read again: the folder may have moved since.
         var offer = _repo.Adapter.CanSupportMods && _offers.ReadHost(_repo) is SavegameHost host
             ? SavegameRowRules.Describe(
-                _savegame.Id, _savegame.ProfileId, profile?.HeadRevision, pinned, host.Held, host.AppliedProfileId, host.AppliedRevision)
+                _savegame.Id, _savegame.ProfileId, profile?.HeadRevision, pinned, host.Held, host.GoneHolds, host.AppliedProfileId, host.AppliedRevision)
             : null;
 
         var list = SavegameRowRules.DescribeActivation(profile?.Name ?? SavegameWording.ProfileOf(_savegame), pinned);

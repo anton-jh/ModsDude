@@ -1,0 +1,175 @@
+<shared:AppPage x:Class="ModsDude.Client.Wpf.Games.GamePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:shared="clr-namespace:ModsDude.Client.Wpf.Shared"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:games="clr-namespace:ModsDude.Client.Wpf.Games"
+      xmlns:navigation="clr-namespace:ModsDude.Client.Wpf.Shell.Navigation"
+      mc:Ignorable="d"
+      d:DesignHeight="450" d:DesignWidth="800"
+      d:DataContext="{d:DesignInstance games:GamePageViewModel, IsDesignTimeCreatable=False}"
+      Title="GamePage"
+      FontSize="14">
+
+    <Border Style="{StaticResource PageBody}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Orientation="Vertical" Style="{StaticResource PageColumn}">
+
+                <navigation:PageTitle Text="{Binding Title}" BackCommand="{Binding BackCommand}" />
+
+                <shared:Surface Style="{StaticResource Card}">
+                    <GroupBox Header="This machine" Padding="0 16 0 16">
+                        <StackPanel Orientation="Vertical">
+
+                            <StackPanel Orientation="Horizontal">
+                                <Border Style="{StaticResource SuccessStatusChip}"
+                                        Visibility="{Binding Status.IsRunning, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="Running" />
+                                </Border>
+                                <Border Style="{StaticResource StatusChip}"
+                                        Visibility="{Binding Status.IsConnected, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                                    <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="Not connected" />
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Vertical"
+                                        Visibility="{Binding Status.IsConnected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <TextBlock Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                           Text="{Binding Status.Game.Problem}"
+                                           Visibility="{Binding Status.Game.HasProblem, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}" />
+
+                                <ItemsControl Grid.IsSharedSizeScope="True"
+                                              ItemsSource="{Binding Status.Game.Details}" />
+
+                                <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Text="No folders"
+                                           Visibility="{Binding Status.Game.HasNoFolders, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}" />
+
+                                <TextBlock Margin="0 4 0 0"
+                                           TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding Status.Game.HoldingSummary}"
+                                           Visibility="{Binding Status.Game.HasHoldingSummary, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}" />
+                            </StackPanel>
+
+                            <TextBlock Margin="0 8 0 0"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding GameError}"
+                                       Visibility="{Binding HasGameError, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <StackPanel Margin="0 12 0 0" Orientation="Horizontal" HorizontalAlignment="Left">
+                                <games:DeactivateGameMenu Margin="0 0 8 0"
+                                                          DataContext="{Binding Status}"
+                                                          Visibility="{Binding CanDeactivate, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <!-- Mods updated from inside the game are the commonest way a folder
+                                     stops matching its profile, and a game launched for the first
+                                     time is how one is found. -->
+                                <Button Margin="0 0 8 0"
+                                        Content="Check again"
+                                        Command="{Binding CheckAgainCommand}"
+                                        Visibility="{Binding CanCheckAgain, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <Button Margin="0 0 8 0"
+                                        Content="Disconnect"
+                                        Command="{Binding DisconnectCommand}"
+                                        Visibility="{Binding CanDisconnect, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            </StackPanel>
+
+                        </StackPanel>
+                    </GroupBox>
+                </shared:Surface>
+
+                <!-- The only settings in the app nobody else in a repo sees. -->
+                <shared:Surface Style="{StaticResource Card}" Margin="0 16 0 0"
+                                Visibility="{Binding HasSettings, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <GroupBox Header="Folders" Padding="0 16 0 16">
+                        <StackPanel Orientation="Vertical">
+                            <games:DynamicFormEditor DataContext="{Binding Settings}" />
+
+                            <TextBlock Margin="0 8 0 0"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding SettingsError}"
+                                       Visibility="{Binding HasSettingsError, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <Button Margin="0 12 0 0"
+                                    HorizontalAlignment="Left"
+                                    Style="{DynamicResource AccentButtonStyle}"
+                                    Content="Save changes"
+                                    Command="{Binding SaveSettingsCommand}" />
+                        </StackPanel>
+                    </GroupBox>
+                </shared:Surface>
+
+                <shared:Surface Style="{StaticResource Card}" Margin="0 16 0 0"
+                                Visibility="{Binding HasHeldSavegames, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <GroupBox Header="Checked-out savegames" Padding="0 16 0 16">
+                        <ItemsControl x:Name="HeldSavegameList" ItemsSource="{Binding HeldSavegames}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type games:GameHeldSavegameRow}">
+                                    <Grid Margin="0 0 0 12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Orientation="Vertical">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                                                <Border Margin="8 0 0 0"
+                                                        Style="{StaticResource StatusChip}"
+                                                        Visibility="{Binding HasUncheckedInPlay, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TextBlock Style="{DynamicResource CaptionTextBlockStyle}" Text="Not checked in" />
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding RepoName}" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="Open"
+                                                    Command="{Binding DataContext.OpenSavegameCommand, ElementName=HeldSavegameList}"
+                                                    CommandParameter="{Binding}"
+                                                    Visibility="{Binding IsLive, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                            <Button Content="Stop tracking"
+                                                    Command="{Binding DataContext.StopTrackingCommand, ElementName=HeldSavegameList}"
+                                                    CommandParameter="{Binding}"
+                                                    Visibility="{Binding IsGone, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </GroupBox>
+                </shared:Surface>
+
+                <shared:Surface Style="{StaticResource Card}" Margin="0 16 0 0">
+                    <GroupBox Header="Repos" Padding="0 16 0 16">
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Text="None you are in"
+                                       Visibility="{Binding HasNoRepos, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                            <ItemsControl x:Name="RepoList" ItemsSource="{Binding Repos}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type games:GameRepoLink}">
+                                        <TextBlock Margin="0 0 0 4">
+                                            <Hyperlink Style="{StaticResource TextLink}"
+                                                       Command="{Binding DataContext.OpenRepoCommand, ElementName=RepoList}"
+                                                       CommandParameter="{Binding}">
+                                                <Run Text="{Binding Name, Mode=OneWay}" />
+                                            </Hyperlink>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </GroupBox>
+                </shared:Surface>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</shared:AppPage>

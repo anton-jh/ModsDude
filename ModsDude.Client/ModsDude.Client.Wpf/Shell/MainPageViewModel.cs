@@ -3,7 +3,9 @@ using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Repos;
 using ModsDude.Client.Core.Users;
+using ModsDude.Client.Core.GameAdapters;
 using ModsDude.Client.Wpf.Account;
+using ModsDude.Client.Wpf.Games;
 using ModsDude.Client.Wpf.Home;
 using ModsDude.Client.Wpf.Profiles;
 using ModsDude.Client.Wpf.Repos.Archive;
@@ -24,6 +26,7 @@ public partial class MainPageViewModel
 {
     private readonly IRepoStore _repoStore;
     private readonly RepoPageViewModel.Factory _repoPageViewModelFactory;
+    private readonly GamePageViewModel.Factory _gamePageViewModelFactory;
     private readonly IShellNavigationService _shellNavigationService;
     private readonly ObservableCollectionSynchronizer<Repo, MenuItemViewModel, string> _reposSynchronizer;
 
@@ -45,6 +48,7 @@ public partial class MainPageViewModel
         IRepoStore repoStore,
         IFactory<HomePageViewModel> homePageViewModelFactory,
         RepoPageViewModel.Factory repoPageViewModelFactory,
+        GamePageViewModel.Factory gamePageViewModelFactory,
         IFactory<JoinOrCreatePageViewModel> joinOrCreatePageViewModelFactory,
         IFactory<SettingsPageViewModel> settingsPageViewModelFactory,
         IFactory<AccountPageViewModel> accountPageViewModelFactory,
@@ -90,6 +94,7 @@ public partial class MainPageViewModel
 
         _repoStore = repoStore;
         _repoPageViewModelFactory = repoPageViewModelFactory;
+        _gamePageViewModelFactory = gamePageViewModelFactory;
         _shellNavigationService = shellNavigationService;
         _reposSynchronizer = new(_repoStore.Repos, Repos, MapRepoToVm, x => x.Title, NaturalOrder.Comparer);
 
@@ -193,6 +198,16 @@ public partial class MainPageViewModel
     }
 
     public void SelectJoinOrCreate() => NavManager.Selected = _joinOrCreateMenuItem;
+
+    /// <summary>
+    /// Opens a game's page as a sub-page of Home, which is where every game on this machine is
+    /// listed. Back returns there.
+    /// </summary>
+    public void SelectGame(GameIdentity game)
+    {
+        NavManager.Selected = new MenuItemViewModel("Game", () => _gamePageViewModelFactory.Create(game, null, NavManager.GoBackCommand))
+            .Under(_homeMenuItem);
+    }
 
 
     /// <summary>

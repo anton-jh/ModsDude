@@ -5,6 +5,7 @@ using ModsDude.Client.Core.GameAdapters.DynamicForms;
 using ModsDude.Client.Core.Helpers;
 using ModsDude.Client.Core.Models;
 using ModsDude.Client.Core.Persistence;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Sync;
 using System.Collections.ObjectModel;
 
@@ -173,24 +174,8 @@ public class GameRepository : IGameRepository
         return game;
     }
 
-    public void Update(Game game, IBaseGameAdapter baseAdapter, DynamicForm localSettings)
-    {
-        switch (TryUpdate(game, baseAdapter, localSettings, GetTargets(baseAdapter, localSettings)))
-        {
-            case TargetRefresh.Busy:
-                throw new UserFriendlyException(
-                    $"'{game.Name}' is busy",
-                    $"Something is working on the folders of '{game.Name}', so its settings were not changed.");
-
-            case TargetRefresh.HoldsSavegame:
-                throw new UserFriendlyException(
-                    $"'{game.Name}' has a savegame checked out",
-                    $"'{game.Name}' holds a checked-out savegame, so its settings were not changed.")
-                {
-                    Hint = "Check it in first."
-                };
-        }
-    }
+    public TargetRefresh Update(Game game, IBaseGameAdapter baseAdapter, DynamicForm localSettings)
+        => TryUpdate(game, baseAdapter, localSettings, GetTargets(baseAdapter, localSettings));
 
     public TargetRefresh RefreshTargets(Game game, IBaseGameAdapter baseAdapter)
     {
@@ -303,32 +288,29 @@ public class GameRepository : IGameRepository
         GameChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public void Delete(Game game)
+    public DisconnectOutcome Delete(Game game, IReadOnlySet<Guid> letGo)
     {
         using var lease = _leases.TryAcquireExclusive(
             game.TargetRefs.Select(ResourceKeys.Target),
-            $"Disconnecting '{game.Name}'")
-            ?? throw new UserFriendlyException(
-                $"'{game.Name}' is busy",
-                $"Something is working on the folders of '{game.Name}', so it was not disconnected.");
+            $"Disconnecting '{game.Name}'");
+
+        if (lease is null)
+        {
+            return DisconnectOutcome.Busy;
+        }
 
         var outcome = DisconnectOutcome.AlreadyGone;
 
         _store.UpdateIf(state =>
         {
-            outcome = Disconnect(state, game.Identity);
+            outcome = Disconnect(state, game.Identity, letGo);
 
             return outcome is DisconnectOutcome.Removed;
         });
 
         if (outcome is DisconnectOutcome.HoldsSavegame)
         {
-            throw new UserFriendlyException(
-                $"'{game.Name}' has a savegame checked out",
-                $"'{game.Name}' holds a checked-out savegame, so it was not disconnected.")
-            {
-                Hint = "Check it in first."
-            };
+            return outcome;
         }
 
         Games.Remove(game);
@@ -336,6 +318,8 @@ public class GameRepository : IGameRepository
         // Nothing reads a manifest for a folder no game reaches any more, and leaving one behind
         // would keep a few hundred kilobytes per disconnected folder forever.
         DropStaleManifests();
+
+        return outcome;
     }
 
     public FolderClaim? FindFolderConflict(IBaseGameAdapter baseAdapter, DynamicForm localSettings, GameIdentity? ignoredGame = null)
@@ -402,28 +386,22 @@ public class GameRepository : IGameRepository
         return null;
     }
 
-    internal enum DisconnectOutcome
-    {
-        Removed,
-        AlreadyGone,
-        HoldsSavegame
-    }
-
     /// <summary>
-    /// Removes the game from the state unless it holds a savegame.
+    /// Removes the game from the state unless it holds a savegame outside <paramref name="letGo"/>.
+    /// The check-out records of the let-go savegames leave with it.
     /// </summary>
     /// <remarks>
     /// Over the state rather than through the store, so the rule can be exercised without a real
     /// <c>state.json</c> - see <see cref="FindFolderConflict(IEnumerable{Game}, IReadOnlyList{PersistedModTarget}, GameIdentity?)"/>.
     /// </remarks>
-    internal static DisconnectOutcome Disconnect(LocalState state, GameIdentity identity)
+    internal static DisconnectOutcome Disconnect(LocalState state, GameIdentity identity, IReadOnlySet<Guid> letGo)
     {
         if (state.Games.TryGetValue(identity, out var persisted) is false)
         {
             return DisconnectOutcome.AlreadyGone;
         }
 
-        if (persisted.SavegameCheckouts.Count > 0)
+        if (SavegameHoldRules.FindDisconnectBlocker(persisted.SavegameCheckouts, letGo) is not null)
         {
             return DisconnectOutcome.HoldsSavegame;
         }

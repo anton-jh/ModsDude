@@ -9,7 +9,8 @@ namespace ModsDude.Client.Wpf.Savegames;
 /// <remarks>
 /// A game holds savegames from any repo the user plays it with, so a name is read from the repo its
 /// binding names. The archived list is read only for what the live one does not have, since
-/// archiving does not release a hold.
+/// archiving does not release a hold. A repo that is not one of this account's is not asked: the
+/// server would refuse, and its savegames are referred to without a name.
 /// </remarks>
 public sealed class HeldSavegameNames(
     ISavegameBindingStore bindingStore,
@@ -27,6 +28,12 @@ public sealed class HeldSavegameNames(
         foreach (var held in bindingStore.GetBindings(game.Identity).GroupBy(x => x.RepoId).OrderBy(x => x.Key))
         {
             var repoId = held.Key;
+
+            if (repos.IsGone(repoId))
+            {
+                continue;
+            }
+
             var otherRepoName = repoId == currentRepoId
                 ? null
                 : repos.Repos.FirstOrDefault(x => x.Id == repoId)?.Name ?? "another repo";

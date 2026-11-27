@@ -1,4 +1,5 @@
 using ModsDude.Client.Core.Models;
+using ModsDude.Client.Core.Savegames;
 using ModsDude.Client.Core.Services;
 using ModsDude.Client.Wpf.Shell.Modals;
 
@@ -13,8 +14,15 @@ internal static class SavegameRefusals
     /// <param name="it">How the sentence before named the savegame: "it", "that savegame".</param>
     public static string FreeHeld(string it, bool repoIsGone)
         => repoIsGone
-            ? $"Stop tracking {it} in its notice first."
+            ? $"Stop tracking {it} first."
             : $"Check {it} in first.";
+
+    /// <summary>
+    /// The refusal for changing or disconnecting a game while it holds savegames: stop tracking them
+    /// where every one is from a repo you are not in, and otherwise check in.
+    /// </summary>
+    public static string GameHoldsSavegame(string gameName, IReadOnlyList<SavegameCheckoutBinding> held, IGoneRepos goneRepos)
+        => $"'{gameName}' has a savegame checked out. " + FreeHeld("it", held.All(x => goneRepos.IsGone(x.RepoId)));
 
     /// <summary>
     /// The refusal for a verb that needs the repo's game on this machine. For a game that connects by

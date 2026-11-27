@@ -190,6 +190,39 @@ public class SavegameHoldRulesTests
     }
 
 
+    [Fact]
+    public void A_game_holding_nothing_may_be_disconnected()
+    {
+        Assert.Null(SavegameHoldRules.FindDisconnectBlocker([], new HashSet<Guid>()));
+    }
+
+    [Fact]
+    public void A_game_whose_every_savegame_is_let_go_may_be_disconnected()
+    {
+        var other = Hold(noProfile: true) with { SavegameId = Guid.NewGuid() };
+
+        Assert.Null(SavegameHoldRules.FindDisconnectBlocker([Hold(), other], new HashSet<Guid> { _savegameId, other.SavegameId }));
+    }
+
+    /// <summary>With or without a profile: the check-out record goes with the game either way.</summary>
+    [Fact]
+    public void Any_savegame_not_let_go_stops_a_disconnect()
+    {
+        Assert.Equal(_savegameId, SavegameHoldRules.FindDisconnectBlocker([Hold()], new HashSet<Guid>())?.SavegameId);
+        Assert.Equal(_savegameId, SavegameHoldRules.FindDisconnectBlocker([Hold(noProfile: true)], new HashSet<Guid>())?.SavegameId);
+    }
+
+    /// <summary>The set the user confirmed, not the saves held now: one checked out since then still stops it.</summary>
+    [Fact]
+    public void A_savegame_checked_out_after_the_confirmation_stops_a_disconnect()
+    {
+        var confirmed = Hold(noProfile: true) with { SavegameId = Guid.NewGuid() };
+        var since = Hold();
+
+        Assert.Equal(_savegameId, SavegameHoldRules.FindDisconnectBlocker([confirmed, since], new HashSet<Guid> { confirmed.SavegameId })?.SavegameId);
+    }
+
+
     /// <param name="target">A number puts it in compatibility mode, pinned to that revision; null follows head.</param>
     private static SavegameCheckoutBinding Hold(int? target = null, bool noProfile = false)
         => new(_repoId, _savegameId, Keys.Slot("savegame1"), 1, "aaaa", DateTime.UtcNow)

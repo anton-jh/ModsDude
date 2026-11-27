@@ -35,7 +35,9 @@ so nothing else could tell which savegame the slot is.
 A game holds **at most one savegame tied to a profile** at a time, because the whole game runs on one
 mod list. Saves without a profile don't count towards this. While a save is held:
 
-- The game's settings can't be changed and the game can't be disconnected (any held save).
+- The game's settings can't be changed (any held save).
+- The game can't be disconnected while it holds a save from a repo you are in. Saves from repos you are
+  not in are let go with it (see [Client](client.md#game-page)).
 - The game can't switch to another profile or be deactivated (a profile-tied save).
 - In compatibility mode, no other revision of the profile can be applied.
 - Leaving the repo offers to check the save in first.
@@ -47,7 +49,9 @@ mod list. Saves without a profile don't count towards this. While a save is held
 1. **Take over**, if someone else holds the claim. Their name is shown.
 2. **Which mod list**: latest or compatibility mode (below).
 3. **Activate** the save's profile on this game, if it isn't active already.
-4. **Check in** whatever this game already holds, if that blocks the check-out.
+4. **Check in** whatever this game already holds, if that blocks the check-out. A blocking save from a
+   repo you are not in can never be checked in, so the row's Check out is greyed with "Stop tracking it
+   first" instead (`SavegameRowOffer.StopsTrackingFirst`).
 5. **Pick a slot**. The last slot used is preselected, or the first free one if that is gone or taken.
    The full list, named by the adapter, opens on request.
 6. **Check in** whatever save occupies that slot, if ModsDude holds it.
@@ -136,7 +140,8 @@ the publisher keeps playing a save tied to a profile, the wizard works out a kee
 (`SavegameKeepPlan`):
 
 - activate the chosen profile first, if the game isn't on it;
-- check in the profile-tied save already held, if there is one.
+- check in the profile-tied save already held, if there is one. Where that save is from a repo you are
+  not in, the publish step refuses Keep playing with "Stop tracking it first" instead.
 
 The new save's details come from the adapter.
 
@@ -161,7 +166,7 @@ Where the adapter lists savegame mods:
 | `TakenOver` | Someone else took the claim |
 | `TakenOverAndCheckedIn` | Someone else took the claim and has checked in since |
 | `PlayedOnAnotherModList` | The game's folder has moved off the save's mod list |
-| `RepoGone` | The save's repo is gone. Offers "Stop tracking" |
+| `RepoGone` | The save's repo is gone. Offers "Stop tracking" and "Open game" |
 
 Most cards navigate to the save rather than act from the notice. The exceptions are "Stop tracking" and,
 for a compatibility-mode save whose folder moved off its revision, "Re-apply revision N". A hold in a folder

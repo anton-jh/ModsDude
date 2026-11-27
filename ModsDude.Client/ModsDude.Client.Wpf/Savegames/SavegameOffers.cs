@@ -11,7 +11,8 @@ public sealed class SavegameOffers(
     ISavegameBindingStore bindingStore,
     ISavegameHolds savegameHolds,
     ISyncManifestStore manifestStore,
-    IProfileStore profileStore) : ISavegameOffers
+    IProfileStore profileStore,
+    IGoneRepos goneRepos) : ISavegameOffers
 {
     public SavegameHost? ReadHost(Repo repo)
     {
@@ -21,11 +22,13 @@ public sealed class SavegameOffers(
         }
 
         var manifest = manifestStore.TryReadAgreed(game.TargetRefs);
+        var held = bindingStore.GetBindings(game.Identity);
 
         return new SavegameHost(
             game,
-            bindingStore.GetBindings(game.Identity),
+            held,
             savegameHolds.GetUnreachableHolds(game).Select(x => x.SavegameId).ToHashSet(),
+            held.Where(x => goneRepos.IsGone(x.RepoId)).Select(x => x.SavegameId).ToHashSet(),
             manifest?.ProfileId,
             manifest?.ProfileRevision);
     }
@@ -49,6 +52,7 @@ public sealed class SavegameOffers(
             profileStore.Find(repo.Id, row.Savegame.ProfileId)?.HeadRevision,
             row.Hold?.PinnedRevision,
             host.Held,
+            host.GoneHolds,
             host.AppliedProfileId,
             host.AppliedRevision);
 

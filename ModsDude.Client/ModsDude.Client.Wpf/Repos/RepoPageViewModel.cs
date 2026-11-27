@@ -33,7 +33,6 @@ public partial class RepoPageViewModel
     private readonly IProfileStore _profileStore;
     private readonly IProfileService _profileService;
     private readonly ConnectGamePageViewModel.Factory _connectGamePageViewModelFactory;
-    private readonly GameSettingsPageViewModel.Factory _gameSettingsPageViewModelFactory;
     private readonly IModalService _modalService;
     private readonly ILogger<RepoPageViewModel> _logger;
 
@@ -55,11 +54,11 @@ public partial class RepoPageViewModel
     private readonly ObservableCollectionSynchronizer<Profile, MenuItemViewModel, string> _profilesSynchronizer;
 
     /// <summary>
-    /// Connect game and Configure game: sub-pages of Overview, reached from its "This machine" card.
-    /// Only a game whose adapter has local settings has either.
+    /// Connect game and the game's own page: sub-pages of Overview, reached from its "This machine"
+    /// card. Only a game whose adapter has local settings is connected by hand.
     /// </summary>
     private readonly MenuItemViewModel _connectGameItem;
-    private readonly MenuItemViewModel _configureGameItem;
+    private readonly MenuItemViewModel _gameItem;
 
 
     public RepoPageViewModel(
@@ -69,7 +68,7 @@ public partial class RepoPageViewModel
         RepoMembersPageViewModel.Factory repoMembersPageViewModelFactory,
         ProfilePageViewModel.Factory profilePageViewModelFactory,
         IRetainedPages retainedPages,
-        GameSettingsPageViewModel.Factory gameSettingsPageViewModelFactory,
+        GamePageViewModel.Factory gamePageViewModelFactory,
         ConnectGamePageViewModel.Factory connectGamePageViewModelFactory,
         RepoModsPageViewModel.Factory repoModsPageViewModelFactory,
         RepoSavegamesPageViewModel.Factory repoSavegamesPageViewModelFactory,
@@ -107,10 +106,9 @@ public partial class RepoPageViewModel
         _profileStore = profileStore;
         _profileService = profileService;
         _connectGamePageViewModelFactory = connectGamePageViewModelFactory;
-        _gameSettingsPageViewModelFactory = gameSettingsPageViewModelFactory;
         NavManager = navigationManager;
 
-        var overviewLinks = new RepoOverviewLinks(ConnectGame, ConfigureGame);
+        var overviewLinks = new RepoOverviewLinks(ConnectGame, OpenGame);
 
         // The one-shot selections are read and cleared by the page they were set for, so they apply
         // to the page a deep link opens and not to the next one somebody reaches through the menu.
@@ -160,11 +158,9 @@ public partial class RepoPageViewModel
         _connectGameItem = new MenuItemViewModel("Connect game", () => _connectGamePageViewModelFactory.Create(repo, NavManager.GoBackCommand))
             .Under(OverviewItem);
 
-        // Falls back to Connect game rather than asserting: the game can be disconnected between the
-        // click and the page being built, and the shell must not fall over on that race.
-        _configureGameItem = new MenuItemViewModel("Configure game", () => ConnectedGame() is Game game
-            ? _gameSettingsPageViewModelFactory.Create(_repo, game, NavManager.GoBackCommand)
-            : _connectGamePageViewModelFactory.Create(_repo, NavManager.GoBackCommand))
+        // The page says so itself where the game is disconnected between the click and the page
+        // being built, or while it is open.
+        _gameItem = new MenuItemViewModel("Game", () => gamePageViewModelFactory.Create(repo.Scope, repo, NavManager.GoBackCommand))
             .Under(OverviewItem);
 
         Profiles = [];
@@ -271,11 +267,11 @@ public partial class RepoPageViewModel
         }
     }
 
-    private void ConfigureGame()
+    private void OpenGame()
     {
-        if (ConnectedGame() is not null && ConnectsAutomatically() is false)
+        if (ConnectedGame() is not null)
         {
-            NavManager.Selected = _configureGameItem;
+            NavManager.Selected = _gameItem;
         }
     }
 
@@ -622,15 +618,12 @@ public partial class RepoPageViewModel
     private bool NeedsConnecting() => ConnectedGame() is null && ConnectsAutomatically() is false;
 
     /// <summary>
-    /// Leaves Connect game once a game is connected, and Configure game once it is gone: either page
-    /// would be about a state the user is no longer in. The Overview says what happened.
+    /// Leaves Connect game once a game is connected: the page would be about a state the user is no
+    /// longer in. The Overview says what happened.
     /// </summary>
     private void OnGamesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        var connected = ConnectedGame() is not null;
-
-        if ((connected && ReferenceEquals(NavManager.Current, _connectGameItem))
-            || (connected is false && ReferenceEquals(NavManager.Current, _configureGameItem)))
+        if (ConnectedGame() is not null && ReferenceEquals(NavManager.Current, _connectGameItem))
         {
             NavManager.GoBackCommand.Execute(null);
         }
